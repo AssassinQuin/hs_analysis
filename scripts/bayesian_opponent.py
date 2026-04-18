@@ -20,8 +20,11 @@ import io
 import os
 import json
 import math
+import random
 import sqlite3
 from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 # ── Paths ──────────────────────────────────────────
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,6 +46,159 @@ from fetch_hsreplay import init_db, get_meta_decks
 SIGNATURE_LIKELIHOOD = 0.8   # P(seen_X | deck_i) when X is a signature card
 EPSILON_LIKELIHOOD = 0.02    # P(seen_X | deck_i) when X is NOT in signature
 LOCK_THRESHOLD = 0.60        # Confidence threshold for deck lock
+
+
+@dataclass
+class Particle:
+    """A single particle in the particle filter representing a hypothesized opponent deck."""
+    deck_id: str
+    deck_cards: List[int]  # dbfIds of cards in the deck
+    played_cards: set = field(default_factory=set)  # dbfIds observed so far
+    weight: float = 1.0
+
+    @property
+    def remaining_cards(self) -> List[int]:
+        return [c for c in self.deck_cards if c not in self.played_cards]
+
+
+class ParticleFilter:
+    """Particle filter for opponent deck archetype inference.
+    
+    Uses weighted particles to represent distribution over possible opponent decks.
+    Supports Bayesian weight updates, systematic resampling, and confidence gating.
+    """
+
+    def __init__(self, archetypes: list, K: int = 10):
+        """Initialize K particles from HSReplay archetype data.
+        
+        Args:
+            archetypes: list of deck dicts with keys (archetype_id, class, name, cards, winrate, usage_rate)
+            K: number of particles (default 10)
+        """
+        self.K = K
+        self.particles: List[Particle] = []
+        self._init_particles(archetypes)
+
+    def _init_particles(self, archetypes: list):
+        """Create initial particles from archetype data."""
+        if not archetypes:
+            return
+        # Create particles proportional to usage_rate
+        for i in range(self.K):
+            deck = archetypes[i % len(archetypes)]
+            self.particles.append(Particle(
+                deck_id=str(deck.get('archetype_id', i)),
+                deck_cards=list(deck.get('cards', [])),
+                weight=1.0 / self.K,
+            ))
+
+    def update(self, observed_card: int):
+        """Bayesian weight update for all particles.
+        
+        P(deck|card) ∝ P(card|deck) × P(deck)
+        Likelihood: 0.8 if card is in deck, 0.02 otherwise.
+        """
+        for p in self.particles:
+            p.played_cards.add(observed_card)
+            likelihood = 0.8 if observed_card in p.deck_cards else 0.02
+            p.weight *= likelihood
+        self._normalize()
+
+    def _normalize(self):
+        """Normalize weights to sum to 1."""
+        total = sum(p.weight for p in self.particles)
+        if total > 0:
+            for p in self.particles:
+                p.weight /= total
+
+    def resample(self):
+        """Systematic resampling when effective sample size < K/2."""
+        ess = self.get_effective_sample_size()
+        if ess >= self.K / 2:
+            return
+
+        # Systematic resampling
+        weights = [p.weight for p in self.particles]
+        cumsum = []
+        s = 0.0
+        for w in weights:
+            s += w
+            cumsum.append(s)
+
+        step = 1.0 / self.K
+        start = random.random() * step
+        new_particles = []
+        idx = 0
+        for i in range(self.K):
+            target = start + i * step
+            while idx < len(cumsum) - 1 and cumsum[idx] < target:
+                idx += 1
+            old = self.particles[idx]
+            new_particles.append(Particle(
+                deck_id=old.deck_id,
+                deck_cards=list(old.deck_cards),
+                played_cards=set(old.played_cards),
+                weight=1.0 / self.K,
+            ))
+        self.particles = new_particles
+
+    def get_confidence(self) -> float:
+        """Max weight across particles."""
+        if not self.particles:
+            return 0.0
+        return max(p.weight for p in self.particles)
+
+    def get_effective_sample_size(self) -> float:
+        """1 / Σ(w_k²)."""
+        sq_sum = sum(p.weight ** 2 for p in self.particles)
+        if sq_sum <= 0:
+            return 0.0
+        return 1.0 / sq_sum
+
+    def sample_opponent_hand(self, n_cards: int) -> List[int]:
+        """Sample likely opponent hand cards from top particles."""
+        # Get top particle
+        if not self.particles:
+            return []
+        top = max(self.particles, key=lambda p: p.weight)
+        remaining = top.remaining_cards
+        n = min(n_cards, len(remaining))
+        return random.sample(remaining, n) if n > 0 else []
+
+    def predict_opponent_play(self, state) -> Optional[object]:
+        """Predict opponent's best play using weighted particles.
+        
+        Uses confidence gating:
+        - confidence > 0.60: full particle-weighted model
+        - confidence > 0.30: top-3 particles only
+        - confidence <= 0.30: returns None (no prediction)
+        """
+        confidence = self.get_confidence()
+        if confidence <= 0.30:
+            return None
+
+        # Use top particles
+        if confidence > 0.60:
+            top_particles = self.particles
+        else:
+            sorted_p = sorted(self.particles, key=lambda p: p.weight, reverse=True)
+            top_particles = sorted_p[:3]
+
+        # Sample from top particle's remaining cards
+        if not top_particles:
+            return None
+        top = max(top_particles, key=lambda p: p.weight)
+        remaining = top.remaining_cards
+        if remaining:
+            return random.choice(remaining)
+        return None
+
+    def get_top_archetype_id(self) -> Optional[str]:
+        """Return the deck_id of the top-weighted particle."""
+        if not self.particles:
+            return None
+        top = max(self.particles, key=lambda p: p.weight)
+        return top.deck_id
 
 
 class BayesianOpponentModel:

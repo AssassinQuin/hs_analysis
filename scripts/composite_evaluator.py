@@ -101,10 +101,9 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
     """
     w = {**DEFAULT_WEIGHTS, **(weights or {})}
 
-    # --- V2 adjusted ---
+    # --- V2 adjusted (hand quality only; board handled by eval_board) ---
     hand_v2 = sum(c.l6_score for c in state.hand)
-    board_v2 = sum(m.attack + m.health for m in state.board)
-    v2_adj = hand_v2 + board_v2
+    v2_adj = hand_v2
 
     # --- sub-models ---
     board_score     = eval_board(state)
@@ -137,10 +136,7 @@ def quick_eval(state: GameState) -> float:
 
     Used for rapid fitness evaluation in RHEA when time is critical.
     """
-    v2_adj = (
-        sum(c.l6_score for c in state.hand)
-      + sum(m.attack + m.health for m in state.board)
-    )
+    v2_adj = sum(c.l6_score for c in state.hand)
     threat = -(max(0, 30 - state.hero.hp - state.hero.armor) * 0.5)
     return v2_adj + 1.5 * threat
 

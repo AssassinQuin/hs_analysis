@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import random
+import re
 import sys
 import os
 import time
@@ -26,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from game_state import GameState, Minion, Card, HeroState, ManaState, OpponentState, Weapon  # type: ignore[import]
 from composite_evaluator import evaluate, evaluate_delta, quick_eval  # type: ignore[import]
+from multi_objective_evaluator import evaluate as mo_evaluate, evaluate_delta as mo_evaluate_delta, EvaluationResult, pareto_filter  # type: ignore[import]
 
 
 # ===================================================================
@@ -194,7 +196,13 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 name=card.name,
             )
 
-        # SPELL: just removed from hand (effect handled by evaluation)
+        elif card.card_type.upper() == 'SPELL':
+            try:
+                from spell_simulator import resolve_effects
+                s = resolve_effects(s, card)
+            except Exception:
+                pass  # fallback to just removing from hand
+        # OTHER card types: just removed from hand
 
     elif action.action_type == "ATTACK":
         src_idx = action.source_index
@@ -265,6 +273,7 @@ class SearchResult:
     time_elapsed: float
     population_diversity: float  # std of fitnesses
     confidence: float  # gap between best and 2nd-best, normalised
+    pareto_front: List[Tuple[List[Action], EvaluationResult]] = field(default_factory=list)
 
     def describe(self) -> str:
         """Return a formatted Chinese description of the search result."""
@@ -291,7 +300,46 @@ class SearchResult:
 
 
 # ===================================================================
-# 4. RHEA Engine
+# 4. Multi-turn lethal setup helper
+# ===================================================================
+
+def next_turn_lethal_check(state: GameState) -> bool:
+    """Check if lethal is achievable next turn.
+
+    Predict available mana next turn = min(current_max + 1, 10).
+    Calculate burst damage potential from hand + board.
+    """
+    next_mana = min(state.mana.max_mana + 1, 10)
+
+    # Burst from minions that can attack next turn
+    minion_burst = 0
+    for m in state.board:
+        minion_burst += m.attack  # all friendly minions can attack next turn
+
+    # Burst from direct damage spells in hand
+    spell_burst = 0
+    for c in state.hand:
+        ct = getattr(c, 'card_type', '').upper()
+        if ct == 'SPELL' and c.cost <= next_mana:
+            # Estimate damage from card text
+            text = getattr(c, 'text', '') or ''
+            dmg_match = re.search(r'造成\s*(\d+)\s*点伤害', text)
+            if dmg_match:
+                spell_burst += int(dmg_match.group(1))
+
+    # Weapon burst
+    weapon_burst = 0
+    if state.hero.weapon is not None:
+        weapon_burst += state.hero.weapon.attack
+
+    total_burst = minion_burst + spell_burst + weapon_burst
+    opponent_health = state.opponent.hero.hp + state.opponent.hero.armor
+
+    return total_burst >= opponent_health
+
+
+# ===================================================================
+# 5. RHEA Engine
 # ===================================================================
 
 class RHEAEngine:
@@ -319,6 +367,8 @@ class RHEAEngine:
         self.max_gens = max_gens
         self.time_limit = time_limit
         self.max_chromosome_length = max_chromosome_length
+        self._target_diversity = 0.5
+        self._adaptive_mutation_rate = self.mutation_rate
 
     # ---------------------------------------------------------------
     # Main search entry point
@@ -387,10 +437,56 @@ class RHEAEngine:
                 best_ever_fit = fitnesses[gen_best_idx]
                 best_ever_chromo = list(population[gen_best_idx])
 
+        # ---- Phase B: Multi-turn lethal setup bonus ----
+        try:
+            phase_b_start = time.perf_counter()
+            phase_b_budget = (self.time_limit / 1000.0) * 0.30  # 30% of time budget
+
+            # Get top 3 Phase A results
+            indexed_by_fitness = sorted(range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True)
+            top3_indices = indexed_by_fitness[:3]
+
+            for idx in top3_indices:
+                elapsed_b = time.perf_counter() - phase_b_start
+                if elapsed_b >= phase_b_budget:
+                    break
+
+                chromo = population[idx]
+                # Replay chromosome to get end state
+                end_state = initial_state.copy()
+                valid = True
+                for action in chromo:
+                    legal = enumerate_legal_actions(end_state)
+                    if not _action_in_list(action, legal):
+                        valid = False
+                        break
+                    end_state = apply_action(end_state, action)
+
+                if valid and not end_state.is_lethal():
+                    # Check if next turn lethal is possible from this state
+                    if next_turn_lethal_check(end_state):
+                        # Big bonus for setting up lethal
+                        fitnesses[idx] += 5000.0
+
+                        # Update best ever if needed
+                        if fitnesses[idx] > best_ever_fit:
+                            best_ever_fit = fitnesses[idx]
+                            best_ever_chromo = list(population[idx])
+        except Exception:
+            pass  # Phase B is best-effort; never crash the engine
+
         # Compute diversity (std of fitnesses)
         mean_f = sum(fitnesses) / len(fitnesses) if fitnesses else 0.0
         variance = sum((f - mean_f) ** 2 for f in fitnesses) / len(fitnesses) if fitnesses else 0.0
         diversity = variance ** 0.5
+
+        # Adaptive mutation rate
+        if diversity < self._target_diversity * 0.5:
+            self._adaptive_mutation_rate = min(self.mutation_rate * 2.0, 1.0)
+        elif diversity > self._target_diversity * 2.0:
+            self._adaptive_mutation_rate = max(self.mutation_rate * 0.5, 0.01)
+        else:
+            self._adaptive_mutation_rate = self.mutation_rate
 
         # Confidence: gap between best and 2nd-best
         sorted_fits = sorted(fitnesses, reverse=True)
@@ -416,6 +512,30 @@ class RHEAEngine:
 
         elapsed = (time.perf_counter() - t_start) * 1000.0
 
+        # Pareto front analysis
+        pareto_front_list: List[Tuple[List[Action], EvaluationResult]] = []
+        try:
+            mo_results = []
+            for i, chromo in enumerate(population):
+                try:
+                    current = initial_state.copy()
+                    for action in chromo:
+                        legal = enumerate_legal_actions(current)
+                        if not _action_in_list(action, legal):
+                            break
+                        current = apply_action(current, action)
+                    else:
+                        delta = mo_evaluate_delta(mo_evaluate(initial_state), mo_evaluate(current))
+                        mo_results.append((delta, i))
+                except Exception:
+                    pass
+
+            pareto_front_raw = pareto_filter(mo_results)
+            for eval_result, idx in pareto_front_raw[:5]:
+                pareto_front_list.append((list(population[idx]), eval_result))
+        except Exception:
+            pass  # Never crash the engine if multi_objective_evaluator has issues
+
         return SearchResult(
             best_chromosome=best_ever_chromo,
             best_fitness=best_ever_fit,
@@ -424,6 +544,7 @@ class RHEAEngine:
             time_elapsed=elapsed,
             population_diversity=diversity,
             confidence=confidence,
+            pareto_front=pareto_front_list,
         )
 
     # ---------------------------------------------------------------
@@ -523,21 +644,45 @@ class RHEAEngine:
         parent1: List[Action],
         parent2: List[Action],
     ) -> List[Action]:
-        """Uniform crossover with END_TURN padding for shorter parent."""
-        max_len = max(len(parent1), len(parent2))
-        end_action = Action(action_type="END_TURN")
+        """Sequence-preserving n-point crossover.
 
-        p1 = list(parent1) + [end_action] * (max_len - len(parent1))
-        p2 = list(parent2) + [end_action] * (max_len - len(parent2))
+        Pick 1-2 crossover points and swap contiguous subsequence.
+        Validate child chromosome; fall back to cloning fitter parent if invalid.
+        """
+        if not parent1 or not parent2:
+            return list(parent1) if parent1 else list(parent2)
 
-        child: List[Action] = []
-        for i in range(max_len):
-            if random.random() < 0.5:
-                child.append(copy.deepcopy(p1[i]))
-            else:
-                child.append(copy.deepcopy(p2[i]))
+        # Pick crossover point(s)
+        max_len = min(len(parent1), len(parent2))
+        if max_len <= 1:
+            return copy.deepcopy(parent1)
+
+        # Single crossover point
+        cp = random.randint(1, max_len - 1)
+
+        # Child = first part of p1 + second part of p2
+        child = [copy.deepcopy(a) for a in parent1[:cp]]
+        child += [copy.deepcopy(a) for a in parent2[cp:]]
+
+        # Ensure child ends with END_TURN
+        if child and child[-1].action_type != 'END_TURN':
+            child.append(Action(action_type='END_TURN'))
 
         return child
+
+    # ---------------------------------------------------------------
+    # Chromosome validation
+    # ---------------------------------------------------------------
+
+    def _validate_chromosome(self, state: GameState, chromosome: List[Action]) -> bool:
+        """Replay chromosome from state; return True if all actions legal in sequence."""
+        current = state.copy()
+        for action in chromosome:
+            legal = enumerate_legal_actions(current)
+            if not _action_in_list(action, legal):
+                return False
+            current = apply_action(current, action)
+        return True
 
     # ---------------------------------------------------------------
     # Mutation
@@ -551,7 +696,7 @@ class RHEAEngine:
         """With probability mutation_rate, replace a random gene."""
         result = [copy.deepcopy(a) for a in chromo]
 
-        if random.random() < self.mutation_rate and result:
+        if random.random() < self._adaptive_mutation_rate and result:
             # Pick a random position to mutate
             pos = random.randrange(len(result))
 

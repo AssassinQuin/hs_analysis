@@ -1,0 +1,402 @@
+{
+  "随从类型": {
+    "description": "随从种族 (Minion Races / Types)",
+    "values": [
+      {
+        "id": "BEAST",
+        "en": "Beast",
+        "zh": "野兽"
+      },
+      {
+        "id": "DEMON",
+        "en": "Demon",
+        "zh": "恶魔"
+      },
+      {
+        "id": "DRAENEI",
+        "en": "Draenei",
+        "zh": "德莱尼"
+      },
+      {
+        "id": "DRAGON",
+        "en": "Dragon",
+        "zh": "龙"
+      },
+      {
+        "id": "ELEMENTAL",
+        "en": "Elemental",
+        "zh": "元素"
+      },
+      {
+        "id": "MECHANICAL",
+        "en": "Mechanical",
+        "zh": "机械"
+      },
+      {
+        "id": "MURLOC",
+        "en": "Murloc",
+        "zh": "鱼人"
+      },
+      {
+        "id": "NAGA",
+        "en": "Naga",
+        "zh": "纳迦"
+      },
+      {
+        "id": "PIRATE",
+        "en": "Pirate",
+        "zh": "海盗"
+      },
+      {
+        "id": "QUILBOAR",
+        "en": "Quilboar",
+        "zh": "野猪人"
+      },
+      {
+        "id": "TOTEM",
+        "en": "Totem",
+        "zh": "图腾"
+      },
+      {
+        "id": "UNDEAD",
+        "en": "Undead",
+        "zh": "亡灵"
+      },
+      {
+        "id": "ALL",
+        "en": "All",
+        "zh": "全部"
+      }
+    ]
+  },
+  "法术派系": {
+    "description": "法术派系 (Spell Schools)",
+    "values": [
+      {
+        "id": "ARCANE",
+        "en": "Arcane",
+        "zh": "奥术"
+      },
+      {
+        "id": "FEL",
+        "en": "Fel",
+        "zh": "邪能"
+      },
+      {
+        "id": "FIRE",
+        "en": "Fire",
+        "zh": "火焰"
+      },
+      {
+        "id": "FROST",
+        "en": "Frost",
+        "zh": "冰霜"
+      },
+      {
+        "id": "HOLY",
+        "en": "Holy",
+        "zh": "神圣"
+      },
+      {
+        "id": "NATURE",
+        "en": "Nature",
+        "zh": "自然"
+      },
+      {
+        "id": "SHADOW",
+        "en": "Shadow",
+        "zh": "暗影"
+      }
+    ]
+  },
+  "关键字": {
+    "description": "卡牌关键字/机制 (Keywords / Mechanics)",
+    "values": [
+      {
+        "id": "BATTLECRY",
+        "en": "Battlecry",
+        "zh": "战吼"
+      },
+      {
+        "id": "DEATHRATTLE",
+        "en": "Deathrattle",
+        "zh": "亡语"
+      },
+      {
+        "id": "TAUNT",
+        "en": "Taunt",
+        "zh": "嘲讽"
+      },
+      {
+        "id": "DIVINE_SHIELD",
+        "en": "Divine Shield",
+        "zh": "圣盾"
+      },
+      {
+        "id": "CHARGE",
+        "en": "Charge",
+        "zh": "冲锋"
+      },
+      {
+        "id": "RUSH",
+        "en": "Rush",
+        "zh": "突袭"
+      },
+      {
+        "id": "WINDFURY",
+        "en": "Windfury",
+        "zh": "风怒"
+      },
+      {
+        "id": "STEALTH",
+        "en": "Stealth",
+        "zh": "潜行"
+      },
+      {
+        "id": "LIFESTEAL",
+        "en": "Lifesteal",
+        "zh": "吸血"
+      },
+      {
+        "id": "POISONOUS",
+        "en": "Poisonous",
+        "zh": "剧毒"
+      },
+      {
+        "id": "VENOMOUS",
+        "en": "Venomous",
+        "zh": "剧毒"
+      },
+      {
+        "id": "FREEZE",
+        "en": "Freeze",
+        "zh": "冻结"
+      },
+      {
+        "id": "OVERLOAD",
+        "en": "Overload",
+        "zh": "过载"
+      },
+      {
+        "id": "SPELLPOWER",
+        "en": "Spell Damage",
+        "zh": "法术伤害"
+      },
+      {
+        "id": "SILENCE",
+        "en": "Silence",
+        "zh": "沉默"
+      },
+      {
+        "id": "COMBO",
+        "en": "Combo",
+        "zh": "连击"
+      },
+      {
+        "id": "DISCOVER",
+        "en": "Discover",
+        "zh": "发现"
+      },
+      {
+        "id": "SECRET",
+        "en": "Secret",
+        "zh": "奥秘"
+      },
+      {
+        "id": "QUEST",
+        "en": "Quest",
+        "zh": "任务"
+      },
+      {
+        "id": "SIDE_QUEST",
+        "en": "Side Quest",
+        "zh": "支线任务"
+      },
+      {
+        "id": "CHOOSE_ONE",
+        "en": "Choose One",
+        "zh": "抉择"
+      },
+      {
+        "id": "ECHO",
+        "en": "Echo",
+        "zh": "回响"
+      },
+      {
+        "id": "TWINSPELL",
+        "en": "Twin Spell",
+        "zh": "双生法术"
+      },
+      {
+        "id": "REBORN",
+        "en": "Reborn",
+        "zh": "复生"
+      },
+      {
+        "id": "OUTCAST",
+        "en": "Outcast",
+        "zh": "流放"
+      },
+      {
+        "id": "SPELLBURST",
+        "en": "Spellburst",
+        "zh": "法术迸发"
+      },
+      {
+        "id": "FRENZY",
+        "en": "Frenzy",
+        "zh": "暴怒"
+      },
+      {
+        "id": "CORRUPT",
+        "en": "Corrupt",
+        "zh": "腐蚀"
+      },
+      {
+        "id": "TRADEABLE",
+        "en": "Tradeable",
+        "zh": "可交易"
+      },
+      {
+        "id": "DREDGE",
+        "en": "Dredge",
+        "zh": "掘葬"
+      },
+      {
+        "id": "INFUSE",
+        "en": "Infuse",
+        "zh": "充能"
+      },
+      {
+        "id": "HONORABLE_KILL",
+        "en": "Honorable Kill",
+        "zh": "荣誉消灭"
+      },
+      {
+        "id": "OVERHEAL",
+        "en": "Overheal",
+        "zh": "过量治疗"
+      },
+      {
+        "id": "MANATHIRST",
+        "en": "Manathirst",
+        "zh": "法力渴求"
+      },
+      {
+        "id": "OVERKILL",
+        "en": "Overkill",
+        "zh": "超杀"
+      },
+      {
+        "id": "INSPIRE",
+        "en": "Inspire",
+        "zh": "激励"
+      },
+      {
+        "id": "MAGNETIC",
+        "en": "Magnetic",
+        "zh": "磁力"
+      },
+      {
+        "id": "FORGE",
+        "en": "Forge",
+        "zh": "锻造"
+      },
+      {
+        "id": "QUICKDRAW",
+        "en": "Quickdraw",
+        "zh": "速瞄"
+      },
+      {
+        "id": "EXCAVATE",
+        "en": "Excavate",
+        "zh": "挖掘"
+      },
+      {
+        "id": "COLOSSAL",
+        "en": "Colossal",
+        "zh": "巨像"
+      },
+      {
+        "id": "TITAN",
+        "en": "Titan",
+        "zh": "泰坦"
+      },
+      {
+        "id": "ENRAGED",
+        "en": "Enraged",
+        "zh": "激怒"
+      },
+      {
+        "id": "COUNTER",
+        "en": "Counter",
+        "zh": "反制"
+      },
+      {
+        "id": "MORPH",
+        "en": "Morph",
+        "zh": "变形"
+      },
+      {
+        "id": "IMMUNE",
+        "en": "Immune",
+        "zh": "免疫"
+      },
+      {
+        "id": "CANT_ATTACK",
+        "en": "Can't Attack",
+        "zh": "无法攻击"
+      },
+      {
+        "id": "AVENGE",
+        "en": "Avenge",
+        "zh": "复仇"
+      },
+      {
+        "id": "AURA",
+        "en": "Aura",
+        "zh": "光环"
+      },
+      {
+        "id": "GIGANTIFY",
+        "en": "Gigantify",
+        "zh": "巨大化"
+      },
+      {
+        "id": "MINIATURIZE",
+        "en": "Miniaturize",
+        "zh": "迷你化"
+      },
+      {
+        "id": "JADE_GOLEM",
+        "en": "Jade Golem",
+        "zh": "青玉魔像"
+      },
+      {
+        "id": "END_OF_TURN_TRIGGER",
+        "en": "End of Turn",
+        "zh": "回合结束触发"
+      },
+      {
+        "id": "START_OF_COMBAT",
+        "en": "Start of Combat",
+        "zh": "战斗开始触发"
+      },
+      {
+        "id": "START_OF_GAME_KEYWORD",
+        "en": "Start of Game",
+        "zh": "游戏开始触发"
+      },
+      {
+        "id": "COLLECTIONMANAGER_FILTER_MANA_EVEN",
+        "en": "Even Mana Cost",
+        "zh": "偶数法术消耗"
+      },
+      {
+        "id": "COLLECTIONMANAGER_FILTER_MANA_ODD",
+        "en": "Odd Mana Cost",
+        "zh": "奇数法术消耗"
+      }
+    ]
+  }
+}
