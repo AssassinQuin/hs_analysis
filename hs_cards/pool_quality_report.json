@@ -1,0 +1,128 @@
+{
+  "type_SPELL": {
+    "avg_v7": 4.384,
+    "top_10_pct_v7": 10.91,
+    "pool_size": 335,
+    "quality_std": 3.224
+  },
+  "school_邪能": {
+    "avg_v7": 3.951,
+    "top_10_pct_v7": 10.354,
+    "pool_size": 12,
+    "quality_std": 3.128
+  },
+  "type_MINION": {
+    "avg_v7": 6.92,
+    "top_10_pct_v7": 16.778,
+    "pool_size": 630,
+    "quality_std": 4.819
+  },
+  "school_自然": {
+    "avg_v7": 5.231,
+    "top_10_pct_v7": 12.931,
+    "pool_size": 34,
+    "quality_std": 3.757
+  },
+  "race_龙": {
+    "avg_v7": 8.673,
+    "top_10_pct_v7": 19.244,
+    "pool_size": 87,
+    "quality_std": 5.444
+  },
+  "race_元素": {
+    "avg_v7": 7.472,
+    "top_10_pct_v7": 18.369,
+    "pool_size": 62,
+    "quality_std": 5.297
+  },
+  "school_暗影": {
+    "avg_v7": 4.093,
+    "top_10_pct_v7": 9.816,
+    "pool_size": 38,
+    "quality_std": 3.037
+  },
+  "school_火焰": {
+    "avg_v7": 4.312,
+    "top_10_pct_v7": 10.793,
+    "pool_size": 31,
+    "quality_std": 3.356
+  },
+  "race_恶魔": {
+    "avg_v7": 7.292,
+    "top_10_pct_v7": 17.702,
+    "pool_size": 32,
+    "quality_std": 4.847
+  },
+  "race_海盗": {
+    "avg_v7": 3.074,
+    "top_10_pct_v7": 9.197,
+    "pool_size": 10,
+    "quality_std": 2.861
+  },
+  "race_鱼人": {
+    "avg_v7": 8.151,
+    "top_10_pct_v7": 15.508,
+    "pool_size": 21,
+    "quality_std": 4.625
+  },
+  "race_图腾": {
+    "avg_v7": 2.437,
+    "top_10_pct_v7": 3.942,
+    "pool_size": 3,
+    "quality_std": 1.506
+  },
+  "race_野兽": {
+    "avg_v7": 7.254,
+    "top_10_pct_v7": 16.511,
+    "pool_size": 108,
+    "quality_std": 4.477
+  },
+  "school_神圣": {
+    "avg_v7": 5.036,
+    "top_10_pct_v7": 12.331,
+    "pool_size": 26,
+    "quality_std": 3.81
+  },
+  "race_亡灵": {
+    "avg_v7": 6.397,
+    "top_10_pct_v7": 13.854,
+    "pool_size": 49,
+    "quality_std": 4.059
+  },
+  "school_冰霜": {
+    "avg_v7": 1.397,
+    "top_10_pct_v7": 1.995,
+    "pool_size": 15,
+    "quality_std": 0.681
+  },
+  "type_WEAPON": {
+    "avg_v7": 5.903,
+    "top_10_pct_v7": 12.573,
+    "pool_size": 29,
+    "quality_std": 3.778
+  },
+  "school_奥术": {
+    "avg_v7": 2.237,
+    "top_10_pct_v7": 3.853,
+    "pool_size": 19,
+    "quality_std": 1.239
+  },
+  "race_机械": {
+    "avg_v7": 6.072,
+    "top_10_pct_v7": 14.518,
+    "pool_size": 24,
+    "quality_std": 4.544
+  },
+  "race_德莱尼": {
+    "avg_v7": 7.49,
+    "top_10_pct_v7": 9.031,
+    "pool_size": 7,
+    "quality_std": 1.062
+  },
+  "race_纳迦": {
+    "avg_v7": 6.738,
+    "top_10_pct_v7": 12.979,
+    "pool_size": 6,
+    "quality_std": 4.402
+  }
+}

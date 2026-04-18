@@ -56,6 +56,7 @@ from multi_objective_evaluator import (
 )
 from bayesian_opponent import ParticleFilter, Particle
 from rhea_engine import next_turn_lethal_check
+from v8_contextual_scorer import V8ContextualScorer, get_scorer as get_v8_scorer, reset_scorer
 
 # ---------------------------------------------------------------------------
 # DecisionPresenter — inline stub (decision_presenter.py not yet created)
@@ -107,6 +108,7 @@ def create_test_card(
         health=health,
         v2_score=kwargs.get("v2_score", 0.0),
         l6_score=kwargs.get("l6_score", 0.0),
+        v7_score=kwargs.get("v7_score", kwargs.get("l6_score", 0.0)),
         text=kwargs.get("text", ""),
     )
 
@@ -628,8 +630,8 @@ def test_multi_objective_tradeoff() -> dict:
     print("=" * 60)
 
     # Situation: low HP (10), opponent has board, we have a heal spell and a minion
-    heal_spell = create_test_card(9002, "Healing Touch", 2, "SPELL", text="恢复8点", l6_score=2.0)
-    big_minion = create_test_card(9003, "Big Minion", 4, "MINION", attack=5, health=5, l6_score=4.0)
+    heal_spell = create_test_card(9002, "Healing Touch", 2, "SPELL", text="恢复8点", v7_score=2.0)
+    big_minion = create_test_card(9003, "Big Minion", 4, "MINION", attack=5, health=5, v7_score=4.0)
     state = make_simple_state(
         hero_hp=10,
         mana=6,
@@ -753,8 +755,8 @@ def test_multi_turn_lethal_setup() -> dict:
     # Turn 7, opponent at 15 HP
     # Hand: a 4-cost minion (can play this turn) + a 6-cost damage spell (too expensive)
     # We have enough board + minion to set up lethal next turn
-    big_minion = create_test_card(9004, "Big Minion", 4, "MINION", attack=6, health=6, l6_score=5.0)
-    damage_spell = create_test_card(9005, "Pyroblast", 6, "SPELL", text="造成10点伤害", l6_score=6.0)
+    big_minion = create_test_card(9004, "Big Minion", 4, "MINION", attack=6, health=6, v7_score=5.0)
+    damage_spell = create_test_card(9005, "Pyroblast", 6, "SPELL", text="造成10点伤害", v7_score=6.0)
 
     state = make_simple_state(
         hero_hp=25,
@@ -906,6 +908,86 @@ def test_v3_performance() -> dict:
     return {"name": "V3 Performance", "time_ms": pipeline_ms, "actions_found": 0, "best_fitness": result.best_fitness, "status": status}
 
 
+def test_v8_scorer_used() -> dict:
+    """V8 Test: Verify V8 scorer produces different values than raw v7."""
+    print("\n" + "=" * 60)
+    print("TEST 11 (V8): V8 Scorer Produces Contextual Values")
+    print("=" * 60)
+
+    card = create_test_card(123146, "Alexstrasza", 7, "MINION", attack=5, health=5,
+                            v7_score=32.0, text="战吼：造成5点伤害")
+    state = make_simple_state(
+        hero_hp=25, mana=7,
+        hand_cards=[card],
+        opp_hp=8,
+    )
+    state.turn_number = 3
+    state.board = [create_test_minion(i, f"M{i}", 2+i, 2+i) for i in range(4)]
+
+    scorer = get_v8_scorer()
+    ctx_score = scorer.contextual_score(card, state)
+    raw_v7 = card.v7_score
+
+    print(f"  Raw V7 score: {raw_v7:.2f}")
+    print(f"  V8 contextual: {ctx_score:.2f}")
+
+    assert ctx_score != raw_v7, f"V8 should differ from raw V7: {ctx_score} vs {raw_v7}"
+    print(f"  ✓ V8 contextual score differs from raw V7")
+
+    return {"name": "V8 Scorer Used", "time_ms": 0, "actions_found": 0, "best_fitness": 0.0, "status": "PASS"}
+
+
+def test_v8_graceful_degradation() -> dict:
+    """V8 Test: Graceful degradation when data files missing."""
+    import tempfile
+    print("\n" + "=" * 60)
+    print("TEST 12 (V8): V8 Graceful Degradation")
+    print("=" * 60)
+
+    with tempfile.TemporaryDirectory() as td:
+        scorer = V8ContextualScorer(data_dir=td)
+        assert not scorer.data_loaded, "Scorer should flag no data loaded"
+
+        card = create_test_card(99999, "Test", 3, "MINION", v7_score=5.0)
+        state = make_simple_state(hand_cards=[card])
+        score = scorer.contextual_score(card, state)
+
+        assert score > 0, f"Score should be > 0 even without data, got {score}"
+        print(f"  ✓ Score with no data files: {score:.3f}")
+
+    return {"name": "V8 Degradation", "time_ms": 0, "actions_found": 0, "best_fitness": 0.0, "status": "PASS"}
+
+
+def test_v8_hand_contextual_value() -> dict:
+    """V8 Test: hand_contextual_value works end-to-end."""
+    print("\n" + "=" * 60)
+    print("TEST 13 (V8): Hand Contextual Value")
+    print("=" * 60)
+
+    cards = [
+        create_test_card(1, "Fireball", 4, "SPELL", v7_score=5.2, text="造成6点伤害"),
+        create_test_card(2, "Frostbolt", 2, "SPELL", v7_score=3.1, text="造成3点伤害"),
+    ]
+    state = make_simple_state(
+        hero_hp=25, mana=6,
+        hand_cards=cards,
+        opp_hp=12,
+    )
+    state.turn_number = 6
+
+    scorer = get_v8_scorer()
+    hand_value = scorer.hand_contextual_value(state)
+    raw_sum = sum(c.v7_score for c in cards)
+
+    print(f"  Raw V7 sum: {raw_sum:.2f}")
+    print(f"  V8 hand value: {hand_value:.2f}")
+
+    assert hand_value > 0, f"Hand value should be > 0, got {hand_value}"
+    print(f"  ✓ Hand contextual value computed: {hand_value:.2f}")
+
+    return {"name": "V8 Hand Value", "time_ms": 0, "actions_found": 0, "best_fitness": 0.0, "status": "PASS"}
+
+
 # ===================================================================
 # Main test runner
 # ===================================================================
@@ -932,6 +1014,9 @@ def test_all() -> None:
         test_multi_turn_lethal_setup,
         test_confidence_gating,
         test_v3_performance,
+        test_v8_scorer_used,
+        test_v8_graceful_degradation,
+        test_v8_hand_contextual_value,
     ]
 
     for func in test_funcs:

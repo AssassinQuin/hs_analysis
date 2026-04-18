@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from game_state import GameState, Minion, Card, HeroState, ManaState, OpponentState, Weapon  # type: ignore[import]
 from composite_evaluator import evaluate, evaluate_delta, quick_eval  # type: ignore[import]
 from multi_objective_evaluator import evaluate as mo_evaluate, evaluate_delta as mo_evaluate_delta, EvaluationResult, pareto_filter  # type: ignore[import]
+from score_provider import load_scores_into_hand  # type: ignore[import]
 
 
 # ===================================================================
@@ -381,6 +382,9 @@ class RHEAEngine:
     ) -> SearchResult:
         """Run the RHEA evolutionary search and return the best action plan."""
         t_start = time.perf_counter()
+
+        # Load V7 scores into hand cards so evaluators see them
+        load_scores_into_hand(initial_state, source="v7")
 
         # Initialise population
         population = self._init_population(initial_state)

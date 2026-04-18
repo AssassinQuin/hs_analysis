@@ -55,6 +55,7 @@ class Card:
     health: int = 0
     v2_score: float = 0.0
     l6_score: float = 0.0
+    v7_score: float = 0.0   # V7 scoring report score
     text: str = ""
 
 

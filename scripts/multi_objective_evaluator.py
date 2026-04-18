@@ -18,6 +18,7 @@ from dataclasses import dataclass
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from game_state import Card, GameState, Minion
+from v8_contextual_scorer import get_scorer as _get_v8_scorer
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -92,7 +93,8 @@ def eval_tempo(state: GameState) -> float:
 def eval_value(state: GameState) -> float:
     """Hand quality + resource generation + card advantage."""
     # Hand quality
-    hand_quality = sum(getattr(c, "l6_score", 0.0) for c in state.hand)
+    v8_scorer = _get_v8_scorer()
+    hand_quality = v8_scorer.hand_contextual_value(state)
 
     # Resource generation proxy
     resource_gen = len(state.cards_played_this_turn) * 2
@@ -217,7 +219,7 @@ if __name__ == "__main__":
     )
     res_empty = evaluate(empty)
     # With empty board/hand, v_tempo ≈ 0 + 0*5 + 0*0.5 = 0
-    # v_value = 0 (no l6_scores) + 0*3 + 0*2 = 0
+    # v_value = 0 (no v7_scores) + 0*3 + 0*2 = 0
     # v_survival = 30/30 * 10 = 10 + 0 (no threats) + 0 (not lethal)
     if abs(res_empty.v_tempo) > 0.01:
         errors.append(f"FAIL empty v_tempo={res_empty.v_tempo:.2f}, expected ~0")
@@ -278,7 +280,7 @@ if __name__ == "__main__":
             Minion(attack=2, health=3, can_attack=True, owner="friendly"),
         ],
         hand=[
-            Card(name="Fireball", cost=4, card_type="SPELL", l6_score=5.0),
+            Card(name="Fireball", cost=4, card_type="SPELL", v7_score=5.0),
         ],
         opponent=OpponentState(
             hero=HeroState(hp=20, armor=0),

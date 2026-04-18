@@ -35,6 +35,8 @@ from game_state import (  # type: ignore[import]
     ManaState,
 )
 
+from v8_contextual_scorer import get_scorer as _get_v8_scorer
+
 # ---------------------------------------------------------------------------
 # Sub-model imports — fall back to inline implementations if absent
 # ---------------------------------------------------------------------------
@@ -73,7 +75,7 @@ except ImportError:
 # Default weights — RHEA will tune these implicitly
 # ===================================================================
 DEFAULT_WEIGHTS = {
-    "w_v2":        1.0,
+    "w_v7":        1.0,
     "w_board":     1.0,
     "w_threat":    1.5,   # threat weighted higher for survival
     "w_lingering": 0.8,
@@ -93,7 +95,7 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
 
     Components
     ----------
-    v2_adj      – V2+L6 adjusted scores of hand cards + board minions
+    v7_adj      – V7 adjusted scores of hand cards + board minions
     board_score – board control advantage
     threat      – lethal / danger assessment
     lingering   – ongoing / persistent effect value
@@ -102,8 +104,9 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
     w = {**DEFAULT_WEIGHTS, **(weights or {})}
 
     # --- V2 adjusted (hand quality only; board handled by eval_board) ---
-    hand_v2 = sum(c.l6_score for c in state.hand)
-    v2_adj = hand_v2
+    v8_scorer = _get_v8_scorer()
+    hand_v7 = v8_scorer.hand_contextual_value(state)
+    v7_adj = hand_v7
 
     # --- sub-models ---
     board_score     = eval_board(state)
@@ -113,7 +116,7 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
 
     # --- weighted sum ---
     V = (
-        w["w_v2"]        * v2_adj
+        w["w_v7"]        * v7_adj
       + w["w_board"]     * board_score
       + w["w_threat"]    * threat_score
       + w["w_lingering"] * lingering_score
@@ -136,9 +139,10 @@ def quick_eval(state: GameState) -> float:
 
     Used for rapid fitness evaluation in RHEA when time is critical.
     """
-    v2_adj = sum(c.l6_score for c in state.hand)
+    v8_scorer = _get_v8_scorer()
+    v7_adj = v8_scorer.hand_contextual_value(state)
     threat = -(max(0, 30 - state.hero.hp - state.hero.armor) * 0.5)
-    return v2_adj + 1.5 * threat
+    return v7_adj + 1.5 * threat
 
 
 # ===================================================================
@@ -167,9 +171,9 @@ def _build_populated_state() -> GameState:
         ],
         hand=[
             Card(dbf_id=1, name="Fireball", cost=4, original_cost=4,
-                 card_type="spell", attack=0, health=0, l6_score=5.2, text="Deal 6 damage."),
+                 card_type="spell", attack=0, health=0, v7_score=5.2, text="Deal 6 damage."),
             Card(dbf_id=2, name="Frostbolt", cost=2, original_cost=2,
-                 card_type="spell", attack=0, health=0, l6_score=3.1, text="Deal 3 damage."),
+                 card_type="spell", attack=0, health=0, v7_score=3.1, text="Deal 3 damage."),
         ],
         opponent=OpponentState(
             hero=HeroState(hp=22, armor=0),
@@ -246,9 +250,9 @@ def main():
     print("  ✓ Lethal state evaluated without error")
 
     # 5. Custom weights
-    custom_w = {"w_v2": 2.0, "w_threat": 3.0}
+    custom_w = {"w_v7": 2.0, "w_threat": 3.0}
     v_custom = evaluate(populated, weights=custom_w)
-    print(f"\n--- Custom weights (w_v2=2, w_threat=3) ---")
+    print(f"\n--- Custom weights (w_v7=2, w_threat=3) ---")
     print(f"  Populated V (custom) : {v_custom:+.2f}")
     print(f"  Populated V (default): {v_pop:+.2f}")
 
