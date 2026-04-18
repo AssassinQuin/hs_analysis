@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-DATA_PATH = "D:/code/game/hs_cards/hsjson_standard.json"
+DATA_PATH = "D:/code/game/hs_cards/unified_standard.json"
 LEGEND_PATH = "D:/code/game/hs_cards/standard_legendaries_analysis.json"
 
 
@@ -194,10 +194,15 @@ def map_submodels(card):
 def main():
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         raw = json.load(f)
-    all_cards = raw["cards"]
+    all_cards = raw if isinstance(raw, list) else raw.get("cards", raw)
     name_to_card = {}
+    dbf_to_card = {}
     for c in all_cards:
         name_to_card[c["name"]] = c
+        if c.get("ename"):
+            name_to_card[c["ename"]] = c
+        if c.get("dbfId"):
+            dbf_to_card[c["dbfId"]] = c
 
     with open(LEGEND_PATH, "r", encoding="utf-8") as f:
         legend_data = json.load(f)
@@ -222,16 +227,10 @@ def main():
 
         cards_info = []
         for dbf_id, count in deck["cards"]:
-            card = name_to_card.get(str(dbf_id))
+            card = dbf_to_card.get(dbf_id)
             if not card:
-                card_by_dbf = None
-                for c in all_cards:
-                    if c["dbfId"] == dbf_id:
-                        card_by_dbf = c
-                        break
-                if card_by_dbf:
-                    card = card_by_dbf
-                else:
+                card = name_to_card.get(str(dbf_id))
+            if not card:
                     cards_info.append({
                         "name": f"dbf={dbf_id}", "count": count, "cost": "?",
                         "type": "?", "class": "?", "rarity": "?",

@@ -180,5 +180,11 @@
     "参考设计文档: thoughts/shared/designs/2026-04-17-hearthstone-card-model-v2-design.md"
   ],
 
-  "git_log": []
+  "git_log": [
+    {
+      "hash": "96b2ebf",
+      "message": "feat(agent): initialize V2 model task workflow with state tracking, plans, and design doc",
+      "date": "2026-04-18"
+    }
+  ]
 }

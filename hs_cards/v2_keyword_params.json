@@ -1,0 +1,57 @@
+{
+  "tiers": {
+    "power": [
+      "DISCOVER",
+      "CHARGE",
+      "WINDFURY",
+      "RUSH",
+      "STEALTH",
+      "QUEST",
+      "LIFESTEAL",
+      "CHOOSE_ONE",
+      "DEATHRATTLE",
+      "DIVINE_SHIELD",
+      "BATTLECRY",
+      "TAUNT"
+    ],
+    "mechanical": [
+      "COLOSSUS",
+      "SECRET",
+      "AURA",
+      "SPELLPOWER",
+      "IMBUE",
+      "OVERLOAD",
+      "REBORN",
+      "OUTCAST",
+      "TRIGGER_VISUAL",
+      "START_OF_GAME",
+      "COMBO",
+      "POISONOUS",
+      "SILENCE",
+      "FREEZE",
+      "SIDE_QUEST",
+      "IMMUNE",
+      "TRADEABLE"
+    ]
+  },
+  "bases": {
+    "power": 1.5,
+    "mechanical": 0.75,
+    "niche": 0.5
+  },
+  "formula": "base * (1 + 0.1 * mana)",
+  "class_multiplier": {
+    "NEUTRAL": 0.85,
+    "DEMONHUNTER": 0.95,
+    "HUNTER": 0.95,
+    "WARRIOR": 0.98,
+    "PALADIN": 1.0,
+    "ROGUE": 1.0,
+    "MAGE": 1.0,
+    "DEATHKNIGHT": 1.02,
+    "PRIEST": 1.02,
+    "WARLOCK": 1.02,
+    "DRUID": 1.05,
+    "SHAMAN": 1.05
+  }
+}

@@ -2,24 +2,16 @@
   "model": "power_law",
   "formula": "a * mana^b + c",
   "parameters": {
-    "a": 3.18684,
-    "b": 0.697459,
-    "c": -0.013844
+    "a": 0.918904,
+    "b": 1.224303,
+    "c": 2.525985
   },
   "fit_quality": {
-    "mae": 0.6645,
-    "rmse": 0.8691,
-    "v1_mae": 2.2234,
-    "v1_rmse": 2.6576
+    "mae": 2.3846,
+    "rmse": 6.7035
   },
   "data_source": {
-    "file": "standard_legendaries_analysis.json",
-    "minion_count": 226,
+    "minion_count": 629,
     "mana_buckets": 11
-  },
-  "validation": {
-    "b in [0.65, 0.95] (sublinear)": true,
-    "Mean |residual| < 1.0": true,
-    "RMSE < V1 RMSE": true
   }
 }
