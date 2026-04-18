@@ -1,37 +1,37 @@
 {
   "tiers": {
     "power": [
-      "DISCOVER",
-      "CHARGE",
-      "WINDFURY",
-      "RUSH",
-      "STEALTH",
-      "QUEST",
-      "LIFESTEAL",
       "CHOOSE_ONE",
+      "STEALTH",
       "DEATHRATTLE",
+      "LIFESTEAL",
+      "QUEST",
+      "DISCOVER",
+      "RUSH",
+      "WINDFURY",
+      "TAUNT",
       "DIVINE_SHIELD",
-      "BATTLECRY",
-      "TAUNT"
+      "CHARGE",
+      "BATTLECRY"
     ],
     "mechanical": [
-      "COLOSSUS",
-      "SECRET",
-      "AURA",
-      "SPELLPOWER",
-      "IMBUE",
-      "OVERLOAD",
-      "REBORN",
-      "OUTCAST",
       "TRIGGER_VISUAL",
+      "COLOSSUS",
+      "SIDE_QUEST",
+      "IMMUNE",
+      "AURA",
+      "OUTCAST",
       "START_OF_GAME",
+      "SECRET",
+      "REBORN",
+      "IMBUE",
       "COMBO",
       "POISONOUS",
       "SILENCE",
+      "TRADEABLE",
       "FREEZE",
-      "SIDE_QUEST",
-      "IMMUNE",
-      "TRADEABLE"
+      "OVERLOAD",
+      "SPELLPOWER"
     ]
   },
   "bases": {

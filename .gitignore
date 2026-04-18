@@ -26,3 +26,8 @@ Thumbs.db
 # Card images (large, downloadable)
 hs_cards/images/
 hs_cards/crops/
+
+# External tool artifacts
+.swarm/
+SWARM_PLAN.*
+mcp-servers/

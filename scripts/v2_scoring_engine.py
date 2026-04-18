@@ -188,57 +188,192 @@ def parse_text_effects(text):
 
 
 # ──────────────────────────────────────────────
-# L4: Type Adapter
+# L5: Conditional Expectation Layer
 # ──────────────────────────────────────────────
-def score_minion(card, curve_popt):
+# Many cards are weak standalone but powerful with conditions met.
+# This layer estimates P(condition met) × bonus_when_met.
+
+CONDITION_DEFS = [
+    # (name, regex_pattern, base_probability, bonus_multiplier)
+    # base_probability: estimated % of games where condition is relevant
+    # bonus_multiplier: how much the effect amplifies when triggered
+    ("dark_gift", r"黑暗之赐", 0.6, 1.8),
+    ("discover_chain", r"发现", 0.8, 1.2),
+    ("quest_progress", r"任务[:：]", 0.7, 3.0),
+    ("imbue_stacking", r"灌注", 0.5, 2.0),
+    ("reveal_burst", r"回溯", 0.6, 1.5),
+    ("mana_thirst", r"延系", 0.5, 1.6),
+    ("trigger_on_turn", r"每当|在你的回合|回合结束|回合开始", 0.7, 1.4),
+    ("condition_if", r"如果", 0.55, 1.5),
+    ("synergy_use_cast", r"使用一张|施放\d+个|打出", 0.5, 1.3),
+    ("discard_payoff", r"弃", 0.3, 1.0),
+    ("cost_reduction", r"消耗.*减少|每.*减少", 0.6, 1.4),
+    ("copy_effect", r"复制", 0.7, 1.3),
+    ("draw_enabler", r"抽.*牌", 0.8, 1.1),
+    ("aoe_clear", r"所有.*(?:伤害|消灭|随从)", 0.5, 1.5),
+    ("buff_aura", r"获得\+\d+/\+\d+|你的.*\+\d+|获得.*攻击力", 0.6, 1.3),
+    ("deathrattle_payoff", r"亡语", 0.7, 1.3),
+    ("battlecry_strong", r"战吼[:：]", 0.9, 1.1),
+    ("generate_value", r"置入|获取|获得一张", 0.7, 1.3),
+    ("destroy_removal", r"消灭", 0.6, 1.4),
+    ("heal_sustain", r"恢复|治疗", 0.5, 1.1),
+    ("armor_gain", r"护甲", 0.5, 1.1),
+    ("rush_immediate", r"突袭", 0.8, 1.2),
+    ("charge_lethal", r"冲锋", 0.6, 1.3),
+    ("taunt_stall", r"嘲讽", 0.7, 1.1),
+    ("freeze_control", r"冻结", 0.5, 1.2),
+    ("stealth_setup", r"潜行", 0.5, 1.2),
+    ("combo_enabler", r"连击", 0.5, 1.3),
+    ("secret_bluff", r"奥秘", 0.5, 1.2),
+    ("tradeable_cycle", r"可交易", 0.8, 1.1),
+]
+
+
+def calc_conditional_ev(card, base_l2l3):
+    text = card.get("text", "")
+    mechs = set(card.get("mechanics", []))
+    all_text = " ".join(mechs) + " " + text
+
+    cond_score = 0.0
+    cond_details = []
+    matched = set()
+
+    for cname, pat, prob, mult in CONDITION_DEFS:
+        if re.search(pat, all_text) and cname not in matched:
+            matched.add(cname)
+            ev = prob * base_l2l3 * (mult - 1.0)
+            cond_score += ev
+            cond_details.append(f"{cname}={ev:+.1f}(P{prob:.0%}×M{mult:.1f})")
+
+    return cond_score, cond_details
+
+
+# ──────────────────────────────────────────────
+# L4: Type Adapters — data-driven baselines per type
+# ──────────────────────────────────────────────
+def _fit_per_type_baselines(cards, curve_popt):
+    """
+    For each card type, compute expected effect budget by fitting
+    actual L2+L3 totals to a per-type power-law curve.
+    This gives every type a proper L1 baseline from data.
+    """
+    baselines = {}
+    type_groups = defaultdict(list)
+
+    for card in cards:
+        ctype = card.get("type", "")
+        if ctype not in ("SPELL", "WEAPON", "LOCATION", "HERO"):
+            continue
+        mana = max(card.get("cost", 0), 0)
+        if mana == 0:
+            continue
+        text = card.get("text", "")
+        l2, _ = calc_keyword_score(card, curve_popt)
+        l3, _ = parse_text_effects(text)
+        total_value = l2 + l3
+        type_groups[ctype].append((mana, total_value))
+
+    for ctype, entries in type_groups.items():
+        if len(entries) < 5:
+            continue
+        manas = np.array([e[0] for e in entries], dtype=float)
+        values = np.array([e[1] for e in entries], dtype=float)
+        try:
+            popt, _ = curve_fit(
+                power_law, manas, values, p0=[1.0, 0.7, 0],
+                bounds=([0, 0.1, -5], [20, 2, 10]), maxfev=10000
+            )
+            baselines[ctype] = {
+                "params": popt.tolist(),
+                "formula": "a * mana^b + c",
+                "sample": len(entries),
+                "mean_value": float(np.mean(values)),
+            }
+            print(f"  {ctype} baseline: {popt[0]:.2f} * m^{popt[1]:.2f} + ({popt[2]:.2f}), n={len(entries)}, mean={np.mean(values):.1f}")
+        except Exception:
+            baselines[ctype] = {"params": None, "mean_value": float(np.mean(values))}
+            print(f"  {ctype} baseline: flat={np.mean(values):.1f} (fit failed), n={len(entries)}")
+
+    return baselines
+
+
+def score_minion(card, curve_popt, baselines):
     mana = max(card.get("cost", 0), 0)
     actual = card.get("attack", 0) + card.get("health", 0)
-    expected = power_law(mana, *curve_popt) * CLASS_MULTIPLIER.get(card.get("cardClass"), 1.0)
+    cls_mult = CLASS_MULTIPLIER.get(card.get("cardClass"), 1.0)
+    expected = power_law(mana, *curve_popt) * cls_mult
     l1 = actual - expected
-    l2, kw_applied = calc_keyword_score(card, curve_popt)
-    text = card.get("text", "")
-    l3, eff_applied = parse_text_effects(text)
-    return l1 + l2 + l3, l1, l2, l3, kw_applied, eff_applied
+    l2, kw = calc_keyword_score(card, curve_popt)
+    l3, eff = parse_text_effects(card.get("text", ""))
+    base_l2l3 = l2 + l3
+    l5, cond = calc_conditional_ev(card, base_l2l3)
+    return l1 + base_l2l3 + l5, l1, l2, l3, kw, eff, l5, cond
 
 
-def score_spell(card, curve_popt):
+def _get_type_expected(ctype, mana, baselines):
+    bl = baselines.get(ctype)
+    if not bl:
+        return 0
+    params = bl.get("params")
+    if params:
+        return power_law(mana, *params)
+    return bl.get("mean_value", 0)
+
+
+def score_spell(card, curve_popt, baselines):
     mana = max(card.get("cost", 0), 0)
-    text = card.get("text", "")
-    l3, eff_applied = parse_text_effects(text)
-    l2, kw_applied = calc_keyword_score(card, curve_popt)
-    expected_budget = power_law(mana, *curve_popt) * 0.5 * CLASS_MULTIPLIER.get(card.get("cardClass"), 1.0)
-    return l2 + l3 - expected_budget, 0, l2, l3, kw_applied, eff_applied
+    l2, kw = calc_keyword_score(card, curve_popt)
+    l3, eff = parse_text_effects(card.get("text", ""))
+    cls_mult = CLASS_MULTIPLIER.get(card.get("cardClass"), 1.0)
+    expected = _get_type_expected("SPELL", mana, baselines) * cls_mult
+    l1 = (l2 + l3) - expected
+    base_l2l3 = l2 + l3
+    l5, cond = calc_conditional_ev(card, base_l2l3)
+    return l1 + l5, l1, l2, l3, kw, eff, l5, cond
 
 
-def score_weapon(card, curve_popt):
+def score_weapon(card, curve_popt, baselines):
     mana = max(card.get("cost", 0), 0)
     atk = card.get("attack", 0)
-    dur = card.get("health", 1)
+    dur = max(card.get("health", 1), 1)
     weapon_stats = atk * dur
-    expected = power_law(mana, *curve_popt) * 0.7
-    l1 = weapon_stats - expected
-    l2, kw_applied = calc_keyword_score(card, curve_popt)
-    text = card.get("text", "")
-    l3, eff_applied = parse_text_effects(text)
-    return l1 + l2 + l3, l1, l2, l3, kw_applied, eff_applied
+    expected_stats = power_law(mana, *curve_popt) * 0.7
+    l1_raw = weapon_stats - expected_stats
+    l2, kw = calc_keyword_score(card, curve_popt)
+    l3, eff = parse_text_effects(card.get("text", ""))
+    expected_effects = _get_type_expected("WEAPON", mana, baselines)
+    l1 = l1_raw + (l2 + l3) - expected_effects
+    base_l2l3 = l2 + l3
+    l5, cond = calc_conditional_ev(card, base_l2l3)
+    return l1 + l5, l1_raw, l2, l3, kw, eff, l5, cond
 
 
-def score_location(card, curve_popt):
+def score_location(card, curve_popt, baselines):
     mana = max(card.get("cost", 0), 0)
-    text = card.get("text", "")
-    l3, eff_applied = parse_text_effects(text)
-    l2, kw_applied = calc_keyword_score(card, curve_popt)
-    expected = power_law(mana, *curve_popt) * 0.4
-    charges = card.get("health", 3)
-    return l2 + l3 * charges * 0.5 - expected, 0, l2, l3, kw_applied, eff_applied
+    charges = max(card.get("health", 3), 1)
+    l2, kw = calc_keyword_score(card, curve_popt)
+    l3_per_use, eff = parse_text_effects(card.get("text", ""))
+    total_effect = l3_per_use * charges
+    expected = _get_type_expected("LOCATION", mana, baselines)
+    l1 = total_effect + l2 - expected
+    base_l2l3 = l2 + total_effect
+    l5, cond = calc_conditional_ev(card, base_l2l3)
+    return l1 + l5, 0, l2, total_effect, kw, eff, l5, cond
 
 
-def score_hero(card, curve_popt):
-    text = card.get("text", "")
-    l3, eff_applied = parse_text_effects(text)
-    l2, kw_applied = calc_keyword_score(card, curve_popt)
-    armor = 5.0
-    return l2 + l3 + armor, 0, l2, l3, kw_applied, eff_applied
+def score_hero(card, curve_popt, baselines):
+    mana = max(card.get("cost", 0), 0)
+    l2, kw = calc_keyword_score(card, curve_popt)
+    l3, eff = parse_text_effects(card.get("text", ""))
+    hero_power_budget = 5.0
+    armor_budget = hero_power_budget
+    expected = _get_type_expected("HERO", mana, baselines)
+    if expected == 0:
+        expected = 7.0
+    l1 = l2 + l3 + armor_budget - expected
+    base_l2l3 = l2 + l3
+    l5, cond = calc_conditional_ev(card, base_l2l3)
+    return l1 + l5, 0, l2, l3, kw, eff, l5, cond
 
 
 SCORERS = {
@@ -256,10 +391,13 @@ def main():
 
     print(f"Loaded {len(cards)} cards from unified DB")
 
-    # L1: Fit curve
     curve_popt = fit_vanilla_curve(cards)
 
-    # Score all cards
+    print(f"\n{'=' * 70}")
+    print("PER-TYPE EFFECT BASELINES")
+    print(f"{'=' * 70}")
+    baselines = _fit_per_type_baselines(cards, curve_popt)
+
     scored = []
     type_counts = Counter()
     for card in cards:
@@ -268,7 +406,7 @@ def main():
         if not scorer:
             continue
         try:
-            total, l1, l2, l3, kw, eff = scorer(card, curve_popt)
+            total, l1, l2, l3, kw, eff, l5, cond = scorer(card, curve_popt, baselines)
         except Exception:
             continue
         scored.append({
@@ -283,6 +421,8 @@ def main():
             "L1": round(float(l1), 2),
             "L2": round(float(l2), 2),
             "L3": round(float(l3), 2),
+            "L5": round(float(l5), 2),
+            "conditions": cond,
             "keywords": kw,
             "effects": eff,
             "mechanics": card.get("mechanics", []),
@@ -335,6 +475,21 @@ def main():
         if rs:
             print(f"    {rar:<12s}: n={len(rs):3d}, mean={np.mean(rs):5.1f}, median={np.median(rs):5.1f}, top={max(rs):5.1f}")
 
+    # L5 conditional expectation stats
+    print(f"\n  === L5 CONDITIONAL EXPECTATION ===")
+    cond_cards = [s for s in scored if s["conditions"]]
+    l5_scores = [s["L5"] for s in scored]
+    l5_pos = [s for s in scored if s["L5"] > 0]
+    print(f"    Cards with conditions: {len(cond_cards)} / {len(scored)} ({100 * len(cond_cards) / len(scored):.1f}%)")
+    print(f"    L5 stats: mean={np.mean(l5_scores):.2f}, max={max(l5_scores):.2f}, total_positive={len(l5_pos)}")
+    if cond_cards:
+        top_cond = sorted(cond_cards, key=lambda x: -x["L5"])[:15]
+        print(f"\n    Top 15 conditional boost:")
+        print(f"    {'L5':>6} | {'Score':>6} | {'Cost':>4} | {'Type':>7} | Name | Conditions")
+        for s in top_cond:
+            cond_str = "; ".join(s["conditions"][:3])
+            print(f"    {s['L5']:6.1f} | {s['score']:6.1f} | {s['cost']:4d} | {s['type']:>7s} | {s['name']} | {cond_str}")
+
     # Validation checks
     print(f"\n{'=' * 70}")
     print("VALIDATION")
@@ -344,12 +499,17 @@ def main():
         v_scores = [s["score"] for s in vanilla]
         print(f"  Vanilla minions ({len(vanilla)}): mean={np.mean(v_scores):.2f}, should be ~0")
 
+    for ctype in ["MINION", "SPELL", "WEAPON", "LOCATION", "HERO"]:
+        ts = [s["score"] for s in scored if s["type"] == ctype]
+        if ts:
+            print(f"  {ctype:<10s}: n={len(ts):3d}, mean={np.mean(ts):5.1f}, range=[{min(ts):.1f}, {max(ts):.1f}]")
+
     skewness = float(np.mean((np.array(scores) - np.mean(scores))**3) / np.std(scores)**3)
     print(f"  Distribution skewness: {skewness:.2f} (target < 1.0)")
 
     # Save
     with open(OUTPUT_REPORT, "w", encoding="utf-8") as f:
-        json.dump(scored, f, ensure_ascii=False, indent=1)
+        json.dump({"cards": scored, "baselines": {k: {kk: vv for kk, vv in v.items() if kk != "params"} for k, v in baselines.items()}}, f, ensure_ascii=False, indent=1)
     print(f"\n  Report saved: {OUTPUT_REPORT}")
 
     # Keyword stats
