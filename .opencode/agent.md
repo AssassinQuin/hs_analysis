@@ -1,5 +1,16 @@
 # Agent Init — 炉石传说卡牌数值数学建模
 
+## ⚡ Session 启动流程（每次新 session 第一条消息前必须执行）
+
+按顺序执行以下 recall，加载持久化记忆到上下文：
+
+1. **环境与命令**：`aivectormemory_recall(tags: ["environment", "system"], scope: "user", brief: true, top_k: 5)`
+2. **项目约定**：`aivectormemory_recall(tags: ["skill", "rules"], scope: "user", brief: true, top_k: 5)`
+3. **会话状态**：`aivectormemory_status()` — 检查是否 blocked，读取 current_task 和进度
+4. **项目知识**：`aivectormemory_recall(tags: ["project-knowledge"], scope: "project", brief: true, top_k: 20)`
+
+如果环境信息与当前系统不匹配（如记录 Windows 但当前是 Mac），重新检测并更新 memory。
+
 ## 项目定位
 
 本项目通过**数学建模**量化《炉石传说》卡牌价值，目标是建立一套可计算的卡牌评估体系，辅助游戏中的决策收益分析。
