@@ -1,14 +1,66 @@
-# 炉石传说卡牌数值数学建模
+# 炉石传说卡牌数值分析
 
-> 通过数学建模量化卡牌价值，建立游戏决策收益分析体系
+> 通过数学建模量化卡牌价值，辅助竞技场决策分析
 
 ## 项目简介
 
-本项目以《炉石传说》（Hearthstone）标准模式传说卡牌为研究对象，建立一套完整的**卡牌数值评估数学模型**。核心思路是将卡牌的关键词、属性、费用等要素量化为可计算的数值，从而：
+本项目以《炉石传说》（Hearthstone）标准/狂野模式卡牌为研究对象，建立了一套**多版本卡牌评分引擎**和**竞技场决策系统**。从 V2 基础评分到 V8 上下文感知评分，再到 RHEA 搜索引擎，覆盖了从单卡评估到完整对局决策的全链路。
 
-- **评估单卡价值**：一张卡是否"超模"或"亏模"
-- **比较卡牌间收益**：同等费用下哪张卡收益更高
-- **辅助决策分析**：为构筑和抉择提供数据支撑
+## 项目结构
+
+```
+hs_analysis/
+├── hs_analysis/                 # 核心包
+│   ├── config.py                # 全局配置
+│   ├── data/                    # 数据获取与处理
+│   │   ├── card_index.py        # 卡牌索引（O(1) 查询）
+│   │   ├── card_cleaner.py      # 数据清洗流水线
+│   │   ├── fetch_hsjson.py      # HearthstoneJSON API
+│   │   ├── fetch_hsreplay.py    # HSReplay 数据获取
+│   │   ├── fetch_iyingdi.py     # iyingdi 数据获取
+│   │   ├── fetch_wild.py        # 狂野卡牌获取
+│   │   ├── build_unified_db.py  # 统一数据库构建
+│   │   └── build_wild_db.py     # 狂野去重构建
+│   ├── models/                  # 数据模型
+│   │   └── card.py              # Card 数据模型
+│   ├── scorers/                 # 评分引擎
+│   │   ├── vanilla_curve.py     # 白板曲线基准
+│   │   ├── v2_engine.py         # V2 评分引擎
+│   │   ├── v7_engine.py         # V7 评分引擎
+│   │   ├── v8_contextual.py     # V8 上下文感知评分
+│   │   ├── l6_real_world.py     # L6 真实世界评分
+│   │   └── constants.py         # 评分常量
+│   ├── evaluators/              # 评估器
+│   │   ├── composite.py         # 复合评估器
+│   │   ├── submodel.py          # 子模型评估器
+│   │   └── multi_objective.py   # 多目标评估器
+│   ├── search/                  # 搜索引擎
+│   │   ├── rhea_engine.py       # RHEA 滚动水平线进化
+│   │   ├── game_state.py        # 游戏状态管理
+│   │   ├── lethal_checker.py    # 致命检测
+│   │   ├── opponent_simulator.py# 对手模拟
+│   │   ├── risk_assessor.py     # 风险评估
+│   │   └── action_normalize.py  # 动作归一化
+│   └── utils/                   # 工具模块
+│       ├── score_provider.py    # 评分数据提供
+│       ├── bayesian_opponent.py # 贝叶斯对手建模
+│       └── spell_simulator.py   # 法术模拟
+├── scripts/                     # 运行入口 & 工具脚本
+│   ├── run_fetch.py             # 数据获取
+│   ├── run_rhea.py              # RHEA 引擎运行
+│   ├── run_score_v2.py          # V2 评分运行
+│   ├── run_score_v7.py          # V7 评分运行
+│   ├── analyze_meta_decks.py    # 环境套牌分析
+│   ├── deep_analysis.py         # 深度分析
+│   ├── decision_presenter.py    # 决策展示
+│   ├── pool_quality_generator.py# 池质量报告
+│   ├── rewind_delta_generator.py# 回溯差异报告
+│   └── diag_*.py                # 诊断工具
+├── tests/                       # 测试套件
+├── hs_cards/                    # 卡牌数据文件
+├── research/                    # 研究文档
+└── libs/                        # 外部库
+```
 
 ## 数学模型
 
@@ -16,11 +68,9 @@
 
 基准公式：**期望属性 = 法力消耗 × 2 + 1**
 
-一张 N 费的"白板"（无特效）随从，其攻击力 + 生命值之和应接近 `2N + 1`。偏差部分即为特效的"隐性价值"。
+一张 N 费的"白板"随从，其攻击力 + 生命值之和应接近 `2N + 1`。偏差部分即为特效的"隐性价值"。
 
 ### 关键词价值模型
-
-每个关键词被赋予一个经验分值，用于量化特效对卡牌总价值的贡献：
 
 | 关键词 | 分值 | 说明 |
 |--------|------|------|
@@ -36,83 +86,39 @@
 | 潜行 | 1.0 | 保证一回合存活 |
 | 过载 | -1.0 | 负面效果惩罚 |
 
-### 综合评分公式
+### 评分体系演进
 
-```
-总评分 = 关键词加成 - 属性偏差
+- **V2** — 基础属性 + 关键词评分
+- **V7** — 基于 HSReplay 数据驱动的实绩评分
+- **V8** — 上下文感知评分（回合数、场面饱和度、种族协同等）
+- **L6** — 真实世界评分（综合多维度数据）
 
-属性偏差 = (攻击 + 生命) - (法力 × 2 + 1)
-关键词加成 = Σ (每个关键词的经验分值)
-```
+## 快速开始
 
-**评分越高，卡牌的"额外价值"越大。**
+```bash
+# 安装依赖
+pip install -e .
 
-## 项目结构
+# 获取卡牌数据
+python scripts/run_fetch.py
 
-```
-game/
-├── scripts/                    # 工具脚本目录
-│   ├── scrape_hs_cards.py      # 暴雪国服 API 数据采集
-│   ├── fetch_hsjson.py         # HearthstoneJSON API 数据获取
-│   ├── rescrape_legendaries.py # 传说卡牌重新采集（修正版）
-│   ├── analyze_cards.py        # 基础卡牌数据分析
-│   ├── full_analysis.py        # 完整数学建模分析
-│   ├── check_rarity.py         # 稀有度分布检查
-│   ├── show_slugs.py           # 卡牌 slug 查看工具
-│   ├── explore_api.py          # API 端点探索
-│   ├── test_api.py             # API 参数测试
-│   └── test_api_endpoints.py   # API 端点连通性测试
-├── hs_cards/                   # 卡牌数据目录
-│   ├── all_standard_legendaries.json   # 全量传说卡牌（按职业分组）
-│   ├── standard_legendaries_v2.json    # 传说卡牌数据（v2 修正版）
-│   ├── legendaries_simple_v2.json      # 传说卡牌精简数据
-│   ├── standard_legendaries_analysis.json  # 带评分的完整分析结果
-│   ├── card_list.json                  # 卡牌摘要列表
-│   ├── images/                 # 卡牌原图
-│   └── crops/                  # 卡牌裁切图
-└── mydatabase.db               # 本地数据库
+# 运行评分
+python scripts/run_score_v7.py
+
+# 运行测试
+pytest
 ```
 
 ## 数据来源
 
-- **暴雪国服 API**：`https://webapi.blizzard.cn/hs-cards-api-server/api` — 提供中文卡牌数据、图片
-- **HearthstoneJSON**：`https://api.hearthstonejson.com/v1/latest/zhCN/` — 社区维护的完整卡牌数据
-
-## 分析维度
-
-### 统计分析
-
-- 法力曲线分布
-- 攻击力 / 生命值分布
-- 职业分布统计
-- 关键词词频统计
-- 扩展包卡牌数量对比
-
-### 价值分析
-
-- 白板测试偏差计算
-- 关键词价值量化
-- 综合评分排名（Top 20 / Bottom 10）
-- 费用梯度下的平均属性趋势
-
-## 使用方式
-
-```bash
-# 1. 采集卡牌数据
-python scripts/scrape_hs_cards.py
-
-# 2. 运行完整分析
-python scripts/full_analysis.py
-
-# 3. 基础数据分析
-python scripts/analyze_cards.py
-```
+- **HearthstoneJSON** — 社区维护的完整卡牌数据
+- **HSReplay** — 对战胜率与卡牌排名数据
+- **iyingdi** — 竞技场卡牌数据
 
 ## 依赖
 
-- Python 3.x
-- `requests` — HTTP 请求（数据采集脚本）
-- 标准库：`json`, `urllib`, `collections`
+- Python 3.11+
+- 参见 `pyproject.toml`
 
 ## 许可
 

@@ -11,10 +11,11 @@ import sys
 import tempfile
 import json
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# migrated to tests/
 
-from game_state import Card, GameState, HeroState, ManaState, OpponentState, Minion
-from v8_contextual_scorer import V8ContextualScorer, get_scorer, reset_scorer
+from hs_analysis.search.game_state import GameState, HeroState, ManaState, OpponentState, Minion
+from hs_analysis.models.card import Card
+from hs_analysis.scorers.v8_contextual import V8ContextualScorer, get_scorer, reset_scorer
 
 
 def _make_card(**kwargs) -> Card:

@@ -11,10 +11,11 @@ import os
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# migrated to tests/
 
-from game_state import Card, GameState
-from score_provider import ScoreProvider, load_scores_into_hand
+from hs_analysis.search.game_state import GameState
+from hs_analysis.models.card import Card
+from hs_analysis.utils.score_provider import ScoreProvider, load_scores_into_hand
 
 
 def test_basic_lookup():
