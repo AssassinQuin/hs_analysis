@@ -34,10 +34,14 @@
 |---------|--------|--------|-------|
 | Charge from hand | ✅ | B01 | `apply_action` now propagates CHARGE/RUSH/TAUNT/DIVINE_SHIELD/WINDFURY/STEALTH/POISONOUS from Card.mechanics to Minion fields |
 | Rush from hand | ✅ | B01 | Mechanic propagated via `apply_action` — same fix as Charge from hand |
-| Windfury | ⚠️ | — | Minion field exists but attack tracking not implemented |
+| Hero Power | ✅ | B03 | Generates HERO_POWER action, deducts 2 mana, sets used flag |
+| Windfury | ⚠️ | B03 | Minion field exists; second attack BROKEN (can_attack=False after first) |
 | Stealth | ⚠️ | — | Minion field exists but targeting rules not enforced |
-| Secret | ⚠️ | — | Tracked in OpponentState.secrets but no simulation |
-| Overload | ⚠️ | — | ManaState tracks overload_next but cards don't declare overload |
+| Secret | ⚠️ | B03 | Tracked in OpponentState.secrets but no simulation/trigger |
+| Overload | ⚠️ | B03 | ManaState tracks overload_next but apply_action never sets it |
+| Armor (opponent) | ⚠️ | B03 | HeroState.armor field exists but apply_action ignores it, subtracts from HP |
+| Poisonous | ⚠️ | B03 | Field propagated to Minion but combat doesn't destroy-on-damage |
+| Hero card play | ⚠️ | B03 | Type "HERO" recognized, card removed from hand, but effect is no-op |
 | Card draw | ⚠️ | — | No draw simulation in action space |
 
 ### Not Supported
@@ -78,6 +82,7 @@
 |-------|------|-------|------------------|
 | B01 | `test_v9_hdt_batch01.py` | 10 | Weapon, taunt, lethal, divine shield, charge, rush, mana, overextension |
 | B02 | `test_v9_hdt_batch02_deck_random.py` | 10 | Real deck data, multi-class (DH/Warlock/Hunter/Rogue/Druid), weapon+spells, charge finisher, stealth, big minions, lethal detection, defense |
+| B03 | `test_v9_hdt_batch03.py` | 10 | Hero power, windfury, armor, secrets, poisonous, hero card, innervate, overload, full hand, spell-only hand |
 
 ## Key Engine Limitations Discovered
 
@@ -105,6 +110,41 @@ All minions (including charge) must attack taunt minions when opponent has taunt
 **Issue**: Weapon attacks use `source_index=-1`, which is a convention not clearly
 documented. This works but could be error-prone for future features.
 
+### 4. Windfury Second Attack (Discovered B03)
+
+**Issue**: After a minion attacks, `apply_action` sets `can_attack=False` unconditionally.
+Windfury minions should be able to attack twice, but the engine has no tracking
+for "has attacked once this turn" vs "has attacked twice".
+
+**Workaround needed**: Track windfury attacks separately; allow second attack if
+`has_windfury` and minion has attacked exactly once this turn.
+
+### 5. Armor Damage Absorption (Discovered B03)
+
+**Issue**: `apply_action` subtracts damage directly from `opponent.hero.hp`, ignoring
+`opponent.hero.armor`. In real Hearthstone, armor absorbs damage before HP.
+
+**Fix**: Before `hp -= damage`, check `armor > 0` and absorb what armor can, then
+subtract remainder from HP.
+
+### 6. Poisonous Combat (Discovered B03)
+
+**Issue**: `apply_action` deals normal `source.attack` damage to target. If source
+has `has_poisonous=True`, the target should be destroyed regardless of remaining health.
+Current engine doesn't check poisonous flag during combat.
+
+### 7. Overload Not Applied (Discovered B03)
+
+**Issue**: `ManaState.overload_next` field exists but `apply_action` never sets it
+when playing a card with OVERLOAD mechanic. The overload amount would need to be
+parsed from card text or added as a separate field on Card.
+
+### 8. Hero Card No-Op (Discovered B03)
+
+**Issue**: Card type "HERO" is recognized in `enumerate_legal_actions` and the card
+is removed from hand in `apply_action`, but no hero replacement effect is applied.
+Hero cards should change hero_class, HP, armor, and replace hero power.
+
 ---
 
-*Last updated: Batch 02 (20 total tests across B01+B02)*
+*Last updated: Batch 03 (30 total tests across B01+B02+B03)*
