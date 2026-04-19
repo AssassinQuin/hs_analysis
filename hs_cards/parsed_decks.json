@@ -363,10 +363,10 @@
         "count": 2
       },
       {
-        "dbfId": 0,
-        "name": "ID:0",
-        "cost": "?",
-        "type": "?",
+        "dbfId": 114219,
+        "name": "龙巢守护者",
+        "cost": 2,
+        "type": "MINION",
         "count": 2
       }
     ],
