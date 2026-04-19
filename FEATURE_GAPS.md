@@ -119,3 +119,26 @@
 - Test 6 confirmed: `check_lethal` can find lethal paths through spell damage + board attacks
 - `max_damage_bound` correctly sums board + spell + weapon damage
 - When lethal found, engine fitness >= 9000 (confirmed)
+
+## Batch 13 — High-Complexity Stress & Edge-Case Findings
+
+### AoE death cleanup requires manual call
+- `EffectApplier.apply_aoe` does NOT call `_resolve_deaths` internally
+- Unlike `resolve_effects` which auto-calls death cleanup, AoE via `apply_aoe` leaves dead minions on board
+- Must call `_resolve_deaths(state)` manually after `apply_aoe` to clean up zero-HP minions
+
+### Spell buff targets all friendly minions (no single-target)
+- `buff_atk` in `resolve_effects` applies attack buff to ALL friendly minions
+- No single-target buff support — cannot buff a specific minion
+- FEATURE_GAP: position-aware or single-target buff targeting not implemented
+
+### Fatigue damage not tracked in draw system
+- `apply_draw` caps `deck_remaining` at `max(0, ...)` but doesn't increment `fatigue_damage`
+- Drawing from empty deck doesn't deal fatigue damage to hero
+- Confirmed in Test 05: deck_remaining goes negative before cap, but no HP loss occurs
+
+### Spell auto-targeting limits lethal setups
+- `resolve_effects` auto-targets highest-attack enemy minion for damage spells
+- With empty enemy board, correctly targets face
+- But when enemy has minions, spell damage goes to minions, not face — limiting spell-based lethal setups
+- `check_lethal` DFS works around this by modeling direct damage application

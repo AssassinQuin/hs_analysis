@@ -1,7 +1,7 @@
 ---
 version: 1.0
 created: 2026-04-19
-last_changed: 2026-04-19 (batch12 complex real-game scenario tests round 2)
+last_changed: 2026-04-19 (batch13 complex real-game scenario tests round 3)
 ---
 
 # Project State: hs_analysis
@@ -37,7 +37,7 @@ last_changed: 2026-04-19 (batch12 complex real-game scenario tests round 2)
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 332 tests, 332 passing (1 known flaky stochastic test in batch02)
+- [x] 342 tests, 342 passing (1 known flaky stochastic test in batch02)
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -60,6 +60,7 @@ last_changed: 2026-04-19 (batch12 complex real-game scenario tests round 2)
 - [x] V9 HDT batch10 advanced scenario tests (10 tests: weapon replacement, overload gap, fatigue gap, stealth targeting gap, poisonous gap, windfury gap, Hunter deck T5, Warlock deck T6, risk AoE, lethal-through-taunt)
 - [x] V9 HDT batch11 complex real-game scenario tests (10 tests: T4 lethal push, T5 discover resource mgmt, T7 druid ramp, T8 AoE decision, T3 DH tempo, T6 stealth combo, T9 full board 7v7, T7 near-death defense, T6 discover+draw chain, T12 fatigue endgame)
 - [x] V9 HDT batch12 complex real-game scenario tests round 2 (10 tests: T6 board recovery after wipe, T5 weapon durability mgmt, T4 divine shield trade, T6 mana squeeze, T7 lethal threat risk, T8 multi-spell combo, T5 taunt placement, T15 resource exhaustion, T7 draw+discover chain, T6 Pareto tempo vs value)
+- [x] V9 HDT batch13 complex real-game scenario tests round 3 (10 tests: T10 max actions, T7 cascading deaths, T8 lethal 5 sources, T9 weapon break mid combo, T6 fatigue boundary, T7 taunt death unlocks face, chromosome normalization, T8 opponent sim worst case, T5 spell buff chain, T9 multi-objective conflict)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)

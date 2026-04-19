@@ -131,6 +131,10 @@
 | B07 | `test_v9_hdt_batch07.py` | 10 | Advanced combat: lethal paths, death chains, mana boundaries, taunt-through-lethal, spell destroy/armor, engine edge cases |
 | B08 | `test_v9_hdt_batch08.py` | 10 | Position-awareness: summon rightmost ✅, OUTCAST positions (left/mid/right FEATURE_GAP), generated card rightmost ✅, taunt multi-minion ✅, board reindexing ✅, heal no-cap (B04 confirmed), complex multi-mechanic, hand order preservation ✅ |
 | B09 | `test_v9_hdt_batch09.py` | 10 | Position strategy: PLAY position variants (empty/3-minion/6-minion boards) ✅, insert leftmost/between/rightmost ✅, death cleanup reindex ✅, deathrattle position inheritance gap ❌, engine position search ✅, full board boundary ✅, multi-death reindex chain ✅ |
+| B10 | `test_v9_hdt_batch10.py` | 10 | Advanced scenarios: weapon replacement, overload gap, fatigue gap, stealth targeting gap, poisonous gap, windfury gap, Hunter deck T5, Warlock deck T6, risk AoE, lethal-through-taunt |
+| B11 | `test_v9_hdt_batch11.py` | 10 | Complex real-game: T4 lethal push, T5 discover, T7 druid ramp, T8 AoE decision, T3 DH tempo, T6 stealth combo, T9 full board 7v7, T7 near-death defense, T6 discover+draw chain, T12 fatigue endgame |
+| B12 | `test_v9_hdt_batch12.py` | 10 | Complex round 2: T6 board recovery, T5 weapon durability, T4 divine shield trade, T6 mana squeeze, T7 lethal threat risk, T8 multi-spell combo, T5 taunt placement, T15 resource exhaustion, T7 draw+discover chain, T6 Pareto tempo vs value |
+| B13 | `test_v9_hdt_batch13.py` | 10 | High-complexity stress: max actions T10, cascading deaths, 5-source lethal, weapon break mid-combo, draw fatigue boundary, taunt death unlocks face, chromosome normalization, opponent sim worst-case, spell buff chain, multi-objective conflict |
 
 ## Key Engine Limitations Discovered
 
@@ -205,4 +209,15 @@ Hero cards should change hero_class, HP, armor, and replace hero power.
 | board_full() boundary | ✅ SUPPORTED | 6 minions → 7 positions legal; after play, board_full() returns True |
 | Deathrattle position inheritance | ❌ NOT SUPPORTED | When minion with deathrattle dies, no token is summoned at the inherited position. Engine just removes dead minion; no deathrattle effect fires. |
 
-*Last updated: Batch 09 (92 total tests across B01–B09) — Position strategy verified, deathrattle inheritance gap documented*
+### Discovered in Batch 13
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| AoE + manual death cleanup | ⚠️ PARTIAL | `EffectApplier.apply_aoe` does NOT call `_resolve_deaths` internally. Must call manually after AoE to clean dead minions. `resolve_effects` DOES call it automatically. |
+| Spell buff target (all_friendly) | ⚠️ PARTIAL | `buff_atk` in `resolve_effects` applies to ALL friendly minions — no single-target buff support. FEATURE_GAP: no position-aware or single-target buff targeting. |
+| Fatigue damage not tracked | ❌ NOT SUPPORTED | `apply_draw` caps `deck_remaining` at `max(0, ...)` but never increments `fatigue_damage` counter or deals fatigue damage. |
+| Weapon ATTACK not enumerated | ❌ NOT SUPPORTED | `enumerate_legal_actions` does NOT generate ATTACK with `source_index=-1` (weapon). Lethal checker DFS includes weapon attacks but engine legal action enumeration skips them. |
+| Spell auto-targeting face vs minions | ⚠️ PARTIAL | `resolve_effects` auto-targets highest-attack enemy minion for damage spells. With empty enemy board, targets face. This limits spell-based lethal setups when enemy has minions. |
+| Multi-objective tension | ✅ SUPPORTED | `mo_evaluate` correctly shows low `v_survival` for low-HP states while `v_tempo` can be high. Engine prioritizes lethal (fitness=10000) when found. |
+
+*Last updated: Batch 13 (342 total tests across B01–B13) — High-complexity stress tests verified, AoE death cleanup and fatigue gaps documented*
