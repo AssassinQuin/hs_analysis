@@ -1,6 +1,7 @@
 # 项目进展日志
 
 > 炉石传说 AI 决策引擎 — 完整开发记录
+> 最后更新：2026-04-19
 
 ---
 
@@ -13,27 +14,9 @@
 | 日期 | 2026-04-17 09:26 |
 | 内容 | 项目脚手架、初始脚本、传说卡分析数据 |
 
-**完成事项:**
-- [x] README.md 项目文档（含数学模型说明）
-- [x] .opencode/agent.md agent 上下文配置
-- [x] 10 个 Python 脚本整理到 scripts/ 目录
-- [x] .gitignore（排除图片、缓存、数据库）
-- [x] HS 卡牌 JSON 数据（传说卡分析结果）
-
-**脚本清单（初始批次）:**
-
-| 脚本 | 功能 |
-|------|------|
-| scrape_hs_cards.py | Blizzard CN API 抓取传说卡 |
-| fetch_hsjson.py | HearthstoneJSON 数据获取 |
-| quick_analysis.py | 快速分析 256 张传说卡 |
-| full_analysis.py | 完整分析脚本 |
-| deep_analysis.py | 深度分析：关键词、效果、属性分布 |
-| explore_api.py | API 端点探索 |
-| test_api.py / test_api_endpoints.py | API 测试 |
-| show_slugs.py | 卡包 slug 展示 |
-| rescrape_legendaries.py | 传说卡重抓取 |
-| check_rarity.py | 稀有度检查 |
+- [x] README.md 项目文档
+- [x] 10 个 Python 脚本整理到 scripts/
+- [x] HS 卡牌 JSON 数据
 
 ---
 
@@ -45,221 +28,272 @@
 |--------|------|------|
 | HearthstoneJSON | ✅ 主数据源 | 完整标准卡牌数据 |
 | iyingdi API | ⚠️ 不完整 | 缺 49 张卡，仅作辅助 |
-| python-hearthstone 9.20.2 | ✅ 已安装 | 卡牌解析库 |
-| hearthstone-data | ✅ 已安装 | 卡牌数据包 |
+| HSReplay | ✅ 校准源 | 卡牌使用率/胜率排名缓存 |
 
-### 新增脚本
+### 产出
 
-| 脚本 | 功能 |
-|------|------|
-| scrape_iyingdi_standard.py | iyingdi 标准卡抓取 |
-| build_hsjson_standard.py | 构建 HSJSON 标准卡数据 |
-| detect_standard_sets.py | 检测标准卡组 |
-| find_missing_cards.py | 缺失卡牌检测 |
-| debug_missing_cards.py | 缺失卡调试 |
-| check_missing_cards.py | 缺失卡检查 |
-| analyze_cards.py | 通用卡牌分析 |
-| analyze_card_pool.py | 卡池分析 |
-| analyze_card_effects.py | 效果分析 |
-| analyze_gaps.py | 差距分析 |
-| analyze_specific_mechanics.py | 特定机制分析 |
-| classify_all_cards.py | 综合分类器（71 类） |
-
-### 数据文件
-
-| 文件 | 内容 |
-|------|------|
-| hsjson_standard.json | 984 张标准卡牌完整数据 |
-| hsjson_standard_compact.json | 精简版标准卡数据 |
-| standard_legendaries_analysis.json | 256 张传说卡分析结果 |
-| standard_legendaries_v2.json | V2 传说卡数据 |
-| standard_complete.json | 完整标准卡 |
-| iyingdi_*.json | iyingdi 抓取数据（多版本） |
-| full_classification_report.md | 984/984 分类报告（100%覆盖） |
-| card_pool_analysis.md | 卡池分析报告 |
-| effect_analysis_report.md | 效果分析报告 |
-| mechanics_detail_analysis.md | 机制细节分析 |
-| missing_standard_cards.md | 缺失卡牌报告 |
-
-### 卡牌分类系统
-
-- **71 个文本模式类别**, 100% 覆盖 984 张卡
-- 0 张未分类，0 张未被子模型覆盖
-- 分类器: `scripts/classify_all_cards.py`
+- 984→1015 张标准卡入库（unified_standard.json）
+- 6174 张全卡（iyingdi_all_raw.json）→ 5209 张狂野去重
+- CardIndex O(1) 多维度索引
+- Card cleaner：56 个关键词正则，中英文兼容
+- 71 类文本分类器，100% 卡牌覆盖
 
 ---
 
-## Phase 1: V2 卡牌模型设计 + 任务规划 (2026-04-18 08:46)
+## Phase 1: V2 评分模型 (2026-04-18)
 
-### Commit `96b2ebf` — V2 任务工作流初始化
+### Commit `96b2ebf` ~ T001-T005 完成
 
-| 项目 | 详情 |
-|------|------|
-| 日期 | 2026-04-18 08:46 |
-| 内容 | 状态跟踪、任务计划、V2 设计文档 |
-
-**完成事项:**
-- [x] state.json — 主项目跟踪器（5 阶段，18 任务 T001-T018）
-- [x] V2 设计文档: `thoughts/shared/designs/2026-04-17-hearthstone-card-model-v2-design.md`
-- [x] Phase 1 计划: `thoughts/shared/plans/2026-04-18-phase1-v2-model.md`
-- [x] 5 个独立任务执行计划（T001-T005），含验收标准
-- [x] T001 执行日志模板
-- [x] deep_analysis.py + quick_analysis.py 暂存
-
-**任务依赖图:**
-```
-T001 (曲线拟合) → T002 (关键词校准) → T003 (文本解析) → T004 (类型适配) → T005 (综合评分)
-```
-
-### Commit `6e5faa5` — 卡牌建模 Skill
-
-| 项目 | 详情 |
-|------|------|
-| 日期 | 2026-04-18 08:56 |
-| 内容 | 5 阶段科学工作流 Skill |
-
-- [x] SKILL.md — 结构化方法论（collect → EDA → model V1 → critique → refine）
-- [x] reference.md — 统计技术、输出模板、卡牌类型策略
-- [x] 项目级 Skill 存放于 `skills/card-modeling/`
-
-### Commit `4563ca7` + `065a203` — Session 自动化
-
-| 项目 | 详情 |
-|------|------|
-| 日期 | 2026-04-18 09:01 ~ 09:09 |
-| 内容 | 项目约定、Session 启动流程 |
-
-- [x] .opencode/CONVENTIONS.md — 项目约定
-- [x] .opencode/agent.md — 4 步 memory recall 启动流程
-- [x] 跨平台命令适配策略（Windows PS 5.1 / Bash）
-
----
-
-## Phase 1.5: 学术调研 + 完整 EV 设计 (2026-04-18)
-
-### 设计文档产出
-
-| 文档 | 内容 |
-|------|------|
-| 2026-04-17-hearthstone-card-model-v2-design.md | V2 三层卡牌价值模型设计 |
-| 2026-04-18-mathematical-model-design.md | 完整数学模型设计（POMDP、EV公式、搜索算法） |
-| 2026-04-18-ev-decision-engine-design.md | 7 子模型 EV 决策引擎设计 |
-| 2026-04-18-hdt-analysis-report.md | HDT 集成方案分析 |
-| 2026-04-18-hearthstone-projects-survey.md | 14 个 GitHub 开源项目 + 5 篇论文调研 |
-
-### 七子模型 EV 框架
-
-| 子模型 | 覆盖范围 | 卡牌数 | 职责 |
-|--------|----------|--------|------|
-| A: 场面状态 | 随从、手牌、英雄、buff | 776 | 核心场面评估 |
-| B: 对手威胁 | 伤害、毁灭、沉默、冰冻 | 315 | 对手动作建模 |
-| C: 持续效果 | 武器、光环、奥秘、地标 | 388 | 跨回合效果 |
-| D: 触发概率 | 亡语、随机、战吼、灌注 | 581 | 随机效果期望值 |
-| E: 环境智能 | 任务、发现、奖励 | 91 | 元数据驱动 |
-| F: 卡池 | 发现、暗影赐福、随机 | 207 | 池定义与权重 |
-| G: 玩家选择 | 抉择卡 | 23 | EV = max(A, B) |
-
-### 数学模型核心公式
-
-- **POMDP 形式化**: belief state 表示隐藏信息
-- **状态评估**: 6 项加权线性组合
-- **EV 公式**: 覆盖确定性/随机/条件/延迟/选择 5 种效果类型
-- **Discover EV**: Order Statistics `E[max] = Σ v_i × [i^k - (i-1)^k] / N^k`
-- **对手建模**: 贝叶斯推断 + Dirichlet 先验
-- **搜索算法**: Top-K Beam Search (K=8, depth=2, <3s)
-
----
-
-## Phase 1 继续执行: T001 非线性白板曲线拟合 (2026-04-18)
-
-### 执行结果
-
-**脚本**: `scripts/v2_vanilla_curve.py`
-**参数输出**: `hs_cards/v2_curve_params.json`
-
-**拟合公式**: `expected_stats(mana) = 3.187 × mana^0.697 - 0.014`
-
-| Mana | N | 实际 | V1(2N+1) | V1残差 | V2预测 | V2残差 | 改善 |
-|------|---|------|----------|--------|--------|--------|------|
-| 0 | 1 | 0.0 | 1.0 | -1.0 | -0.0 | +0.0 | +1.0 |
-| 1 | 1 | 2.0 | 3.0 | -1.0 | 3.2 | -1.2 | -0.2 |
-| 2 | 7 | 7.0 | 5.0 | +2.0 | 5.2 | +1.8 | +0.2 |
-| 3 | 29 | 7.2 | 7.0 | +0.2 | 6.8 | +0.4 | -0.2 |
-| 4 | 35 | 8.3 | 9.0 | -0.7 | 8.4 | -0.0 | +0.6 |
-| 5 | 38 | 9.0 | 11.0 | -2.0 | 9.8 | -0.8 | +1.2 |
-| 6 | 32 | 10.4 | 13.0 | -2.6 | 11.1 | -0.7 | +1.9 |
-| 7 | 34 | 12.6 | 15.0 | -2.4 | 12.4 | +0.2 | +2.2 |
-| 8 | 23 | 13.7 | 17.0 | -3.3 | 13.6 | +0.1 | +3.3 |
-| 9 | 17 | 13.8 | 19.0 | -5.2 | 14.7 | -1.0 | +4.3 |
-| 10 | 9 | 17.0 | 21.0 | -4.0 | 15.9 | +1.1 | +2.9 |
-
-**模型对比:**
+**V2 幂律曲线拟合**: `expected_stats(mana) = 3.187 × mana^0.697 - 0.014`
 
 | 指标 | V1 (2N+1) | V2 (幂律) | 改善 |
 |------|-----------|----------|------|
 | MAE | 2.22 | 0.66 | **70.1%** |
 | RMSE | 2.66 | 0.87 | 67.3% |
 
-**验证结果:**
-- [x] 拟合残差均值 < 1.0 (实际 0.66)
-- [x] 参数 b ∈ [0.65, 0.95] (实际 0.697)
-- [x] RMSE < V1 RMSE
-- [x] 脚本可独立运行
-- [x] 输出包含新旧对比表
+**任务链**: T001(曲线拟合) → T002(关键词校准) → T003(文本解析) → T004(类型适配) → T005(综合评分)
 
 ---
 
-## 整体进度总览
+## Phase 2: V7+ 数据驱动评分 (2026-04-18 ~ 04-19)
+
+### 评分管线演进
+
+```
+L1(白板曲线) → L2(关键词分层) → L3(28正则文本) → L4(类型基线)
+  → L5(37条件EV) → L6(HSReplay CPI混合) → L7(报告生成)
+```
+
+- **V7**: L1→L7 完整管线 + HSReplay Rankings 校准
+- **V8**: 7 个上下文修正因子（回合曲线、类型上下文、池质量、亡语EV、斩杀加速、回溯EV、协同）
+- **L6**: `V2 × (1-θ) + CPI × θ × max`, θ=0.3
+
+### 数据文件
+
+| 文件 | 内容 |
+|------|------|
+| v7_scoring_report.json | V7 评分全量 |
+| v2_scoring_report.json | V2 评分 |
+| l6_scoring_report.json | L6 评分 |
+| pool_quality_report.json | 种族/类型池质量 |
+| card_turn_data.json | HSReplay 平均回合 |
+| rewind_delta_report.json | 回溯卡EV增量 |
+
+---
+
+## Phase 3: V9 RHEA 决策引擎 (2026-04-19)
+
+### 核心组件
+
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| RHEA 搜索 | search/rhea_engine.py | 进化算法搜索最优出牌 |
+| 斩杀检测 | search/lethal_checker.py | DFS 致命检测 |
+| 游戏状态 | search/game_state.py | GameState/Minion/HeroState |
+| 法术模拟 | utils/spell_simulator.py | 10 正则法术效果解析 |
+| 对手模拟 | search/opponent_simulator.py | 贪心对手模型 |
+| 风险评估 | search/risk_assessor.py | AoE脆弱性/超铺惩罚 |
+| 动作规范 | search/action_normalize.py | 合法动作枚举+交叉修复 |
+
+### 综合评估器
+
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| 复合评估 | evaluators/composite.py | 3轴加权融合 (tempo+value+survival) |
+| 子模型 | evaluators/submodel.py | 场面/威胁/持续效果/触发4子模型 |
+| 多目标 | evaluators/multi_objective.py | 3维Pareto + 阶段自适应标量化 |
+
+### 集成测试
+
+- 15 批次 HDT 真实卡组场景测试 (batch01→batch15)
+- 覆盖：快速铺场、控制后期、OTK斩杀、疲劳、极端场面等
+- **213→233 测试通过**
+
+---
+
+## Phase 4: V10 引擎大修 (2026-04-19)
+
+### Phase 4a: 基础修复 (8 个 bug fix)
+
+**Commit `3d1a409`**
+
+| # | 修复 | 文件 |
+|---|------|------|
+| 1 | 斩杀检测：冲锋随从必须尊重嘲讽 | lethal_checker.py |
+| 2 | 风怒双击：`has_attacked_once` 标记 | game_state.py + rhea_engine.py |
+| 3 | 过载解析：中文正则 + PLAY时设定 + END_TURN扣减 | rhea_engine.py |
+| 4 | 剧毒即杀：伤害后 target.health=0 | rhea_engine.py |
+| 5 | 连击追踪：`cards_played_this_turn` 列表 | game_state.py |
+| 6 | 疲劳伤害：递增计数器 | rhea_engine.py |
+| 7 | 潜行打破：攻击后清除 | rhea_engine.py |
+| 8 | 冰冻效果：`frozen_until_next_turn` 标记 | game_state.py + rhea_engine.py |
+
+**设计文档**: `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
+
+### Phase 4b: 游戏规则研究
+
+**Commit `c76e902`** — 1017 行，10 章 61 节
+
+| 章节 | 内容 |
+|------|------|
+| Ch1 | 游戏区域（手牌10、场面7、奥秘5） |
+| Ch2 | 法力系统（水晶增长、过载、临时法力） |
+| Ch3 | 战斗系统（6阶段攻击序列、嘲讽/冲锋/突袭/风怒/圣盾/剧毒/潜行/冰冻/免疫/吸血） |
+| Ch4 | 关键词机制（战吼/亡语/发现/抉择/连击/激励/过载/流放/复生/超额/腐蚀） |
+| Ch5 | 触发/光环系统（Phase/Sequence、Whenever vs After、光环重算） |
+| Ch6 | 奥秘系统（各职业触发条件、反制特殊规则） |
+| Ch7 | 英雄技能（11职业、灌注升级路径、刷新机制） |
+| Ch8 | 抽牌/疲劳（爆牌→墓地、疲劳递增1/2/3/…） |
+| Ch9 | 2026特殊机制（兆示/裂变/延系/回溯/黑暗之赐/寓言/巨型/休眠/手牌定位/任务） |
+| Ch10 | 附录（阶段解析、死亡创建步骤、触发队列不可变性） |
+
+**研究来源**: wiki.gg Advanced Rulebook、Blizzard 补丁说明、outof.games
+
+### Phase 4c: V10 状态感知评分框架设计
+
+**Commit `788c461`**
+
+诊断出 3 个根本缺陷：
+1. **线性叠加** — 无法表达"斩杀=无限价值"
+2. **静态vs动态脱节** — 评分不考虑游戏状态
+3. **规则脱节** — 关键词分值无规则依据
+
+三层架构设计：
+- **CIV**（基础层）：V2→V7 离线管线 + 关键词交互 + 2026机制公式
+- **SIV**（交互层）：8 个运行时状态修正器
+- **BSV**（全局层）：softmax 非线性融合
+
+**设计文档**: `thoughts/shared/designs/2026-04-19-v10-stateful-scoring-design.md`
+
+### Phase 4d: V10 评分实现 ✨
+
+**Commit `a1b3221`** — 16 文件, 2758 行新增
+
+| 模块 | 文件 | 功能 | 测试 |
+|------|------|------|------|
+| SIV | evaluators/siv.py | 8 状态修正器 + siv_score() 入口 | 54 |
+| BSV | evaluators/bsv.py | softmax 融合 + 3轴 + 斩杀覆盖 | 24 |
+| 关键词交互 | scorers/keyword_interactions.py | 8 条规则推导交互 | 168 |
+| 机制基础值 | scorers/mechanic_base_values.py | 9 个2026机制CIV公式 | 含 |
+| 集成 | evaluators/composite.py | V10_ENABLED 开关 + evaluate_v10() | 7 |
+| A/B 对比 | evaluators/test_v10_ab_comparison.py | V10 vs legacy 验证 | 4 |
+| 性能 | evaluators/test_v10_performance.py | 基准测试 | 3 |
+
+**8 个 SIV 修正器**:
+
+| # | 修正器 | 关键公式 | 规则章节 |
+|---|--------|---------|---------|
+| 1 | 斩杀感知 | `1 + (1-hp/30)² × 3.0` | Ch3 战斗 |
+| 2 | 嘲讽约束 | `1 + 0.3 × 敌方嘲讽数` | Ch3.2 嘲讽 |
+| 3 | 节奏窗口 | 法力曲线匹配度惩罚 | Ch2 法力 |
+| 4 | 手牌位置 | 外域/裂变位置奖励 | Ch9.2 裂变 |
+| 5 | 触发概率 | 铜须/瑞文/光环倍率 | Ch5 触发 |
+| 6 | 种族协同 | 同族计数 × 0.1 | Ch9.3 延系 |
+| 7 | 累积进度 | 灌注/兆示/任务阈值跳跃 | Ch9.1/9.7/9.10 |
+| 8 | 反制感知 | 冰冻/奥秘/AoE威胁修正 | Ch6 奥秘 |
+
+**BSV softmax 融合**:
+
+```
+raw = [tempo×w_t, value×w_v, survival×w_s]
+weights = softmax(raw / 0.5)   # temperature=0.5
+BSV = Σ weights[i] × raw[i]
+if lethal_possible → BSV = 999.0
+```
+
+**阶段权重**: 早期(t=1.3,v=0.7,s=0.5) / 中期(1.0,1.0,1.0) / 后期(0.7,1.2,1.5)
+
+**8 条关键词交互**（规则推导）:
+
+| 交互 | 效果 | 规则源 |
+|------|------|--------|
+| 剧毒 vs 圣盾 | ×0.1 | Ch3.5+3.6 |
+| 潜行+嘲讽 | 嘲讽=0 | Ch3.2+3.7 |
+| 免疫+嘲讽 | 嘲讽=0 | Ch3.2+3.9 |
+| 冰冻+风怒 | ×0.5 | Ch3.4+3.8 |
+| 吸血 vs 圣盾敌人 | 吸血=0 | Ch3.5+3.10 |
+| 复生+亡语 | ×1.5 | Ch4.2+4.9 |
+| 铜须+战吼 | ×2.0 | Ch4.1 |
+| 瑞文+亡语 | ×2.0 | Ch4.2 |
+
+**测试**: 493 通过（260 新增 + 233 原有），零回归
+
+---
+
+## 整体进度总览 (2026-04-19)
 
 ### 已完成 ✅
 
-| # | 任务 | 产出 |
-|---|------|------|
-| 1 | 数据基础设施 | 984 张标准卡 JSON, 多源抓取脚本 |
-| 2 | 卡牌分类系统 | 71 类, 100% 覆盖, classify_all_cards.py |
-| 3 | 七子模型 EV 框架 | 7 子模型映射, 完整覆盖报告 |
-| 4 | 数学模型设计 | 5 篇设计文档, 完整公式体系 |
-| 5 | V2 卡牌价值模型设计 | 三层设计, 任务计划 T001-T005 |
-| 6 | 学术调研 | 5+ 论文, 14 个 GitHub 项目 |
-| 7 | HDT 集成方案 | 方案 B: C# 插件 + Python 后端 |
-| 8 | T001 白板曲线拟合 | v2_vanilla_curve.py + v2_curve_params.json |
+| # | 阶段 | 产出 | 测试 |
+|---|------|------|------|
+| 1 | 数据管线 | 1015 标准卡 + 5209 狂野卡, CardIndex | 51+35+6=92 |
+| 2 | V2 评分 | 幂律曲线 MAE 0.66 | 含 |
+| 3 | V7 评分 | HSReplay 校准完整管线 | 16 |
+| 4 | V8 评分 | 7 上下文修正因子 | 16 |
+| 5 | V9 RHEA 引擎 | 搜索+斩杀+状态+模拟全套 | 150+ |
+| 6 | 综合评估器 | 3轴复合 + 4子模型 + Pareto | 含 |
+| 7 | V10 Phase 1 | 8 个基础 bug 修复 | 20 |
+| 8 | 游戏规则 | 1017 行完整规则参考 | 0 (文档) |
+| 9 | V10 评分框架设计 | 三层架构 CIV+SIV+BSV | 0 (设计) |
+| 10 | V10 评分实现 | SIV+BSV+交互+机制+集成 | 260 |
+| **总计** | | **32 源文件, 10022 行** | **493 通过** |
 
 ### 进行中 🔄
 
-| # | 任务 | 依赖 |
-|---|------|------|
-| - | T002 关键词三层校准 | T001 ✅ |
+无当前进行中的任务。
 
 ### 待开始 ⏳
 
-| 优先级 | 任务 | 说明 |
-|--------|------|------|
-| 🔴 P0 | T002-T005 V2 模型剩余 | 关键词校准 → 文本解析 → 类型适配 → 综合评分 |
-| 🔴 P0 | 状态评估函数 | 数学模型 → 代码 |
-| 🔴 P0 | EV 计算器 | 5 种效果类型 |
-| 🟡 P1 | 卡池数据库 | 解析随机效果池定义 |
-| 🟡 P1 | 发现规则引擎 | 自排除、职业加权、过滤 |
-| 🟡 P1 | 贝叶斯对手模型 | HSReplay + 实时更新 |
-| 🟡 P1 | 动作枚举+剪枝 | 合法动作枚举、剪枝规则 |
-| 🟢 P2 | Top-K Beam Search | depth-2 搜索 |
-| 🟢 P2 | HSReplay API 集成 | 每职业 Top5 卡组缓存 |
-| 🟢 P2 | HDT C# 插件 | IPC 桥接 |
-| 🟢 P2 | 权重优化 | ~21 个参数进化算法 |
+| 优先级 | 任务 | 说明 | 前置依赖 |
+|--------|------|------|---------|
+| 🔴 P1 | V10 Phase 2: 附魔框架 | Enchantment + TriggerDispatcher | 设计完成 |
+| 🔴 P1 | V10 Phase 2: 战吼派发 | 文本解析→效果应用 | 附魔框架 |
+| 🔴 P1 | V10 Phase 2: 亡语队列 | 板位顺序执行，5层级联 | 触发系统 |
+| 🔴 P1 | V10 Phase 2: 光环引擎 | 连续附魔重算 | 附魔框架 |
+| 🔴 P1 | V10 Phase 2: 发现框架 | 池生成+三选一最优 | 评估器 |
+| 🔴 P1 | V10 Phase 2: 地标支持 | 新卡类型+耐久+冷却 | GameState |
+| 🟡 P2 | V10 Phase 3: 灌注系统 | 英雄技能升级 | Phase 2 |
+| 🟡 P2 | V10 Phase 3: 手牌位置 | 外域/裂变/手牌定位 | Phase 2 |
+| 🟡 P2 | V10 Phase 3: 兆示+巨型 | 计数器+附属物召唤 | Phase 2 |
+| 🟡 P2 | V10 Phase 3: 延系 | 上回合种族/学派追踪 | Phase 2 |
+| 🟡 P2 | V10 Phase 3: 任务/黑暗之赐/回溯 | 进度追踪+分支模拟 | Phase 2 |
+| 🟢 P3 | 评分校准 | 温度/斩杀比例调优 | 实战数据 |
+| 🟢 P3 | 性能基准 | 75ms RHEA 目标 | Phase 2 |
+| 🟢 P3 | 狂野评分 | 5209 卡池扩展 | Phase 3 |
 
-### 关键设计决策
+---
 
-1. **轻量 EV 建模** 而非完整模拟器（区别于所有学术方案）
-2. **HearthstoneJSON** 而非 iyingdi（数据完整性）
-3. **7 子模型** 而非 6 个（增加 G: 玩家选择）
-4. **方案 B 架构** HDT 插件 + Python 后端
-
-### Git 提交历史
+## Git 提交历史
 
 | Hash | 日期 | 说明 |
 |------|------|------|
-| `1d29a87` | 04-17 09:26 | 项目初始化 |
-| `96b2ebf` | 04-18 08:46 | V2 任务工作流初始化 |
-| `6e5faa5` | 04-18 08:56 | 卡牌建模 Skill |
-| `4563ca7` | 04-18 09:01 | 项目约定文件 |
-| `065a203` | 04-18 09:09 | Session 启动流程 |
-| *(pending)* | 04-18 | T001 + 数据/分析/设计/分类 全量提交 |
+| `1d29a87` | 04-17 | 项目初始化 |
+| `96b2ebf` | 04-18 | V2 任务工作流 |
+| `6e5faa5` | 04-18 | 卡牌建模 Skill |
+| `4563ca7` | 04-18 | 项目约定文件 |
+| `065a203` | 04-18 | Session 启动流程 |
+| *(multiple)* | 04-18~19 | T001-T005 + 数据/分析/分类 |
+| `3d1a409` | 04-19 | V10 engine overhaul 设计 |
+| `6d49ddf` | 04-19 | V10 Phase 1 基础修复 + 文档约定 |
+| `c76e902` | 04-19 | 完整游戏规则参考文档 |
+| `788c461` | 04-19 | V10 评分框架设计 + PROJECT_STATE v3.0 |
+| `46f7007` | 04-19 | V10 评分实现设计 |
+| `1c4c3af` | 04-19 | V10 评分实现计划 |
+| `a1b3221` | 04-19 | V10 评分实现 (SIV+BSV+集成, 493测试) |
+
+---
+
+## 架构决策摘要
+
+| # | 决策 | 理由 |
+|---|------|------|
+| D001 | HearthstoneJSON 主数据源 | 100% 覆盖，社区维护 |
+| D002 | 轻量 EV 建模 | 80% 精度 × 10% 复杂度 |
+| D006 | RHEA 进化搜索 | 探索/利用平衡，75ms 预算 |
+| D009 | 三阶段渐进改造 | 233 测试不回归 |
+| D010 | 附魔框架关键多米诺 | 所有触发型机制的基础 |
+| D014 | 三层评分 CIV+SIV+BSV | 规则→价值修正器映射 |
+| D015 | softmax 非线性融合 | 线性无法表达斩杀=∞ |
+| D016 | 规则推导关键词交互 | 确定性交互逻辑，非经验常数 |
+
+完整决策记录: `thoughts/DECISIONS.md`

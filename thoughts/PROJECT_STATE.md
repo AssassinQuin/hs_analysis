@@ -1,14 +1,14 @@
 ---
-version: 3.0
+version: 4.0
 created: 2026-04-19
-last_changed: 2026-04-19 (Complete game rules + V10 scoring design)
+last_changed: 2026-04-19 (V10 scoring implementation complete)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V10 Engine Overhaul + Scoring Framework Redesign
+## Current Phase: V10 Engine Overhaul — Phase 2 (Enchantment Framework) Next
 
 ## ✅ DONE
 
@@ -18,183 +18,144 @@ last_changed: 2026-04-19 (Complete game rules + V10 scoring design)
 - [x] CardIndex with O(1) multi-dimensional lookup
 - [x] Card cleaner: race/mechanic/school normalization (56 keywords)
 - [x] Card data model (dataclass) with full type hints
+- [x] Wild format: 6174 cards fetched, 5209 wild-only after dedup
 
-### Scoring Engines
+### Scoring Engines (Offline Pipeline)
 - [x] V2: Power-law curve fitting (MAE 0.66, 70% improvement over V1)
 - [x] V7: Data-driven scoring with HSReplay Rankings calibration
 - [x] V8: 7 contextual correction factors (turn curve, type context, pool quality, etc.)
-- [x] L6: Real-world composite scoring
+- [x] L6: Real-world composite scoring (V2 × (1-θ) + CPI × θ)
 
 ### Search & Decision (V9)
 - [x] RHEA evolutionary search engine
 - [x] Lethal checker (DFS-based)
-- [x] Game state management (GameState, HeroState)
+- [x] Game state management (GameState, HeroState, Minion, ManaState)
 - [x] Action normalization (including crossover fix)
-- [x] Risk assessor
-- [x] Opponent simulator
+- [x] Risk assessor (AoE vulnerability, overextension, secret threat)
+- [x] Opponent simulator (greedy model)
 - [x] Bayesian opponent modeling
-- [x] Spell simulator
+- [x] Spell simulator (10 regex patterns)
 - [x] Score provider with lazy loading + cache
 
-### V10 Phase 1: Foundation Fixes ✅ (2026-04-19)
-- [x] Lethal checker: charge minions now respect taunt (charge-vs-taunt bug fix)
-- [x] Windfury second attack: `has_attacked_once` flag enables double attack
-- [x] Overload parsing + application: regex parse on PLAY, apply on END_TURN
-- [x] Poisonous instant kill: target.health = 0 when attacker has poisonous
-- [x] Combo tracking: `cards_played_this_turn` list populated by apply_action
-- [x] Fatigue damage: incrementing counter on empty deck draw
-- [x] Stealth break on attack: clears `has_stealth` when minion attacks
-- [x] Freeze effect: `frozen_until_next_turn` flag skips attack enumeration
-- [x] game_state.py: added `has_attacked_once`, `frozen_until_next_turn` to Minion
-- [x] rhea_engine.py: all 6 mechanic fixes integrated into apply_action + enumerate
-- [x] lethal_checker.py: removed charge-bypasses-taunt block
-- **Design doc:** `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
-- **Plan:** `thoughts/shared/plans/2026-04-19-v10-phase1-foundation-fixes.md`
-- **Commit:** `3d1a409`
+### V10 Phase 1: Foundation Fixes ✅ (2026-04-19, commit `3d1a409`)
+- [x] Lethal checker: charge minions now respect taunt
+- [x] Windfury second attack: `has_attacked_once` flag
+- [x] Overload parsing + application
+- [x] Poisonous instant kill
+- [x] Combo tracking: `cards_played_this_turn`
+- [x] Fatigue damage: incrementing counter
+- [x] Stealth break on attack
+- [x] Freeze effect: `frozen_until_next_turn`
+- **Design:** `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
 
-### Complete Game Rules Reference ✅ (2026-04-19)
+### Complete Game Rules Reference ✅ (2026-04-19, commit `c76e902`)
 - [x] 10章61节完整规则文档 (1017行)
-- [x] 覆盖：游戏区域、法力系统、战斗系统、关键词机制、触发/光环、奥秘、英雄技能、抽牌/疲劳、2026特殊机制、阶段解析
-- [x] 研究来源：wiki.gg Advanced Rulebook、Blizzard补丁说明、outof.games
-- **文档：** `thoughts/shared/designs/2026-04-19-hearthstone-complete-rules.md`
-- **Commit:** `c76e902`
+- [x] Sources: wiki.gg, Blizzard patch notes, outof.games
+- **Doc:** `thoughts/shared/designs/2026-04-19-hearthstone-complete-rules.md`
 
-### V10 Scoring Framework Design ✅ (2026-04-19)
-- [x] 诊断当前模型3个根本缺陷：线性叠加、静态vs动态脱节、规则脱节
-- [x] 设计三层状态感知评分架构：CIV(基础层) + SIV(交互层) + BSV(全局层)
-- [x] 8个状态修正器：斩杀感知、嘲讽约束、节奏窗口、手牌位置、触发概率、种族协同、累积进度、对手反制
-- [x] 关键词交互价值表（从规则文档推导）
-- [x] 2026机制基础价值公式（灌注递增、兆示阈值跳跃、裂变合并等）
-- [x] 非线性融合替代线性加权（softmax + 温度参数）
-- **文档：** `thoughts/shared/designs/2026-04-19-v10-stateful-scoring-design.md`
+### V10 State-Aware Scoring ✅ (2026-04-19, commit `a1b3221`)
+- [x] **SIV module** (`evaluators/siv.py`): 8 state modifiers
+  - Lethal awareness: `1 + (1-hp/30)² × 3.0`
+  - Taunt constraint: `1 + 0.3 × count(enemy_taunts)`
+  - Tempo window: curve matching penalty
+  - Hand position: Outcast/Shatter position bonus
+  - Trigger probability: Brann/Rivendare/aura multipliers
+  - Race synergy: same-race count × 0.1
+  - Progress tracker: Imbue/Herald/Quest threshold jumps
+  - Counter awareness: freeze/secret/AoE threat adjustments
+- [x] **BSV module** (`evaluators/bsv.py`): Non-linear 3-axis fusion
+  - Tempo axis: Σ SIV(friendly) - Σ SIV(enemy) + mana efficiency
+  - Value axis: Σ SIV(hand) + card advantage + resource generation
+  - Survival axis: hero safety - threats - lethal exposure
+  - Softmax fusion with temperature=0.5
+  - Phase weights: early(1.3,0.7,0.5) / mid(1.0,1.0,1.0) / late(0.7,1.2,1.5)
+  - Lethal override: BSV = 999.0 when lethal possible
+- [x] **Keyword interactions** (`scorers/keyword_interactions.py`): 8 rule-derived pairs
+- [x] **2026 mechanic base values** (`scorers/mechanic_base_values.py`): 9 formulas
+- [x] **Composite integration** (`evaluators/composite.py`): V10_ENABLED flag + evaluate_v10()
+- [x] **260 new tests**, 493 total, zero regressions
+- **Design:** `thoughts/shared/designs/2026-04-19-v10-stateful-scoring-design.md`
+- **Design (impl):** `thoughts/shared/designs/2026-04-19-v10-scoring-implementation-design.md`
+- **Plan:** `thoughts/shared/plans/2026-04-19-v10-scoring-implementation.md`
 
 ### Test Coverage
-- [x] 233 tests passing (213 existing + 20 new batch16, zero regressions)
-- [x] test_card_cleaner.py (51 tests)
-- [x] test_card_index.py (35 tests)
-- [x] test_score_provider.py (11 tests)
-- [x] test_v8_contextual_scorer.py (16 tests)
-- [x] test_wild_dedup.py (6 tests)
-- [x] test_pool_quality_generator.py (8 tests)
-- [x] test_rewind_delta_generator.py (6 tests)
-- [x] test_action_normalize.py (10 tests)
-- [x] test_game_state.py (16 tests)
-- [x] Internal module tests in hs_analysis/search/ (73 tests total)
-- [x] V9 HDT batch01–batch15 integration tests (150 tests)
-- [x] V10 HDT batch16 mechanic tests (20 tests)
+- [x] **493 tests passing** (as of 2026-04-19)
+- [x] Card data tests: 51+35+6 = 92
+- [x] V8 contextual scorer: 16
+- [x] V9 search engine + HDT batches: 150+
+- [x] V10 Phase 1 mechanic tests: 20
+- [x] V10 scoring (SIV+BSV+interactions+mechanics+integration): 260
 
-### Wild Pool Data
-- [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
-- [x] Wild database built (unified_wild.json, deduplicated against standard pool)
-- [x] Race-based pool quality metrics (11 race pools + 3 type pools = 14 total)
-
-### 2026 Environment Research
-- [x] 4 expansions analyzed: Emerald Dream, Un'Goro, Timeways, CATACLYSM
-- [x] 37 unique mechanic keywords catalogued from 1015 cards
-- [x] New 2026 mechanics documented: Imbue, Herald, Shatter, Kindred, Rewind, Fabled, Colossal, Dark Gift, Hand Targeting, Location
-- [x] Engine gap analysis: P0 (enchantments, deathrattle, battlecry), P1 (combo, overload, windfury), 2026 gaps
+### Architecture & Research Documentation
+- [x] 7 design documents in `thoughts/shared/designs/`
+- [x] 4 implementation plans in `thoughts/shared/plans/`
+- [x] PROGRESS.md — complete development log
+- [x] PROJECT_STATE.md — progress tracker (this file)
+- [x] DECISIONS.md — 16 architectural decisions (D001-D016)
+- [x] PROJECT_CHARTER.md — immutable goals & constraints
 
 ## 🔄 WIP
 
-### V10 Engine Phase 2: Enchantment Framework + Trigger System
-- [ ] Enchantment data model (`Enchantment` dataclass with deltas, keywords, triggers)
-- [ ] Trigger dispatcher (on_minion_played, on_minion_dies, on_turn_end, on_attack, on_spell_cast)
-- [ ] Battlecry dispatcher (parse card text → apply effect on play)
-- [ ] Deathrattle queue (collect + execute in board-position order)
-- [ ] Aura engine (continuous enchantments that recompute after state changes)
-- [ ] Discover framework (generate 3 options, evaluate each, pick best)
-- [ ] Location card support (new card type with durability/cooldown)
-- **Design:** Phase 2 section in `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
-
-### V10 Scoring Phase: State-Aware Scoring Implementation
-- [ ] SIV module (8 state modifiers in `evaluators/siv.py`)
-- [ ] BSV module (non-linear fusion in `evaluators/bsv.py`)
-- [ ] Keyword interaction table (`scorers/keyword_interactions.py`)
-- [ ] 2026 mechanic base values (`scorers/mechanic_base_values.py`)
-- [ ] Integration into composite.py
-- **Design:** `thoughts/shared/designs/2026-04-19-v10-stateful-scoring-design.md`
+(none currently)
 
 ## ⏳ TODO (by priority)
 
-### P1: V10 Engine Phase 2 — Enchantment Framework
-- [ ] Enchantment dataclass with attack/health/keyword deltas and trigger_type
+### P1: V10 Engine Phase 2 — Enchantment Framework + Trigger System
+- [ ] Enchantment dataclass (attack/health/keyword deltas, trigger_type, duration)
 - [ ] Computed stats on Minion (base + enchantment deltas)
-- [ ] TriggerDispatcher class with event hooks
-- [ ] Battlecry text parser + effect dispatch
-- [ ] Deathrattle queue with cascade (max 5 depth)
-- [ ] Aura recomputation engine
-- [ ] Discover pool generation + option evaluation
-- [ ] Location card type support
-- [ ] ~40 new tests (batch17–batch20)
-
-### P1: V10 Scoring — SIV + BSV Implementation
-- [ ] Keyword interaction value table (derived from rules doc)
-- [ ] 2026 mechanic CIV base values (Imbue, Herald, Shatter, etc.)
-- [ ] 8 SIV state modifiers (lethal, taunt, curve, position, trigger, synergy, progress, counter)
-- [ ] Non-linear BSV fusion (softmax + temperature)
-- [ ] Lethal detection module (integrate lethal_checker into BSV)
-- [ ] ~55 new tests (basic + interaction + global layers)
+- [ ] TriggerDispatcher class (on_minion_played, on_minion_dies, on_turn_end, on_attack, on_spell_cast)
+- [ ] Battlecry dispatcher (parse card text → apply effect)
+- [ ] Deathrattle queue (board-position order, max 5 cascade)
+- [ ] Aura engine (recompute after state changes, max 10 iterations)
+- [ ] Discover framework (pool gen + evaluate best of 3)
+- [ ] Location card support (new zone, durability, cooldown)
+- **Design:** Phase 2 in `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
 
 ### P2: V10 Engine Phase 3 — 2026 Modern Mechanics
-- [ ] Imbue hero power upgrade system (per-class upgrade paths)
-- [ ] Hand position system (index-aware hand, Shatter split/merge, Outcast, Hand Targeting)
-- [ ] Herald progressive counter + Colossal appendage summoning
+- [ ] Imbue hero power upgrade (per-class paths, diminishing marginal value)
+- [ ] Hand position system (Shatter split/merge, Outcast edges, Hand Targeting)
+- [ ] Herald counter + Colossal appendage summoning
 - [ ] Kindred previous-turn race/school tracking
 - [ ] Quest progress tracking with reward
-- [ ] Dark Gift pool (10 random bonuses for Discover)
-- [ ] Rewind branching simulation
-- [ ] ~40 new tests (batch21–batch24)
+- [ ] Dark Gift pool (10 random bonuses)
+- [ ] Rewind branching simulation (2-branch evaluate, pick best)
+- **Design:** Phase 3 in `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
 
-### P3: Polish
-- [ ] Wild format support in scoring engines
-- [ ] Performance benchmarking (75ms target for RHEA)
-- [ ] HSReplay archetype integration
-- [ ] Risk assessor: add DH, DK, Rogue, Shaman, Warrior class AoE thresholds
-- [ ] Opponent simulator: consider hand size, hero power, windfury, divine shield
+### P3: Polish & Calibration
+- [ ] Scoring calibration (temperature, LETHAL_SCALE, phase weights)
+- [ ] Performance benchmarking (75ms RHEA target)
+- [ ] Wild format scoring support (5209 cards)
+- [ ] Risk assessor: additional class AoE thresholds
+- [ ] Opponent simulator: consider hand size, hero power, divine shield
 
 ## 🚫 BLOCKED
 (none currently)
 
-## Architecture Decisions (see DECISIONS.md for full details)
-- D009: Three-phase layered overhaul (not full rewrite)
-- D010: Enchantment framework as the key domino for all trigger-based mechanics
-- D011: Regex + manual dispatch for effect parsing (not ML)
-- D012: Graceful degradation — unknown effects → vanilla behavior, never crash
-- D014: Three-layer state-aware scoring (CIV + SIV + BSV, not pure ML or MC simulation)
-- D015: Non-linear value fusion via softmax (not linear weighted sum)
-- D016: Rule-derived keyword interaction table (not empirical constants)
+## Architecture Decisions
+See `thoughts/DECISIONS.md` for full details (D001-D016).
 
 ## Data Inventory
 
 | File | Description | Size |
 |------|-------------|------|
 | hs_cards/unified_standard.json | Cleaned standard pool | 1015 cards |
-| hs_cards/hsjson_standard.json | HSJSON raw data | ~1015 cards |
-| hs_cards/iyingdi_standard_raw.json | iyingdi raw (standard) | ~900 cards |
+| hs_cards/unified_wild.json | Cleaned wild-only pool | 5209 cards |
 | hs_cards/v7_scoring_report.json | V7 scores | all standard |
 | hs_cards/v2_scoring_report.json | V2 scores | all standard |
 | hs_cards/l6_scoring_report.json | L6 scores | all standard |
 | hs_cards/pool_quality_report.json | Pool quality metrics | 3 type pools |
 | hs_cards/card_turn_data.json | Avg turn data | from HSReplay |
 | hs_cards/rewind_delta_report.json | V7 rewind deltas | generated |
-| hs_cards/v2_curve_params.json | V2 curve parameters | fitted |
-| hs_cards/v2_keyword_params.json | V2 keyword parameters | calibrated |
 | hs_cards/hsreplay_cache.db | HSReplay SQLite cache | cached |
-| hs_cards/iyingdi_all_raw.json | iyingdi raw (all cards) | 6174 cards |
-| hs_cards/iyingdi_all_normalized.json | iyingdi normalized (all cards) | 6174 cards |
-| hs_cards/unified_wild.json | Cleaned wild-only pool | 5209 cards |
 
-## Active Designs
-- thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md ⭐ (engine)
-- thoughts/shared/designs/2026-04-19-v10-stateful-scoring-design.md ⭐ (scoring)
-- thoughts/shared/designs/2026-04-19-hearthstone-complete-rules.md ⭐ (reference)
-- thoughts/shared/designs/2026-04-19-v9-decision-engine-v2-design.md
-- thoughts/shared/designs/2026-04-19-card-index-and-cleanup-design.md
-- thoughts/shared/designs/2026-04-19-package-restructure-design.md
-- thoughts/shared/designs/2026-04-19-project-state-tracking-design.md
+## Active Design Docs
+- `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md` ⭐ (engine, Phase 2+3)
+- `thoughts/shared/designs/2026-04-19-v10-stateful-scoring-design.md` ⭐ (scoring framework)
+- `thoughts/shared/designs/2026-04-19-v10-scoring-implementation-design.md` ⭐ (scoring impl)
+- `thoughts/shared/designs/2026-04-19-hearthstone-complete-rules.md` ⭐ (rules reference)
 
 ## Next Actions
-1. Execute V10 Engine Phase 2: Enchantment framework + trigger system
-2. Execute V10 Scoring: SIV + BSV implementation
-3. Execute V10 Engine Phase 3: 2026 modern mechanics
-4. Performance benchmarking and polish
+1. **V10 Phase 2**: Enchantment framework + trigger system (designed, ready to implement)
+2. **V10 Phase 3**: 2026 modern mechanics (designed, blocked on Phase 2)
+3. **Scoring calibration**: temperature/weight tuning with real game data
+4. **Performance**: benchmark and optimize to 75ms target
