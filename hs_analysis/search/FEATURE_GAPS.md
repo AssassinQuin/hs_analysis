@@ -130,6 +130,7 @@
 | B06 | `test_v9_hdt_batch06.py` | 10 | Real deck data-driven: quest+discover, weapon-attack, RUSH propagation, taunt defense, stealth, deathrattle, outcast, 0-cost chain, complex late-game |
 | B07 | `test_v9_hdt_batch07.py` | 10 | Advanced combat: lethal paths, death chains, mana boundaries, taunt-through-lethal, spell destroy/armor, engine edge cases |
 | B08 | `test_v9_hdt_batch08.py` | 10 | Position-awareness: summon rightmost ✅, OUTCAST positions (left/mid/right FEATURE_GAP), generated card rightmost ✅, taunt multi-minion ✅, board reindexing ✅, heal no-cap (B04 confirmed), complex multi-mechanic, hand order preservation ✅ |
+| B09 | `test_v9_hdt_batch09.py` | 10 | Position strategy: PLAY position variants (empty/3-minion/6-minion boards) ✅, insert leftmost/between/rightmost ✅, death cleanup reindex ✅, deathrattle position inheritance gap ❌, engine position search ✅, full board boundary ✅, multi-death reindex chain ✅ |
 
 ## Key Engine Limitations Discovered
 
@@ -194,4 +195,14 @@ Hero cards should change hero_class, HP, armor, and replace hero power.
 
 ---
 
-*Last updated: Batch 08 (80 total tests across B01–B08) — Position mechanics verified, OUTCAST gap confirmed*
+### Discovered in Batch 09
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| PLAY position variants | ✅ SUPPORTED | `enumerate_legal_actions` generates one action per valid board position (0..len(board)). `apply_action` uses `insert(pos, minion)` for correct placement. |
+| Board insert at position | ✅ SUPPORTED | Leftmost (pos=0), between, rightmost (pos=len(board)) all work correctly via `list.insert()` |
+| Death cleanup reindex | ✅ SUPPORTED | List comprehension `[m for m in board if m.health > 0]` correctly reindexes surviving minions |
+| board_full() boundary | ✅ SUPPORTED | 6 minions → 7 positions legal; after play, board_full() returns True |
+| Deathrattle position inheritance | ❌ NOT SUPPORTED | When minion with deathrattle dies, no token is summoned at the inherited position. Engine just removes dead minion; no deathrattle effect fires. |
+
+*Last updated: Batch 09 (92 total tests across B01–B09) — Position strategy verified, deathrattle inheritance gap documented*
