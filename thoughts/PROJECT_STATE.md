@@ -37,7 +37,7 @@ last_changed: 2026-04-19
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 212 tests, 212 passing
+- [x] 232 tests, 232 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -47,7 +47,9 @@ last_changed: 2026-04-19
 - [x] test_rewind_delta_generator.py (6 tests)
 - [x] test_action_normalize.py (10 tests)
 - [x] test_game_state.py (16 tests)
-- [x] Internal module tests in hs_analysis/search/ (63 tests total)
+- [x] Internal module tests in hs_analysis/search/ (73 tests total)
+- [x] V9 HDT batch01 integration tests (10 tests)
+- [x] V9 HDT batch02 deck-based random tests (10 tests, real parsed decks)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)

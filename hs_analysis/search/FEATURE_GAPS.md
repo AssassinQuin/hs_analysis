@@ -61,11 +61,23 @@
 | Immune | ❌ | Not modeled |
 | Can't Attack | ❌ | Not modeled |
 
+### Discovered in Batch 02
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| CHOOSE_ONE | ❌ | Cards like 生命火花 have choose-one, not modeled |
+| OUTCAST | ❌ | Cards like 伊利达雷研习 have outcast, not modeled |
+| COLOSSAL | ❌ | Cards like 柳牙 have colossal appendage, not modeled |
+| TRIGGER_VISUAL | ❌ | Triggered effects not simulated |
+| START_OF_GAME | ❌ | Start-of-game effects not relevant for in-game decisions |
+| DEATHRATTLE on weapons | ❌ | 迷时战刃 has DEATHRATTLE on a weapon, not simulated |
+
 ## Batch Coverage
 
 | Batch | File | Tests | Features Covered |
 |-------|------|-------|------------------|
 | B01 | `test_v9_hdt_batch01.py` | 10 | Weapon, taunt, lethal, divine shield, charge, rush, mana, overextension |
+| B02 | `test_v9_hdt_batch02_deck_random.py` | 10 | Real deck data, multi-class (DH/Warlock/Hunter/Rogue/Druid), weapon+spells, charge finisher, stealth, big minions, lethal detection, defense |
 
 ## Key Engine Limitations Discovered
 
@@ -95,4 +107,4 @@ documented. This works but could be error-prone for future features.
 
 ---
 
-*Last updated: Batch 01 (10 tests)*
+*Last updated: Batch 02 (20 total tests across B01+B02)*
