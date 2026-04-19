@@ -1,7 +1,7 @@
 ---
 version: 1.0
 created: 2026-04-19
-last_changed: 2026-04-19 (batch14 complex real-deck scenario tests)
+last_changed: 2026-04-19 (batch15 extreme complexity real-deck scenario tests)
 ---
 
 # Project State: hs_analysis
@@ -37,7 +37,7 @@ last_changed: 2026-04-19 (batch14 complex real-deck scenario tests)
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 352 tests, 351 passing (1 known flaky stochastic test in batch01: test_02_dh_weapon_trade)
+- [x] 362 tests, 362 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -62,6 +62,7 @@ last_changed: 2026-04-19 (batch14 complex real-deck scenario tests)
 - [x] V9 HDT batch12 complex real-game scenario tests round 2 (10 tests: T6 board recovery after wipe, T5 weapon durability mgmt, T4 divine shield trade, T6 mana squeeze, T7 lethal threat risk, T8 multi-spell combo, T5 taunt placement, T15 resource exhaustion, T7 draw+discover chain, T6 Pareto tempo vs value)
 - [x] V9 HDT batch13 complex real-game scenario tests round 3 (10 tests: T10 max actions, T7 cascading deaths, T8 lethal 5 sources, T9 weapon break mid combo, T6 fatigue boundary, T7 taunt death unlocks face, chromosome normalization, T8 opponent sim worst case, T5 spell buff chain, T9 multi-objective conflict)
 - [x] V9 HDT batch14 complex real-deck scenario tests (10 tests: Hunter T3 aggro push, Warlock Quest T5 discover chain, Warlock Dragon T8 charge finisher, DH T4 weapon+rush tempo, Druid T7 ramp big turn, Rogue-style Warlock T6 stealth+weapon, full 7v7 late-game T9, near-death taunt save T6, Hunter T4 deathrattle+rush combo, Druid T5 innervate big play)
+- [x] V9 HDT batch15 extreme complexity real-deck scenario tests (10 tests: DH vs Warlock Dragon cross-deck T6, Hunter vs Druid aggro race T5, Warlock discover vs stealth T7, Druid full 7v7 T10, lethal through single taunt T8, low HP risk assessment T5, multi-weapon sequence T5, discover-heavy 6-card hand T4, mixed-deck lethal T9, endgame resource scarcity T12)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
