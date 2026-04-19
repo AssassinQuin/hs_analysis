@@ -1,7 +1,7 @@
 ---
 version: 1.0
 created: 2026-04-19
-last_changed: 2026-04-19 (batch09 position strategy tests)
+last_changed: 2026-04-19 (batch10 advanced scenario tests)
 ---
 
 # Project State: hs_analysis
@@ -37,7 +37,7 @@ last_changed: 2026-04-19 (batch09 position strategy tests)
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 302 tests, 302 passing
+- [x] 312 tests, 312 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -57,6 +57,7 @@ last_changed: 2026-04-19 (batch09 position strategy tests)
 - [x] V9 HDT batch07 advanced combat + multi-system tests (10 tests: lethal paths, death chains, mana boundaries, taunt-through-lethal, spell destroy/armor, engine edge cases)
 - [x] V9 HDT batch08 position-awareness tests (10 tests: summon rightmost, OUTCAST positions, generated card rightmost, taunt multi-minion, board reindexing, heal no-cap, complex multi-mechanic, hand order)
 - [x] V9 HDT batch09 position strategy tests (10 tests: PLAY position variants, insert leftmost/between/rightmost, death cleanup reindex, deathrattle inheritance gap, engine position search, full board boundary, multi-death reindex chain)
+- [x] V9 HDT batch10 advanced scenario tests (10 tests: weapon replacement, overload gap, fatigue gap, stealth targeting gap, poisonous gap, windfury gap, Hunter deck T5, Warlock deck T6, risk AoE, lethal-through-taunt)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)

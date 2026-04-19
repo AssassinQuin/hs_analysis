@@ -46,9 +46,13 @@
 | Rule | Status | Notes |
 |------|--------|-------|
 | STEALTH breaks on attack | ❌ Not enforced | Stealth minions can attack without losing stealth |
-| STEALTH targeting protection | ❌ Not enforced | Enemy can target stealth minions in attack enumeration |
+| STEALTH targeting protection | ❌ Not enforced | Enemy can target stealth minions in attack enumeration (B10 confirmed) |
 | Weapon attack enumeration | ❌ Not in enumerate_legal_actions | Weapon attacks handled via mutation in search, not enumerated |
 | Deathrattle on death | ❌ Not triggered | When minions die, deathrattle effects don't fire |
+| Overload mana tracking | ❌ Not parsed | Engine doesn't parse 过载 text or set overload_next (B10 confirmed) |
+| Fatigue damage | ❌ Not tracked | Drawing from empty deck doesn't increment fatigue_damage or deal damage (B10 confirmed) |
+| Poisonous instant kill | ❌ Not implemented | Engine deals normal attack damage instead of instant kill (B10 confirmed) |
+| Windfury second attack | ❌ Not tracked | can_attack set to False after first attack, no windfury tracking (B10 confirmed) |
 | AOE damage simulation | Partial | Basic spell_simulator exists but limited |
 
 ## Tracked by Batch
@@ -59,3 +63,7 @@
 - **Batch 04** (10 tests): Spell damage, AoE, card draw, summon, death cleanup, opponent sim, Pareto front
 - **Batch 05** (10 tests): Edge cases, multi-action sequences, complex board states
 - **Batch 06** (10 tests): Quest+discover play, weapon-then-attack sequence, RUSH propagation, taunt defense, stealth behavior, deathrattle play, outcast play, 0-cost spell chain, complex late-game
+- **Batch 07** (10 tests): Lethal paths, death chains, mana boundaries, taunt-through-lethal, spell destroy/armor, engine edge cases
+- **Batch 08** (10 tests): Position-awareness tests (summon rightmost, OUTCAST, generated card positioning, taunt multi-minion, board reindexing)
+- **Batch 09** (10 tests): Position strategy (PLAY position variants, insert leftmost/between/rightmost, death cleanup reindex, deathrattle inheritance gap)
+- **Batch 10** (10 tests): Weapon replacement durability reset, overload mana tracking gap, fatigue damage gap, stealth targeting protection gap, poisonous instant kill gap, windfury second attack gap, Hunter deck T5 search, Warlock deck T6 search, risk assessor class-specific AoE, combined lethal through taunt with spell
