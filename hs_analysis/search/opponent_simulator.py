@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
-from hs_analysis.search.game_state import GameState, Minion, HeroState, OpponentState
-from hs_analysis.search.rhea_engine import Action, apply_action
+from hs_analysis.search.game_state import GameState
 
 
 # ===================================================================
@@ -150,55 +149,3 @@ class OpponentSimulator:
             )
         except Exception:
             return SimulatedOpponentTurn()  # safe default
-
-    # ---------------------------------------------------------------
-    # Internal helpers
-    # ---------------------------------------------------------------
-
-    def _enumerate_opponent_actions(self, state: GameState) -> list:
-        """Enumerate simplified opponent ATTACK actions.
-
-        The opponent can attack with each of their minions. Targets:
-        - target_index=0 → our hero (face)
-        - target_index=1+ → our minions (1-indexed)
-
-        Taunt rules: if we have taunt minions, the opponent must attack
-        through them first.
-        """
-        actions: list[Action] = []
-        friendly_taunts = [m for m in state.board if m.has_taunt]
-
-        for idx in range(len(state.opponent.board)):
-            if friendly_taunts:
-                for t_idx, _t in enumerate(friendly_taunts):
-                    actions.append(Action(
-                        action_type="ATTACK",
-                        source_index=idx,
-                        target_index=t_idx + 1,
-                    ))
-            else:
-                # Can go face
-                actions.append(Action(
-                    action_type="ATTACK",
-                    source_index=idx,
-                    target_index=0,
-                ))
-                # Can attack each of our minions
-                for f_idx in range(len(state.board)):
-                    actions.append(Action(
-                        action_type="ATTACK",
-                        source_index=idx,
-                        target_index=f_idx + 1,
-                    ))
-        return actions
-
-    def _evaluate_from_opponent_perspective(self, state: GameState) -> float:
-        """Negate our evaluation score to get opponent's perspective."""
-        if self.eval_fn is not None:
-            return -self.eval_fn(state)
-        # Inline quick eval: opponent wants to minimize our (hp + board value)
-        our_value = state.hero.hp + state.hero.armor
-        our_value += sum(m.attack + m.health for m in state.board)
-        opp_value = state.opponent.hero.hp + state.opponent.hero.armor
-        opp_value += sum(m.attack + m.health for m in state.opponent.board)
-        return opp_value - our_value
