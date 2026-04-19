@@ -26,7 +26,12 @@
 | Divine Shield | ✅ | B01 | Absorbs one hit of damage |
 | Mana system | ✅ | B01 | Available/overloaded/max mana tracking |
 | Lethal detection | ✅ | B01 | Board damage exact lethal found by engine |
-| Board size limit (7) | ✅ | B01 | `board_full()` prevents 8th minion |
+| Board size limit (7) | ✅ | B01, B05 | `board_full()` prevents 8th minion; summon blocked when full (B05) |
+| Divine Shield pop | ✅ | B01, B05 | Shield absorbs damage, pops without HP loss; counter-attack still occurs (B05) |
+| Weapon replacement | ✅ | B05 | Playing a weapon replaces existing weapon on hero |
+| Multi-attack sequence | ✅ | B05 | Sequential ATTACK actions with death cleanup between steps |
+| Spell buff attack | ✅ | B05 | "+N 攻击力" parsed by EffectParser, applied via apply_buff |
+| Empty hand end turn | ✅ | B05 | Engine finds ATTACK + END_TURN with no PLAY actions |
 
 ### Partially Supported
 
@@ -45,7 +50,7 @@
 | Card draw | ✅ | B04 | Spell draw via resolve_effects (抽N张牌), adds cards to hand, decrements deck_remaining |
 | Spell direct damage | ✅ | B04 | resolve_effects applies damage + _resolve_deaths cleanup |
 | Spell AoE damage | ✅ | B04 | Applies to all enemy minions, death cleanup |
-| Spell summon | ⚠️ | B04 | summon_stats parses stats but multi-summon count not parsed (1 instead of N) |
+| Spell summon | ⚠️ | B04, B05 | summon_stats parses stats but multi-summon count not parsed (1 instead of N); board_full check prevents overflow (B05) |
 | Spell armor | ✅ | B04 | resolve_effects applies armor gain correctly |
 | Spell heal | ⚠️ | B04 | Heals hero HP but does NOT cap at 30 |
 | Death cleanup (combat) | ✅ | B04 | Both attacker and defender cleaned up when HP ≤ 0 |
@@ -94,6 +99,7 @@
 | B02 | `test_v9_hdt_batch02_deck_random.py` | 10 | Real deck data, multi-class (DH/Warlock/Hunter/Rogue/Druid), weapon+spells, charge finisher, stealth, big minions, lethal detection, defense |
 | B03 | `test_v9_hdt_batch03.py` | 10 | Hero power, windfury, armor, secrets, poisonous, hero card, innervate, overload, full hand, spell-only hand |
 | B04 | `test_v9_hdt_batch04.py` | 10 | Spell direct damage, AoE clear, draw cards, summon minions, death cleanup, opponent sim, next-turn lethal, Pareto front, risk-adjusted eval, armor/heal |
+| B05 | `test_v9_hdt_batch05.py` | 10 | Summon board limits (full/near-full/multi-summon), AoE+summon combo, weapon replacement, divine shield pop, multi-attack sequence, spell buff, empty-hand end turn, deathrattle gap |
 
 ## Key Engine Limitations Discovered
 
@@ -158,4 +164,4 @@ Hero cards should change hero_class, HP, armor, and replace hero power.
 
 ---
 
-*Last updated: Batch 04 (40 total tests across B01+B02+B03+B04)*
+*Last updated: Batch 05 (50 total tests across B01+B02+B03+B04+B05)*

@@ -37,7 +37,7 @@ last_changed: 2026-04-19
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 189 tests, 189 passing
+- [x] 262 tests, 262 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
