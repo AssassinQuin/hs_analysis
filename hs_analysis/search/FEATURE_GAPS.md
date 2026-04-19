@@ -42,7 +42,17 @@
 | Armor (opponent) | ⚠️ | B03 | HeroState.armor field exists but apply_action ignores it, subtracts from HP |
 | Poisonous | ⚠️ | B03 | Field propagated to Minion but combat doesn't destroy-on-damage |
 | Hero card play | ⚠️ | B03 | Type "HERO" recognized, card removed from hand, but effect is no-op |
-| Card draw | ⚠️ | — | No draw simulation in action space |
+| Card draw | ✅ | B04 | Spell draw via resolve_effects (抽N张牌), adds cards to hand, decrements deck_remaining |
+| Spell direct damage | ✅ | B04 | resolve_effects applies damage + _resolve_deaths cleanup |
+| Spell AoE damage | ✅ | B04 | Applies to all enemy minions, death cleanup |
+| Spell summon | ⚠️ | B04 | summon_stats parses stats but multi-summon count not parsed (1 instead of N) |
+| Spell armor | ✅ | B04 | resolve_effects applies armor gain correctly |
+| Spell heal | ⚠️ | B04 | Heals hero HP but does NOT cap at 30 |
+| Death cleanup (combat) | ✅ | B04 | Both attacker and defender cleaned up when HP ≤ 0 |
+| Next-turn lethal check | ✅ | B04 | Correctly sums board + spell burst + weapon vs opponent HP+armor |
+| Risk-adjusted eval | ✅ | B04 | evaluate_with_risk reduces score by risk_penalty × 0.3 (capped 90%) |
+| Opponent simulator | ✅ | B04 | Available; applies resilience + lethal-exposure penalties to top chromosomes |
+| Pareto front | ⚠️ | B04 | pareto_filter works O(n²); but engine pareto_front often empty (chromosome replay failures) |
 
 ### Not Supported
 
@@ -83,6 +93,7 @@
 | B01 | `test_v9_hdt_batch01.py` | 10 | Weapon, taunt, lethal, divine shield, charge, rush, mana, overextension |
 | B02 | `test_v9_hdt_batch02_deck_random.py` | 10 | Real deck data, multi-class (DH/Warlock/Hunter/Rogue/Druid), weapon+spells, charge finisher, stealth, big minions, lethal detection, defense |
 | B03 | `test_v9_hdt_batch03.py` | 10 | Hero power, windfury, armor, secrets, poisonous, hero card, innervate, overload, full hand, spell-only hand |
+| B04 | `test_v9_hdt_batch04.py` | 10 | Spell direct damage, AoE clear, draw cards, summon minions, death cleanup, opponent sim, next-turn lethal, Pareto front, risk-adjusted eval, armor/heal |
 
 ## Key Engine Limitations Discovered
 
@@ -147,4 +158,4 @@ Hero cards should change hero_class, HP, armor, and replace hero power.
 
 ---
 
-*Last updated: Batch 03 (30 total tests across B01+B02+B03)*
+*Last updated: Batch 04 (40 total tests across B01+B02+B03+B04)*

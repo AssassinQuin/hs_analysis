@@ -37,7 +37,7 @@ last_changed: 2026-04-19
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 242 tests, 242 passing
+- [x] 189 tests, 189 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -51,6 +51,7 @@ last_changed: 2026-04-19
 - [x] V9 HDT batch01 integration tests (10 tests)
 - [x] V9 HDT batch02 deck-based random tests (10 tests, real parsed decks)
 - [x] V9 HDT batch03 engine path tests (10 tests: hero power, windfury, armor, secrets, poisonous, hero card, overload, boundaries)
+- [x] V9 HDT batch04 spell sim + engine tests (10 tests: spell damage, AoE, draw, summon, death cleanup, opponent sim, next-turn lethal, Pareto front, risk eval, armor/heal)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
