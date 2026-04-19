@@ -75,4 +75,47 @@ last_changed: 2026-04-19
 
 ---
 
+## D009 | 2026-04-19 | Three-phase layered overhaul for V10 (not full rewrite)
+**Context**: Engine simulates 2018-level Hearthstone but 2026 Standard has 37 mechanic keywords. Need massive capability expansion.
+**Decision**: Three-phase incremental overhaul: Phase 1 (fix broken basics), Phase 2 (enchantment framework), Phase 3 (2026 mechanics). Not a full rewrite.
+**Alternatives**: (A) Full engine rewrite — risks regression on 233 tests, wastes solid RHEA core. (B) Plugin architecture — over-engineered. (C) ML-based text parser — fragile, needs training data.
+**Rationale**: RHEA evolutionary loop, evaluation, and action normalization are solid. Problem is simulation fidelity, not search algorithm.
+
+---
+
+## D010 | 2026-04-19 | Enchantment framework as the key architectural domino
+**Context**: 33% of cards have Battlecry, 14% have Deathrattle, but neither is simulated. Need a foundation layer for ALL trigger-based mechanics.
+**Decision**: Build Enchantment dataclass + TriggerDispatcher as core abstraction. Every trigger-based mechanic builds on this.
+**Alternatives**: (A) Hardcode each mechanic — duplicated logic. (B) Event sourcing — over-complex. (C) Fix battlecry/deathrattle without framework — blocks Phase 3.
+**Rationale**: Framework is a force multiplier. Battlecry, deathrattle, aura, Dark Gift, Imbue, Quest all compose naturally on top.
+
+---
+
+## D011 | 2026-04-19 | Regex + manual dispatch for card effect parsing
+**Context**: Card text is Chinese, follows predictable patterns. Need effects from ~1000 cards.
+**Decision**: Continue regex pattern matching + manual dispatch. Extend spell_simulator patterns to battlecry/deathrattle.
+**Alternatives**: (A) ML text parser — needs labeled data. (B) Full NLP — overkill. (C) Per-card mapping — unmaintainable.
+**Rationale**: Card descriptions follow strict templates. Regex is deterministic, fast, already working.
+
+---
+
+## D012 | 2026-04-19 | Graceful degradation for unknown effects
+**Context**: Not all card effects can be parsed. Novel text patterns exist.
+**Decision**: Unparseable effects → log warning + treat card as vanilla. Engine never crashes.
+**Alternatives**: (A) Fail loudly — crashes search, unacceptable. (B) Skip card — loses stats value. (C) Best guess — may produce wrong simulation.
+**Rationale**: Working search that underestimates a card > crashed search.
+
+---
+
+## D013 | 2026-04-19 | Phase 1 design choices (8 mechanic fixes)
+**Context**: Foundation bug fixes before building new systems.
+**Decisions**:
+- Poisonous does NOT bypass divine shield (official game rules)
+- Windfury uses `has_attacked_once` flag for two-attack tracking
+- Overload: `overload_next` on PLAY → `overloaded` on END_TURN → deduct next turn
+- Freeze: flag-based skip in enumerate, reset on END_TURN
+- Fatigue: standalone `apply_draw()` with incrementing counter
+
+---
+
 <!-- Append new decisions below this line -->

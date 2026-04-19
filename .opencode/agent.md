@@ -132,7 +132,7 @@ hs_analysis/                    # 核心包
 ## 测试
 
 ```bash
-pytest                          # 全量测试（163+ 用例）
+pytest                          # 全量测试（233+ 用例）
 pytest tests/                   # 仅 tests/ 目录
 pytest hs_analysis/search/      # search 模块内嵌测试
 ```
@@ -143,6 +143,8 @@ pytest hs_analysis/search/      # search 模块内嵌测试
 - **V7** — 基于 HSReplay 数据驱动的实绩评分
 - **V8** — 上下文感知（回合数、场面饱和度、种族协同、发现池期望）
 - **L6** — 真实世界综合评分
+- **V9** — RHEA 层叠决策管线（致命检测 → 进化搜索 → 对手模拟 → 风险评估）
+- **V10** — 2026 机制覆盖大修（附魔框架 + 触发系统 + 现代关键词）← 当前
 
 ## 开发约定
 
@@ -153,3 +155,61 @@ pytest hs_analysis/search/      # search 模块内嵌测试
 - import 路径使用 `from hs_analysis.xxx import yyy`
 - 设计文档在 `thoughts/shared/designs/`，归档在 `thoughts/archive/`
 - commit 格式: `feat: / fix: / cleanup: 简述`
+
+## V10 设计生产规范
+
+> 后续 Phase 2/3 的设计生产（设计文档 → 计划 → 实现）遵循以下流程。
+
+### 文件结构规范
+
+```
+thoughts/
+├── PROJECT_CHARTER.md          # 项目目标与约束（不可变）
+├── PROJECT_STATE.md            # 当前进度（每次变更后更新）
+├── DECISIONS.md                # 架构决策记录（追加写入）
+└── shared/
+    ├── designs/
+    │   └── YYYY-MM-DD-{topic}-design.md    # 设计文档
+    └── plans/
+        └── YYYY-MM-DD-{topic}.md           # 实现计划
+```
+
+### 设计文档模板
+
+每个 Phase 开始前，产出设计文档，包含以下 section（缺一不可）：
+
+1. **Problem Statement** — 解决什么问题，影响哪些卡牌/场景
+2. **Constraints** — 不可逾越的限制（向后兼容、性能、依赖）
+3. **Approach** — 选定方案 + 排斥的替代方案 + 理由
+4. **Architecture** — 高层结构，模块交互，数据流
+5. **Components** — 新增/修改的文件，每个文件的职责
+6. **Data Flow** — 数据从输入到输出的完整路径
+7. **Error Handling** — 失败策略（降级、回退、日志）
+8. **Testing Strategy** — 测试批次号、测试数量、覆盖场景
+9. **Open Questions** — 未解决的问题（如有）
+
+### 生产流程
+
+```
+[brainstormer]  调研 + 分析 → 设计文档
+    ↓
+[planner]       设计文档 → 实现计划（micro-tasks + batches）
+    ↓
+[executor]      实现计划 → 代码 + 测试
+    ↓
+[reviewer]      验证测试通过 → 更新 PROJECT_STATE.md + DECISIONS.md
+```
+
+### 计划文档规范
+
+- 每个计划拆为 **micro-tasks**，每个 task 对应一个文件
+- 独立 tasks 放同一 batch 并行执行
+- 有依赖的 tasks 拆为多个 batch，串行执行
+- 每个 micro-task 包含：目标、修改文件、关键实现点、验证方式
+
+### 进度更新规范
+
+每完成一个 Phase：
+1. 更新 `PROJECT_STATE.md` — 标记 DONE 项，更新测试计数，更新 Next Actions
+2. 追加 `DECISIONS.md` — 记录该 Phase 做出的关键设计决策
+3. Git commit — `feat: V10 Phase N: {描述}`

@@ -82,12 +82,8 @@ def _enumerate_damage_actions(state: GameState) -> list:
             continue
 
         if enemy_taunts:
-            # Charge minions can still go face even when taunts are present
-            if m.has_charge and not m.has_rush:
-                actions.append(
-                    Action(action_type="ATTACK", source_index=src_idx, target_index=0)
-                )
-            # All attackers can target taunt minions
+            # ALL attackers (including charge) must target taunt minions first.
+            # Charge bypasses summoning sickness, NOT taunt.
             for t in enemy_taunts:
                 real_idx = state.opponent.board.index(t)
                 actions.append(

@@ -127,9 +127,9 @@ def test_01_weapon_replacement_durability_reset():
 # ===================================================================
 
 def test_02_overload_mana_tracking_gap():
-    """Play card with overload text. Engine doesn't parse/set overload_next.
+    """Play card with overload text. Engine now parses overload from card text.
 
-    FEATURE_GAP: overload_next should be 2 but stays 0.
+    V10 FIX: overload_next is correctly set to 2 when playing overload card.
     """
     overload_card = _make_card(
         "闪电风暴", cost=3, card_type="SPELL",
@@ -152,11 +152,9 @@ def test_02_overload_mana_tracking_gap():
         f"Expected mana.available=2 (5-3), got {result.mana.available}"
     )
 
-    # FEATURE_GAP: overload_next should be 2 but engine doesn't parse it
-    print(f"GAP B10-02: overload_next={result.mana.overload_next} "
-          f"(expected 2 in real game, engine doesn't parse overload text)")
-    assert result.mana.overload_next == 0, (
-        "FEATURE_GAP confirmed: overload_next not set by engine"
+    # V10 FIX: overload_next is now correctly parsed from card text
+    assert result.mana.overload_next == 2, (
+        f"Expected overload_next=2 (parsed from card text), got {result.mana.overload_next}"
     )
 
 
@@ -296,8 +294,8 @@ def test_05_poisonous_instant_kill_gap():
 # ===================================================================
 
 def test_06_windfury_second_attack_gap():
-    """3/3 windfury minion attacks face. FEATURE_GAP: can_attack set to False
-    after first attack. Verify current behavior.
+    """3/3 windfury minion attacks face. V10 FIX: can_attack stays True
+    after first attack so windfury minion can attack again.
     """
     windfury_minion = _make_minion("风怒鹰", 3, 3, has_windfury=True)
 
@@ -317,14 +315,14 @@ def test_06_windfury_second_attack_gap():
         f"Expected opponent HP=27 (30-3), got {result.opponent.hero.hp}"
     )
 
-    # FEATURE_GAP: windfury minion should still have can_attack=True for second attack
+    # V10 FIX: windfury minion keeps can_attack=True after first attack
     if len(result.board) > 0:
         wf_minion = result.board[0]
-        print(f"GAP B10-06: windfury minion can_attack={wf_minion.can_attack} "
-              f"after first attack (should be True for second attack)")
-        assert wf_minion.can_attack == False, (
-            "FEATURE_GAP confirmed: can_attack set to False after first attack "
-            "(windfury should allow second attack)"
+        assert wf_minion.can_attack == True, (
+            "V10 FIX: windfury minion should keep can_attack=True after first attack"
+        )
+        assert wf_minion.has_attacked_once == True, (
+            "V10 FIX: has_attacked_once should be True after first attack"
         )
     else:
         pytest.fail("Windfury minion should survive attacking face")

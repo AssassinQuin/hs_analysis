@@ -124,7 +124,12 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
     enemy_taunts = [m for m in state.opponent.board if m.has_taunt]
 
     for src_idx, minion in enumerate(state.board):
-        if not (minion.can_attack or minion.has_charge or minion.has_rush):
+        # Can attack if: can_attack flag is set, OR has windfury and has attacked once
+        can_act = minion.can_attack or (minion.has_windfury and minion.has_attacked_once)
+        if not (can_act or minion.has_charge or minion.has_rush):
+            continue
+        # Frozen minions cannot attack
+        if minion.frozen_until_next_turn:
             continue
 
         if enemy_taunts:
@@ -191,8 +196,17 @@ def apply_action(state: GameState, action: Action) -> GameState:
         # Deduct mana
         s.mana.available -= card.cost
 
+        # Parse overload from card text (Chinese: "过载：(N)" or "过载：(N)")
+        card_text = getattr(card, 'text', '') or ''
+        overload_match = re.search(r'过载[：:]\s*[（(]\s*(\d+)\s*[）)]', card_text)
+        if overload_match:
+            s.mana.overload_next += int(overload_match.group(1))
+
         # Remove card from hand
         s.hand.pop(card_idx)
+
+        # Track cards played this turn for combo
+        s.cards_played_this_turn.append(card)
 
         if card.card_type.upper() == "MINION":
             mechanics = set(card.mechanics or [])
@@ -229,6 +243,12 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 s = resolve_effects(s, card)
             except Exception:
                 pass  # fallback to just removing from hand
+            # Apply freeze if card text contains freeze effect
+            card_text = getattr(card, 'text', '') or ''
+            if '冻结' in card_text or 'FREEZE' in (getattr(card, 'mechanics', None) or []):
+                # Simplified: freeze first enemy minion
+                if s.opponent.board:
+                    s.opponent.board[0].frozen_until_next_turn = True
         # OTHER card types: just removed from hand
 
     elif action.action_type == "ATTACK":
@@ -276,10 +296,15 @@ def apply_action(state: GameState, action: Action) -> GameState:
             target = s.opponent.board[enemy_idx]
 
             # Deal source attack to target
+            target_had_divine_shield = target.has_divine_shield
             if target.has_divine_shield:
                 target.has_divine_shield = False
             else:
                 target.health -= source.attack
+
+            # Poisonous: instant kill if hit connected (target had no divine shield)
+            if source.has_poisonous and not target_had_divine_shield:
+                target.health = 0
 
             # Counter-attack: deal target attack to source
             if source.has_divine_shield:
@@ -290,15 +315,26 @@ def apply_action(state: GameState, action: Action) -> GameState:
             # Remove dead enemy minions
             s.opponent.board = [m for m in s.opponent.board if m.health > 0]
 
+        # Stealth breaks when minion attacks
+        for m in s.board:
+            if m is source and m.has_stealth:
+                m.has_stealth = False
+                break
+
         # Remove dead friendly minions (may have died from counter-attack)
         s.board = [m for m in s.board if m.health > 0]
 
-        # Mark source as having attacked
+        # Mark source as having attacked (windfury tracking)
         if src_idx < len(s.board):
             # Source may have been removed if it died
             for m in s.board:
                 if m is source:
-                    m.can_attack = False
+                    if m.has_windfury and not m.has_attacked_once:
+                        # First attack for windfury minion: allow second attack
+                        m.has_attacked_once = True
+                        # keep can_attack = True for second swing
+                    else:
+                        m.can_attack = False
                     break
         # If source died, it's already removed above
 
@@ -307,8 +343,34 @@ def apply_action(state: GameState, action: Action) -> GameState:
         s.hero.hero_power_used = True
 
     elif action.action_type == "END_TURN":
-        pass  # no state change
+        # Apply overload: this turn's overload_next becomes next turn's overloaded
+        s.mana.overloaded = s.mana.overload_next
+        s.mana.overload_next = 0
+        # Deduct overloaded mana from available
+        s.mana.available -= s.mana.overloaded
+        # Reset per-turn states
+        s.cards_played_this_turn = []
+        s.fatigue_damage = 0
+        # Unfreeze friendly minions at end of turn
+        for m in s.board:
+            m.frozen_until_next_turn = False
 
+    return s
+
+
+def apply_draw(state: GameState, count: int = 1) -> GameState:
+    """Draw cards from deck. Deals fatigue damage if deck is empty.
+
+    Returns a modified copy of state.
+    """
+    s = state.copy()
+    for _ in range(count):
+        if s.deck_remaining <= 0:
+            # Fatigue: incrementing damage
+            s.fatigue_damage += 1
+            s.hero.hp -= s.fatigue_damage
+        else:
+            s.deck_remaining -= 1
     return s
 
 

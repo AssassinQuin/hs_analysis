@@ -1,20 +1,20 @@
 ---
-version: 1.0
+version: 2.0
 created: 2026-04-19
-last_changed: 2026-04-19 (batch15 extreme complexity real-deck scenario tests)
+last_changed: 2026-04-19 (V10 Phase 1 foundation fixes complete)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V9 Decision Engine + Data Completion
+## Current Phase: V10 Engine Overhaul — 2026 Mechanic Coverage
 
 ## ✅ DONE
 
 ### Data Infrastructure
 - [x] Multi-source data pipeline (HearthstoneJSON + iyingdi + HSReplay)
-- [x] 984+ standard cards in unified_standard.json
+- [x] 1015 standard cards in unified_standard.json (2026 Year of the Scarab)
 - [x] CardIndex with O(1) multi-dimensional lookup
 - [x] Card cleaner: race/mechanic/school normalization (56 keywords)
 - [x] Card data model (dataclass) with full type hints
@@ -25,7 +25,7 @@ last_changed: 2026-04-19 (batch15 extreme complexity real-deck scenario tests)
 - [x] V8: 7 contextual correction factors (turn curve, type context, pool quality, etc.)
 - [x] L6: Real-world composite scoring
 
-### Search & Decision
+### Search & Decision (V9)
 - [x] RHEA evolutionary search engine
 - [x] Lethal checker (DFS-based)
 - [x] Game state management (GameState, HeroState)
@@ -36,8 +36,24 @@ last_changed: 2026-04-19 (batch15 extreme complexity real-deck scenario tests)
 - [x] Spell simulator
 - [x] Score provider with lazy loading + cache
 
+### V10 Phase 1: Foundation Fixes ✅ (2026-04-19)
+- [x] Lethal checker: charge minions now respect taunt (charge-vs-taunt bug fix)
+- [x] Windfury second attack: `has_attacked_once` flag enables double attack
+- [x] Overload parsing + application: regex parse on PLAY, apply on END_TURN
+- [x] Poisonous instant kill: target.health = 0 when attacker has poisonous
+- [x] Combo tracking: `cards_played_this_turn` list populated by apply_action
+- [x] Fatigue damage: incrementing counter on empty deck draw
+- [x] Stealth break on attack: clears `has_stealth` when minion attacks
+- [x] Freeze effect: `frozen_until_next_turn` flag skips attack enumeration
+- [x] game_state.py: added `has_attacked_once`, `frozen_until_next_turn` to Minion
+- [x] rhea_engine.py: all 6 mechanic fixes integrated into apply_action + enumerate
+- [x] lethal_checker.py: removed charge-bypasses-taunt block
+- **Design doc:** `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
+- **Plan:** `thoughts/shared/plans/2026-04-19-v10-phase1-foundation-fixes.md`
+- **Commit:** `3d1a409`
+
 ### Test Coverage
-- [x] 362 tests, 362 passing
+- [x] 233 tests passing (213 existing + 20 new batch16, zero regressions)
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -48,66 +64,77 @@ last_changed: 2026-04-19 (batch15 extreme complexity real-deck scenario tests)
 - [x] test_action_normalize.py (10 tests)
 - [x] test_game_state.py (16 tests)
 - [x] Internal module tests in hs_analysis/search/ (73 tests total)
-- [x] V9 HDT batch01 integration tests (10 tests)
-- [x] V9 HDT batch02 deck-based random tests (10 tests, real parsed decks)
-- [x] V9 HDT batch03 engine path tests (10 tests: hero power, windfury, armor, secrets, poisonous, hero card, overload, boundaries)
-- [x] V9 HDT batch04 spell sim + engine tests (10 tests: spell damage, AoE, draw, summon, death cleanup, opponent sim, next-turn lethal, Pareto front, risk eval, armor/heal)
-- [x] V9 HDT batch05 edge-case + complex board tests (10 tests)
-- [x] V9 HDT batch06 real deck data-driven tests (10 tests: quest+discover, weapon-attack sequence, RUSH propagation, taunt defense, stealth behavior, deathrattle play, outcast, 0-cost chain, complex late-game)
-- [x] V9 HDT batch07 advanced combat + multi-system tests (10 tests: lethal paths, death chains, mana boundaries, taunt-through-lethal, spell destroy/armor, engine edge cases)
-- [x] V9 HDT batch08 position-awareness tests (10 tests: summon rightmost, OUTCAST positions, generated card rightmost, taunt multi-minion, board reindexing, heal no-cap, complex multi-mechanic, hand order)
-- [x] V9 HDT batch09 position strategy tests (10 tests: PLAY position variants, insert leftmost/between/rightmost, death cleanup reindex, deathrattle inheritance gap, engine position search, full board boundary, multi-death reindex chain)
-- [x] V9 HDT batch10 advanced scenario tests (10 tests: weapon replacement, overload gap, fatigue gap, stealth targeting gap, poisonous gap, windfury gap, Hunter deck T5, Warlock deck T6, risk AoE, lethal-through-taunt)
-- [x] V9 HDT batch11 complex real-game scenario tests (10 tests: T4 lethal push, T5 discover resource mgmt, T7 druid ramp, T8 AoE decision, T3 DH tempo, T6 stealth combo, T9 full board 7v7, T7 near-death defense, T6 discover+draw chain, T12 fatigue endgame)
-- [x] V9 HDT batch12 complex real-game scenario tests round 2 (10 tests: T6 board recovery after wipe, T5 weapon durability mgmt, T4 divine shield trade, T6 mana squeeze, T7 lethal threat risk, T8 multi-spell combo, T5 taunt placement, T15 resource exhaustion, T7 draw+discover chain, T6 Pareto tempo vs value)
-- [x] V9 HDT batch13 complex real-game scenario tests round 3 (10 tests: T10 max actions, T7 cascading deaths, T8 lethal 5 sources, T9 weapon break mid combo, T6 fatigue boundary, T7 taunt death unlocks face, chromosome normalization, T8 opponent sim worst case, T5 spell buff chain, T9 multi-objective conflict)
-- [x] V9 HDT batch14 complex real-deck scenario tests (10 tests: Hunter T3 aggro push, Warlock Quest T5 discover chain, Warlock Dragon T8 charge finisher, DH T4 weapon+rush tempo, Druid T7 ramp big turn, Rogue-style Warlock T6 stealth+weapon, full 7v7 late-game T9, near-death taunt save T6, Hunter T4 deathrattle+rush combo, Druid T5 innervate big play)
-- [x] V9 HDT batch15 extreme complexity real-deck scenario tests (10 tests: DH vs Warlock Dragon cross-deck T6, Hunter vs Druid aggro race T5, Warlock discover vs stealth T7, Druid full 7v7 T10, lethal through single taunt T8, low HP risk assessment T5, multi-weapon sequence T5, discover-heavy 6-card hand T4, mixed-deck lethal T9, endgame resource scarcity T12)
+- [x] V9 HDT batch01–batch15 integration tests (150 tests)
+- [x] V10 HDT batch16 mechanic tests (20 tests: windfury, overload, poisonous, combo, fatigue, stealth, freeze, charge-taunt)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
 - [x] Wild database built (unified_wild.json, deduplicated against standard pool)
 - [x] Race-based pool quality metrics (11 race pools + 3 type pools = 14 total)
-- [x] Fixed test_dragon_pool_avg_v7 (Chinese→English race name mismatch)
-- [x] fetch_wild.py enhanced with wild=True parameter support
+
+### 2026 Environment Research
+- [x] 4 expansions analyzed: Emerald Dream, Un'Goro, Timeways, CATACLYSM
+- [x] 37 unique mechanic keywords catalogued from 1015 cards
+- [x] New 2026 mechanics documented: Imbue, Herald, Shatter, Kindred, Rewind, Fabled, Colossal, Dark Gift, Hand Targeting, Location
+- [x] Engine gap analysis: P0 (enchantments, deathrattle, battlecry), P1 (combo, overload, windfury), 2026 gaps
 
 ## 🔄 WIP
 
-### V9 Decision Engine v2
-- [ ] Cascading pipeline: lethal → enhanced RHEA → opponent sim → risk assess → select
-- [ ] Integration tests for full pipeline
-- Design: thoughts/shared/designs/2026-04-19-v9-decision-engine-v2-design.md
+### V10 Phase 2: Enchantment Framework + Trigger System
+- [ ] Enchantment data model (`Enchantment` dataclass with deltas, keywords, triggers)
+- [ ] Trigger dispatcher (on_minion_played, on_minion_dies, on_turn_end, on_attack, on_spell_cast)
+- [ ] Battlecry dispatcher (parse card text → apply effect on play)
+- [ ] Deathrattle queue (collect + execute in board-position order)
+- [ ] Aura engine (continuous enchantments that recompute after state changes)
+- [ ] Discover framework (generate 3 options, evaluate each, pick best)
+- [ ] Location card support (new card type with durability/cooldown)
+- **Design:** Phase 2 section in `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
 
 ## ⏳ TODO (by priority)
 
-### P1: V9 Pipeline
-- [ ] Complete V9 cascading decision pipeline
-- [ ] Integration tests for end-to-end decision flow
+### P1: V10 Phase 2 — Enchantment Framework
+- [ ] Enchantment dataclass with attack/health/keyword deltas and trigger_type
+- [ ] Computed stats on Minion (base + enchantment deltas)
+- [ ] TriggerDispatcher class with event hooks
+- [ ] Battlecry text parser + effect dispatch
+- [ ] Deathrattle queue with cascade (max 5 depth)
+- [ ] Aura recomputation engine
+- [ ] Discover pool generation + option evaluation
+- [ ] Location card type support
+- [ ] ~40 new tests (batch17–batch20)
 
-### P1.5: Position-Based Mechanics (位置机制)
-- [ ] Hand position tracking (slot index per card) — required for OUTCAST
-- [ ] OUTCAST (流放) mechanic — bonus when played from leftmost/rightmost hand position
-- [ ] Generated card rightmost placement — explicit position-aware card insertion
-- [ ] Board position index on Minion — support adjacency queries
-- [ ] Board adjacency barriers — dormant minions / locations block attack paths
-- [ ] Adjacency buffs — "相邻的随从" only affects immediate board neighbors
-- [ ] Position-aware buff targeting — leftmost/rightmost/adjacent selectors
-- [ ] Summon positioning: ✅ already correct (append = rightmost)
+### P2: V10 Phase 3 — 2026 Modern Mechanics
+- [ ] Imbue hero power upgrade system (per-class upgrade paths)
+- [ ] Hand position system (index-aware hand, Shatter split/merge, Outcast, Hand Targeting)
+- [ ] Herald progressive counter + Colossal appendage summoning
+- [ ] Kindred previous-turn race/school tracking
+- [ ] Quest progress tracking with reward
+- [ ] Dark Gift pool (10 random bonuses for Discover)
+- [ ] Rewind branching simulation
+- [ ] ~40 new tests (batch21–batch24)
 
-### P2: Polish
+### P3: Polish
 - [ ] Wild format support in scoring engines
 - [ ] Performance benchmarking (75ms target for RHEA)
 - [ ] HSReplay archetype integration
+- [ ] Risk assessor: add DH, DK, Rogue, Shaman, Warrior class AoE thresholds
+- [ ] Opponent simulator: consider hand size, hero power, windfury, divine shield
 
 ## 🚫 BLOCKED
 (none currently)
+
+## Architecture Decisions (see DECISIONS.md for full details)
+- D009: Three-phase layered overhaul (not full rewrite)
+- D010: Enchantment framework as the key domino for all trigger-based mechanics
+- D011: Regex + manual dispatch for effect parsing (not ML)
+- D012: Graceful degradation — unknown effects → vanilla behavior, never crash
 
 ## Data Inventory
 
 | File | Description | Size |
 |------|-------------|------|
-| hs_cards/unified_standard.json | Cleaned standard pool | 984+ cards |
-| hs_cards/hsjson_standard.json | HSJSON raw data | ~1000 cards |
+| hs_cards/unified_standard.json | Cleaned standard pool | 1015 cards |
+| hs_cards/hsjson_standard.json | HSJSON raw data | ~1015 cards |
 | hs_cards/iyingdi_standard_raw.json | iyingdi raw (standard) | ~900 cards |
 | hs_cards/v7_scoring_report.json | V7 scores | all standard |
 | hs_cards/v2_scoring_report.json | V2 scores | all standard |
@@ -123,12 +150,13 @@ last_changed: 2026-04-19 (batch15 extreme complexity real-deck scenario tests)
 | hs_cards/unified_wild.json | Cleaned wild-only pool | 5209 cards |
 
 ## Active Designs
+- thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md ⭐ (current)
 - thoughts/shared/designs/2026-04-19-v9-decision-engine-v2-design.md
 - thoughts/shared/designs/2026-04-19-card-index-and-cleanup-design.md
 - thoughts/shared/designs/2026-04-19-package-restructure-design.md
 - thoughts/shared/designs/2026-04-19-project-state-tracking-design.md
 
 ## Next Actions
-1. Complete V9 decision engine pipeline
-2. Integration tests for cascading pipeline
-3. Wild format support in V7/V8 scoring engines
+1. Execute V10 Phase 2: Enchantment framework + trigger system
+2. Execute V10 Phase 3: 2026 modern mechanics
+3. Performance benchmarking and polish

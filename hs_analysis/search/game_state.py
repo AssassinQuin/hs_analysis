@@ -37,6 +37,8 @@ class Minion:
     has_rush: bool = False
     has_charge: bool = False
     has_poisonous: bool = False
+    has_attacked_once: bool = False          # windfury first-attack tracking
+    frozen_until_next_turn: bool = False     # freeze effect
     enchantments: list = field(default_factory=list)
     owner: str = "friendly"  # or "enemy"
 

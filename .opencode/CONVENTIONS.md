@@ -50,6 +50,15 @@ MCP 工具 > OpenCode 内置 > 子代理
 - `hs_cards/images/` 和 `hs_cards/crops/` 已 gitignore
 - `*.db` 已 gitignore
 
+## 设计生产约定
+
+- 设计文档路径: `thoughts/shared/designs/YYYY-MM-DD-{topic}-design.md`
+- 实现计划路径: `thoughts/shared/plans/YYYY-MM-DD-{topic}.md`
+- 每个 Phase 完成后必须更新: `PROJECT_STATE.md` + `DECISIONS.md`
+- 设计文档必须包含 9 个 section: Problem Statement, Constraints, Approach, Architecture, Components, Data Flow, Error Handling, Testing Strategy, Open Questions
+- 计划文档必须拆为 micro-tasks + batches，每个 task 对应一个文件
+- 流水线: brainstormer(调研+设计) → planner(拆任务) → executor(实现) → reviewer(验证) → 更新文档
+
 ## 代码约定
 
 - 核心逻辑在 `hs_analysis/` 包内，`scripts/` 仅放运行入口
