@@ -1,7 +1,7 @@
 ---
 version: 1.0
 created: 2026-04-19
-last_changed: 2026-04-19 (batch10 advanced scenario tests)
+last_changed: 2026-04-19 (batch11 complex real-game scenario tests)
 ---
 
 # Project State: hs_analysis
@@ -37,7 +37,7 @@ last_changed: 2026-04-19 (batch10 advanced scenario tests)
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 312 tests, 312 passing
+- [x] 322 tests, 322 passing (1 known flaky stochastic test in batch02)
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -58,6 +58,7 @@ last_changed: 2026-04-19 (batch10 advanced scenario tests)
 - [x] V9 HDT batch08 position-awareness tests (10 tests: summon rightmost, OUTCAST positions, generated card rightmost, taunt multi-minion, board reindexing, heal no-cap, complex multi-mechanic, hand order)
 - [x] V9 HDT batch09 position strategy tests (10 tests: PLAY position variants, insert leftmost/between/rightmost, death cleanup reindex, deathrattle inheritance gap, engine position search, full board boundary, multi-death reindex chain)
 - [x] V9 HDT batch10 advanced scenario tests (10 tests: weapon replacement, overload gap, fatigue gap, stealth targeting gap, poisonous gap, windfury gap, Hunter deck T5, Warlock deck T6, risk AoE, lethal-through-taunt)
+- [x] V9 HDT batch11 complex real-game scenario tests (10 tests: T4 lethal push, T5 discover resource mgmt, T7 druid ramp, T8 AoE decision, T3 DH tempo, T6 stealth combo, T9 full board 7v7, T7 near-death defense, T6 discover+draw chain, T12 fatigue endgame)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
