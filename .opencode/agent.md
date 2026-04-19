@@ -2,14 +2,53 @@
 
 ## ⚡ Session 启动流程
 
-每次新 session 第一条消息前必须执行：
+每次新 session **第一条消息前**必须执行：
 
-1. **环境与命令**：`aivectormemory_recall(tags: ["environment", "system"], scope: "user", brief: true, top_k: 5)`
-2. **项目约定**：`aivectormemory_recall(tags: ["skill", "rules"], scope: "user", brief: true, top_k: 5)`
-3. **会话状态**：`aivectormemory_status()` — 检查是否 blocked，读取 current_task 和进度
-4. **项目知识**：`aivectormemory_recall(tags: ["project-knowledge"], scope: "project", brief: true, top_k: 20)`
+1. **平台检测**：运行 `uname -s 2>/dev/null || echo "Windows"` 自动识别当前 OS
+   - macOS/Darwin → 使用 POSIX 命令（`rm -rf`, `&&`, `python3`）
+   - Windows → 使用 PowerShell 语法（`Remove-Item -Recurse -Force`, `; if ($?) { }`, `python`）
+   - 检测结果决定后续所有 shell 命令语法
+2. **环境与命令**：`memory_search(query: "environment system preferences", tags: ["environment"], limit: 5)`
+3. **项目约定**：`memory_search(query: "project rules conventions", tags: ["convention"], limit: 5)`
+4. **项目知识**：`memory_search(query: "hs_analysis card modeling scoring", tags: ["project-knowledge"], limit: 10)`
 
-如果环境信息与当前系统不匹配，重新检测并更新 memory。
+如果 memory 中的环境信息与当前平台不匹配，重新检测并更新。
+
+## 🔧 工具优先级
+
+生成文件、执行代码、搜索代码时，**严格按以下优先级选择工具**：
+
+1. **MCP 工具**（最高优先级）— 优先使用 MCP 提供的工具
+   - 文件操作：`memory_ingest`, `memory_search` 等
+   - 代码搜索：`ast_grep_search`, `ast_grep_replace`
+   - GitHub：`github_*` 系列
+   - Web：`web_search_exa`, `web_fetch_exa`, `searxng_web_search`
+2. **OpenCode 内置工具**（次优先）— MCP 无对应工具时使用
+   - `bash`, `read`, `write`, `edit`, `glob`, `grep`
+   - `look_at`, `batch_read`
+3. **子代理**（按需）— 复杂任务分解时使用
+   - `codebase-locator`, `codebase-analyzer`, `pattern-finder`
+
+**规则：** 同一功能有 MCP 和 OpenCode 两种工具时，选 MCP。
+
+## 📐 大文件生成策略
+
+当需要生成超过 **500 行**的文件时：
+
+1. **先骨架后填充** — 先生成文件结构（imports、class 骨架、method 签名、docstring），再逐步填充实现
+2. **分块写入** — 每次写入一个逻辑单元（一个类、一个函数组），不超过 200 行
+3. **验证再继续** — 每写完一个模块，运行相关测试确认无误后再继续
+4. **标记 TODO** — 未填充的部分用 `# TODO: implement` 标记，方便后续定位
+
+## 🔬 研究任务流程
+
+所有研究/调研性质的任务，**必须使用项目级 skill**：
+
+- 卡牌建模研究 → 加载 `card-modeling` skill（`.opencode/skills/card-modeling/SKILL.md`）
+- 文献调研、学术参考 → 使用 skill 中的 Academic References 和方法论
+- 数据分析 → 遵循 skill 中的 5-phase 科学方法论（Collect → EDA → Model → Critique → Refine）
+
+**触发词：** "调研"、"研究"、"分析"、"文献"、"方法论"、"评分模型"、"数据探索"
 
 ## 项目定位
 
