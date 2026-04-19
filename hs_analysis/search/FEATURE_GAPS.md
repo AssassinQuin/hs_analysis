@@ -32,8 +32,8 @@
 
 | Feature | Status | Tested | Notes |
 |---------|--------|--------|-------|
-| Charge from hand | ⚠️ | B01 | `apply_action` doesn't propagate CHARGE from Card.mechanics to Minion.has_charge; charge minions played from hand get `can_attack=False` |
-| Rush from hand | ⚠️ | B01 | Same issue as Charge — mechanic not propagated during play |
+| Charge from hand | ✅ | B01 | `apply_action` now propagates CHARGE/RUSH/TAUNT/DIVINE_SHIELD/WINDFURY/STEALTH/POISONOUS from Card.mechanics to Minion fields |
+| Rush from hand | ✅ | B01 | Mechanic propagated via `apply_action` — same fix as Charge from hand |
 | Windfury | ⚠️ | — | Minion field exists but attack tracking not implemented |
 | Stealth | ⚠️ | — | Minion field exists but targeting rules not enforced |
 | Secret | ⚠️ | — | Tracked in OpponentState.secrets but no simulation |
@@ -69,45 +69,24 @@
 
 ## Key Engine Limitations Discovered
 
-### 1. Card → Minion Mechanic Propagation (Priority: HIGH)
+### 1. ~~Card → Minion Mechanic Propagation~~ ✅ FIXED
 
 **Issue**: `apply_action()` in `rhea_engine.py` creates Minion objects with hardcoded
 `can_attack=False` and does NOT copy `has_charge`, `has_rush`, `has_divine_shield`,
 `has_taunt`, `has_windfury`, or `has_poisonous` from the Card's `mechanics` field.
 
-**Impact**: Charge/Rush minions played from hand cannot attack on the turn they're played,
-violating core Hearthstone rules.
+**Fix applied**: `apply_action` now reads `card.mechanics` and propagates all mechanic
+flags (CHARGE, RUSH, TAUNT, DIVINE_SHIELD, WINDFURY, STEALTH, POISONOUS) to the Minion.
+Charge minions played from hand correctly get `can_attack=True`.
 
-**Fix**: Add mechanic propagation in `apply_action`:
-```python
-if card.card_type.upper() == "MINION":
-    mechanics = card.mechanics or []
-    new_minion = Minion(
-        ...
-        can_attack="CHARGE" in mechanics,
-        has_charge="CHARGE" in mechanics,
-        has_rush="RUSH" in mechanics,
-        has_divine_shield="DIVINE_SHIELD" in mechanics,
-        has_taunt="TAUNT" in mechanics,
-        ...
-    )
-```
+### 2. ~~Rush + Taunt Interaction~~ ✅ FIXED
 
-### 2. Rush + Taunt Interaction
-
-**Issue**: When enemy has taunt, the engine allows charge minions to attack face
+**Issue**: When enemy has taunt, the engine allowed charge minions to attack face
 (bypassing taunt). In real Hearthstone, charge doesn't bypass taunt — only the
 charge minion itself ignores summoning sickness, not taunt rules.
 
-**Current code** (`enumerate_legal_actions`):
-```python
-if enemy_taunts:
-    if minion.has_charge and not minion.has_rush:
-        # Charge can attack enemy hero directly
-        actions.append(Action(...target_index=0))
-```
-
-**Fix**: Charge minions should also be forced to attack taunt minions first.
+**Fix applied**: Removed the charge-can-go-face exception in `enumerate_legal_actions`.
+All minions (including charge) must attack taunt minions when opponent has taunt.
 
 ### 3. Weapon Attack Source Index
 

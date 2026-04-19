@@ -128,15 +128,8 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
             continue
 
         if enemy_taunts:
-            # Must attack taunt minions (unless charge — charge can go face)
-            if minion.has_charge and not minion.has_rush:
-                # Charge minions can attack enemy hero directly
-                actions.append(Action(
-                    action_type="ATTACK",
-                    source_index=src_idx,
-                    target_index=0,
-                ))
-            # Can attack enemy taunt minions
+            # Must attack taunt minions — taunt blocks ALL face attacks,
+            # including charge minions (charge bypasses summoning sickness, NOT taunt)
             for tgt_idx, _ in enumerate(enemy_taunts):
                 # Find the actual index in opponent.board
                 real_idx = _find_enemy_minion_index(state, enemy_taunts[tgt_idx])
@@ -202,6 +195,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
         s.hand.pop(card_idx)
 
         if card.card_type.upper() == "MINION":
+            mechanics = set(card.mechanics or [])
             new_minion = Minion(
                 dbf_id=card.dbf_id,
                 name=card.name,
@@ -209,7 +203,14 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 health=card.health,
                 max_health=card.health,
                 cost=card.cost,
-                can_attack=False,  # summoning sickness
+                can_attack="CHARGE" in mechanics,
+                has_charge="CHARGE" in mechanics,
+                has_rush="RUSH" in mechanics,
+                has_taunt="TAUNT" in mechanics,
+                has_divine_shield="DIVINE_SHIELD" in mechanics,
+                has_windfury="WINDFURY" in mechanics,
+                has_stealth="STEALTH" in mechanics,
+                has_poisonous="POISONOUS" in mechanics,
                 owner="friendly",
             )
             pos = min(action.position, len(s.board))
