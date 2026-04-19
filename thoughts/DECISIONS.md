@@ -119,3 +119,27 @@ last_changed: 2026-04-19
 ---
 
 <!-- Append new decisions below this line -->
+
+---
+
+## D014 | 2026-04-19 | Three-layer state-aware scoring architecture (CIV + SIV + BSV)
+**Context**: Current V2→V7→V8→Composite pipeline has three fundamental flaws: linear superposition, static vs dynamic disconnect, keyword scoring disconnected from game rules.
+**Decision**: Redesign as three-layer architecture: CIV (Card Intrinsic Value, offline) + SIV (State Interaction Value, runtime, 8 modifiers) + BSV (Board State Value, non-linear fusion).
+**Alternatives**: (A) Pure ML model — no training data, not interpretable. (B) Monte Carlo simulation — too slow for 250ms RHEA budget. (C) Keep linear weighted sum — cannot capture non-linear value jumps like lethal proximity.
+**Rationale**: Each layer has clear responsibility. SIV maps game rules to value modifiers (each of the 8 modifiers corresponds to specific rule chapters). Non-linear fusion via softmax captures lethal/value jumps. Incremental: each modifier is independent and can be added one at a time.
+
+---
+
+## D015 | 2026-04-19 | Non-linear value fusion via softmax (not linear weighted sum)
+**Context**: Current composite.py uses `V = w1×v1 + w2×v2 + ...` which cannot represent "lethal = infinite value" or "1 HP vs 30 HP opponent" value differences.
+**Decision**: Use softmax normalization with temperature parameter for BSV fusion. Lethal detection as independent module that overrides BSV to ABSOLUTE_LETHAL_VALUE.
+**Alternatives**: (A) Keep linear weights — proven inadequate for lethal scenarios. (B) Full neural network — overkill, not interpretable. (C) Threshold-based rules — too brittle, many edge cases.
+**Rationale**: Softmax naturally emphasizes the dominant dimension (survival when threatened, tempo when ahead). Temperature parameter allows tuning exploration vs exploitation. Lethal override ensures search always finds kill when available.
+
+---
+
+## D016 | 2026-04-19 | Rule-derived keyword interaction table (not empirical constants)
+**Context**: Current keyword scoring uses hardcoded constants (power=1.5, mechanical=0.75) with no basis in game rules. Interactions like Poisonous+Divine Shield are not modeled.
+**Decision**: Build keyword interaction table directly from the complete rules document. Each interaction has a rule reference and a precise value impact.
+**Alternatives**: (A) Keep empirical constants — proven inaccurate. (B) Learn from HSReplay data — interaction effects are confounded with too many variables. (C) Per-card manual tuning — unmaintainable for 1000+ cards.
+**Rationale**: Rules document provides deterministic interaction logic (e.g., "Divine Shield absorbs damage → Poisonous does not trigger → Poisonous value × 0.1 vs shielded targets"). This is ground truth, not approximation.
