@@ -11,6 +11,11 @@
 2. **环境与命令**：`memory_search(query: "environment system preferences", tags: ["environment"], limit: 5)`
 3. **项目约定**：`memory_search(query: "project rules conventions", tags: ["convention"], limit: 5)`
 4. **项目知识**：`memory_search(query: "hs_analysis card modeling scoring", tags: ["project-knowledge"], limit: 10)`
+5. **项目状态对齐**：读取以下文件确保与最新状态同步
+   - `cat thoughts/PROJECT_CHARTER.md` — 项目目标与约束（不可变）
+   - `cat thoughts/PROJECT_STATE.md` — 当前进度（单一事实来源）
+   - `cat thoughts/DECISIONS.md` — 架构决策记录（最近 5 条）
+6. **状态声明**：确认已读取上述文件，声明「已对齐项目状态」
 
 如果 memory 中的环境信息与当前平台不匹配，重新检测并更新。
 
