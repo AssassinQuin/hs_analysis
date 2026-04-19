@@ -1,101 +1,111 @@
-# Agent Init — 炉石传说卡牌数值数学建模
+# Agent Init — 炉石传说卡牌数值分析
 
-## ⚡ Session 启动流程（每次新 session 第一条消息前必须执行）
+## ⚡ Session 启动流程
 
-按顺序执行以下 recall，加载持久化记忆到上下文：
+每次新 session 第一条消息前必须执行：
 
 1. **环境与命令**：`aivectormemory_recall(tags: ["environment", "system"], scope: "user", brief: true, top_k: 5)`
 2. **项目约定**：`aivectormemory_recall(tags: ["skill", "rules"], scope: "user", brief: true, top_k: 5)`
 3. **会话状态**：`aivectormemory_status()` — 检查是否 blocked，读取 current_task 和进度
 4. **项目知识**：`aivectormemory_recall(tags: ["project-knowledge"], scope: "project", brief: true, top_k: 20)`
 
-如果环境信息与当前系统不匹配（如记录 Windows 但当前是 Mac），重新检测并更新 memory。
+如果环境信息与当前系统不匹配，重新检测并更新 memory。
 
 ## 项目定位
 
-本项目通过**数学建模**量化《炉石传说》卡牌价值，目标是建立一套可计算的卡牌评估体系，辅助游戏中的决策收益分析。
+通过**数学建模 + 数据驱动**量化《炉石传说》卡牌价值，建立多版本评分引擎（V2→V7→V8→L6）和竞技场决策系统（RHEA 搜索 + 贝叶斯对手建模）。
 
 ## 技术栈
 
-- **语言**: Python 3.x
-- **依赖**: requests（HTTP）, 标准库 json/urllib/collections
-- **数据存储**: JSON 文件（hs_cards/ 目录）, SQLite（mydatabase.db）
-- **数据源**: 暴雪国服 API, HearthstoneJSON API
+- **语言**: Python 3.11+
+- **包管理**: pyproject.toml, `pip install -e .`
+- **依赖**: numpy, scipy, requests, dataclasses
+- **数据存储**: JSON 文件（hs_cards/）, SQLite（hsreplay_cache.db）
+- **数据源**: HearthstoneJSON, HSReplay, iyingdi
+- **测试**: pytest（163+ 测试用例）
 
-## 核心数学模型
-
-### 白板测试（Vanilla Test）
-
-```
-期望属性 = 法力消耗 × 2 + 1
-属性偏差 = (攻击 + 生命) - 期望属性
-```
-
-- 偏差 > 0：属性低于预期（特效占用了"预算"）
-- 偏差 < 0：属性高于预期（超模）
-- 偏差 = 0：恰好达标
-
-### 关键词价值量化
-
-每个关键词有经验分值（正/负），用于量化特效的总贡献：
-- 高价值：圣盾(+2), 冲锋(+2), 发现(+2)
-- 中价值：战吼(+1.5), 亡语(+1.5), 突袭(+1.5), 吸血(+1.5), 风怒(+1.5)
-- 低价值：嘲讽(+1), 潜行(+1), 法术伤害(+1)
-- 负面：过载(-1)
-
-### 综合评分
+## 核心包结构
 
 ```
-总评分 = 关键词加成 - 属性偏差
+hs_analysis/                    # 核心包
+├── config.py                   # 全局配置（路径、常量）
+├── data/                       # 数据获取与处理
+│   ├── card_index.py           # CardIndex — O(1) 卡牌查询
+│   ├── card_cleaner.py         # 数据清洗（种族/机制/法术派系）
+│   ├── fetch_hsjson.py         # HearthstoneJSON API
+│   ├── fetch_hsreplay.py       # HSReplay 数据获取
+│   ├── fetch_iyingdi.py        # iyingdi 数据获取
+│   ├── fetch_wild.py           # 狂野卡牌获取
+│   ├── build_unified_db.py     # 统一数据库构建
+│   └── build_wild_db.py        # 狂野去重构建
+├── models/
+│   └── card.py                 # Card 数据模型（dataclass）
+├── scorers/                    # 评分引擎（多版本演进）
+│   ├── vanilla_curve.py        # 白板曲线基准
+│   ├── v2_engine.py            # V2 基础评分
+│   ├── v7_engine.py            # V7 数据驱动评分
+│   ├── v8_contextual.py        # V8 上下文感知评分
+│   ├── l6_real_world.py        # L6 真实世界评分
+│   └── constants.py            # 评分常量
+├── evaluators/                 # 评估器
+│   ├── composite.py            # 复合评估器
+│   ├── submodel.py             # 子模型评估器
+│   └── multi_objective.py      # 多目标评估器
+├── search/                     # 搜索引擎
+│   ├── rhea_engine.py          # RHEA 滚动水平线进化
+│   ├── game_state.py           # 游戏状态管理（GameState, HeroState 等）
+│   ├── lethal_checker.py       # 致命检测
+│   ├── opponent_simulator.py   # 对手模拟
+│   ├── risk_assessor.py        # 风险评估
+│   └── action_normalize.py     # 动作归一化
+└── utils/                      # 工具模块
+    ├── score_provider.py       # 评分数据提供（懒加载 + 缓存）
+    ├── bayesian_opponent.py    # 贝叶斯对手建模
+    └── spell_simulator.py      # 法术模拟
 ```
 
-评分越高 → 卡牌额外价值越大。
-
-## 项目结构约定
-
-```
-scripts/          → 所有 Python 脚本（采集、分析、测试）
-hs_cards/         → JSON 数据 + 图片资源
-thoughts/shared/  → 设计文档和思考笔记
-```
-
-## 数据文件说明
+## 数据文件
 
 | 文件 | 用途 |
 |------|------|
-| hs_cards/all_standard_legendaries.json | 暴雪 API 采集的全量传说卡（按职业分组） |
-| hs_cards/standard_legendaries_v2.json | 传说卡数据（v2 修正版） |
-| hs_cards/legendaries_simple_v2.json | 精简版卡牌列表（id/name/class/mana/atk/hp） |
-| hs_cards/standard_legendaries_analysis.json | **核心产出** — 带评分的完整分析结果 |
-| hs_cards/card_list.json | 卡牌摘要列表 |
+| `hs_cards/unified_standard.json` | 清洗后的标准池卡牌数据（主数据源） |
+| `hs_cards/hsjson_standard.json` | HearthstoneJSON 原始数据 |
+| `hs_cards/hsreplay_cache.db` | HSReplay 缓存数据库 |
+| `hs_cards/v7_scoring_report.json` | V7 评分报告 |
+| `hs_cards/l6_scoring_report.json` | L6 评分报告 |
 
-## 脚本用途
+## 运行入口
 
 | 脚本 | 功能 |
 |------|------|
-| scrape_hs_cards.py | 暴雪国服 API 数据采集 + 图片下载 |
-| fetch_hsjson.py | HearthstoneJSON API 数据获取 |
-| rescrape_legendaries.py | 传说卡重采（修正过滤条件） |
-| full_analysis.py | **核心脚本** — 完整数学建模 + 评分 |
-| analyze_cards.py | 基础统计分析 |
-| check_rarity.py | 稀有度分布检查 |
-| show_slugs.py | 卡牌 slug 查看 |
-| explore_api.py | API 端点探测 |
-| test_api.py | API 参数测试 |
-| test_api_endpoints.py | API 端点连通测试 |
+| `scripts/run_fetch.py` | 数据获取 |
+| `scripts/run_rhea.py` | RHEA 引擎运行 |
+| `scripts/run_score_v2.py` | V2 评分 |
+| `scripts/run_score_v7.py` | V7 评分 |
+| `scripts/analyze_meta_decks.py` | 环境套牌分析 |
+| `scripts/deep_analysis.py` | 深度分析 |
+
+## 测试
+
+```bash
+pytest                          # 全量测试（163+ 用例）
+pytest tests/                   # 仅 tests/ 目录
+pytest hs_analysis/search/      # search 模块内嵌测试
+```
+
+## 评分体系演进
+
+- **V2** — 属性 + 关键词基础评分
+- **V7** — 基于 HSReplay 数据驱动的实绩评分
+- **V8** — 上下文感知（回合数、场面饱和度、种族协同、发现池期望）
+- **L6** — 真实世界综合评分
 
 ## 开发约定
 
-- 脚本都放在 `scripts/` 目录
-- 数据文件只读不手动修改，通过脚本生成
-- 图片目录（images/、crops/）不纳入版本控制
-- 分析结果以 JSON 格式保存到 `hs_cards/`
-- 设计文档放在 `thoughts/shared/`
-
-## 扩展方向
-
-- 多 rarity 分析（非传说卡的基准线）
-- 职业特色价值差异
-- 卡组协同效应建模
-- 回合节奏曲线分析
-- 期望值 vs 实际胜率关联
+- 所有核心逻辑在 `hs_analysis/` 包内，不在 `scripts/`
+- `scripts/` 只放运行入口和独立工具脚本
+- 数据文件通过脚本生成，不手动修改
+- 测试文件放在 `tests/` 或模块内（`hs_analysis/search/test_*.py`）
+- import 路径使用 `from hs_analysis.xxx import yyy`
+- 设计文档在 `thoughts/shared/designs/`，归档在 `thoughts/archive/`
+- commit 格式: `feat: / fix: / cleanup: 简述`
