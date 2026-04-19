@@ -1,7 +1,7 @@
 ---
 version: 1.0
 created: 2026-04-19
-last_changed: 2026-04-19
+last_changed: 2026-04-19 (position mechanics gap analysis)
 ---
 
 # Project State: hs_analysis
@@ -37,7 +37,7 @@ last_changed: 2026-04-19
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 282 tests, 282 passing
+- [x] 292 tests, 292 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -55,6 +55,7 @@ last_changed: 2026-04-19
 - [x] V9 HDT batch05 edge-case + complex board tests (10 tests)
 - [x] V9 HDT batch06 real deck data-driven tests (10 tests: quest+discover, weapon-attack sequence, RUSH propagation, taunt defense, stealth behavior, deathrattle play, outcast, 0-cost chain, complex late-game)
 - [x] V9 HDT batch07 advanced combat + multi-system tests (10 tests: lethal paths, death chains, mana boundaries, taunt-through-lethal, spell destroy/armor, engine edge cases)
+- [x] V9 HDT batch08 position-awareness tests (10 tests: summon rightmost, OUTCAST positions, generated card rightmost, taunt multi-minion, board reindexing, heal no-cap, complex multi-mechanic, hand order)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
@@ -75,6 +76,16 @@ last_changed: 2026-04-19
 ### P1: V9 Pipeline
 - [ ] Complete V9 cascading decision pipeline
 - [ ] Integration tests for end-to-end decision flow
+
+### P1.5: Position-Based Mechanics (位置机制)
+- [ ] Hand position tracking (slot index per card) — required for OUTCAST
+- [ ] OUTCAST (流放) mechanic — bonus when played from leftmost/rightmost hand position
+- [ ] Generated card rightmost placement — explicit position-aware card insertion
+- [ ] Board position index on Minion — support adjacency queries
+- [ ] Board adjacency barriers — dormant minions / locations block attack paths
+- [ ] Adjacency buffs — "相邻的随从" only affects immediate board neighbors
+- [ ] Position-aware buff targeting — leftmost/rightmost/adjacent selectors
+- [ ] Summon positioning: ✅ already correct (append = rightmost)
 
 ### P2: Polish
 - [ ] Wild format support in scoring engines

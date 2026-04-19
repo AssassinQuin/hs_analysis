@@ -24,6 +24,23 @@
 | IMMUNE | ❌ Not simulated | Immune keyword stored but not enforced |
 | 激活 (Innervate) temp mana | ❌ Not simulated | 0-cost spell plays but doesn't grant temp mana |
 
+## Position-Based Mechanics (位置机制)
+
+| Mechanic | Status | Notes |
+|----------|--------|-------|
+| OUTCAST (流放) | ❌ Not simulated | Cards played from leftmost or rightmost hand position get bonus effects. Engine treats all hand positions identically. Hand position tracking not implemented. |
+| Generated card positioning (生成牌位置) | ❌ Not enforced | Cards generated during a turn (Discover, Battlecry, etc.) should be added to **rightmost** position in hand. Engine adds dummy cards without position awareness. |
+| Summon positioning (召唤位置) | ✅ Correct | Random/token summons appear at **rightmost** position on board. `apply_summon` appends to end of board list — this IS rightmost. |
+| Board adjacency (场面邻接) | ❌ Not modeled | Board is a flat list; position doesn't matter. In real HS: dormant minions/locations create barriers, adjacency buffs only affect neighbors, position-targeted effects require index awareness. |
+| Side-based attack buffs (位置增益) | ❌ Not modeled | Buffs like "+2 attack to leftmost/rightmost minion" depend on board position. Current buff system applies `all_friendly` without position filtering. |
+
+### Key Implementation Needs
+
+1. **Hand position tracking**: Add slot index to each card in hand; OUTCAST checks index 0 or last.
+2. **Generated cards rightmost**: Ensure `hand.append()` is used explicitly for generated cards (currently incidental).
+3. **Board position index**: Add position to Minion; support adjacency queries with barrier awareness.
+4. **Position-aware buffs**: Extend `apply_buff` and `resolve_effects` to support `leftmost`, `rightmost`, `adjacent` targeting.
+
 ## Game Rules (Not Enforced)
 
 | Rule | Status | Notes |

@@ -80,12 +80,39 @@
 | Immune | ❌ | Not modeled |
 | Can't Attack | ❌ | Not modeled |
 
+### Position-Based Mechanics (位置机制)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| OUTCAST (流放) | ❌ | Cards played from leftmost or rightmost hand position get bonus effects. Current engine treats all hand positions identically. Hand position tracking not implemented. |
+| Generated card positioning (生成牌位置) | ❌ | Cards generated during a turn (from Discover, Battlecry, etc.) should be added to the **rightmost** position in hand. Current engine adds dummy cards without position awareness. |
+| Summon positioning (召唤位置) | ✅ | Random/token summons appear at the **rightmost** position on board. Current `apply_summon` appends to end of board list, which IS rightmost — correct behavior. |
+| Board adjacency (场面邻接) | ❌ | Minions separated by dormant minions or locations cannot attack minions on the other side. Board is NOT a flat list — position matters for attack range, adjacency buffs, position-targeted effects. |
+| Side-based attack buffs (位置增益) | ❌ | Buffs like "+2 attack to leftmost/rightmost minion" depend on board position. Current buff system applies to `all_friendly` without position filtering. |
+
+**Details:**
+
+1. **OUTCAST**: Hand position must be tracked per card. Leftmost (index 0) and rightmost (last index) are "outcast positions". When a card with OUTCAST mechanic is played from these positions, its bonus effect triggers. The engine currently has no concept of hand slot index.
+
+2. **Generated card positioning**: The `resolve_effects` and spell simulation paths add cards to hand via `hand.append()`, which happens to place them rightmost — but this is incidental, not intentional position-aware logic. If hand ever becomes position-aware, generated cards must explicitly go to the rightmost slot.
+
+3. **Summon positioning**: `apply_summon` uses `board.append()`, which is equivalent to rightmost position on board. This is correct per Hearthstone rules. No change needed.
+
+4. **Board adjacency**: This is a significant gap. The current `board` is a flat `list[Minion]`. In real Hearthstone:
+   - Dormant minions and locations create positional barriers
+   - Adjacency buffs (e.g., "相邻的随从获得+1攻击力") buff only immediate neighbors
+   - Position-targeted effects (e.g., "leftmost minion") require index-aware targeting
+   - Attack range across dormant/location barriers is blocked
+   Requires: Minion position index on board, barrier-aware adjacency queries, position-based buff targeting.
+
+5. **Side-based attack buffs**: The current `apply_buff` and effect resolution use broad targeting (`all_friendly`, `all_enemy`). No path supports "leftmost minion" or "rightmost minion" targeting. Requires: position-aware buff targets in `resolve_effects` and `apply_buff`.
+
 ### Discovered in Batch 02
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | CHOOSE_ONE | ❌ | Cards like 生命火花 have choose-one, not modeled |
-| OUTCAST | ❌ | Cards like 伊利达雷研习 have outcast, not modeled |
+| OUTCAST | ❌ | Cards like 伊利达雷研习 have outcast, not modeled (see Position-Based Mechanics above for full analysis) |
 | COLOSSAL | ❌ | Cards like 柳牙 have colossal appendage, not modeled |
 | TRIGGER_VISUAL | ❌ | Triggered effects not simulated |
 | START_OF_GAME | ❌ | Start-of-game effects not relevant for in-game decisions |
@@ -100,6 +127,9 @@
 | B03 | `test_v9_hdt_batch03.py` | 10 | Hero power, windfury, armor, secrets, poisonous, hero card, innervate, overload, full hand, spell-only hand |
 | B04 | `test_v9_hdt_batch04.py` | 10 | Spell direct damage, AoE clear, draw cards, summon minions, death cleanup, opponent sim, next-turn lethal, Pareto front, risk-adjusted eval, armor/heal |
 | B05 | `test_v9_hdt_batch05.py` | 10 | Summon board limits (full/near-full/multi-summon), AoE+summon combo, weapon replacement, divine shield pop, multi-attack sequence, spell buff, empty-hand end turn, deathrattle gap |
+| B06 | `test_v9_hdt_batch06.py` | 10 | Real deck data-driven: quest+discover, weapon-attack, RUSH propagation, taunt defense, stealth, deathrattle, outcast, 0-cost chain, complex late-game |
+| B07 | `test_v9_hdt_batch07.py` | 10 | Advanced combat: lethal paths, death chains, mana boundaries, taunt-through-lethal, spell destroy/armor, engine edge cases |
+| B08 | `test_v9_hdt_batch08.py` | 10 | Position-awareness: summon rightmost ✅, OUTCAST positions (left/mid/right FEATURE_GAP), generated card rightmost ✅, taunt multi-minion ✅, board reindexing ✅, heal no-cap (B04 confirmed), complex multi-mechanic, hand order preservation ✅ |
 
 ## Key Engine Limitations Discovered
 
@@ -164,4 +194,4 @@ Hero cards should change hero_class, HP, armor, and replace hero power.
 
 ---
 
-*Last updated: Batch 05 (50 total tests across B01+B02+B03+B04+B05)*
+*Last updated: Batch 08 (80 total tests across B01–B08) — Position mechanics verified, OUTCAST gap confirmed*
