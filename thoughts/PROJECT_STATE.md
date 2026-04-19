@@ -29,7 +29,7 @@ last_changed: 2026-04-19
 - [x] RHEA evolutionary search engine
 - [x] Lethal checker (DFS-based)
 - [x] Game state management (GameState, HeroState)
-- [x] Action normalization
+- [x] Action normalization (including crossover fix)
 - [x] Risk assessor
 - [x] Opponent simulator
 - [x] Bayesian opponent modeling
@@ -37,7 +37,7 @@ last_changed: 2026-04-19
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 149 tests, 149 passing
+- [x] 212 tests, 212 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
@@ -45,7 +45,9 @@ last_changed: 2026-04-19
 - [x] test_wild_dedup.py (6 tests)
 - [x] test_pool_quality_generator.py (8 tests)
 - [x] test_rewind_delta_generator.py (6 tests)
-- [x] Internal module tests in hs-analysis/search/
+- [x] test_action_normalize.py (10 tests)
+- [x] test_game_state.py (16 tests)
+- [x] Internal module tests in hs_analysis/search/ (63 tests total)
 
 ### Wild Pool Data
 - [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
