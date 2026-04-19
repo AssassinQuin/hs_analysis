@@ -79,12 +79,16 @@ _TYPE_MAP: Dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 
-def fetch_page(page: int, size: int = 50) -> Dict[str, Any]:
+def fetch_page(page: int, size: int = 50, *, wild: bool = False) -> Dict[str, Any]:
     """Fetch a single page from the iyingdi card search API.
 
-    **No** ``standard`` parameter → returns all cards (wild included).
+    Args:
+        page: Page number (1-based).
+        size: Cards per page (max 50).
+        wild: If True, send ``wild=1`` to filter for wild-eligible cards.
+              Default False (no format filter → returns all cards).
     """
-    body = urllib.parse.urlencode({
+    params: Dict[str, str] = {
         "ignoreHero": "1",
         # NOTE: No "standard": "1" — fetch ALL formats
         "statistic": "total",
@@ -92,7 +96,11 @@ def fetch_page(page: int, size: int = 50) -> Dict[str, Any]:
         "token": "",
         "page": str(page),
         "size": str(size),
-    }).encode()
+    }
+    if wild:
+        params["wild"] = "1"
+
+    body = urllib.parse.urlencode(params).encode()
 
     req = urllib.request.Request(_API_URL, data=body, headers=_HEADERS)
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -143,6 +151,8 @@ def fetch_all_cards(
     output_normalized: Path | None = None,
     page_size: int = 50,
     delay: float = 0.3,
+    *,
+    wild: bool = False,
 ) -> List[Dict[str, Any]]:
     """Fetch ALL cards from iyingdi (standard + wild).
 
@@ -151,6 +161,8 @@ def fetch_all_cards(
         output_normalized: Path to save normalized cards.
         page_size:         Cards per API page (max 50).
         delay:             Seconds between pages (rate limit).
+        wild:              If True, send ``wild=1`` to filter for wild-eligible
+                           cards.  Default False (no format filter → all cards).
 
     Returns:
         List of normalized card dicts.
@@ -167,7 +179,7 @@ def fetch_all_cards(
     while True:
         logger.info("Fetching page %d ...", page)
         try:
-            data = fetch_page(page, size=page_size)
+            data = fetch_page(page, size=page_size, wild=wild)
         except Exception as exc:
             logger.error("API error on page %d: %s", page, exc)
             break

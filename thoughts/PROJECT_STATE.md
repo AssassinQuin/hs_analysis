@@ -37,15 +37,22 @@ last_changed: 2026-04-19
 - [x] Score provider with lazy loading + cache
 
 ### Test Coverage
-- [x] 140 tests, 139 passing
+- [x] 149 tests, 149 passing
 - [x] test_card_cleaner.py (51 tests)
 - [x] test_card_index.py (35 tests)
 - [x] test_score_provider.py (11 tests)
 - [x] test_v8_contextual_scorer.py (16 tests)
 - [x] test_wild_dedup.py (6 tests)
-- [x] test_pool_quality_generator.py (8 tests, 1 failing)
+- [x] test_pool_quality_generator.py (8 tests)
 - [x] test_rewind_delta_generator.py (6 tests)
 - [x] Internal module tests in hs-analysis/search/
+
+### Wild Pool Data
+- [x] Wild format card fetch from iyingdi API (6174 cards total, 5209 wild-only)
+- [x] Wild database built (unified_wild.json, deduplicated against standard pool)
+- [x] Race-based pool quality metrics (11 race pools + 3 type pools = 14 total)
+- [x] Fixed test_dragon_pool_avg_v7 (Chinese→English race name mismatch)
+- [x] fetch_wild.py enhanced with wild=True parameter support
 
 ## 🔄 WIP
 
@@ -55,11 +62,6 @@ last_changed: 2026-04-19
 - Design: thoughts/shared/designs/2026-04-19-v9-decision-engine-v2-design.md
 
 ## ⏳ TODO (by priority)
-
-### P0: Data Completion
-- [ ] Wild format card fetch (iyingdi wild=1 parameter)
-- [ ] Race-based pool quality (DRAGON, DEMON, BEAST, MURLOC, etc.)
-- [ ] Fix test_dragon_pool_avg_v7 failure
 
 ### P1: V9 Pipeline
 - [ ] Complete V9 cascading decision pipeline
@@ -89,6 +91,9 @@ last_changed: 2026-04-19
 | hs_cards/v2_curve_params.json | V2 curve parameters | fitted |
 | hs_cards/v2_keyword_params.json | V2 keyword parameters | calibrated |
 | hs_cards/hsreplay_cache.db | HSReplay SQLite cache | cached |
+| hs_cards/iyingdi_all_raw.json | iyingdi raw (all cards) | 6174 cards |
+| hs_cards/iyingdi_all_normalized.json | iyingdi normalized (all cards) | 6174 cards |
+| hs_cards/unified_wild.json | Cleaned wild-only pool | 5209 cards |
 
 ## Active Designs
 - thoughts/shared/designs/2026-04-19-v9-decision-engine-v2-design.md
@@ -97,7 +102,6 @@ last_changed: 2026-04-19
 - thoughts/shared/designs/2026-04-19-project-state-tracking-design.md
 
 ## Next Actions
-1. Fetch wild format cards (iyingdi wild=1)
-2. Fix race-based pool quality (English race names)
-3. Fix test_dragon_pool_avg_v7
-4. Complete V9 decision engine pipeline
+1. Complete V9 decision engine pipeline
+2. Integration tests for cascading pipeline
+3. Wild format support in V7/V8 scoring engines

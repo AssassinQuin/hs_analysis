@@ -17,10 +17,10 @@ DB_PATH = os.path.join(BASE_DIR, "hs_cards", "hsreplay_cache.db")
 POOL_OUT = os.path.join(BASE_DIR, "hs_cards", "pool_quality_report.json")
 TURN_OUT = os.path.join(BASE_DIR, "hs_cards", "card_turn_data.json")
 
-# Race pools to compute
-RACE_POOLS = ["龙", "恶魔", "野兽", "鱼人", "海盗", "元素", "亡灵", "图腾", "机械", "纳迦", "德莱尼"]
-# Spell school pools
-SCHOOL_POOLS = ["火焰", "冰霜", "奥术", "自然", "暗影", "神圣", "邪能"]
+# Race pools to compute (English names matching card_cleaner output)
+RACE_POOLS = ["DRAGON", "DEMON", "BEAST", "MURLOC", "PIRATE", "ELEMENTAL", "UNDEAD", "TOTEM", "MECHANICAL", "NAGA", "DRAENEI"]
+# Spell school pools (English names matching card_cleaner output)
+SCHOOL_POOLS = ["FIRE", "FROST", "ARCANE", "NATURE", "SHADOW", "HOLY", "FEL"]
 # Type pools
 TYPE_POOLS = ["MINION", "SPELL", "WEAPON"]
 
