@@ -27,6 +27,34 @@ from hs_analysis.evaluators.composite import evaluate, evaluate_delta, quick_eva
 from hs_analysis.evaluators.multi_objective import evaluate as mo_evaluate, evaluate_delta as mo_evaluate_delta, EvaluationResult, pareto_filter
 from hs_analysis.utils.score_provider import load_scores_into_hand
 
+# V9: Layered decision pipeline imports (all optional for graceful degradation)
+try:
+    from hs_analysis.search.lethal_checker import check_lethal
+except ImportError:
+    check_lethal = None
+
+try:
+    from hs_analysis.search.risk_assessor import RiskAssessor, RiskReport
+except ImportError:
+    RiskAssessor = None
+    RiskReport = None
+
+try:
+    from hs_analysis.search.opponent_simulator import OpponentSimulator
+except ImportError:
+    OpponentSimulator = None
+
+try:
+    from hs_analysis.search.action_normalize import normalize_chromosome
+except ImportError:
+    normalize_chromosome = None
+
+try:
+    from hs_analysis.evaluators.composite import evaluate_with_risk, evaluate_delta_with_risk
+except ImportError:
+    evaluate_with_risk = None
+    evaluate_delta_with_risk = None
+
 
 # ===================================================================
 # 1. Action dataclass
@@ -377,17 +405,62 @@ class RHEAEngine:
         initial_state: GameState,
         weights: Optional[dict] = None,
     ) -> SearchResult:
-        """Run the RHEA evolutionary search and return the best action plan."""
+        """Run the RHEA search with layered decision pipeline."""
         t_start = time.perf_counter()
 
         # Load V7 scores into hand cards so evaluators see them
         load_scores_into_hand(initial_state, source="v7")
 
+        # ========== Layer 0: Lethal Check (5ms budget) ==========
+        if check_lethal is not None:
+            try:
+                lethal_result = check_lethal(initial_state, time_budget_ms=5.0)
+                if lethal_result is not None:
+                    lethal_actions = lethal_result + [Action(action_type="END_TURN")]
+                    return SearchResult(
+                        best_chromosome=lethal_actions,
+                        best_fitness=10000.0,
+                        alternatives=[],
+                        generations_run=0,
+                        time_elapsed=(time.perf_counter() - t_start) * 1000.0,
+                        population_diversity=0.0,
+                        confidence=1.0,
+                        pareto_front=[],
+                    )
+            except Exception:
+                pass  # graceful degradation
+
+        # ========== Phase Detection + Adaptive Params ==========
+        phase = self._detect_phase(initial_state)
+        phase_params = self._get_phase_params(phase)
+
+        # Override instance params with phase-appropriate ones
+        saved_pop_size = self.pop_size
+        saved_max_gens = self.max_gens
+        saved_max_chrom_len = self.max_chromosome_length
+
+        self.pop_size = phase_params["pop_size"]
+        self.max_gens = phase_params["max_gens"]
+        self.max_chromosome_length = phase_params["max_chromosome_length"]
+
+        # Merge phase weights with user-provided weights
+        effective_weights = {**phase_params["weights"], **(weights or {})}
+
+        # ========== Layer 1: RHEA Evolutionary Search ==========
+        # Risk assessment for risk-aware fitness
+        risk_report = None
+        if RiskAssessor is not None:
+            try:
+                assessor = RiskAssessor()
+                risk_report = assessor.assess(initial_state)
+            except Exception:
+                pass
+
         # Initialise population
         population = self._init_population(initial_state)
 
         fitnesses: List[float] = [
-            self._evaluate_chromosome(initial_state, chromo, weights)
+            self._evaluate_chromosome(initial_state, chromo, effective_weights, risk_report)
             for chromo in population
         ]
 
@@ -398,22 +471,21 @@ class RHEAEngine:
         gen = 0
         for gen in range(1, self.max_gens + 1):
             elapsed_ms = (time.perf_counter() - t_start) * 1000.0
-            if elapsed_ms >= self.time_limit:
+            # Use 65% of time budget for RHEA
+            rhea_budget = self.time_limit * 0.65
+            if elapsed_ms >= rhea_budget:
                 break
 
-            # Sort by fitness (descending)
             indexed = sorted(
                 range(len(fitnesses)),
                 key=lambda i: fitnesses[i],
                 reverse=True,
             )
 
-            # Elitism: keep top individuals
             new_pop: List[List[Action]] = []
             for ei in indexed[: self.elite_count]:
                 new_pop.append(list(population[ei]))
 
-            # Fill rest of population
             while len(new_pop) < self.pop_size:
                 parent1 = self._tournament_select(population, fitnesses)
                 parent2 = self._tournament_select(population, fitnesses)
@@ -428,11 +500,10 @@ class RHEAEngine:
 
             population = new_pop
             fitnesses = [
-                self._evaluate_chromosome(initial_state, chromo, weights)
+                self._evaluate_chromosome(initial_state, chromo, effective_weights, risk_report)
                 for chromo in population
             ]
 
-            # Track best ever
             gen_best_idx = max(range(len(fitnesses)), key=lambda i: fitnesses[i])
             if fitnesses[gen_best_idx] > best_ever_fit:
                 best_ever_fit = fitnesses[gen_best_idx]
@@ -441,9 +512,8 @@ class RHEAEngine:
         # ---- Phase B: Multi-turn lethal setup bonus ----
         try:
             phase_b_start = time.perf_counter()
-            phase_b_budget = (self.time_limit / 1000.0) * 0.30  # 30% of time budget
+            phase_b_budget = (self.time_limit / 1000.0) * 0.30
 
-            # Get top 3 Phase A results
             indexed_by_fitness = sorted(range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True)
             top3_indices = indexed_by_fitness[:3]
 
@@ -453,7 +523,6 @@ class RHEAEngine:
                     break
 
                 chromo = population[idx]
-                # Replay chromosome to get end state
                 end_state = initial_state.copy()
                 valid = True
                 for action in chromo:
@@ -464,24 +533,65 @@ class RHEAEngine:
                     end_state = apply_action(end_state, action)
 
                 if valid and not end_state.is_lethal():
-                    # Check if next turn lethal is possible from this state
                     if next_turn_lethal_check(end_state):
-                        # Big bonus for setting up lethal
                         fitnesses[idx] += 5000.0
-
-                        # Update best ever if needed
                         if fitnesses[idx] > best_ever_fit:
                             best_ever_fit = fitnesses[idx]
                             best_ever_chromo = list(population[idx])
         except Exception:
-            pass  # Phase B is best-effort; never crash the engine
+            pass
 
-        # Compute diversity (std of fitnesses)
+        # ========== Layer 2: Opponent Simulation (top-5) ==========
+        if OpponentSimulator is not None:
+            try:
+                sim = OpponentSimulator()
+                opp_budget = self.time_limit * 0.15  # 15% of time budget
+                opp_start = time.perf_counter()
+
+                indexed_sorted = sorted(range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True)
+                top_k = indexed_sorted[:5]
+
+                for idx in top_k:
+                    if (time.perf_counter() - opp_start) * 1000.0 >= opp_budget:
+                        break
+
+                    chromo = population[idx]
+                    # Replay chromosome to get end state
+                    end_state = initial_state.copy()
+                    valid = True
+                    for action in chromo:
+                        legal = enumerate_legal_actions(end_state)
+                        if not _action_in_list(action, legal):
+                            valid = False
+                            break
+                        end_state = apply_action(end_state, action)
+
+                    if valid:
+                        opp_result = sim.simulate_best_response(end_state, time_budget_ms=opp_budget / 5.0)
+                        # Apply resilience penalty
+                        resilience_penalty = (1.0 - opp_result.board_resilience_delta) * 200.0
+                        fitnesses[idx] -= resilience_penalty
+                        # Lethal exposure penalty
+                        if opp_result.lethal_exposure:
+                            fitnesses[idx] -= 2000.0
+
+                        if fitnesses[idx] > best_ever_fit:
+                            best_ever_fit = fitnesses[idx]
+                            best_ever_chromo = list(population[idx])
+            except Exception:
+                pass  # graceful degradation
+
+        # ========== Restore original params ==========
+        self.pop_size = saved_pop_size
+        self.max_gens = saved_max_gens
+        self.max_chromosome_length = saved_max_chrom_len
+
+        # ========== Layer 3: Selection & Confidence ==========
+        # Compute diversity
         mean_f = sum(fitnesses) / len(fitnesses) if fitnesses else 0.0
         variance = sum((f - mean_f) ** 2 for f in fitnesses) / len(fitnesses) if fitnesses else 0.0
         diversity = variance ** 0.5
 
-        # Adaptive mutation rate
         if diversity < self._target_diversity * 0.5:
             self._adaptive_mutation_rate = min(self.mutation_rate * 2.0, 1.0)
         elif diversity > self._target_diversity * 2.0:
@@ -489,14 +599,12 @@ class RHEAEngine:
         else:
             self._adaptive_mutation_rate = self.mutation_rate
 
-        # Confidence: gap between best and 2nd-best
         sorted_fits = sorted(fitnesses, reverse=True)
         if len(sorted_fits) >= 2 and abs(sorted_fits[0]) > 1e-9:
             confidence = 1.0 - (sorted_fits[1] / sorted_fits[0])
         else:
             confidence = 1.0
 
-        # Collect top 3 alternatives (excluding the best)
         indexed_sorted = sorted(
             range(len(fitnesses)),
             key=lambda i: fitnesses[i],
@@ -505,7 +613,6 @@ class RHEAEngine:
         alternatives: List[Tuple[List[Action], float]] = []
         for idx in indexed_sorted:
             chromo = population[idx]
-            # Skip if same fitness as best or same object as best_ever
             if len(alternatives) >= 3:
                 break
             if population[idx] is not population[indexed_sorted[0]]:
@@ -513,7 +620,7 @@ class RHEAEngine:
 
         elapsed = (time.perf_counter() - t_start) * 1000.0
 
-        # Pareto front analysis
+        # Pareto front
         pareto_front_list: List[Tuple[List[Action], EvaluationResult]] = []
         try:
             mo_results = []
@@ -535,7 +642,7 @@ class RHEAEngine:
             for eval_result, idx in pareto_front_raw[:5]:
                 pareto_front_list.append((list(population[idx]), eval_result))
         except Exception:
-            pass  # Never crash the engine if multi_objective_evaluator has issues
+            pass
 
         return SearchResult(
             best_chromosome=best_ever_chromo,
@@ -552,11 +659,39 @@ class RHEAEngine:
     # Population initialisation
     # ---------------------------------------------------------------
 
+    def _detect_phase(self, state: GameState) -> str:
+        """Detect game phase: early (1-3), mid (4-7), late (8+)."""
+        turn = state.turn_number
+        if turn <= 3:
+            return "early"
+        elif turn <= 7:
+            return "mid"
+        else:
+            return "late"
+
+    def _get_phase_params(self, phase: str) -> dict:
+        """Get search parameters for game phase."""
+        params = {
+            "early": {"pop_size": 30, "max_gens": 100, "max_chromosome_length": 4,
+                      "weights": {"w_v7": 1.0, "w_board": 1.0, "w_threat": 0.8, "w_lingering": 0.8, "w_trigger": 0.5}},
+            "mid":   {"pop_size": 50, "max_gens": 200, "max_chromosome_length": 6,
+                      "weights": {"w_v7": 1.0, "w_board": 1.0, "w_threat": 1.5, "w_lingering": 0.8, "w_trigger": 0.5}},
+            "late":  {"pop_size": 60, "max_gens": 150, "max_chromosome_length": 8,
+                      "weights": {"w_v7": 1.0, "w_board": 1.0, "w_threat": 2.0, "w_lingering": 0.8, "w_trigger": 0.5}},
+        }
+        return params.get(phase, params["mid"])
+
     def _init_population(self, state: GameState) -> List[List[Action]]:
         """Create initial population of random legal action sequences."""
         population: List[List[Action]] = []
         for _ in range(self.pop_size):
             chromo = self._random_chromosome(state)
+            # V9: normalize to eliminate equivalent orderings
+            if normalize_chromosome is not None:
+                try:
+                    chromo = normalize_chromosome(chromo, state)
+                except Exception:
+                    pass
             population.append(chromo)
         return population
 
@@ -599,6 +734,7 @@ class RHEAEngine:
         initial_state: GameState,
         chromo: List[Action],
         weights: Optional[dict],
+        risk_report=None,
     ) -> float:
         """Apply all actions and return evaluate_delta.
 
@@ -616,6 +752,13 @@ class RHEAEngine:
             current = apply_action(current, action)
             if current.is_lethal():
                 return 10000.0
+
+        # V9: Use risk-adjusted evaluation when available
+        if evaluate_delta_with_risk is not None and risk_report is not None:
+            try:
+                return evaluate_delta_with_risk(initial_state, current, weights, risk_report)
+            except Exception:
+                pass
 
         return evaluate_delta(initial_state, current, weights)
 
@@ -715,6 +858,13 @@ class RHEAEngine:
             legal = enumerate_legal_actions(current)
             if legal:
                 result[pos] = random.choice(legal)
+
+        # V9: normalize after mutation
+        if normalize_chromosome is not None:
+            try:
+                result = normalize_chromosome(result, state)
+            except Exception:
+                pass
 
         return result
 

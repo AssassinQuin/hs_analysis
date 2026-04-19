@@ -137,7 +137,7 @@ def load_scores_into_hand(state_or_hand, source: str = "v7", report_path: Option
         Override the default report path.
     """
     # Deferred import to avoid circular dependency at module level
-    from hs_analysis.models.game_state import GameState  # type: ignore[import]
+    from hs_analysis.search.game_state import GameState  # type: ignore[import]
 
     if isinstance(state_or_hand, GameState):
         hand = state_or_hand.hand

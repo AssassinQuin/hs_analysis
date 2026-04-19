@@ -86,6 +86,7 @@ class GameState:
     mana: ManaState = field(default_factory=ManaState)
     board: List[Minion] = field(default_factory=list)
     hand: list = field(default_factory=list)  # List of Card
+    deck_list: Optional[List] = None  # remaining cards in player's deck (for draw probability)
     deck_remaining: int = 15
     opponent: OpponentState = field(default_factory=OpponentState)
     turn_number: int = 1

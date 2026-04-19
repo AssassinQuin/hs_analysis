@@ -25,6 +25,11 @@ from hs_analysis.search.game_state import GameState, Minion, HeroState, Opponent
 from hs_analysis.models.card import Card
 from hs_analysis.scorers.v8_contextual import get_scorer as _get_v8_scorer
 
+try:
+    from hs_analysis.search.risk_assessor import RiskReport
+except ImportError:
+    RiskReport = None
+
 # ---------------------------------------------------------------------------
 # Sub-model imports — fall back to inline implementations if absent
 # ---------------------------------------------------------------------------
@@ -131,6 +136,34 @@ def quick_eval(state: GameState) -> float:
     v7_adj = v8_scorer.hand_contextual_value(state)
     threat = -(max(0, 30 - state.hero.hp - state.hero.armor) * 0.5)
     return v7_adj + 1.5 * threat
+
+
+def evaluate_with_risk(state: GameState, weights: dict | None = None, risk_report=None) -> float:
+    """Risk-adjusted evaluation.
+    
+    Returns base_score × (1.0 - risk_penalty).
+    Falls back to plain evaluate() if risk_report is None or unavailable.
+    """
+    base_score = evaluate(state, weights)
+    
+    if risk_report is None:
+        return base_score
+    
+    # risk_report might be a RiskReport or any object with total_risk attr
+    risk_penalty = getattr(risk_report, 'total_risk', 0.0) * 0.3  # default risk_weight=0.3
+    risk_penalty = min(risk_penalty, 0.9)  # cap at 90% penalty
+    
+    return base_score * (1.0 - risk_penalty)
+
+
+def evaluate_delta_with_risk(initial: GameState, current: GameState,
+                              weights: dict | None = None, risk_report=None) -> float:
+    """Risk-adjusted delta fitness.
+    
+    Same as evaluate_delta but uses evaluate_with_risk for current state.
+    Initial state uses plain evaluate (risk applies to the RESULT state).
+    """
+    return evaluate_with_risk(current, weights, risk_report) - evaluate(initial, weights)
 
 
 # ===================================================================

@@ -31,3 +31,6 @@ hs_cards/crops/
 .swarm/
 SWARM_PLAN.*
 mcp-servers/
+
+# Environment variables
+.env
