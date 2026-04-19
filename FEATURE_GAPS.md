@@ -82,3 +82,40 @@
 - Tests 1 and 2: RHEA with pop_size=25 sometimes produces only 1 action where 2+ is ideal
 - Relaxed assertions to >= 1 action to avoid flaky failures
 - This is inherent to small-population evolutionary search
+
+## Batch 12 — Complex Scenario Findings (Round 2)
+
+### Rush minion can_attack behavior
+- `apply_action` sets `can_attack=True` only for CHARGE mechanics, not RUSH
+- Rush minions get `has_rush=True`; `enumerate_legal_actions` still generates ATTACK actions for them
+- Tests should assert `has_rush` (not `can_attack`) for rush minion identity
+- ATTACK actions for rush minions correctly target only enemy minions (not hero)
+
+### OpponentSimulator greedy trading behavior
+- OpponentSimulator uses greedy trade-first logic: opponent minions trade into our board before going face
+- If opponent board can trade into all our minions, `worst_case_damage=0` and `lethal_exposure=False`
+- Even when opponent has lethal on board (8 attack vs 8 HP), if they trade into our 2 minions first, sim doesn't detect face lethal
+- Test 5 confirmed: with empty board variant, sim correctly detects `lethal_exposure=True`
+
+### evaluate_with_risk multiplicative behavior on negative scores
+- `evaluate_with_risk` returns `base_score × (1.0 - risk_penalty)`
+- When `base_score < 0`, risk adjustment makes it *less negative* (moves toward zero)
+- This is mathematically correct for multiplicative penalty but may be semantically unexpected
+- For states with large negative base scores, risk adjustment paradoxically "improves" the number
+
+### Spell text format sensitivity
+- `resolve_effects` regex for direct_damage: `造成\s*(\d+)\s*点伤害` — does NOT match `$` prefix
+- Cards with text like `造成 $4 点伤害` won't parse correctly
+- Tests should use clean format `造成 4 点伤害` (without `$`) for deterministic behavior
+- Same issue in `max_damage_bound` spell damage regex
+- FEATURE_GAP: Spell damage regex should handle `$` prefix from HearthstoneJSON format
+
+### Position-based evaluation FEATURE_GAP
+- Test 7 confirmed: playing taunt minion at different board positions produces identical `evaluate()` scores
+- Board position does not affect evaluation — this is a known limitation
+- Adjacency buffs, OUTCAST, and position-targeted effects not modeled
+
+### Multi-spell combo lethal detection
+- Test 6 confirmed: `check_lethal` can find lethal paths through spell damage + board attacks
+- `max_damage_bound` correctly sums board + spell + weapon damage
+- When lethal found, engine fitness >= 9000 (confirmed)
