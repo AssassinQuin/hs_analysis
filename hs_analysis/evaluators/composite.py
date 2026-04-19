@@ -31,6 +31,36 @@ except ImportError:
     RiskReport = None
 
 # ---------------------------------------------------------------------------
+# V10 state-aware scoring integration
+# ---------------------------------------------------------------------------
+V10_ENABLED: bool = False
+
+
+def set_v10_enabled(enabled: bool) -> None:
+    """Enable or disable the V10 state-aware scoring path."""
+    global V10_ENABLED
+    V10_ENABLED = enabled
+
+
+def evaluate_v10(state: GameState, weights: dict | None = None) -> float:
+    """V10 state-aware evaluation using BSV fusion.
+
+    Args:
+        state: Current game state.
+        weights: Ignored in V10 (axes use their own weighting).
+
+    Returns:
+        BSV fusion score, or 999.0 if lethal detected.
+    """
+    # Lazy import to avoid circular dependency at module load time
+    try:
+        from hs_analysis.evaluators.bsv import bsv_fusion
+    except ImportError:
+        return evaluate(state, weights)  # fallback to legacy
+    return bsv_fusion(state)
+
+
+# ---------------------------------------------------------------------------
 # Sub-model imports — fall back to inline implementations if absent
 # ---------------------------------------------------------------------------
 try:
@@ -86,7 +116,10 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
     Returns a scalar V representing how favourable *state* is for the
     friendly player.  Higher is better.
 
-    Components
+    When V10_ENABLED is True, routes to evaluate_v10 (BSV fusion).
+    Otherwise uses the legacy V8 + sub-model pipeline.
+
+    Components (legacy)
     ----------
     v7_adj      – V7 adjusted scores of hand cards + board minions
     board_score – board control advantage
@@ -94,6 +127,10 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
     lingering   – ongoing / persistent effect value
     trigger     – trigger / deathrattle quality
     """
+    # --- V10 routing ---
+    if V10_ENABLED:
+        return evaluate_v10(state, weights)
+
     w = {**DEFAULT_WEIGHTS, **(weights or {})}
 
     # --- V2 adjusted (hand quality only; board handled by eval_board) ---
