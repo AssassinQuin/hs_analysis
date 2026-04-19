@@ -1,0 +1,26 @@
+[project]
+name = "hs-analysis"
+version = "0.1.0"
+description = "炉石传说卡牌数值数学建模 — Hearthstone card value analysis toolkit"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "openpyxl",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.setuptools.packages.find]
+include = ["hs_analysis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["scripts", "tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
