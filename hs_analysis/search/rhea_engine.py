@@ -234,6 +234,33 @@ def apply_action(state: GameState, action: Action) -> GameState:
         src_idx = action.source_index
         tgt_idx = action.target_index
 
+        # Hero weapon attack (source_index == -1)
+        if src_idx == -1:
+            weapon = s.hero.weapon
+            if weapon is None or weapon.attack <= 0:
+                return s
+            if tgt_idx == 0:
+                # Attack enemy hero
+                s.opponent.hero.hp -= weapon.attack
+            else:
+                enemy_idx = tgt_idx - 1
+                if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
+                    return s
+                target = s.opponent.board[enemy_idx]
+                if target.has_divine_shield:
+                    target.has_divine_shield = False
+                else:
+                    target.health -= weapon.attack
+                # Hero takes counter-damage from minion
+                s.hero.hp -= target.attack
+                # Remove dead enemy minions
+                s.opponent.board = [m for m in s.opponent.board if m.health > 0]
+            # Reduce weapon durability
+            weapon.health -= 1
+            if weapon.health <= 0:
+                s.hero.weapon = None
+            return s
+
         if src_idx < 0 or src_idx >= len(s.board):
             return s
         source = s.board[src_idx]
@@ -491,7 +518,7 @@ class RHEAEngine:
                 parent2 = self._tournament_select(population, fitnesses)
 
                 if random.random() < self.crossover_rate:
-                    child = self._crossover(parent1, parent2)
+                    child = self._crossover(parent1, parent2, initial_state)
                 else:
                     child = list(parent1)
 
@@ -787,6 +814,7 @@ class RHEAEngine:
         self,
         parent1: List[Action],
         parent2: List[Action],
+        state: GameState,
     ) -> List[Action]:
         """Sequence-preserving n-point crossover.
 
@@ -811,6 +839,13 @@ class RHEAEngine:
         # Ensure child ends with END_TURN
         if child and child[-1].action_type != 'END_TURN':
             child.append(Action(action_type='END_TURN'))
+
+        # V9: normalize crossover children
+        if normalize_chromosome is not None:
+            try:
+                child = normalize_chromosome(child, state)
+            except Exception:
+                pass
 
         return child
 

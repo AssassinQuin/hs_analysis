@@ -113,6 +113,37 @@ def _enumerate_damage_actions(state: GameState) -> list:
                     )
                 )
 
+    # Hero weapon ATTACK (source_index=-1 convention for hero)
+    if (
+        state.hero.weapon is not None
+        and state.hero.weapon.attack > 0
+    ):
+        if enemy_taunts:
+            # Must attack through taunts
+            for t in enemy_taunts:
+                real_idx = state.opponent.board.index(t)
+                actions.append(
+                    Action(
+                        action_type="ATTACK",
+                        source_index=-1,  # hero
+                        target_index=real_idx + 1,
+                    )
+                )
+        else:
+            # Can go face
+            actions.append(
+                Action(action_type="ATTACK", source_index=-1, target_index=0)
+            )
+            # Can attack enemy minions
+            for tgt_idx in range(len(state.opponent.board)):
+                actions.append(
+                    Action(
+                        action_type="ATTACK",
+                        source_index=-1,
+                        target_index=tgt_idx + 1,
+                    )
+                )
+
     # PLAY damage spells
     for idx, card in enumerate(state.hand):
         if card.cost > state.mana.available:
