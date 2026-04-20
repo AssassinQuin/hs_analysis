@@ -206,8 +206,38 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         ct = constraints.get('card_type')
         race = constraints.get('race')
 
+        # V10 Feedback: Rune discover filtering
+        rune_name = None
+        try:
+            from hs_analysis.search.rune import parse_rune_discover_target, filter_by_rune
+            rune_name = parse_rune_discover_target(card_text)
+        except Exception:
+            pass
+
         # Generate pool
         pool = generate_discover_pool(hero_class, card_type=ct, race=race)
+
+        # Apply rune filter if needed
+        if rune_name and pool:
+            try:
+                pool = filter_by_rune(pool, rune_name)
+            except Exception:
+                pass
+
+        # V10 Feedback: Dark Gift discover — filter + enchant
+        dark_gift_active = False
+        try:
+            from hs_analysis.search.dark_gift import (
+                has_dark_gift_discover, filter_dark_gift_pool,
+                parse_dark_gift_constraint, apply_dark_gift,
+            )
+            dark_gift_active = has_dark_gift_discover(card_text)
+            if dark_gift_active and pool:
+                dg_constraint = parse_dark_gift_constraint(card_text)
+                if dg_constraint:
+                    pool = filter_dark_gift_pool(pool, dg_constraint)
+        except Exception:
+            pass
 
         # Fallback if pool empty
         if not pool:
@@ -227,6 +257,13 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         else:
             # Sample up to 3, pick highest cost
             sample = random.sample(pool, min(3, len(pool)))
+            # V10 Feedback: Apply Dark Gift enchantment to each sample
+            if dark_gift_active:
+                try:
+                    from hs_analysis.search.dark_gift import apply_dark_gift as _apply_dg
+                    sample = [_apply_dg(c.copy()) for c in sample]
+                except Exception:
+                    pass
             chosen_raw = max(sample, key=lambda c: c.get('cost', 0))
 
         # Convert to Card for hand compatibility
