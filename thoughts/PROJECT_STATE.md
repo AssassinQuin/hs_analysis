@@ -1,14 +1,14 @@
 ---
-version: 6.0
+version: 7.0
 created: 2026-04-19
-last_changed: 2026-04-20 (V10 Phase 3 complete — 2026 modern mechanics implemented)
+last_changed: 2026-04-20 (V10 Feedback complete — all 4 batches implemented)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V10 Engine Overhaul — Phase 3 Complete, Polish & Calibration Next
+## Current Phase: V10 Engine Overhaul — Feedback Complete, Polish & Calibration Next
 
 ## ✅ DONE
 
@@ -104,8 +104,33 @@ last_changed: 2026-04-20 (V10 Phase 3 complete — 2026 modern mechanics impleme
 - [x] **Skipped** Kindred + Dark Gift (not in current card pool — YAGNI)
 - [x] **~63 new tests** across 7 test modules
 
+### V10 Feedback: Mechanic Gaps + Discover Enhancements ✅ (2026-04-20, 4 commits)
+- [x] **Batch 1: Kindred + Corpse** (commit `8a288f9`)
+  - `kindred.py` — 延系 mechanic detection via text regex, race/school intersection check
+  - `corpse.py` — DK corpse resource (gain/spend/double-gen for 法瑞克), optional effect system
+  - `game_state.py` — added `corpses`, `kindred_double_next`, `last_played_card` fields
+  - `rhea_engine.py` — kindred dispatch after colossal, corpse gain on death, corpse effects for DK
+  - 51 new tests
+- [x] **Batch 2: Rune + Dark Gift** (commit `146133a`)
+  - `rune.py` — DK rune mapping (spellSchool → rune type), discover filtering
+  - `dark_gift.py` — 10 predefined enchantments, discover modifier, pool filtering
+  - `discover.py` — integrated rune filtering + dark gift enchantment on discover options
+  - 38 new tests
+- [x] **Batch 3: Exhaustive Target Selection** (commit `c822950`)
+  - `battlecry_dispatcher.py` — clone→apply→evaluate loop, removal bonus eval, attack-based tiebreaker
+  - `_quick_eval()` — removal bonus (+10/kill), lethal detection (1000), skips dead minions
+  - `_pick_damage_target(amount)` — uses actual damage amount in probe for accurate kill detection
+  - 7 new tests
+- [x] **Batch 4: Wild Card Pool** (commit `72cec1a`)
+  - `discover.py` — `_WILD_CACHE` + `_load_wild_cards()` for unified_wild.json (5209 cards)
+  - "来自过去" detection triggers wild pool in `resolve_discover()`
+  - Case-insensitive class filter, Chinese type normalization (装备→WEAPON)
+  - 11 new tests
+- **Design:** `thoughts/shared/designs/2026-04-20-v10-feedback-design.md`
+- **Plan:** `thoughts/shared/plans/2026-04-20-v10-feedback.md`
+
 ### Test Coverage
-- [x] **689 tests passing** (as of 2026-04-20, 1 known flaky RHEA stochastic test)
+- [x] **514 search tests passing** (as of 2026-04-20, 1 known flaky RHEA stochastic test)
 - [x] Card data tests: 51+35+6 = 92
 - [x] V8 contextual scorer: 16
 - [x] V9 search engine + HDT batches: 150+
@@ -113,13 +138,14 @@ last_changed: 2026-04-20 (V10 Phase 3 complete — 2026 modern mechanics impleme
 - [x] V10 scoring (SIV+BSV+interactions+mechanics+integration): 260
 - [x] V10 Phase 2 (enchant+trigger+battlecry+deathrattle+aura+discover+location): 341
 - [x] V10 Phase 3 (state expansion+imbue+outcast+colossal+herald+quest+rewind): ~63
+- [x] V10 Feedback (kindred+corpse+rune+dark_gift+target_selection+wild_discover): 107
 
 ### Architecture & Research Documentation
 - [x] 7 design documents in `thoughts/shared/designs/`
 - [x] 4 implementation plans in `thoughts/shared/plans/`
 - [x] PROGRESS.md — complete development log
 - [x] PROJECT_STATE.md — progress tracker (this file)
-- [x] DECISIONS.md — 16 architectural decisions (D001-D016)
+- [x] DECISIONS.md — 27 architectural decisions (D001-D027)
 - [x] PROJECT_CHARTER.md — immutable goals & constraints
 
 ## 🔄 WIP
@@ -136,8 +162,6 @@ last_changed: 2026-04-20 (V10 Phase 3 complete — 2026 modern mechanics impleme
 - [ ] Opponent simulator: consider hand size, hero power, divine shield
 
 ### P2: Future Mechanics (when cards enter standard pool)
-- [ ] Kindred (延系) — previous turn race/school tracking
-- [ ] Dark Gift (暗影赐福) — random bonus pool on discover
 - [ ] Shatter — card split/merge in hand
 
 ### P3: Full Rewind Integration
@@ -148,7 +172,7 @@ last_changed: 2026-04-20 (V10 Phase 3 complete — 2026 modern mechanics impleme
 (none currently)
 
 ## Architecture Decisions
-See `thoughts/DECISIONS.md` for full details (D001-D019).
+See `thoughts/DECISIONS.md` for full details (D001-D027).
 
 ## Data Inventory
 

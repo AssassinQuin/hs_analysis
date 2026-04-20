@@ -1,7 +1,7 @@
 ---
-version: 1.0
+version: 2.0
 created: 2026-04-19
-last_changed: 2026-04-19
+last_changed: 2026-04-20
 ---
 
 # Decision Log: hs_analysis
@@ -179,3 +179,33 @@ last_changed: 2026-04-19
 **Decision**: Direct action type matching in `track_quest_progress(state, action_type, card)`. Called once per PLAY action from apply_action. No event subscription overhead.
 **Alternatives**: (A) Use TriggerDispatcher events — more architecturally pure but adds complexity for a simple counter. (B) Per-quest event handlers — overkill for arena quest frequency.
 **Rationale**: Quests are rare in arena (5 cards out of 1015). Simple counting is sufficient. The trigger system exists for high-frequency events like deathrattles.
+
+## D023 | 2026-04-20 | Kindred detection via text-only regex
+**Context**: Kindred (延系) has no dedicated "KINDRED" mechanic tag in card data. Need to detect when a card has the kindred effect.
+**Decision**: Detect via "延系" regex in card text, check race/school intersection with `last_turn_races`/`last_turn_schools`. No special field or tag lookup.
+**Alternatives**: (A) Wait for Blizzard to add KINDRED tag — not guaranteed. (B) Maintain a hardcoded card list — brittle across patches.
+**Rationale**: Text-based detection is forward-compatible: new cards with 延系 automatically work. 29 cards in current pool use this pattern.
+
+## D024 | 2026-04-20 | Corpse as optional resource (not mana gate)
+**Context**: DK corpse effects (残骸) require spending corpses. Could gate playability (card unplayable without corpses) or make effects optional bonuses.
+**Decision**: Corpse effects are optional bonuses. Cards are always playable; spending corpses adds extra effects. If not enough corpses, the effect is simply skipped.
+**Alternatives**: (A) Gate playability — would require action legality changes, breaks existing search. (B) Optional resource — minimal integration, graceful degradation.
+**Rationale**: 23 DK cards affected. Optional approach matches real HS behavior and keeps search integration simple.
+
+## D025 | 2026-04-20 | Rune via spellSchool field mapping
+**Context**: DK runes (冰霜/邪恶/鲜血) are needed for discover filtering. Cards don't have a "rune" field but many DK cards have a `spellSchool` field.
+**Decision**: Map spellSchool to rune type: FROST→冰霜, SHADOW→邪恶, FIRE→鲜血. Only ~30 DK cards have identifiable rune types via this mapping.
+**Alternatives**: (A) Hardcoded rune assignments — brittle. (B) Parse rune from card text — inconsistent formatting. (C) spellSchool mapping — good coverage, standard field.
+**Rationale**: spellSchool is a standard field in card data, already normalized by card_cleaner. Covers the DK cards that matter for discover filtering.
+
+## D026 | 2026-04-20 | Dark Gift as discover modifier (not standalone mechanic)
+**Context**: Dark Gift (黑暗之赐) adds random enchantments to discover options. Could be a standalone mechanic system or a simple discover modifier.
+**Decision**: Implement as a discover modifier: 10 predefined enchantments, applied to each of the 3 sample cards before selection. Triggered by "黑暗之赐" in card text.
+**Alternatives**: (A) Standalone mechanic module — overkill for 20 cards. (B) Discover modifier — minimal integration, reuses existing discover pipeline.
+**Rationale**: Dark Gift only matters during discover resolution. Making it a discover modifier keeps the integration point singular and testable.
+
+## D027 | 2026-04-20 | Exhaustive target selection with eval-based tiebreaker
+**Context**: Battlecry damage/heal/freeze effects need target selection. The old greedy approach (always pick highest-attack enemy) missed lethal plays and kill opportunities.
+**Decision**: Clone→apply→evaluate loop: for each candidate target, clone the state, apply the effect, evaluate with `_quick_eval`, pick the best. Tiebreaker: prefer minions over hero, higher attack over lower.
+**Alternatives**: (A) Greedy (highest attack) — simple but misses kills. (B) Full game tree — too slow for search. (C) Exhaustive with eval — max 7 targets, ~2ms per call, captures kills and lethal.
+**Rationale**: Max 7 board slots means max 8 candidates (7 minions + hero). Clone+eval is fast enough. The removal bonus in `_quick_eval` (+10 per dead enemy) correctly values kills over chip damage.
