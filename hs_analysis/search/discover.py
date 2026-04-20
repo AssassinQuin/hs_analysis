@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # ===================================================================
 
 _CARD_CACHE: Optional[List[dict]] = None
+_WILD_CACHE: Optional[List[dict]] = None
 
 
 def _load_cards() -> List[dict]:
@@ -42,6 +43,26 @@ def _load_cards() -> List[dict]:
     return _CARD_CACHE
 
 
+def _load_wild_cards() -> List[dict]:
+    """Lazy-load unified_wild.json, cache at module level.
+
+    The wild pool (~5209 cards) is used when discover text contains "来自过去"
+    (from the past), indicating the player should discover from wild card pool.
+    """
+    global _WILD_CACHE
+    if _WILD_CACHE is not None:
+        return _WILD_CACHE
+    try:
+        p = Path(__file__).resolve().parent.parent.parent / 'hs_cards' / 'unified_wild.json'
+        with open(p, 'r', encoding='utf-8') as f:
+            _WILD_CACHE = json.load(f)
+        logger.debug('Loaded %d cards from unified_wild.json', len(_WILD_CACHE))
+    except Exception as exc:
+        logger.error('Failed to load unified_wild.json: %s', exc)
+        _WILD_CACHE = []
+    return _WILD_CACHE
+
+
 # ===================================================================
 # Race name mapping (Chinese → JSON race value)
 # ===================================================================
@@ -56,6 +77,16 @@ _RACE_MAP = {
     '机械': 'MECHANICAL',
     '亡灵': 'UNDEAD',
     '图腾': 'TOTEM',
+}
+
+# Wild JSON uses Chinese/mixed type names; normalize to standard UPPERCASE
+_TYPE_NORMALIZE = {
+    '装备': 'WEAPON',
+    '武器': 'WEAPON',
+    '随从': 'MINION',
+    '法术': 'SPELL',
+    '英雄': 'HERO',
+    '地标': 'LOCATION',
 }
 
 # English race aliases
@@ -132,8 +163,9 @@ def generate_discover_pool(
     hero_class: str,
     card_type: Optional[str] = None,
     race: Optional[str] = None,
+    use_wild_pool: bool = False,
 ) -> List[dict]:
-    """Generate discover pool from unified_standard.json.
+    """Generate discover pool from card database.
 
     Filters cards by:
     - cardClass matches hero_class OR 'NEUTRAL'
@@ -141,20 +173,29 @@ def generate_discover_pool(
     - race contains race string if specified
     - Excludes HERO and LOCATION types
 
+    Args:
+        hero_class: Hero class string (e.g. 'MAGE')
+        card_type: Optional type filter (SPELL, MINION, WEAPON)
+        race: Optional race filter (e.g. 'BEAST')
+        use_wild_pool: If True, load from unified_wild.json instead of standard
+
     Returns list of card dicts (raw JSON, not Card objects).
     """
     try:
-        all_cards = _load_cards()
+        all_cards = _load_wild_cards() if use_wild_pool else _load_cards()
     except Exception:
         return []
 
     pool = []
+    hero_upper = hero_class.upper()
     for c in all_cards:
         cc = c.get('cardClass', '')
-        ct = c.get('type', '')
+        ct_raw = c.get('type', '')
+        # Normalize type: wild JSON may use Chinese names like '装备'
+        ct = _TYPE_NORMALIZE.get(ct_raw, ct_raw).upper()
 
-        # Class filter
-        if cc != hero_class and cc != 'NEUTRAL':
+        # Class filter (case-insensitive: wild JSON uses Title Case)
+        if cc.upper() != hero_upper and cc.upper() != 'NEUTRAL':
             continue
 
         # Exclude HERO and LOCATION
@@ -214,8 +255,14 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         except Exception:
             pass
 
+        # V10 Feedback: Wild pool for "来自过去" (from the past) discover
+        use_wild_pool = '来自过去' in card_text
+
         # Generate pool
-        pool = generate_discover_pool(hero_class, card_type=ct, race=race)
+        pool = generate_discover_pool(
+            hero_class, card_type=ct, race=race,
+            use_wild_pool=use_wild_pool,
+        )
 
         # Apply rune filter if needed
         if rune_name and pool:
