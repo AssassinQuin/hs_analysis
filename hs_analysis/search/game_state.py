@@ -100,6 +100,9 @@ class GameState:
     last_turn_races: set = field(default_factory=set)   # Kindred: races played last turn
     last_turn_schools: set = field(default_factory=set)  # Kindred: spell schools played last turn
     active_quests: list = field(default_factory=list)    # Active quest tracking
+    corpses: int = 0                                     # DK Corpse resource
+    kindred_double_next: bool = False                    # Kindred: next 延系 triggers twice
+    last_played_card: dict | None = None                 # Last card played (for rune/conditional checks)
 
     # ------------------------------------------------------------------
     # Utility helpers

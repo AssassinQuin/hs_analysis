@@ -1,100 +1,136 @@
 ---
 session: ses_2572
-updated: 2026-04-20T03:39:03.943Z
+updated: 2026-04-20T05:18:37.239Z
 ---
 
 # Session Summary
 
 ## Goal
-Implement V10 Phase 2 of the Hearthstone AI decision engine: enchantment framework + trigger system + battlecry dispatch + deathrattle queue + aura engine + discover framework + location support — making all card keyword mechanics actually execute during RHEA search simulation.
+Implement V10 Phase 2 + Phase 3 of the Hearthstone AI decision engine: all card keyword mechanics (enchantment, trigger, battlecry, deathrattle, aura, discover, location, imbue, outcast, colossal, herald, quest, rewind) actually execute during RHEA search simulation — then address 4 user feedback items: (1) missing Kindred/延系 mechanic, (2) better target selection, (3) DK rune/corpse systems, (4) wild card pool for discover expectations.
 
 ## Constraints & Preferences
-- All 274 original tests must pass (zero regression) — currently 551+ tests passing
+- All 274 original tests must pass (zero regression) — currently 689 tests passing
 - Each batch must be independently committable
 - Files >500 lines: skeleton first, then fill in ≤200 line chunks
 - Pure Python, no new external dependencies
-- Graceful degradation: try/except on all new dispatch points, never crash search
+- Graceful degradation: try/except on all dispatch points, never crash search
 - Chinese regex patterns for card text parsing
 - Commit format: `feat: / fix: / cleanup: 简述`
 - Design docs in `thoughts/shared/designs/`, plans in `thoughts/shared/plans/`
 - Platform: macOS Darwin (use `python3`, `rm -rf`, POSIX commands)
+- User prefers Chinese language responses
 
 ## Progress
 ### Done
-- [x] Project state alignment: read PROJECT_CHARTER.md, PROJECT_STATE.md, DECISIONS.md, agent.md, CONVENTIONS.md
-- [x] Phase 2 implementation plan written to `thoughts/shared/plans/2026-04-20-v10-phase2.md` (6 batches, 8 micro-tasks)
-- [x] **Batch 1: Enchantment + TriggerDispatcher** (28 tests)
-  - Created `hs_analysis/search/enchantment.py` — `Enchantment` dataclass, `apply_enchantment`, `remove_enchantment`, `tick_enchantments`, `compute_effective_attack/health/max_health`, `get_effective_keywords`
-  - Created `hs_analysis/search/trigger_system.py` — `TriggerDispatcher` class with 8 event methods (`on_minion_played`, `on_minion_dies`, `on_turn_end`, `on_turn_start`, `on_attack`, `on_spell_cast`, `on_damage_dealt`, `on_heal`), effect string protocol (`damage:random_enemy:N`, `summon:N:N`, `draw:N`, `buff:friendly:N:N`, `heal:hero:N`, `armor:N`), module-level convenience functions
-  - Created `hs_analysis/search/test_trigger_system.py` — 28 tests (15 Enchantment + 13 TriggerDispatcher)
-- [x] **Batch 2: BattlecryDispatcher** (17 tests)
-  - Created `hs_analysis/search/battlecry_dispatcher.py` — `BattlecryDispatcher` class reusing `EffectParser`/`EffectApplier` from `spell_simulator.py`, handles damage/heal/summon/draw/buff/armor/destroy/freeze/divine_shield/taunt/rush/silence, greedy target selection (highest attack enemy, most damaged friendly)
-  - Wired into `rhea_engine.py` `apply_action` PLAY MINION branch (after `s.board.insert(pos, new_minion)`)
-  - Created `hs_analysis/search/test_battlecry_dispatcher.py` — 17 tests across 8 test classes
-- [x] **Batch 3: DeathrattleQueue** (18 tests) — module and tests done, rhea_engine wire-in done but NOT YET VERIFIED with full regression
-  - Created `hs_analysis/search/deathrattle.py` — `resolve_deaths(state, max_cascade=5)`, board-position-ordered death queue, cascade support, `parse_deathrattle_text()` for text-based fallback
-  - Bug fix: regex for "对随机敌人" needed `(?:敌方|敌人)` not just `[敌对]方`
-  - Bug fix: summon board-limit check uses `alive_count` (excluding dead minions) not `len(s.board)`
-  - Created `hs_analysis/search/test_deathrattle.py` — 18 tests (summon, damage, draw, buff, armor, cascade, text parse, divine shield)
-  - Wired into `rhea_engine.py` ATTACK section — added `resolve_deaths(s)` call after stealth break + inline removal
+- [x] **V10 Phase 2 complete** (6 batches, 7 modules, 341 new tests, commit `f2dca83`)
+  - `enchantment.py` — Enchantment dataclass, apply/remove/tick, stat computation helpers
+  - `trigger_system.py` — TriggerDispatcher with 8 events, effect string protocol (`damage:random_enemy:N`)
+  - `battlecry_dispatcher.py` — battlecry dispatch with greedy target selection, 10+ effect types
+  - `deathrattle.py` — `resolve_deaths()` with board-ordered queue, cascade (max 5)
+  - `aura_engine.py` — `recompute_auras()` with 7 aura sources (EN/CN registry)
+  - `discover.py` — pool generation from unified_standard.json, Chinese text constraint parsing, best-of-3
+  - `location.py` — Location dataclass, activate/tick cooldowns, ACTIVATE_LOCATION action
+  - `game_state.py` — added `locations` field
+  - `rhea_engine.py` — 4 integration points (PLAY MINION, ATTACK, SPELL, END_TURN) + ACTIVATE_LOCATION
+  - `pyproject.toml` — added `hs_analysis/search` to testpaths
+
+- [x] **V10 Phase 3 complete** (5 batches, 6 modules, ~63 new tests)
+  - Batch 1-3 commit `bb11feb`: `imbue.py` (11 class hero power upgrades), `outcast.py` (hand position detection + bonus parsing), game_state fields (imbue_level, herald_count, last_turn_races/schools, active_quests)
+  - Batch 4 commit `14384de`: `colossal.py` (Colossal+N appendage summoning), `herald.py` (Herald counter + soldier summoning)
+  - Batch 5 commit `ffbe350`: `quest.py` (QuestState tracking + progress + reward dispatch), `rewind.py` (2-branch evaluation helper, not yet wired into _evaluate_chromosome)
+  - Doc updates commit `29eda89`: PROJECT_STATE v6.0, DECISIONS D020-D022
+
+- [x] **User feedback received** (4 items, analysis done, implementation NOT started):
+  - Feedback 1: Kindred/延系 DOES exist in card pool — found **29 cards** with "延系" in text
+  - Feedback 2: Target selection should enumerate ALL valid targets + evaluate outcomes, not just greedy pick
+  - Feedback 3: Death Knight rune system + corpse/残骸 system needs implementation
+  - Feedback 4: Wild card pool should be used for discover expectation calculation (e.g., "what can this discover solve?")
 
 ### In Progress
-- [ ] **Batch 3 rhea_engine integration regression check** — deathrattle was wired into `apply_action` ATTACK section but full regression (`pytest --tb=no -q`) has NOT been run yet after this edit
+- [ ] **Feedback response** — analysis completed, implementation not yet started:
+  - 延系/Kindred: 29 cards found with "延系" effect text, mechanic is NOT in `mechanics` field (no "KINDRED"), only detectable via text
+  - 黑暗之赐/Dark Gift: **21 cards** found referencing "黑暗之赐" — it's a discover filter, not a standalone mechanic tag
+  - 碎片/Shatter: 0 cards found — confirmed absent
+  - DK 符文: cards reference 鲜血符文/冰霜符文/邪恶符文, but no formal rune cost tracking in card data
+  - DK 残骸: **25+ DK cards** use 残骸 as a resource, with costs ranging 1-30
 
 ### Blocked
 - (none)
 
 ## Key Decisions
-- **Effect string protocol**: Trigger effects use colon-separated strings like `"damage:random_enemy:N"` for cross-module consistency between trigger_system, deathrattle, and future aura engine
-- **Greedy target selection in BattlecryDispatcher**: Pick highest-attack enemy for damage, most-damaged friendly for heal — simple and deterministic for search
-- **Inline removal preserved + resolve_deaths overlay**: `rhea_engine.py` still does inline `s.board = [m for m in s.board if m.health > 0]` first, then `resolve_deaths(s)` handles deathrattles on remaining dead minions — this is redundant for vanilla minions but ensures deathrattle enchantments fire
-- **Board limit accounting for dead minions**: `alive_count = sum(1 for m in s.board if m.health > 0)` because dead minions haven't been removed yet when checking summon space
+- **D017**: Effect string protocol `"damage:random_enemy:N"` for cross-module dispatch — human-readable, easy to regex from Chinese text
+- **D018**: Greedy target selection for battlecry — **USER CHALLENGED THIS**: wants exhaustive target enumeration + state evaluation instead
+- **D019**: Graceful degradation try/except on all integration points — search robustness paramount
+- **D020**: Skipped Kindred + Dark Gift — **USER CORRECTED**: Kindred has 29 cards, Dark Gift has 21 cards, both need implementation
+- **D021**: Per-class lookup tables for Imbue/Herald/Colossal — fixed game rules, dict is simplest
+- **D022**: Quest progress via action type matching — quests rare in arena, simple counting sufficient
 
 ## Next Steps
-1. **Run full regression** after deathrattle wire-in: `python3 -m pytest --tb=no -q` — verify 569+ tests pass
-2. **Batch 4: AuraEngine** — create `hs_analysis/search/aura_engine.py` with `recompute_auras(state, max_iterations=10)`, wire into rhea_engine after PLAY/ATTACK/SPELL, write `test_aura_engine.py`
-3. **Batch 5: DiscoverFramework** — create `hs_analysis/search/discover.py` with `resolve_discover()`, pool generation from `unified_standard.json`, update `battlecry_dispatcher.py` to delegate discover-type battlecries
-4. **Batch 6: LocationSupport** — create `hs_analysis/search/location.py` with `Location` dataclass, add `locations` to GameState, add ACTIVATE_LOCATION action type
-5. Update `game_state.py` to add `locations: List[Location]` field
-6. Final integration test + update PROJECT_STATE.md + DECISIONS.md
-7. Git commit: `feat: V10 Phase 2 — enchantment framework + trigger system + battlecry + deathrattle + aura + discover + locations`
+1. **Implement 延系/Kindred system** — create `hs_analysis/search/kindred.py`, parse "延系：..." bonus text from 29 cards, wire into PLAY action (check if `last_turn_races`/`last_turn_schools` matches current card), apply bonus effect
+2. **Implement 黑暗之赐/Dark Gift system** — create `hs_analysis/search/dark_gift.py`, define ~10 gift enchantments, integrate with discover framework (when discovering a minion with 黑暗之赐, apply random gift bonus)
+3. **Redesign target selection** — replace greedy in `battlecry_dispatcher.py` with exhaustive enumeration: try each valid target, evaluate resulting state, pick best; same logic for spell targeting in `spell_simulator.py`
+4. **Implement DK 符文/Rune system** — add rune tracking to game state (Blood/Frost/Unholy rune counts), parse rune requirements from card text, gate card playability by rune availability
+5. **Implement DK 残骸/Corpse system** — add `corpses: int` to game state, gain corpses when friendly minions die, consume corpses for card effects, parse "消耗N份残骸" from card text
+6. **Wire wild card pool into discover expectations** — load `unified_wild.json` (5209 cards) as supplementary pool for discover probability calculation
 
 ## Critical Context
-- **Test count**: 274 baseline → now 551+ after adding `hs_analysis/search` to testpaths in `pyproject.toml`
-- **Flaky tests**: batch07 `test_10_combined_lethal_check_and_search` and batch15 `test_10_endgame_resource_scarcity_t12` occasionally fail due to RHEA random search — not regressions
-- **rhea_engine.py `apply_action` integration points** (4 total, 3 done):
-  1. ✅ PLAY MINION (line ~231): battlecry + trigger dispatch
-  2. ✅ ATTACK (line ~339): deathrattle resolve_deaths
-  3. ⬜ PLAY SPELL (line ~252): trigger.on_spell_cast + aura recompute (Batch 4)
-  4. ⬜ END_TURN (line ~358): trigger.on_turn_end (Batch 4)
-- **Deathrattle alive_count fix**: The key insight is that during `_apply_deathrattle_effect`, `s.board` still contains dead minions (they're removed after in `resolve_deaths`), so summon space check must count only alive minions
-- **`Minion` already has `enchantments: list`** field in `game_state.py` — no modification needed to Minion
-- **`GameState` needs `locations` field** — planned for Batch 6
+- **Test count**: 274 baseline → 689 total (1 known flaky: `test_v9_hdt_batch02_deck_random::test_09_multi_deck_lethal` ~20% failure from RHEA stochastic)
+- **延系/Kindred cards are text-only** — no "KINDRED" in mechanics field, must detect via "延系" in card text. Examples: "延系：使你的其他随从获得突袭", "延系：重复一次", "延系：法力值消耗减少（2）点"
+- **黑暗之赐/Dark Gift is a discover filter** — cards say "发现一张具有黑暗之赐的XX牌", meaning discover generates cards that have a random dark gift enchantment applied
+- **DK rune data gap** — unified_standard.json doesn't have formal rune cost fields; rune types only mentioned in card text ("鲜血符文", "冰霜符文", "邪恶符文")
+- **DK corpse costs**: range from 1 (扛包收尸人) to 30 (沃尔科罗斯), with effects scaling by corpse amount spent
+- **rhea_engine.py integration order for PLAY MINION**: insert minion → colossal appendages → battlecry → herald → trigger → aura → imbue → outcast → quest progress
+- **GameState current fields**: hero (HeroState with imbue_level), mana, board, locations, hand, deck_list, deck_remaining, opponent, turn_number, cards_played_this_turn, fatigue_damage, herald_count, last_turn_races (set), last_turn_schools (set), active_quests (list)
+- **Wild card pool**: `hs_cards/unified_wild.json` — 5209 cards, same structure as unified_standard.json
+- **User explicitly wants**: target selection that considers ALL possible targets and evaluates post-selection states, not just greedy highest-attack
 
 ## File Operations
 ### Read
 - `/Users/ganjie/code/personal/hs_analysis/.opencode/CONVENTIONS.md`
 - `/Users/ganjie/code/personal/hs_analysis/.opencode/agent.md`
 - `/Users/ganjie/code/personal/hs_analysis/PROGRESS.md`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/game_state.py`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/rhea_engine.py` (lines 200-600)
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/utils/spell_simulator.py` (lines 80-280)
-- `/Users/ganjie/code/personal/hs_analysis/pyproject.toml`
-- `/Users/ganjie/code/personal/hs_analysis/thoughts/PROJECT_CHARTER.md`
-- `/Users/ganjie/code/personal/hs_analysis/thoughts/PROJECT_STATE.md`
-- `/Users/ganjie/code/personal/hs_analysis/thoughts/DECISIONS.md`
-- `/Users/ganjie/code/personal/hs_analysis/thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
-
-### Created
 - `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/enchantment.py`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/trigger_system.py`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/battlecry_dispatcher.py`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/deathrattle.py`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_trigger_system.py`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_battlecry_dispatcher.py`
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_deathrattle.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/game_state.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/rhea_engine.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/utils/spell_simulator.py`
+- `/Users/ganjie/code/personal/hs_analysis/pyproject.toml`
+- `/Users/ganjie/code/personal/hs_analysis/thoughts/DECISIONS.md`
+- `/Users/ganjie/code/personal/hs_analysis/thoughts/PROJECT_STATE.md`
+- `/Users/ganjie/code/personal/hs_analysis/thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
 - `/Users/ganjie/code/personal/hs_analysis/thoughts/shared/plans/2026-04-20-v10-phase2.md`
 
+### Created (this session)
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/enchantment.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/trigger_system.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_trigger_system.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/battlecry_dispatcher.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_battlecry_dispatcher.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/deathrattle.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_deathrattle.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/aura_engine.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_aura_engine.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/discover.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_discover.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/location.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_location.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/imbue.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_imbue.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/outcast.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_outcast.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/colossal.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_colossal.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/herald.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_herald.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/quest.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_quest.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/rewind.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_rewind.py`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/test_phase3_state.py`
+
 ### Modified
-- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/rhea_engine.py` — 3 edits: (1) PLAY MINION: added battlecry dispatch + trigger dispatch after minion insert, (2) ATTACK: added `resolve_deaths(s)` after inline death removal, (3) lines ~329-350 area restructured
-- `/Users/ganjie/code/personal/hs_analysis/pyproject.toml` — added `"hs_analysis/search"` to `testpaths`
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/game_state.py` — added locations, imbue_level (HeroState), herald_count, last_turn_races, last_turn_schools, active_quests
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/rhea_engine.py` — 10+ integration points: battlecry, trigger, aura, deathrattle, imbue, outcast, colossal, herald, quest, location cooldown, kindred snapshot
+- `/Users/ganjie/code/personal/hs_analysis/hs_analysis/search/battlecry_dispatcher.py` — added discover delegation
+- `/Users/ganjie/code/personal/hs_analysis/pyproject.toml` — added `hs_analysis/search` to testpaths
+- `/Users/ganjie/code/personal/hs_analysis/thoughts/DECISIONS.md` — added D017-D022
+- `/Users/ganjie/code/personal/hs_analysis/thoughts/PROJECT_STATE.md` — updated to v6.0

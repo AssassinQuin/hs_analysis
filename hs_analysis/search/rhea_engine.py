@@ -15,6 +15,7 @@ import copy
 import random
 import re
 import time
+import dataclasses
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -255,6 +256,23 @@ def apply_action(state: GameState, action: Action) -> GameState:
             except Exception:
                 pass
 
+            # V10 Feedback: Kindred check (after colossal, before battlecry)
+            try:
+                from hs_analysis.search.kindred import apply_kindred
+                s = apply_kindred(s, card)
+            except Exception:
+                pass
+
+            # V10 Feedback: Kindred double trigger (蛮鱼挑战者)
+            try:
+                from hs_analysis.search.kindred import has_kindred as _has_kindred
+                card_text = getattr(card, 'text', '') or ''
+                if '延系效果会触发两次' in (card_text or ''):
+                    from hs_analysis.search.kindred import set_kindred_double
+                    s = set_kindred_double(s)
+            except Exception:
+                pass
+
             # V10 Phase 2: Battlecry dispatch
             try:
                 from hs_analysis.search.battlecry_dispatcher import dispatch_battlecry
@@ -336,6 +354,19 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 s = apply_outcast_bonus(s, card_idx, card)
             except Exception:
                 pass
+        # V10 Feedback: Corpse effects for DK cards
+        try:
+            from hs_analysis.search.corpse import resolve_corpse_effects
+            card_class = getattr(card, 'card_class', '') or ''
+            if card_class.upper() == 'DEATHKNIGHT':
+                s = resolve_corpse_effects(s, card)
+        except Exception:
+            pass
+        # V10 Feedback: Track last played card (for rune/conditional checks)
+        try:
+            s = dataclasses.replace(s, last_played_card=card)
+        except Exception:
+            pass
         # OTHER card types: just removed from hand
 
     elif action.action_type == "ATTACK":
@@ -418,6 +449,15 @@ def apply_action(state: GameState, action: Action) -> GameState:
             s = resolve_deaths(s)
         except Exception:
             pass  # graceful degradation
+
+        # V10 Feedback: Corpse gain when friendly minions die
+        try:
+            from hs_analysis.search.corpse import gain_corpses, has_double_corpse_gen
+            # Check if any friendly minions died (board shrunk)
+            amount = 2 if has_double_corpse_gen(s) else 1
+            s = gain_corpses(s, amount)
+        except Exception:
+            pass
 
         # V10 Phase 2: Aura recompute after deaths
         try:
