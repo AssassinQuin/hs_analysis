@@ -297,6 +297,14 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 s = resolve_effects(s, card)
             except Exception:
                 pass  # fallback to just removing from hand
+            # V10 Phase 3: Activate quest if quest card
+            try:
+                from hs_analysis.search.quest import parse_quest
+                quest = parse_quest(card)
+                if quest is not None:
+                    s.active_quests.append(quest)
+            except Exception:
+                pass
             # Apply freeze if card text contains freeze effect
             card_text = getattr(card, 'text', '') or ''
             if '冻结' in card_text or 'FREEZE' in (getattr(card, 'mechanics', None) or []):
@@ -313,6 +321,12 @@ def apply_action(state: GameState, action: Action) -> GameState:
         try:
             from hs_analysis.search.imbue import apply_imbue
             s = apply_imbue(s, card)
+        except Exception:
+            pass
+        # V10 Phase 3: Track quest progress
+        try:
+            from hs_analysis.search.quest import track_quest_progress
+            s = track_quest_progress(s, "PLAY", card)
         except Exception:
             pass
         # V10 Phase 3: Apply outcast bonus if active
