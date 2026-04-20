@@ -161,3 +161,21 @@ last_changed: 2026-04-19
 **Decision**: Every integration point in `apply_action` is wrapped in `try/except: pass`. If a new module fails, the search continues with the vanilla behavior (play the card without battlecry, resolve combat without deathrattles, etc.).
 **Alternatives**: (A) Let exceptions propagate — one bug kills the entire decision engine. (B) Logging on failure — adds I/O overhead in hot path. (C) Feature flags — adds config complexity.
 **Rationale**: Search robustness is paramount. A degraded search that plays vanilla Hearthstone is infinitely better than a crashed search. The 274 baseline tests already verify vanilla behavior works.
+
+## D020 | 2026-04-20 | YAGNI: Skip Kindred + Dark Gift (not in current card pool)
+**Context**: Phase 3 design included Kindred (延系) and Dark Gift (暗影赐福) mechanics. Searching unified_standard.json found 0 cards with these mechanics.
+**Decision**: Skip implementation entirely. The modules can be added later if/when these mechanics enter the standard card pool.
+**Alternatives**: (A) Implement anyway — violates YAGNI, adds untestable dead code. (B) Add stub modules — still dead code, maintenance burden.
+**Rationale**: 0 cards means 0 test cases, 0 integration paths, 0 value. Building it would be speculative engineering.
+
+## D021 | 2026-04-20 | Per-class lookup tables for Imbue/Herald/Colossal (not card text parsing)
+**Context**: Imbue hero powers, Herald soldiers, and Colossal appendages are class-specific effects that differ per class. Could parse from card text or use hardcoded tables.
+**Decision**: Use hardcoded per-class lookup tables (dict keyed by cardClass). Simpler, faster, and the card text doesn't always contain the exact stats.
+**Alternatives**: (A) Parse from card text — inconsistent formatting, many edge cases. (B) Load from external config — overkill for ~11 classes.
+**Rationale**: These are fixed game rules, not configurable values. A dict is the simplest correct representation.
+
+## D022 | 2026-04-20 | Quest progress via action type matching (not event system)
+**Context**: Quest tracking needs to know when specific actions happen (play a spell, summon a minion, etc.). Could use the trigger event system or a simpler approach.
+**Decision**: Direct action type matching in `track_quest_progress(state, action_type, card)`. Called once per PLAY action from apply_action. No event subscription overhead.
+**Alternatives**: (A) Use TriggerDispatcher events — more architecturally pure but adds complexity for a simple counter. (B) Per-quest event handlers — overkill for arena quest frequency.
+**Rationale**: Quests are rare in arena (5 cards out of 1015). Simple counting is sufficient. The trigger system exists for high-frequency events like deathrattles.

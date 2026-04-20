@@ -1,14 +1,14 @@
 ---
-version: 5.0
+version: 6.0
 created: 2026-04-19
-last_changed: 2026-04-20 (V10 Phase 2 complete — enchantment framework + trigger system + all keyword mechanics)
+last_changed: 2026-04-20 (V10 Phase 3 complete — 2026 modern mechanics implemented)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V10 Engine Overhaul — Phase 3 (2026 Modern Mechanics) Next
+## Current Phase: V10 Engine Overhaul — Phase 3 Complete, Polish & Calibration Next
 
 ## ✅ DONE
 
@@ -92,14 +92,27 @@ last_changed: 2026-04-20 (V10 Phase 2 complete — enchantment framework + trigg
 - [x] **341 new tests** across 6 test modules, 615 total passing
 - **Plan:** `thoughts/shared/plans/2026-04-20-v10-phase2.md`
 
+### V10 Phase 3: 2026 Modern Mechanics ✅ (2026-04-20, commits `bb11feb` + `14384de` + `ffbe350`)
+- [x] **imbue.py** — Hero power upgrade system with 11 class-specific upgrade paths, scaling by imbue_level
+- [x] **outcast.py** — Hand position detection (leftmost/rightmost), Chinese text bonus parsing (draw, cost reduction, buff)
+- [x] **colossal.py** — Colossal+N appendage summoning, per-class appendage definitions, herald upgrade scaling
+- [x] **herald.py** — Herald counter + soldier summoning, per-class soldier definitions, milestone tracking
+- [x] **quest.py** — QuestState tracking, progress by action type, reward dispatch on completion, constraint parsing
+- [x] **rewind.py** — 2-branch evaluation helper, rewind card detection
+- [x] **game_state.py** — added imbue_level (HeroState), herald_count, last_turn_races, last_turn_schools, active_quests
+- [x] **rhea_engine.py** — Kindred snapshot in END_TURN, imbue dispatch, outcast check/apply, colossal+herald in PLAY MINION, quest activation+tracking
+- [x] **Skipped** Kindred + Dark Gift (not in current card pool — YAGNI)
+- [x] **~63 new tests** across 7 test modules
+
 ### Test Coverage
-- [x] **615 tests passing** (as of 2026-04-20)
+- [x] **689 tests passing** (as of 2026-04-20, 1 known flaky RHEA stochastic test)
 - [x] Card data tests: 51+35+6 = 92
 - [x] V8 contextual scorer: 16
 - [x] V9 search engine + HDT batches: 150+
 - [x] V10 Phase 1 mechanic tests: 20
 - [x] V10 scoring (SIV+BSV+interactions+mechanics+integration): 260
 - [x] V10 Phase 2 (enchant+trigger+battlecry+deathrattle+aura+discover+location): 341
+- [x] V10 Phase 3 (state expansion+imbue+outcast+colossal+herald+quest+rewind): ~63
 
 ### Architecture & Research Documentation
 - [x] 7 design documents in `thoughts/shared/designs/`
@@ -115,22 +128,21 @@ last_changed: 2026-04-20 (V10 Phase 2 complete — enchantment framework + trigg
 
 ## ⏳ TODO (by priority)
 
-### P1: V10 Engine Phase 3 — 2026 Modern Mechanics
-- [ ] Imbue hero power upgrade (per-class paths, diminishing marginal value)
-- [ ] Hand position system (Shatter split/merge, Outcast edges, Hand Targeting)
-- [ ] Herald counter + Colossal appendage summoning
-- [ ] Kindred previous-turn race/school tracking
-- [ ] Quest progress tracking with reward
-- [ ] Dark Gift pool (10 random bonuses)
-- [ ] Rewind branching simulation (2-branch evaluate, pick best)
-- **Design:** Phase 3 in `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
-
-### P3: Polish & Calibration
+### P1: Polish & Calibration
 - [ ] Scoring calibration (temperature, LETHAL_SCALE, phase weights)
 - [ ] Performance benchmarking (75ms RHEA target)
 - [ ] Wild format scoring support (5209 cards)
 - [ ] Risk assessor: additional class AoE thresholds
 - [ ] Opponent simulator: consider hand size, hero power, divine shield
+
+### P2: Future Mechanics (when cards enter standard pool)
+- [ ] Kindred (延系) — previous turn race/school tracking
+- [ ] Dark Gift (暗影赐福) — random bonus pool on discover
+- [ ] Shatter — card split/merge in hand
+
+### P3: Full Rewind Integration
+- [ ] Wire rewind.py into _evaluate_chromosome for true 2-branch evaluation
+- [ ] Performance impact analysis (2× evaluation cost for rewind cards)
 
 ## 🚫 BLOCKED
 (none currently)
@@ -159,6 +171,6 @@ See `thoughts/DECISIONS.md` for full details (D001-D019).
 - `thoughts/shared/designs/2026-04-19-hearthstone-complete-rules.md` ⭐ (rules reference)
 
 ## Next Actions
-1. **V10 Phase 3**: 2026 modern mechanics (Imbue, Hand position, Herald, Kindred, Quest, Dark Gift)
-2. **Scoring calibration**: temperature/weight tuning with real game data
-3. **Performance**: benchmark and optimize to 75ms target
+1. **Scoring calibration**: temperature/weight tuning with real game data
+2. **Performance**: benchmark and optimize to 75ms target
+3. **Full Rewind integration**: wire into _evaluate_chromosome for true 2-branch eval
