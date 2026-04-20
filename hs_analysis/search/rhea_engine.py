@@ -247,12 +247,28 @@ def apply_action(state: GameState, action: Action) -> GameState:
             pos = min(action.position, len(s.board))
             s.board.insert(pos, new_minion)
 
+            # V10 Phase 3: Colossal appendage summoning
+            try:
+                from hs_analysis.search.colossal import parse_colossal_value, summon_colossal_appendages
+                if parse_colossal_value(card) > 0:
+                    s = summon_colossal_appendages(s, new_minion, card, pos, s.herald_count)
+            except Exception:
+                pass
+
             # V10 Phase 2: Battlecry dispatch
             try:
                 from hs_analysis.search.battlecry_dispatcher import dispatch_battlecry
                 s = dispatch_battlecry(s, card, new_minion)
             except Exception:
                 pass  # graceful degradation
+
+            # V10 Phase 3: Herald counter
+            try:
+                from hs_analysis.search.herald import check_herald, apply_herald
+                if check_herald(card):
+                    s = apply_herald(s, card)
+            except Exception:
+                pass
 
             # V10 Phase 2: Trigger dispatch (on_minion_played)
             try:
