@@ -37,6 +37,13 @@ class Minion:
     has_rush: bool = False
     has_charge: bool = False
     has_poisonous: bool = False
+    has_lifesteal: bool = False              # lifesteal: heal hero for damage dealt
+    has_reborn: bool = False                 # reborn: resummon as 1/1 on death
+    has_immune: bool = False                 # immune: prevents all damage
+    cant_attack: bool = False                # cannot attack (e.g. Watcher)
+    is_dormant: bool = False                 # dormant: can't attack until awaken
+    dormant_turns_remaining: int = 0         # turns until dormant minion awakens
+    spell_power: int = 0                     # spell damage +N
     has_attacked_once: bool = False          # windfury first-attack tracking
     frozen_until_next_turn: bool = False     # freeze effect
     enchantments: list = field(default_factory=list)
@@ -48,11 +55,13 @@ class HeroState:
     """Hero + weapon state."""
 
     hp: int = 30
+    max_hp: int = 30
     armor: int = 0
     hero_class: str = ""
     weapon: Optional[Weapon] = None
     hero_power_used: bool = False
     imbue_level: int = 0  # Imbue hero power upgrade counter
+    is_immune: bool = False  # immune: prevents all damage this turn
 
 
 @dataclass
@@ -63,6 +72,7 @@ class ManaState:
     overloaded: int = 0
     max_mana: int = 0
     overload_next: int = 0
+    max_mana_cap: int = 10  # some cards can raise this above 10
 
 
 @dataclass
@@ -103,6 +113,9 @@ class GameState:
     corpses: int = 0                                     # DK Corpse resource
     kindred_double_next: bool = False                    # Kindred: next 延系 triggers twice
     last_played_card: dict | None = None                 # Last card played (for rune/conditional checks)
+    _defer_deaths: bool = False                          # Phase death delay: defer death resolution to phase end
+    _pending_dead_friendly: list = field(default_factory=list)  # Deferred dead friendly minions
+    _pending_dead_enemy: list = field(default_factory=list)     # Deferred dead enemy minions
 
     # ------------------------------------------------------------------
     # Utility helpers
@@ -131,3 +144,55 @@ class GameState:
         if self.hero.weapon is not None:
             total += self.hero.weapon.attack
         return total
+
+    def flush_deaths(self) -> "GameState":
+        """Process all pending deaths (outermost phase death delay).
+
+        Called at END_TURN or when the phase completes. Applies reborn,
+        deathrattles, corpse gain, and removes dead minions.
+        """
+        try:
+            from hs_analysis.search.deathrattle import resolve_deaths
+            self = resolve_deaths(self)
+        except Exception:
+            pass
+
+        # Reborn for friendly minions
+        for m in list(self.board):
+            if m.health <= 0 and m.has_reborn:
+                m.has_reborn = False
+                m.health = 1
+                m.max_health = 1
+                m.has_attacked_once = False
+                m.can_attack = False
+                m.has_divine_shield = False
+                m.has_stealth = False
+                m.has_taunt = False
+
+        # Reborn for enemy minions
+        for m in list(self.opponent.board):
+            if m.health <= 0 and m.has_reborn:
+                m.has_reborn = False
+                m.health = 1
+                m.max_health = 1
+
+        self.board = [m for m in self.board if m.health > 0]
+        self.opponent.board = [m for m in self.opponent.board if m.health > 0]
+
+        # Corpse gain
+        try:
+            from hs_analysis.search.corpse import gain_corpses, has_double_corpse_gen
+            amount = 2 if has_double_corpse_gen(self) else 1
+            self = gain_corpses(self, amount)
+        except Exception:
+            pass
+
+        # Aura recompute
+        try:
+            from hs_analysis.search.aura_engine import recompute_auras
+            self = recompute_auras(self)
+        except Exception:
+            pass
+
+        self._defer_deaths = False
+        return self

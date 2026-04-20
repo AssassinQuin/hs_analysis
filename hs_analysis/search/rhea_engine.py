@@ -80,6 +80,8 @@ class Action:
                 card_name = state.hand[self.card_index].name or f"卡牌#{self.card_index}"
             return f"打出 [{card_name}]"
         elif self.action_type == "ATTACK":
+            if self.source_index == -1:
+                return f"英雄武器 攻击 目标#{self.target_index}"
             return f"随从#{self.source_index} 攻击 目标#{self.target_index}"
         elif self.action_type == "HERO_POWER":
             return "使用英雄技能"
@@ -134,6 +136,12 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
         # Frozen minions cannot attack
         if minion.frozen_until_next_turn:
             continue
+        # Dormant minions cannot attack
+        if minion.is_dormant:
+            continue
+        # Minions with cant_attack cannot attack
+        if minion.cant_attack:
+            continue
 
         if enemy_taunts:
             # Must attack taunt minions — taunt blocks ALL face attacks,
@@ -162,6 +170,30 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                     action_type="ATTACK",
                     source_index=src_idx,
                     target_index=tgt_idx + 1,  # 1-indexed
+                ))
+
+    # --- Hero weapon ATTACK ---
+    if state.hero.weapon is not None and state.hero.weapon.attack > 0:
+        # Hero immune check: immune hero can still attack but doesn't take damage
+        if enemy_taunts:
+            for t in enemy_taunts:
+                real_idx = _find_enemy_minion_index(state, t)
+                actions.append(Action(
+                    action_type="ATTACK",
+                    source_index=-1,
+                    target_index=real_idx + 1,
+                ))
+        else:
+            actions.append(Action(
+                action_type="ATTACK",
+                source_index=-1,
+                target_index=0,
+            ))
+            for tgt_idx in range(len(state.opponent.board)):
+                actions.append(Action(
+                    action_type="ATTACK",
+                    source_index=-1,
+                    target_index=tgt_idx + 1,
                 ))
 
     # --- HERO_POWER action ---
@@ -207,6 +239,10 @@ def apply_action(state: GameState, action: Action) -> GameState:
         # Deduct mana
         s.mana.available -= card.cost
 
+        # V10: Dynamic cost modification from enchantments/auras
+        # Check for cost reductions already applied to card
+        effective_cost = min(card.cost, s.mana.available + card.cost)  # already deducted
+
         # Parse overload from card text (Chinese: "过载：(N)" or "过载：(N)")
         card_text = getattr(card, 'text', '') or ''
         overload_match = re.search(r'过载[：:]\s*[（(]\s*(\d+)\s*[）)]', card_text)
@@ -243,6 +279,10 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 has_windfury="WINDFURY" in mechanics,
                 has_stealth="STEALTH" in mechanics,
                 has_poisonous="POISONOUS" in mechanics,
+                has_lifesteal="LIFESTEAL" in mechanics,
+                has_reborn="REBORN" in mechanics,
+                has_immune="IMMUNE" in mechanics,
+                cant_attack="CANT_ATTACK" in mechanics,
                 owner="friendly",
             )
             pos = min(action.position, len(s.board))
@@ -279,6 +319,22 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 s = dispatch_battlecry(s, card, new_minion)
             except Exception:
                 pass  # graceful degradation
+
+            # V10: Choose One (抉择) resolution
+            try:
+                from hs_analysis.search.choose_one import is_choose_one, resolve_choose_one
+                if is_choose_one(card):
+                    s = resolve_choose_one(s, card, new_minion)
+            except Exception:
+                pass
+
+            # V10: Dormant (休眠) application
+            try:
+                from hs_analysis.search.dormant import is_dormant_card, apply_dormant
+                if is_dormant_card(card):
+                    new_minion = apply_dormant(new_minion, card)
+            except Exception:
+                pass
 
             # V10 Phase 3: Herald counter
             try:
@@ -326,7 +382,6 @@ def apply_action(state: GameState, action: Action) -> GameState:
             # Apply freeze if card text contains freeze effect
             card_text = getattr(card, 'text', '') or ''
             if '冻结' in card_text or 'FREEZE' in (getattr(card, 'mechanics', None) or []):
-                # Simplified: freeze first enemy minion
                 if s.opponent.board:
                     s.opponent.board[0].frozen_until_next_turn = True
             # V10 Phase 2: Aura recompute after spell effects
@@ -335,6 +390,34 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 s = recompute_auras(s)
             except Exception:
                 pass  # graceful degradation
+
+        elif card.card_type.upper() == "HERO":
+            # V10: Hero card replacement
+            armor = getattr(card, 'armor', 0) or 0
+            if armor <= 0:
+                card_text = getattr(card, 'text', '') or ''
+                import re as _re
+                armor_match = _re.search(r'获得\s*(\d+)\s*点护甲', card_text)
+                if armor_match:
+                    armor = int(armor_match.group(1))
+            s.hero.armor += armor
+            hero_class = getattr(card, 'card_class', '') or ''
+            if hero_class:
+                s.hero.hero_class = hero_class
+            s.hero.hero_power_used = False
+            s.hero.imbue_level = 0
+            # Apply non-armor effects from hero card text
+            try:
+                from hs_analysis.utils.spell_simulator import resolve_effects
+                # Temporarily remove armor text to avoid double-applying
+                card_copy = Card(
+                    dbf_id=card.dbf_id, name=card.name, cost=card.cost,
+                    card_type=card.card_type, text="", mechanics=card.mechanics,
+                    card_class=card.card_class, rarity=card.rarity, race=card.race,
+                )
+                s = resolve_effects(s, card_copy)
+            except Exception:
+                pass
         # V10 Phase 3: Imbue hero power upgrade
         try:
             from hs_analysis.search.imbue import apply_imbue
@@ -367,6 +450,14 @@ def apply_action(state: GameState, action: Action) -> GameState:
             s = dataclasses.replace(s, last_played_card=card)
         except Exception:
             pass
+        # V10: Corrupt (腐蚀) — upgrade hand cards with Corrupt when higher-cost played
+        try:
+            from hs_analysis.search.corrupt import check_corrupt_upgrade
+            s = check_corrupt_upgrade(s, card)
+        except Exception:
+            pass
+        # V10: Overdraw — burn cards if hand exceeds 10
+        _handle_overdraw(s)
         # OTHER card types: just removed from hand
 
     elif action.action_type == "ATTACK":
@@ -379,8 +470,15 @@ def apply_action(state: GameState, action: Action) -> GameState:
             if weapon is None or weapon.attack <= 0:
                 return s
             if tgt_idx == 0:
-                # Attack enemy hero
-                s.opponent.hero.hp -= weapon.attack
+                # Attack enemy hero (check immune)
+                if not s.opponent.hero.is_immune:
+                    s.opponent.hero.hp -= weapon.attack
+                # V10 Phase 2: Check opponent secrets (e.g. Explosive Trap)
+                try:
+                    from hs_analysis.search.secret_triggers import check_secrets
+                    s = check_secrets(s, "on_attack_hero", {"attacker": None})
+                except Exception:
+                    pass
             else:
                 enemy_idx = tgt_idx - 1
                 if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
@@ -405,18 +503,30 @@ def apply_action(state: GameState, action: Action) -> GameState:
         source = s.board[src_idx]
 
         if tgt_idx == 0:
-            # Attack enemy hero
-            s.opponent.hero.hp -= source.attack
+            # Check opponent immune
+            if s.opponent.hero.is_immune:
+                pass  # damage prevented
+            else:
+                s.opponent.hero.hp -= source.attack
+                if source.has_lifesteal:
+                    s.hero.hp = min(30, s.hero.hp + source.attack)
+            # V10 Phase 2: Check opponent secrets (e.g. Explosive Trap)
+            try:
+                from hs_analysis.search.secret_triggers import check_secrets
+                s = check_secrets(s, "on_attack_hero", {"attacker": source})
+            except Exception:
+                pass
         else:
             enemy_idx = tgt_idx - 1
             if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
                 return s
             target = s.opponent.board[enemy_idx]
 
-            # Deal source attack to target
             target_had_divine_shield = target.has_divine_shield
             if target.has_divine_shield:
                 target.has_divine_shield = False
+            elif target.has_immune:
+                pass  # immune prevents all damage
             else:
                 target.health -= source.attack
 
@@ -427,8 +537,16 @@ def apply_action(state: GameState, action: Action) -> GameState:
             # Counter-attack: deal target attack to source
             if source.has_divine_shield:
                 source.has_divine_shield = False
+            elif source.has_immune:
+                pass  # immune prevents counter damage
             else:
                 source.health -= target.attack
+
+            # Lifesteal: heal hero for damage dealt to target
+            if source.has_lifesteal:
+                actual_damage = source.attack if not target_had_divine_shield else 0
+                if actual_damage > 0:
+                    s.hero.hp = min(30, s.hero.hp + actual_damage)
 
             # Remove dead enemy minions
             s.opponent.board = [m for m in s.opponent.board if m.health > 0]
@@ -449,6 +567,30 @@ def apply_action(state: GameState, action: Action) -> GameState:
             s = resolve_deaths(s)
         except Exception:
             pass  # graceful degradation
+
+        # Reborn: friendly minions with has_reborn that died resummon as 1/1
+        if src_idx != -1:
+            for m in list(s.board):
+                if m.health <= 0 and m.has_reborn:
+                    m.has_reborn = False
+                    m.health = 1
+                    m.max_health = 1
+                    m.has_attacked_once = False
+                    m.can_attack = False
+                    # Remove combat keywords on reborn
+                    m.has_divine_shield = False
+                    m.has_stealth = False
+                    m.has_taunt = False
+            # Remove truly dead minions (health still <= 0 after reborn check)
+            s.board = [m for m in s.board if m.health > 0]
+
+        # Reborn for enemy minions
+        for m in list(s.opponent.board):
+            if m.health <= 0 and m.has_reborn:
+                m.has_reborn = False
+                m.health = 1
+                m.max_health = 1
+        s.opponent.board = [m for m in s.opponent.board if m.health > 0]
 
         # V10 Feedback: Corpse gain when friendly minions die
         try:
@@ -522,6 +664,16 @@ def apply_action(state: GameState, action: Action) -> GameState:
         # Unfreeze friendly minions at end of turn
         for m in s.board:
             m.frozen_until_next_turn = False
+        # V10: Tick dormant minions
+        try:
+            from hs_analysis.search.dormant import tick_dormant
+            s = tick_dormant(s)
+        except Exception:
+            pass
+        # V10: Reset immune flags
+        s.hero.is_immune = False
+        for m in s.board:
+            m.has_immune = False
         # V10 Phase 2: Tick location cooldowns
         try:
             from hs_analysis.search.location import tick_location_cooldowns
@@ -535,17 +687,42 @@ def apply_action(state: GameState, action: Action) -> GameState:
 def apply_draw(state: GameState, count: int = 1) -> GameState:
     """Draw cards from deck. Deals fatigue damage if deck is empty.
 
+    Handles overdraw (hand > 10 burns cards) and shatter mechanic.
+
     Returns a modified copy of state.
     """
     s = state.copy()
     for _ in range(count):
         if s.deck_remaining <= 0:
-            # Fatigue: incrementing damage
             s.fatigue_damage += 1
             s.hero.hp -= s.fatigue_damage
         else:
             s.deck_remaining -= 1
+            # Create a placeholder drawn card
+            drawn = Card(
+                dbf_id=0,
+                name="Drawn Card",
+                cost=0,
+                card_type="SPELL",
+            )
+            # V10: Check if hand is full (overdraw) — burn the card
+            if len(s.hand) >= 10:
+                pass  # card is burned (not added to hand)
+            else:
+                s.hand.append(drawn)
+                # V10: Check shatter on draw
+                try:
+                    from hs_analysis.search.shatter import check_shatter_on_draw
+                    s = check_shatter_on_draw(s, len(s.hand) - 1)
+                except Exception:
+                    pass
     return s
+
+
+def _handle_overdraw(state: GameState) -> None:
+    """Burn excess cards if hand exceeds 10 (in-place)."""
+    while len(state.hand) > 10:
+        state.hand.pop()  # burn the rightmost card
 
 
 # ===================================================================
@@ -599,7 +776,7 @@ def next_turn_lethal_check(state: GameState) -> bool:
     Predict available mana next turn = min(current_max + 1, 10).
     Calculate burst damage potential from hand + board.
     """
-    next_mana = min(state.mana.max_mana + 1, 10)
+    next_mana = min(state.mana.max_mana + 1, state.mana.max_mana_cap)
 
     # Burst from minions that can attack next turn
     minion_burst = 0

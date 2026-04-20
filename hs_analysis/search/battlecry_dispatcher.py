@@ -58,21 +58,10 @@ class BattlecryDispatcher:
     """
 
     def dispatch(self, state: GameState, card: Card, minion: Minion) -> GameState:
-        """Apply battlecry effects from a card to the game state.
-
-        Args:
-            state: Current game state (will NOT be mutated; returns copy if changed).
-            card: The card being played (has .text with battlecry description).
-            minion: The minion just summoned onto the board.
-
-        Returns:
-            GameState with battlecry effects applied.
-        """
         card_text = getattr(card, 'text', '') or ''
         if not card_text:
             return state
 
-        # Extract battlecry portion
         bc_match = _BATTLECRY_PATTERN.search(card_text)
         if not bc_match:
             return state
@@ -81,15 +70,33 @@ class BattlecryDispatcher:
         if not bc_text:
             return state
 
-        # Check mechanics field for BATTLECRY tag
         mechanics = set(getattr(card, 'mechanics', []) or [])
         if 'BATTLECRY' not in mechanics:
-            # Fallback: if text matches but no mechanic tag, still try
             pass
 
         s = state
         s = self._apply_battlecry_effects(s, bc_text, card, minion)
+
+        # Brann Bronzebeard / Baron Rivendare aura: if any friendly minion
+        # doubles battlecry triggers, apply effects a second time
+        if self._has_battlecry_doubler(s, minion):
+            s = self._apply_battlecry_effects(s, bc_text, card, minion)
+
         return s
+
+    @staticmethod
+    def _has_battlecry_doubler(state: GameState, played_minion: Minion) -> bool:
+        for m in state.board:
+            if m is played_minion:
+                continue
+            name = (getattr(m, 'name', '') or '').lower()
+            if 'brann' in name or '布莱恩' in name:
+                return True
+            for ench in getattr(m, 'enchantments', []) or []:
+                etype = getattr(ench, 'trigger_effect', '') or ''
+                if 'double_battlecry' in etype:
+                    return True
+        return False
 
     # ---------------------------------------------------------------
     # Effect application
@@ -134,7 +141,8 @@ class BattlecryDispatcher:
 
         if effect_type == 'direct_damage':
             amount = params
-            # Exhaustive: pick best enemy target using actual damage amount
+            spell_power_bonus = sum(m.spell_power for m in state.board)
+            amount += spell_power_bonus
             target = self._pick_damage_target(s, amount=amount)
             s = EffectApplier.apply_damage(s, target, amount)
 

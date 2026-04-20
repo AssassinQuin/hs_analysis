@@ -3,8 +3,10 @@
 V10 Phase 3: Detects rewind (回溯) cards and provides a helper for
 evaluating two branches during RHEA fitness evaluation.
 
-Note: Full integration with the RHEA chromosome evaluator would require
-changes to _evaluate_chromosome. This module provides the building blocks.
+Rewind mechanic: when a card with 回溯 is played, the player gets to
+discover (choose from 3 options) a second copy of the effect. Branch A
+plays the card normally; Branch B applies the effect twice (simulating
+picking the same effect from the discover).
 """
 
 from __future__ import annotations
@@ -12,49 +14,27 @@ from __future__ import annotations
 from typing import Tuple
 
 
-# ===================================================================
-# is_rewind_card
-# ===================================================================
-
 def is_rewind_card(card) -> bool:
-    """Return True if the card has the Rewind (回溯) mechanic.
-
-    Detection logic:
-    1. 'REWIND' in mechanics
-    2. '回溯' in card text
-    3. 'TRIGGER_VISUAL' in mechanics AND '回溯' in text (combo pattern)
-    """
     mechanics = getattr(card, 'mechanics', None) or []
     text = getattr(card, 'text', '') or ''
 
-    # Direct mechanic check
     if 'REWIND' in mechanics:
         return True
 
-    # Chinese text check
     if '回溯' in text:
         return True
 
     return False
 
 
-# ===================================================================
-# REWIND_SCORING_BONUS
-# ===================================================================
-
-# Flat bonus for rewind cards in fitness evaluation.
-# Having a second chance is valuable even without branch simulation.
 REWIND_SCORING_BONUS: float = 0.5
 
-
-# ===================================================================
-# evaluate_with_rewind
-# ===================================================================
 
 def evaluate_with_rewind(state, card, apply_func, fitness_func) -> Tuple:
     """Evaluate a rewind card by trying two branches and picking the better one.
 
-    This is a helper for the RHEA fitness evaluation, NOT for apply_action.
+    Branch A: apply the card normally (no rewind bonus).
+    Branch B: apply the card TWICE (simulating rewind discover picking same effect).
 
     Args:
         state: Current GameState (will be copied for each branch)
@@ -65,17 +45,17 @@ def evaluate_with_rewind(state, card, apply_func, fitness_func) -> Tuple:
     Returns:
         Tuple of (best_state, best_fitness) from the two branches.
     """
-    # Branch A
+    # Branch A: normal play (no rewind)
     snapshot_a = state.copy()
     result_a = apply_func(snapshot_a, card)
     fitness_a = fitness_func(result_a)
 
-    # Branch B (fresh copy from original state)
+    # Branch B: rewind — apply card effect twice (simulating discover same card)
     snapshot_b = state.copy()
     result_b = apply_func(snapshot_b, card)
+    result_b = apply_func(result_b, card)
     fitness_b = fitness_func(result_b)
 
-    # Return the better branch (tie goes to branch A for stability)
     if fitness_b > fitness_a:
         return result_b, fitness_b
     return result_a, fitness_a

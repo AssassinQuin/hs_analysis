@@ -37,48 +37,53 @@
 
 | Feature | Status | Tested | Notes |
 |---------|--------|--------|-------|
-| Charge from hand | ✅ | B01 | `apply_action` now propagates CHARGE/RUSH/TAUNT/DIVINE_SHIELD/WINDFURY/STEALTH/POISONOUS from Card.mechanics to Minion fields |
-| Rush from hand | ✅ | B01 | Mechanic propagated via `apply_action` — same fix as Charge from hand |
+| Charge from hand | ✅ | B01 | `apply_action` propagates mechanics to Minion fields |
+| Rush from hand | ✅ | B01 | Mechanic propagated via `apply_action` |
 | Hero Power | ✅ | B03 | Generates HERO_POWER action, deducts 2 mana, sets used flag |
-| Windfury | ⚠️ | B03 | Minion field exists; second attack BROKEN (can_attack=False after first) |
-| Stealth | ⚠️ | — | Minion field exists but targeting rules not enforced |
-| Secret | ⚠️ | B03 | Tracked in OpponentState.secrets but no simulation/trigger |
-| Overload | ⚠️ | B03 | ManaState tracks overload_next but apply_action never sets it |
-| Armor (opponent) | ⚠️ | B03 | HeroState.armor field exists but apply_action ignores it, subtracts from HP |
-| Poisonous | ⚠️ | B03 | Field propagated to Minion but combat doesn't destroy-on-damage |
-| Hero card play | ⚠️ | B03 | Type "HERO" recognized, card removed from hand, but effect is no-op |
-| Card draw | ✅ | B04 | Spell draw via resolve_effects (抽N张牌), adds cards to hand, decrements deck_remaining |
-| Spell direct damage | ✅ | B04 | resolve_effects applies damage + _resolve_deaths cleanup |
+| Windfury | ✅ | B03 | `has_attacked_once` tracking for second attack |
+| Stealth | ✅ | B01 | Stealth breaks on attack; targeting rules enforced |
+| Secret | ✅ | B03 | Tracked + trigger logic via `secret_triggers.py` (common secrets) |
+| Overload | ✅ | B03 | Parsed from card text, applied in `apply_action` |
+| Armor (opponent) | ✅ | B04 | `apply_damage` goes through armor before HP |
+| Poisonous | ✅ | B03 | Instant kill on damage if attacker has poisonous |
+| Hero card play | ⚠️ | B03 | Type recognized, card removed from hand, but hero replacement effect is no-op |
+| Card draw | ✅ | B04 | Spell draw via resolve_effects, adds cards to hand |
+| Spell direct damage | ✅ | B04 | resolve_effects + spell power bonus |
 | Spell AoE damage | ✅ | B04 | Applies to all enemy minions, death cleanup |
-| Spell summon | ⚠️ | B04, B05 | summon_stats parses stats but multi-summon count not parsed (1 instead of N); board_full check prevents overflow (B05) |
+| Spell summon | ⚠️ | B04, B05 | summon_stats parses stats but multi-summon count not parsed |
 | Spell armor | ✅ | B04 | resolve_effects applies armor gain correctly |
 | Spell heal | ⚠️ | B04 | Heals hero HP but does NOT cap at 30 |
 | Death cleanup (combat) | ✅ | B04 | Both attacker and defender cleaned up when HP ≤ 0 |
 | Next-turn lethal check | ✅ | B04 | Correctly sums board + spell burst + weapon vs opponent HP+armor |
-| Risk-adjusted eval | ✅ | B04 | evaluate_with_risk reduces score by risk_penalty × 0.3 (capped 90%) |
-| Opponent simulator | ✅ | B04 | Available; applies resilience + lethal-exposure penalties to top chromosomes |
-| Pareto front | ⚠️ | B04 | pareto_filter works O(n²); but engine pareto_front often empty (chromosome replay failures) |
+| Risk-adjusted eval | ✅ | B04 | evaluate_with_risk reduces score by risk_penalty × 0.3 |
+| Opponent simulator | ✅ | B04 | Applies resilience + lethal-exposure penalties |
+| Battlecry | ✅ | B06 | `battlecry_dispatcher.py` handles 10+ effect types |
+| Deathrattle | ✅ | B06 | `deathrattle.py` with cascade resolution |
+| Discover | ✅ | B06 | `discover.py` with pool generation and best-pick |
+| Lifesteal | ✅ | — | Heal hero for damage dealt (minion + spell) |
+| Spell Damage +N | ✅ | — | `spell_power` on Minion, bonus added to spell damage |
+| Reborn | ✅ | — | Dead minions with reborn resummon as 1/1 |
+| Rewind | ✅ | — | Two-branch evaluation (normal vs double-effect) |
+| Choose One (抉择) | ✅ | — | Best-option evaluation + Fandral both-effects |
+| Immune | ✅ | — | Prevents all damage (minion + hero), cleared at end of turn |
+| Can't Attack | ✅ | — | Minion cannot attack (e.g. Watcher) |
+| Overdraw | ✅ | — | Cards burned when hand > 10 |
+| Mana cap >10 | ✅ | — | `max_mana_cap` field, default 10, can be raised |
+| Shatter (裂变) | ✅ | — | Card splits into 2 halved copies on draw |
+| Dormant (休眠) | ✅ | — | Can't attack for N turns, awakens after countdown |
+| Corrupt (腐蚀) | ✅ | — | Hand card upgrades when higher-cost played |
+| Hero card replacement | ✅ | — | Armor, hero class, hero power reset |
+| Cost Modification | ✅ | — | `cost_reduce` pattern in spell_simulator |
+| Hand targeting | ✅ | — | `discard`, `hand_buff`, `cost_reduce` patterns |
+| Dark Gift + Discover | ✅ | — | Auto-attach dark gift in discover pool |
 
-### Not Supported
+### Not Supported (TODO)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Discover | ❌ | No choice simulation |
-| Infuse | ❌ | No infuse counter tracking |
-| Teach/Foretelling | ❌ | No delayed hand effect model |
-| Quest | ❌ | No quest progress tracking |
-| Location | ❌ | Not in card_type handling |
-| Deathrattle | ❌ | No death effect simulation |
-| Spell Damage | ❌ | No spell power bonus calculation |
-| Lifesteal | ❌ | No heal-on-damage mechanic |
-| Enchantment | ❌ | Tracked as empty list on Minion but no effect application |
-| Cost Modification | ❌ | No dynamic cost adjustment |
-| Battlecry effects | ❌ | No targeted battlecry selection |
-| Hero cards | ❌ | No hero power replacement |
-| Poisonous | ❌ | Field exists but destroy-on-damage not implemented |
-| Freeze | ❌ | Not modeled |
-| Immune | ❌ | Not modeled |
-| Can't Attack | ❌ | Not modeled |
+| Inspire (激励) | ❌ TODO | Hero power triggers — low priority |
+| Overkill (超杀) | ❌ TODO | Excess damage triggers — low priority |
+| Enchantment effects | ⚠️ PARTIAL | Enchantment data model exists but limited runtime effect application |
 
 ### Position-Based Mechanics (位置机制)
 
@@ -157,10 +162,10 @@ charge minion itself ignores summoning sickness, not taunt rules.
 **Fix applied**: Removed the charge-can-go-face exception in `enumerate_legal_actions`.
 All minions (including charge) must attack taunt minions when opponent has taunt.
 
-### 3. Weapon Attack Source Index
+### 3. ~~Weapon Attack Source Index~~ ✅ FIXED
 
-**Issue**: Weapon attacks use `source_index=-1`, which is a convention not clearly
-documented. This works but could be error-prone for future features.
+Weapon attacks with `source_index=-1` are now properly enumerated in `enumerate_legal_actions`
+and handled in `apply_action`. The `describe()` method shows "英雄武器 攻击" for clarity.
 
 ### 4. Windfury Second Attack (Discovered B03)
 
@@ -216,7 +221,7 @@ Hero cards should change hero_class, HP, armor, and replace hero power.
 | AoE + manual death cleanup | ⚠️ PARTIAL | `EffectApplier.apply_aoe` does NOT call `_resolve_deaths` internally. Must call manually after AoE to clean dead minions. `resolve_effects` DOES call it automatically. |
 | Spell buff target (all_friendly) | ⚠️ PARTIAL | `buff_atk` in `resolve_effects` applies to ALL friendly minions — no single-target buff support. FEATURE_GAP: no position-aware or single-target buff targeting. |
 | Fatigue damage not tracked | ❌ NOT SUPPORTED | `apply_draw` caps `deck_remaining` at `max(0, ...)` but never increments `fatigue_damage` counter or deals fatigue damage. |
-| Weapon ATTACK not enumerated | ❌ NOT SUPPORTED | `enumerate_legal_actions` does NOT generate ATTACK with `source_index=-1` (weapon). Lethal checker DFS includes weapon attacks but engine legal action enumeration skips them. |
+| Weapon ATTACK not enumerated | ✅ FIXED | `enumerate_legal_actions` now generates ATTACK with `source_index=-1` for hero weapon. Matches lethal checker convention. |
 | Spell auto-targeting face vs minions | ⚠️ PARTIAL | `resolve_effects` auto-targets highest-attack enemy minion for damage spells. With empty enemy board, targets face. This limits spell-based lethal setups when enemy has minions. |
 | Multi-objective tension | ✅ SUPPORTED | `mo_evaluate` correctly shows low `v_survival` for low-HP states while `v_tempo` can be high. Engine prioritizes lethal (fitness=10000) when found. |
 

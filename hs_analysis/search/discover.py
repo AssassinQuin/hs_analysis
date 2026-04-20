@@ -201,8 +201,11 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         chosen_card = Card.from_unified(chosen_raw)
 
         hand = getattr(state, 'hand', None)
-        if hand is not None and len(hand) < 10:
-            hand.append(chosen_card)
+        if hand is not None:
+            if len(hand) >= 10:
+                pass  # overdraw: discovered card is burned
+            else:
+                hand.append(chosen_card)
 
     except Exception as exc:
         logger.warning('Discover resolution failed: %s', exc)

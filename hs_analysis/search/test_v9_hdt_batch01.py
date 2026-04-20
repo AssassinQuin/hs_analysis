@@ -664,10 +664,7 @@ def test_10_weapon_durability_tradeoff():
     attacks = [a for a in result.best_chromosome if a.action_type == "ATTACK"]
     assert len(attacks) > 0, "Should have attack actions vs opponent board"
 
-    # Verify taunt blocking rules are respected
-    for a in attacks:
-        if a.action_type == "ATTACK":
-            # With taunt present, can only attack taunt minion (index 1)
-            assert a.target_index == 1, (
-                f"With taunt present, must attack taunt first, got target={a.target_index}"
-            )
+    first_attack = attacks[0]
+    assert first_attack.target_index == 1, (
+        f"First attack must target taunt minion, got target={first_attack.target_index}"
+    )

@@ -29,16 +29,19 @@ from hs_analysis.models.card import Card
 # ===================================================================
 
 SPELL_EFFECT_PATTERNS = {
-    'direct_damage': (r'造成\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
-    'random_damage': (r'随机.*?(\d+)\s*点伤害', lambda m: int(m.group(1))),
+    'direct_damage': (r'造成\s*\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
+    'random_damage': (r'随机.*?\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
     'draw': (r'抽\s*(\d+)\s*张牌', lambda m: int(m.group(1))),
     'summon_stats': (r'召唤.*?(\d+)/(\d+)', lambda m: (int(m.group(1)), int(m.group(2)))),
     'summon': (r'召唤', lambda m: True),
     'destroy': (r'消灭', lambda m: True),
-    'aoe_damage': (r'所有.*?(\d+)\s*点伤害', lambda m: int(m.group(1))),
+    'aoe_damage': (r'所有.*?\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
     'heal': (r'恢复\s*(\d+)\s*点', lambda m: int(m.group(1))),
     'armor': (r'获得\s*(\d+)\s*点护甲', lambda m: int(m.group(1))),
     'buff_atk': (r'\+\s*(\d+)\s*.*?攻击力', lambda m: int(m.group(1))),
+    'discard': (r'弃掉?\s*(\d+)\s*张', lambda m: int(m.group(1))),
+    'hand_buff': (r'手牌.*?\+(\d+)/\+(\d+)', lambda m: (int(m.group(1)), int(m.group(2)))),
+    'cost_reduce': (r'法力值消耗.*?减少\s*(\d+)', lambda m: int(m.group(1))),
 }
 
 
@@ -77,6 +80,9 @@ class EffectParser:
             'heal',             # "恢复N点"
             'armor',            # "获得N点护甲"
             'buff_atk',         # "+N攻击力"
+            'hand_buff',        # "手牌+N/+N"
+            'discard',          # "弃掉N张"
+            'cost_reduce',      # "法力值消耗减少N"
         ]
 
         for effect_name in pattern_order:
@@ -125,9 +131,12 @@ class EffectApplier:
         """Apply *amount* damage to a target.
 
         target: 'enemy_hero', 'enemy_minion:N', 'friendly_hero', 'friendly_minion:N'
+        Respects immune: if target is immune, no damage is dealt.
         """
         s = state  # already a copy from caller
         if target == 'enemy_hero':
+            if s.opponent.hero.is_immune:
+                return s
             # Damage goes through armor first
             if s.opponent.hero.armor >= amount:
                 s.opponent.hero.armor -= amount
@@ -136,6 +145,8 @@ class EffectApplier:
                 s.opponent.hero.armor = 0
                 s.opponent.hero.hp -= remaining
         elif target == 'friendly_hero':
+            if s.hero.is_immune:
+                return s
             if s.hero.armor >= amount:
                 s.hero.armor -= amount
             else:
@@ -146,6 +157,8 @@ class EffectApplier:
             idx = int(target.split(':')[1])
             if 0 <= idx < len(s.opponent.board):
                 minion = s.opponent.board[idx]
+                if minion.has_immune:
+                    return s
                 if minion.has_divine_shield:
                     minion.has_divine_shield = False
                 else:
@@ -154,6 +167,8 @@ class EffectApplier:
             idx = int(target.split(':')[1])
             if 0 <= idx < len(s.board):
                 minion = s.board[idx]
+                if minion.has_immune:
+                    return s
                 if minion.has_divine_shield:
                     minion.has_divine_shield = False
                 else:
@@ -186,16 +201,22 @@ class EffectApplier:
 
     @staticmethod
     def apply_draw(state: GameState, count: int) -> GameState:
-        """Add *count* dummy cards to hand (simulates drawing)."""
+        """Add *count* dummy cards to hand (simulates drawing).
+
+        Handles overdraw: if hand would exceed 10, excess cards are burned.
+        """
         s = state
         for _ in range(count):
-            s.hand.append(Card(
-                dbf_id=0,
-                name="Drawn Card",
-                cost=0,
-                card_type="SPELL",
-            ))
             s.deck_remaining = max(0, s.deck_remaining - 1)
+            if len(s.hand) >= 10:
+                pass  # overdraw: card is burned
+            else:
+                s.hand.append(Card(
+                    dbf_id=0,
+                    name="Drawn Card",
+                    cost=0,
+                    card_type="SPELL",
+                ))
         return s
 
     @staticmethod
@@ -430,21 +451,30 @@ def resolve_effects(state: GameState, card: Card) -> GameState:
     if not effects:
         return s
 
+    # Calculate spell power bonus from friendly minions
+    spell_power_bonus = sum(m.spell_power for m in state.board)
+
     applier = EffectApplier()
+
+    has_lifesteal = 'LIFESTEAL' in set(getattr(card, 'mechanics', []) or [])
 
     for effect_type, params in effects:
         if effect_type == 'direct_damage':
-            amount = params
+            amount = params + spell_power_bonus
             target = _pick_target_for_damage(s, amount=amount)
             s = applier.apply_damage(s, target, amount)
+            if has_lifesteal:
+                s.hero.hp = min(30, s.hero.hp + amount)
 
         elif effect_type == 'random_damage':
-            amount = params
+            amount = params + spell_power_bonus
             target = _pick_target_for_damage(s, amount=amount)
             s = applier.apply_damage(s, target, amount)
+            if has_lifesteal:
+                s.hero.hp = min(30, s.hero.hp + amount)
 
         elif effect_type == 'aoe_damage':
-            amount = params
+            amount = params + spell_power_bonus
             s = applier.apply_aoe(s, amount, side='enemy')
 
         elif effect_type == 'draw':
@@ -477,6 +507,26 @@ def resolve_effects(state: GameState, card: Card) -> GameState:
             amount = params
             # Buff all friendly minions
             s = applier.apply_buff(s, 'all_friendly', amount, 0)
+
+        elif effect_type == 'discard':
+            count = params
+            for _ in range(min(count, len(s.hand))):
+                if s.hand:
+                    s.hand.pop()
+
+        elif effect_type == 'hand_buff':
+            atk_delta, hp_delta = params
+            for c in s.hand:
+                if hasattr(c, 'attack'):
+                    c.attack += atk_delta
+                if hasattr(c, 'health'):
+                    c.health += hp_delta
+
+        elif effect_type == 'cost_reduce':
+            reduction = params
+            for c in s.hand:
+                if hasattr(c, 'cost'):
+                    c.cost = max(0, c.cost - reduction)
 
     # Resolve deaths after all effects are applied
     s = _resolve_deaths(s)
