@@ -16,41 +16,7 @@ from hs_analysis.evaluators.bsv import (
     ABSOLUTE_LETHAL_VALUE,
     _get_phase,
 )
-from hs_analysis.models.card import Card
-from hs_analysis.search.game_state import (
-    GameState,
-    HeroState,
-    ManaState,
-    Minion,
-    OpponentState,
-    Weapon,
-)
-
-
-# ──────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────
-
-def _make_card(**kwargs) -> Card:
-    defaults = dict(
-        dbf_id=1, name="Test Card", cost=3, original_cost=3,
-        card_type="MINION", attack=3, health=3, v7_score=5.0,
-        text="", mechanics=[],
-    )
-    defaults.update(kwargs)
-    return Card(**defaults)
-
-
-def _make_state(**kwargs) -> GameState:
-    defaults = dict(
-        hero=HeroState(hp=30, armor=0),
-        mana=ManaState(available=5, max_mana=5),
-        board=[], hand=[], cards_played_this_turn=[],
-        opponent=OpponentState(hero=HeroState(hp=30, armor=0)),
-        turn_number=5,
-    )
-    defaults.update(kwargs)
-    return GameState(**defaults)
+from hs_analysis.search.game_state import HeroState, ManaState, Minion, OpponentState, Weapon
 
 
 # ──────────────────────────────────────────────
@@ -67,26 +33,20 @@ class TestSoftmax:
         assert result[0] == pytest.approx(1.0, abs=0.001)
 
     def test_sums_to_one(self):
-        result = softmax([1.0, 2.0, 3.0])
-        assert sum(result) == pytest.approx(1.0, abs=0.001)
+        assert sum(softmax([1.0, 2.0, 3.0])) == pytest.approx(1.0, abs=0.001)
 
     def test_larger_value_gets_higher_weight(self):
         result = softmax([1.0, 10.0])
         assert result[1] > result[0]
 
     def test_equal_values_equal_weights(self):
-        result = softmax([5.0, 5.0, 5.0])
-        for w in result:
+        for w in softmax([5.0, 5.0, 5.0]):
             assert w == pytest.approx(1.0 / 3, abs=0.01)
 
     def test_temperature_effect(self):
-        """Lower temperature → sharper distribution."""
         sharp = softmax([1.0, 2.0], temperature=0.1)
         soft = softmax([1.0, 2.0], temperature=10.0)
-        # Sharp should have bigger gap
-        sharp_gap = sharp[1] - sharp[0]
-        soft_gap = soft[1] - soft[0]
-        assert sharp_gap > soft_gap
+        assert (sharp[1] - sharp[0]) > (soft[1] - soft[0])
 
 
 # ──────────────────────────────────────────────
@@ -94,17 +54,9 @@ class TestSoftmax:
 # ──────────────────────────────────────────────
 
 class TestPhaseSelection:
-    def test_early_game(self):
-        assert _get_phase(1) == "early"
-        assert _get_phase(4) == "early"
-
-    def test_mid_game(self):
-        assert _get_phase(5) == "mid"
-        assert _get_phase(7) == "mid"
-
-    def test_late_game(self):
-        assert _get_phase(8) == "late"
-        assert _get_phase(15) == "late"
+    @pytest.mark.parametrize("turn,phase", [(1, "early"), (4, "early"), (5, "mid"), (7, "mid"), (8, "late"), (15, "late")])
+    def test_phase_mapping(self, turn, phase):
+        assert _get_phase(turn) == phase
 
 
 # ──────────────────────────────────────────────
@@ -112,38 +64,24 @@ class TestPhaseSelection:
 # ──────────────────────────────────────────────
 
 class TestEvalTempo:
-    def test_empty_board(self):
-        state = _make_state()
-        result = eval_tempo_v10(state)
-        # Only mana efficiency + 0 weapon
-        assert isinstance(result, float)
+    def test_empty_board(self, make_state):
+        assert isinstance(eval_tempo_v10(make_state()), float)
 
-    def test_friendly_board_advantage(self):
-        state = _make_state(
-            board=[Minion(name="Yeti", attack=4, health=5, max_health=5)],
-        )
-        result = eval_tempo_v10(state)
-        assert result > 0
+    def test_friendly_board_advantage(self, make_state):
+        state = make_state(board=[Minion(name="Yeti", attack=4, health=5, max_health=5)])
+        assert eval_tempo_v10(state) > 0
 
-    def test_enemy_board_penalty(self):
-        friendly = _make_state(
+    def test_enemy_board_penalty(self, make_state):
+        friendly = make_state(board=[Minion(name="Yeti", attack=4, health=5, max_health=5)])
+        both = make_state(
             board=[Minion(name="Yeti", attack=4, health=5, max_health=5)],
-        )
-        both = _make_state(
-            board=[Minion(name="Yeti", attack=4, health=5, max_health=5)],
-            opponent=OpponentState(
-                hero=HeroState(hp=30),
-                board=[Minion(name="Big", attack=8, health=8, max_health=8)],
-            ),
+            opponent=OpponentState(hero=HeroState(hp=30), board=[Minion(name="Big", attack=8, health=8, max_health=8)]),
         )
         assert eval_tempo_v10(friendly) > eval_tempo_v10(both)
 
-    def test_weapon_contribution(self):
-        with_weapon = _make_state(
-            hero=HeroState(hp=30, weapon=Weapon(attack=3, health=2)),
-        )
-        without = _make_state()
-        assert eval_tempo_v10(with_weapon) > eval_tempo_v10(without)
+    def test_weapon_contribution(self, make_state):
+        with_weapon = make_state(hero=HeroState(hp=30, weapon=Weapon(attack=3, health=2)))
+        assert eval_tempo_v10(with_weapon) > eval_tempo_v10(make_state())
 
 
 # ──────────────────────────────────────────────
@@ -151,28 +89,20 @@ class TestEvalTempo:
 # ──────────────────────────────────────────────
 
 class TestEvalValue:
-    def test_empty_hand(self):
-        state = _make_state()
-        result = eval_value_v10(state)
-        assert isinstance(result, float)
+    def test_empty_hand(self, make_state):
+        assert isinstance(eval_value_v10(make_state()), float)
 
-    def test_hand_cards_add_value(self):
-        with_cards = _make_state(
-            hand=[_make_card(v7_score=5.0), _make_card(dbf_id=2, v7_score=4.0)],
-        )
-        empty = _make_state()
-        assert eval_value_v10(with_cards) > eval_value_v10(empty)
+    def test_hand_cards_add_value(self, make_card, make_state):
+        with_cards = make_state(hand=[make_card(v7_score=5.0), make_card(dbf_id=2, v7_score=4.0)])
+        assert eval_value_v10(with_cards) > eval_value_v10(make_state())
 
-    def test_card_advantage_bonus(self):
-        winning = _make_state(
-            hand=[_make_card()],
+    def test_card_advantage_bonus(self, make_card, make_state):
+        winning = make_state(
+            hand=[make_card()],
             board=[Minion(name="Yeti", attack=4, health=5, max_health=5)],
             opponent=OpponentState(hero=HeroState(hp=30), hand_count=0),
         )
-        losing = _make_state(
-            hand=[],
-            opponent=OpponentState(hero=HeroState(hp=30), hand_count=5),
-        )
+        losing = make_state(hand=[], opponent=OpponentState(hero=HeroState(hp=30), hand_count=5))
         assert eval_value_v10(winning) > eval_value_v10(losing)
 
 
@@ -181,33 +111,26 @@ class TestEvalValue:
 # ──────────────────────────────────────────────
 
 class TestEvalSurvival:
-    def test_full_health(self):
-        state = _make_state()
-        result = eval_survival_v10(state)
-        assert result > 0
+    def test_full_health(self, make_state):
+        assert eval_survival_v10(make_state()) > 0
 
-    def test_low_health_penalty(self):
-        low = _make_state(hero=HeroState(hp=5, armor=0))
-        high = _make_state(hero=HeroState(hp=30, armor=0))
-        assert eval_survival_v10(high) > eval_survival_v10(low)
+    def test_low_health_penalty(self, make_state):
+        assert eval_survival_v10(make_state(hero=HeroState(hp=30, armor=0))) > \
+               eval_survival_v10(make_state(hero=HeroState(hp=5, armor=0)))
 
-    def test_lethal_threat_massive_penalty(self):
-        """Enemy can kill us → huge penalty."""
-        state = _make_state(
+    def test_lethal_threat_massive_penalty(self, make_state):
+        state = make_state(
             hero=HeroState(hp=3, armor=0),
             opponent=OpponentState(
                 hero=HeroState(hp=30),
                 board=[Minion(name="Attacker", attack=5, health=5, can_attack=True)],
             ),
         )
-        result = eval_survival_v10(state)
-        assert result < -10  # Should be very negative
+        assert eval_survival_v10(state) < -10
 
-    def test_healing_potential(self):
-        heal_card = _make_card(text="恢复5点生命值", card_type="SPELL")
-        with_heal = _make_state(hand=[heal_card])
-        without = _make_state()
-        assert eval_survival_v10(with_heal) > eval_survival_v10(without)
+    def test_healing_potential(self, make_card, make_state):
+        heal_card = make_card(text="恢复5点生命值", card_type="SPELL")
+        assert eval_survival_v10(make_state(hand=[heal_card])) > eval_survival_v10(make_state())
 
 
 # ──────────────────────────────────────────────
@@ -215,50 +138,30 @@ class TestEvalSurvival:
 # ──────────────────────────────────────────────
 
 class TestBsvFusion:
-    def test_returns_float(self):
-        state = _make_state()
-        result = bsv_fusion(state)
-        assert isinstance(result, float)
+    def test_returns_float(self, make_state):
+        assert isinstance(bsv_fusion(make_state()), float)
 
-    def test_lethal_state_returns_999(self):
-        """State where opponent is at 0 HP → lethal override."""
-        state = _make_state(
-            opponent=OpponentState(hero=HeroState(hp=0, armor=0)),
-        )
-        # check_lethal should detect already-dead opponent
-        result = bsv_fusion(state)
-        # Note: this depends on check_lethal implementation
-        # At minimum, bsv_fusion should not crash
-        assert isinstance(result, float)
+    def test_lethal_state(self, make_state):
+        state = make_state(opponent=OpponentState(hero=HeroState(hp=0, armor=0)))
+        assert isinstance(bsv_fusion(state), float)
 
-    def test_winning_state_higher_than_losing(self):
-        winning = _make_state(
+    def test_winning_state_higher_than_losing(self, make_card, make_state):
+        winning = make_state(
             hero=HeroState(hp=30, armor=5),
-            board=[
-                Minion(name="Big1", attack=7, health=7, max_health=7),
-                Minion(name="Big2", attack=6, health=6, max_health=6),
-            ],
-            hand=[_make_card(v7_score=6.0)],
-            opponent=OpponentState(
-                hero=HeroState(hp=15, armor=0),
-                board=[Minion(name="Small", attack=1, health=1, max_health=1)],
-            ),
+            board=[Minion(name="Big1", attack=7, health=7, max_health=7),
+                   Minion(name="Big2", attack=6, health=6, max_health=6)],
+            hand=[make_card(v7_score=6.0)],
+            opponent=OpponentState(hero=HeroState(hp=15, armor=0),
+                                   board=[Minion(name="Small", attack=1, health=1, max_health=1)]),
         )
-        losing = _make_state(
+        losing = make_state(
             hero=HeroState(hp=5, armor=0),
-            board=[],
-            hand=[],
-            opponent=OpponentState(
-                hero=HeroState(hp=30, armor=0),
-                board=[Minion(name="Big", attack=8, health=8, max_health=8, can_attack=True)],
-            ),
+            board=[], hand=[],
+            opponent=OpponentState(hero=HeroState(hp=30, armor=0),
+                                   board=[Minion(name="Big", attack=8, health=8, max_health=8, can_attack=True)]),
         )
         assert bsv_fusion(winning) > bsv_fusion(losing)
 
-    def test_phase_weights_applied(self):
-        """Different turn numbers should give different BSV values for same state."""
-        card = _make_card(v7_score=5.0)
-        early = _make_state(hand=[card], turn_number=2)
-        late = _make_state(hand=[card], turn_number=10)
-        # They should be different (even if we can't predict which is higher)
-        assert bsv_fusion(early) != bsv_fusion(late)
+    def test_phase_weights_applied(self, make_card, make_state):
+        card = make_card(v7_score=5.0)
+        assert bsv_fusion(make_state(hand=[card], turn_number=2)) != bsv_fusion(make_state(hand=[card], turn_number=10))
