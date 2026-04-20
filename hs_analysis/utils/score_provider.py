@@ -124,19 +124,18 @@ class ScoreProvider:
 # Convenience bridge function
 # ======================================================================
 
-def load_scores_into_hand(state_or_hand, source: str = "v7", report_path: Optional[str] = None):
-    """Load scores from the scoring report into Card.v7_score fields.
+_PROVIDERS: Dict[str, "ScoreProvider"] = {}
 
-    Parameters
-    ----------
-    state_or_hand : GameState | list[Card]
-        Either a GameState (uses state.hand) or a list of Cards directly.
-    source : str
-        "v7" or "l6" — determines which score field to read from the JSON.
-    report_path : str | None
-        Override the default report path.
-    """
-    # Deferred import to avoid circular dependency at module level
+
+def _get_provider(report_path: str, score_field: str) -> "ScoreProvider":
+    global _PROVIDERS
+    key = f"{report_path}|{score_field}"
+    if key not in _PROVIDERS:
+        _PROVIDERS[key] = ScoreProvider(report_path=report_path, score_field=score_field)
+    return _PROVIDERS[key]
+
+
+def load_scores_into_hand(state_or_hand, source: str = "v7", report_path: Optional[str] = None):
     from hs_analysis.search.game_state import GameState  # type: ignore[import]
 
     if isinstance(state_or_hand, GameState):
@@ -146,10 +145,9 @@ def load_scores_into_hand(state_or_hand, source: str = "v7", report_path: Option
     else:
         raise TypeError(f"Expected GameState or list[Card], got {type(state_or_hand).__name__}")
 
-    # Map source to score field name in JSON
     field_map = {"v7": "v7_score", "l6": "L6"}
     score_field = field_map.get(source.lower(), source)
 
     path = report_path or DEFAULT_V7_PATH
-    provider = ScoreProvider(report_path=path, score_field=score_field)
+    provider = _get_provider(path, score_field)
     provider.load_into_hand(hand)

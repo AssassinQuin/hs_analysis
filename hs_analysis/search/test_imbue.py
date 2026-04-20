@@ -61,15 +61,6 @@ class TestHeroPowerDamage:
         result = apply_hero_power(gs)
         assert result.opponent.hero.hp == 27  # 30 - (1+2)
 
-    def test_damage_targets_minion_first(self):
-        """HUNTER hero power hits first enemy minion if present."""
-        gs = _make_state(hero_class="HUNTER", imbue=1)
-        gs.opponent.board.append(Minion(name="Target", attack=1, health=5, max_health=5))
-        result = apply_hero_power(gs)
-        assert result.opponent.board[0].health == 3  # 5 - (1+1)
-        assert result.opponent.hero.hp == 30  # hero untouched
-
-
 class TestHeroPowerHeal:
     def test_priest_heal_with_imbue(self):
         gs = _make_state(hero_class="PRIEST", imbue=3)

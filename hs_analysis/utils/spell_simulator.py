@@ -346,17 +346,69 @@ class EffectApplier:
 # resolve_effects — Main entry point
 # ===================================================================
 
-def _pick_target_for_damage(state: GameState) -> str:
-    """Pick the best target for a damage effect.
+def _pick_target_for_damage(state: GameState, amount: int = 1) -> str:
+    """Pick the best target for a damage effect using exhaustive evaluation.
 
-    Strategy: prefer enemy minions (highest attack), fall back to enemy hero.
+    Tries each enemy minion + enemy hero, applies damage, evaluates state.
+    Picks the target that yields the best outcome (kills valued via removal bonus).
+
+    Args:
+        state: current game state
+        amount: damage amount to use in the evaluation probe
     """
-    if state.opponent.board:
-        # Target the highest-attack enemy minion
-        best_idx = max(range(len(state.opponent.board)),
-                       key=lambda i: state.opponent.board[i].attack)
-        return f'enemy_minion:{best_idx}'
-    return 'enemy_hero'
+    candidates = ['enemy_hero']
+    for i in range(len(state.opponent.board)):
+        candidates.append(f'enemy_minion:{i}')
+
+    if len(candidates) <= 1:
+        return candidates[0] if candidates else 'enemy_hero'
+
+    best_score = float('-inf')
+    best_target = candidates[0]
+
+    for target_id in candidates:
+        try:
+            sim = state.copy()
+            if target_id == 'enemy_hero':
+                sim.opponent.hero.hp -= amount
+            else:
+                idx = int(target_id.split(':')[1])
+                if idx < len(sim.opponent.board):
+                    sim.opponent.board[idx].health -= amount
+            score = _quick_eval(sim)
+            # Tiebreaker: prefer minions, higher attack wins
+            tiebreaker = 0.0
+            if target_id.startswith('enemy_minion:'):
+                idx = int(target_id.split(':')[1])
+                if idx < len(state.opponent.board):
+                    tiebreaker = state.opponent.board[idx].attack * 0.01
+            if score + tiebreaker > best_score:
+                best_score = score + tiebreaker
+                best_target = target_id
+        except Exception:
+            continue
+
+    return best_target
+
+
+def _quick_eval(state: GameState) -> float:
+    """Quick state evaluation for target selection.
+
+    Heuristic: friendly power - enemy power + hero delta + removal bonus.
+    """
+    friendly_power = sum(m.attack + m.health for m in state.board if m.health > 0)
+    enemy_power = 0
+    dead_enemies = 0
+    for m in state.opponent.board:
+        if m.health <= 0:
+            dead_enemies += 1
+        else:
+            enemy_power += m.attack + m.health
+    removal_bonus = dead_enemies * 10
+    if state.opponent.hero.hp <= 0:
+        return 1000  # lethal beats everything
+    hero_delta = state.hero.hp - state.opponent.hero.hp
+    return friendly_power - enemy_power + hero_delta + removal_bonus
 
 
 def _resolve_deaths(state: GameState) -> GameState:
@@ -383,12 +435,12 @@ def resolve_effects(state: GameState, card: Card) -> GameState:
     for effect_type, params in effects:
         if effect_type == 'direct_damage':
             amount = params
-            target = _pick_target_for_damage(s)
+            target = _pick_target_for_damage(s, amount=amount)
             s = applier.apply_damage(s, target, amount)
 
         elif effect_type == 'random_damage':
             amount = params
-            target = _pick_target_for_damage(s)
+            target = _pick_target_for_damage(s, amount=amount)
             s = applier.apply_damage(s, target, amount)
 
         elif effect_type == 'aoe_damage':

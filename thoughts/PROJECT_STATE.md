@@ -1,14 +1,14 @@
 ---
 version: 7.0
 created: 2026-04-19
-last_changed: 2026-04-20 (V10 Feedback complete — all 4 batches implemented)
+last_changed: 2026-04-20 (Retrieval optimization — CardIndex LRU + ScoreProvider cache + discover refactor)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V10 Engine Overhaul — Feedback Complete, Polish & Calibration Next
+## Current Phase: V10 Engine Overhaul — Retrieval Optimized, Polish & Calibration Next
 
 ## ✅ DONE
 
@@ -129,8 +129,27 @@ last_changed: 2026-04-20 (V10 Feedback complete — all 4 batches implemented)
 - **Design:** `thoughts/shared/designs/2026-04-20-v10-feedback-design.md`
 - **Plan:** `thoughts/shared/plans/2026-04-20-v10-feedback.md`
 
+### Retrieval Optimization ✅ (2026-04-20)
+- [x] **CardIndex 增强** (`data/card_index.py`)
+  - `_dbf_frozensets` 预构建索引: attribute:key → frozenset of dbfIds
+  - `_pool_cache` LRU 缓存 (max 256 entries)
+  - `get_pool()` 重写为 dbfId frozenset 交集 + LRU 命中 (cold 2.2µs → warm 0.8µs, 2.9x)
+  - `discover_pool()` 新增: 排除 HERO/LOCATION 类型
+  - `_index_card()`: cardClass 标准化大写 (修复 wild JSON Title Case)
+- [x] **ScoreProvider 全局缓存** (`utils/score_provider.py`)
+  - `_PROVIDERS` 模块级 dict 缓存，`_get_provider()` 工厂复用已有实例
+  - `load_scores_into_hand()` 不再每次 new ScoreProvider (cache hit 0.2µs)
+- [x] **discover.py 复用 CardIndex** (`search/discover.py`)
+  - 删除 `_CARD_CACHE`, `_WILD_CACHE`, `_load_cards()`, `_load_wild_cards()`
+  - `generate_discover_pool()` delegate 到 `CardIndex.discover_pool()`
+  - 路径统一使用 config.DATA_DIR，消除不一致
+- [x] **性能基准**: 卡牌数据仅加载一次 (6224 cards)，内存减少 3-4x
+- [x] **test_wild_discover.py** 重写适配新架构
+- **Design:** `thoughts/shared/designs/2026-04-20-retrieval-optimization-design.md`
+- **Plan:** `thoughts/shared/plans/2026-04-20-retrieval-optimization.md`
+
 ### Test Coverage
-- [x] **514 search tests passing** (as of 2026-04-20, 1 known flaky RHEA stochastic test)
+- [x] **~795 tests passing** (as of 2026-04-20, 2 known flaky RHEA stochastic tests)
 - [x] Card data tests: 51+35+6 = 92
 - [x] V8 contextual scorer: 16
 - [x] V9 search engine + HDT batches: 150+
@@ -141,8 +160,8 @@ last_changed: 2026-04-20 (V10 Feedback complete — all 4 batches implemented)
 - [x] V10 Feedback (kindred+corpse+rune+dark_gift+target_selection+wild_discover): 107
 
 ### Architecture & Research Documentation
-- [x] 7 design documents in `thoughts/shared/designs/`
-- [x] 4 implementation plans in `thoughts/shared/plans/`
+- [x] 9 design documents in `thoughts/shared/designs/`
+- [x] 6 implementation plans in `thoughts/shared/plans/`
 - [x] PROGRESS.md — complete development log
 - [x] PROJECT_STATE.md — progress tracker (this file)
 - [x] DECISIONS.md — 27 architectural decisions (D001-D027)
@@ -198,3 +217,4 @@ See `thoughts/DECISIONS.md` for full details (D001-D027).
 1. **Scoring calibration**: temperature/weight tuning with real game data
 2. **Performance**: benchmark and optimize to 75ms target
 3. **Full Rewind integration**: wire into _evaluate_chromosome for true 2-branch eval
+4. **Git commit**: commit retrieval optimization changes

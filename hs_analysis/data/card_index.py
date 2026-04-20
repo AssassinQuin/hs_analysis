@@ -81,20 +81,49 @@ class CardIndex:
         self._build_indexes()
 
     def _build_indexes(self) -> None:
-        """Populate all indexes from the card list."""
         for card in self._cards:
             self._index_card(card)
 
-        # Log summary
+        self._dbf_frozensets: Dict[str, frozenset] = {}
+        all_indexes: Dict[str, Dict] = {
+            "mechanic": self.by_mechanic,
+            "type": self.by_type,
+            "class": self.by_class,
+            "race": self.by_race,
+            "school": self.by_school,
+            "cost": self.by_cost,
+            "format": self.by_format,
+            "set": self.by_set,
+            "rarity": self.by_rarity,
+        }
+        for idx_name, idx_dict in all_indexes.items():
+            for key, cards in idx_dict.items():
+                cache_key = f"{idx_name}:{key}"
+                self._dbf_frozensets[cache_key] = frozenset(
+                    c.get("dbfId", id(c)) for c in cards
+                )
+        for (k1, k2), cards in self._class_type.items():
+            self._dbf_frozensets[f"ctype:{k1}:{k2}"] = frozenset(
+                c.get("dbfId", id(c)) for c in cards
+            )
+        for (k1, k2), cards in self._mechanic_type.items():
+            self._dbf_frozensets[f"mtype:{k1}:{k2}"] = frozenset(
+                c.get("dbfId", id(c)) for c in cards
+            )
+
+        self._pool_cache: Dict[str, List[CardDict]] = {}
+        self._pool_cache_max: int = 256
+
         logger.debug(
             "CardIndex built: %d cards, %d mechanics, %d types, "
-            "%d classes, %d races, %d schools",
+            "%d classes, %d races, %d schools, %d dbf frozensets",
             self._total,
             len(self.by_mechanic),
             len(self.by_type),
             len(self.by_class),
             len(self.by_race),
             len(self.by_school),
+            len(self._dbf_frozensets),
         )
 
     def _index_card(self, card: CardDict) -> None:
@@ -117,6 +146,8 @@ class CardIndex:
         # Class
         card_class = card.get("cardClass", "")
         if card_class:
+            card_class = card_class.upper()
+            card["cardClass"] = card_class
             self.by_class.setdefault(card_class, []).append(card)
 
         # Race (may be space-separated multi-race)
@@ -183,146 +214,126 @@ class CardIndex:
         card_set: Optional[str] = None,
         exclude_dbfids: Optional[Set[int] | List[int]] = None,
     ) -> List[CardDict]:
-        """Query the card pool with multiple filters (AND logic).
+        """Query the card pool with multiple filters (AND logic)."""
+        cache_key_parts: List[str] = []
+        dbf_sets: List[frozenset] = []
 
-        All parameters are optional.  Only cards matching ALL provided
-        filters are returned.
-
-        Args:
-            mechanics:  One or more mechanic IDs (card must have ALL of them).
-            card_class: Card class enum, e.g. ``"MAGE"``.
-            card_type:  Card type, e.g. ``"MINION"``.
-            race:       Race enum, e.g. ``"BEAST"``.
-            school:     Spell school enum, e.g. ``"FIRE"``.
-            cost:       Exact mana cost.
-            cost_min:   Minimum mana cost (inclusive).
-            cost_max:   Maximum mana cost (inclusive).
-            format:     ``"standard"`` or ``"wild"``.
-            rarity:     Rarity enum, e.g. ``"LEGENDARY"``.
-            card_set:   Set code, e.g. ``"CORE"``.
-            exclude_dbfids: Set of dbfIds to exclude from results.
-
-        Returns:
-            List of matching card dicts (may be empty).
-        """
-        # Start from the most selective index (smallest result set)
-        candidate_lists: List[List[CardDict]] = []
-
-        # Use composite index for (class, type) if both given
         if card_class and card_type:
-            composite = self._class_type.get((card_class, card_type))
-            if composite is not None:
-                candidate_lists.append(composite)
-            else:
-                return []  # No cards match this combo
+            key = f"ctype:{card_class}:{card_type}"
+            fs = self._dbf_frozensets.get(key)
+            if fs is None:
+                return []
+            dbf_sets.append(fs)
+            cache_key_parts.append(key)
         else:
-            # Use individual indexes
             if card_class:
-                lst = self.by_class.get(card_class)
-                if lst is not None:
-                    candidate_lists.append(lst)
-                else:
+                key = f"class:{card_class}"
+                fs = self._dbf_frozensets.get(key)
+                if fs is None:
                     return []
+                dbf_sets.append(fs)
+                cache_key_parts.append(key)
             if card_type:
-                lst = self.by_type.get(card_type)
-                if lst is not None:
-                    candidate_lists.append(lst)
-                else:
+                key = f"type:{card_type}"
+                fs = self._dbf_frozensets.get(key)
+                if fs is None:
                     return []
+                dbf_sets.append(fs)
+                cache_key_parts.append(key)
 
-        # Mechanics filter (card must have ALL specified mechanics)
         if mechanics is not None:
             if isinstance(mechanics, str):
                 mechanics = [mechanics]
             for mech in mechanics:
-                lst = self.by_mechanic.get(mech)
-                if lst is not None:
-                    candidate_lists.append(lst)
-                else:
+                key = f"mechanic:{mech}"
+                fs = self._dbf_frozensets.get(key)
+                if fs is None:
                     return []
+                dbf_sets.append(fs)
+                cache_key_parts.append(key)
 
-        # Race
         if race:
-            lst = self.by_race.get(race)
-            if lst is not None:
-                candidate_lists.append(lst)
-            else:
+            key = f"race:{race}"
+            fs = self._dbf_frozensets.get(key)
+            if fs is None:
                 return []
-
-        # School
+            dbf_sets.append(fs)
+            cache_key_parts.append(key)
         if school:
-            lst = self.by_school.get(school)
-            if lst is not None:
-                candidate_lists.append(lst)
-            else:
+            key = f"school:{school}"
+            fs = self._dbf_frozensets.get(key)
+            if fs is None:
                 return []
-
-        # Cost (exact)
+            dbf_sets.append(fs)
+            cache_key_parts.append(key)
         if cost is not None:
             bucket = cost if cost <= _MAX_COST_BUCKET else _MAX_COST_BUCKET
-            lst = self.by_cost.get(bucket)
-            if lst is not None:
-                candidate_lists.append(lst)
-            else:
+            key = f"cost:{bucket}"
+            fs = self._dbf_frozensets.get(key)
+            if fs is None:
                 return []
-
-        # Format
+            dbf_sets.append(fs)
+            cache_key_parts.append(key)
         if format:
-            lst = self.by_format.get(format)
-            if lst is not None:
-                candidate_lists.append(lst)
-            else:
+            key = f"format:{format}"
+            fs = self._dbf_frozensets.get(key)
+            if fs is None:
                 return []
-
-        # Rarity
+            dbf_sets.append(fs)
+            cache_key_parts.append(key)
         if rarity:
-            lst = self.by_rarity.get(rarity)
-            if lst is not None:
-                candidate_lists.append(lst)
-            else:
+            key = f"rarity:{rarity}"
+            fs = self._dbf_frozensets.get(key)
+            if fs is None:
                 return []
-
-        # Set
+            dbf_sets.append(fs)
+            cache_key_parts.append(key)
         if card_set:
-            lst = self.by_set.get(card_set)
-            if lst is not None:
-                candidate_lists.append(lst)
-            else:
+            key = f"set:{card_set}"
+            fs = self._dbf_frozensets.get(key)
+            if fs is None:
                 return []
+            dbf_sets.append(fs)
+            cache_key_parts.append(key)
 
-        # Intersect all candidate lists
-        if not candidate_lists:
-            # No index-based filters → start with all cards
+        range_suffix = ""
+        if cost_min is not None:
+            range_suffix += f"cmin:{cost_min}"
+        if cost_max is not None:
+            range_suffix += f"cmax:{cost_max}"
+        excl_suffix = ""
+        if exclude_dbfids:
+            excl_suffix = f"excl:{len(exclude_dbfids)}"
+        pool_key = "|".join(cache_key_parts) + range_suffix + excl_suffix
+
+        if pool_key and pool_key in self._pool_cache:
+            return list(self._pool_cache[pool_key])
+
+        if not dbf_sets:
             output = list(self._cards)
         else:
-            # Start from smallest list for efficiency
-            candidate_lists.sort(key=len)
-            result = set(id(c) for c in candidate_lists[0])
-            for lst in candidate_lists[1:]:
-                ids = set(id(c) for c in lst)
-                result &= ids
-                if not result:
-                    return []
+            dbf_sets_sorted = sorted(dbf_sets, key=len)
+            result_ids = dbf_sets_sorted[0]
+            for s in dbf_sets_sorted[1:]:
+                result_ids = result_ids & s
+                if not result_ids:
+                    break
+            if not result_ids:
+                output = []
+            else:
+                output = [self.dbf_lookup[dbf] for dbf in result_ids if dbf in self.dbf_lookup]
 
-            # Build filtered list
-            id_to_card: Dict[int, CardDict] = {id(c): c for c in candidate_lists[0]}
-            for lst in candidate_lists[1:]:
-                for c in lst:
-                    if id(c) not in id_to_card:
-                        id_to_card[id(c)] = c
-
-            output = [id_to_card[i] for i in result if i in id_to_card]
-
-        # Range filters (cost_min, cost_max)
         if cost_min is not None or cost_max is not None:
             cmin = cost_min if cost_min is not None else 0
             cmax = cost_max if cost_max is not None else 999
             output = [c for c in output if cmin <= c.get("cost", 0) <= cmax]
 
-        # Exclusion filter
         if exclude_dbfids:
             excl = set(exclude_dbfids)
             output = [c for c in output if c.get("dbfId", -1) not in excl]
+
+        if pool_key and len(self._pool_cache) < self._pool_cache_max:
+            self._pool_cache[pool_key] = list(output)
 
         return output
 
@@ -383,7 +394,8 @@ class CardIndex:
         neutral_cards = self.get_pool(card_class="NEUTRAL", format=format)
         pool = class_cards + neutral_cards
 
-        # Type filter
+        pool = [c for c in pool if c.get("type", "") not in ("HERO", "LOCATION")]
+
         if card_type:
             pool = [c for c in pool if c.get("type") == card_type]
 
