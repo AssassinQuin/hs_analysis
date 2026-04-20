@@ -1,14 +1,14 @@
 ---
-version: 4.0
+version: 5.0
 created: 2026-04-19
-last_changed: 2026-04-19 (V10 scoring implementation complete)
+last_changed: 2026-04-20 (V10 Phase 2 complete — enchantment framework + trigger system + all keyword mechanics)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V10 Engine Overhaul — Phase 2 (Enchantment Framework) Next
+## Current Phase: V10 Engine Overhaul — Phase 3 (2026 Modern Mechanics) Next
 
 ## ✅ DONE
 
@@ -78,13 +78,28 @@ last_changed: 2026-04-19 (V10 scoring implementation complete)
 - **Design (impl):** `thoughts/shared/designs/2026-04-19-v10-scoring-implementation-design.md`
 - **Plan:** `thoughts/shared/plans/2026-04-19-v10-scoring-implementation.md`
 
+### V10 Phase 2: Enchantment Framework + Keyword Mechanics ✅ (2026-04-20, commit `f2dca83`)
+- [x] **enchantment.py** — Enchantment dataclass, apply/remove/tick, stat computation helpers
+- [x] **trigger_system.py** — TriggerDispatcher with 8 events, effect string protocol (`damage:random_enemy:N`)
+- [x] **battlecry_dispatcher.py** — battlecry dispatch with greedy target selection, 10+ effect types
+- [x] **deathrattle.py** — `resolve_deaths()` with board-ordered queue, cascade (max 5), text parsing
+- [x] **aura_engine.py** — `recompute_auras()` with 7 aura sources (EN/CN registry), target filters (other_friendly, adjacent, murloc, pirate)
+- [x] **discover.py** — pool generation from unified_standard.json, Chinese text constraint parsing, best-of-3 heuristic
+- [x] **location.py** — Location dataclass, activate/tick cooldowns, effect resolution
+- [x] **game_state.py** — added `locations` field, Minion already had `enchantments` list
+- [x] **rhea_engine.py** — 4 integration points (PLAY MINION, ATTACK, SPELL, END_TURN) + ACTIVATE_LOCATION action
+- [x] **pyproject.toml** — added `hs_analysis/search` to testpaths
+- [x] **341 new tests** across 6 test modules, 615 total passing
+- **Plan:** `thoughts/shared/plans/2026-04-20-v10-phase2.md`
+
 ### Test Coverage
-- [x] **493 tests passing** (as of 2026-04-19)
+- [x] **615 tests passing** (as of 2026-04-20)
 - [x] Card data tests: 51+35+6 = 92
 - [x] V8 contextual scorer: 16
 - [x] V9 search engine + HDT batches: 150+
 - [x] V10 Phase 1 mechanic tests: 20
 - [x] V10 scoring (SIV+BSV+interactions+mechanics+integration): 260
+- [x] V10 Phase 2 (enchant+trigger+battlecry+deathrattle+aura+discover+location): 341
 
 ### Architecture & Research Documentation
 - [x] 7 design documents in `thoughts/shared/designs/`
@@ -100,18 +115,7 @@ last_changed: 2026-04-19 (V10 scoring implementation complete)
 
 ## ⏳ TODO (by priority)
 
-### P1: V10 Engine Phase 2 — Enchantment Framework + Trigger System
-- [ ] Enchantment dataclass (attack/health/keyword deltas, trigger_type, duration)
-- [ ] Computed stats on Minion (base + enchantment deltas)
-- [ ] TriggerDispatcher class (on_minion_played, on_minion_dies, on_turn_end, on_attack, on_spell_cast)
-- [ ] Battlecry dispatcher (parse card text → apply effect)
-- [ ] Deathrattle queue (board-position order, max 5 cascade)
-- [ ] Aura engine (recompute after state changes, max 10 iterations)
-- [ ] Discover framework (pool gen + evaluate best of 3)
-- [ ] Location card support (new zone, durability, cooldown)
-- **Design:** Phase 2 in `thoughts/shared/designs/2026-04-19-v10-engine-overhaul-design.md`
-
-### P2: V10 Engine Phase 3 — 2026 Modern Mechanics
+### P1: V10 Engine Phase 3 — 2026 Modern Mechanics
 - [ ] Imbue hero power upgrade (per-class paths, diminishing marginal value)
 - [ ] Hand position system (Shatter split/merge, Outcast edges, Hand Targeting)
 - [ ] Herald counter + Colossal appendage summoning
@@ -132,7 +136,7 @@ last_changed: 2026-04-19 (V10 scoring implementation complete)
 (none currently)
 
 ## Architecture Decisions
-See `thoughts/DECISIONS.md` for full details (D001-D016).
+See `thoughts/DECISIONS.md` for full details (D001-D019).
 
 ## Data Inventory
 
@@ -155,7 +159,6 @@ See `thoughts/DECISIONS.md` for full details (D001-D016).
 - `thoughts/shared/designs/2026-04-19-hearthstone-complete-rules.md` ⭐ (rules reference)
 
 ## Next Actions
-1. **V10 Phase 2**: Enchantment framework + trigger system (designed, ready to implement)
-2. **V10 Phase 3**: 2026 modern mechanics (designed, blocked on Phase 2)
-3. **Scoring calibration**: temperature/weight tuning with real game data
-4. **Performance**: benchmark and optimize to 75ms target
+1. **V10 Phase 3**: 2026 modern mechanics (Imbue, Hand position, Herald, Kindred, Quest, Dark Gift)
+2. **Scoring calibration**: temperature/weight tuning with real game data
+3. **Performance**: benchmark and optimize to 75ms target

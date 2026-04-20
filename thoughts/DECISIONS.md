@@ -143,3 +143,21 @@ last_changed: 2026-04-19
 **Decision**: Build keyword interaction table directly from the complete rules document. Each interaction has a rule reference and a precise value impact.
 **Alternatives**: (A) Keep empirical constants — proven inaccurate. (B) Learn from HSReplay data — interaction effects are confounded with too many variables. (C) Per-card manual tuning — unmaintainable for 1000+ cards.
 **Rationale**: Rules document provides deterministic interaction logic (e.g., "Divine Shield absorbs damage → Poisonous does not trigger → Poisonous value × 0.1 vs shielded targets"). This is ground truth, not approximation.
+
+## D017 | 2026-04-20 | Effect string protocol for cross-module trigger/deathrattle/aura dispatch
+**Context**: Triggers, deathrattles, and auras all need to express "deal N damage to random enemy" or "summon N/N" etc. Without a protocol, each module invents its own representation.
+**Decision**: Colon-separated effect strings like `"damage:random_enemy:N"`, `"summon:N:N"`, `"draw:N"`, `"buff:friendly:N:N"`, `"heal:hero:N"`, `"armor:N"`. All dispatch modules (trigger_system, deathrattle, battlecry_dispatcher) use the same format.
+**Alternatives**: (A) Enum-based effect types — more type-safe but harder to parse from card text. (B) Callable effect objects — overkill for search simulation. (C) Per-module ad-hoc — leads to inconsistency.
+**Rationale**: String protocol is human-readable, easy to parse from Chinese card text with regex, and consistent across all dispatch points. Search doesn't need type safety.
+
+## D018 | 2026-04-20 | Greedy target selection for battlecry (highest-attack enemy, most-damaged friendly)
+**Context**: Battlecry effects need target selection but RHEA search can't afford Monte Carlo target simulation for every battlecry.
+**Decision**: Deterministic greedy: damage → highest-attack enemy, heal → most-damaged friendly, buff → highest-cost friendly. Simple, fast, and produces reasonable search outcomes.
+**Alternatives**: (A) Random target — non-deterministic, makes search unstable. (B) Exhaustive target enumeration — explodes search space. (C) Heuristic scoring per target — adds complexity for marginal gain.
+**Rationale**: In arena, battlecry targets usually have an obvious best choice (kill the biggest threat, heal the most damaged). Greedy captures this well enough for search.
+
+## D019 | 2026-04-20 | Graceful degradation: try/except on all new dispatch points in rhea_engine
+**Context**: Phase 2 adds battlecry dispatch, trigger dispatch, deathrattle resolution, aura recomputation, discover resolution, and location activation — all wired into the critical `apply_action` path. Any bug in these new modules could crash the entire search.
+**Decision**: Every integration point in `apply_action` is wrapped in `try/except: pass`. If a new module fails, the search continues with the vanilla behavior (play the card without battlecry, resolve combat without deathrattles, etc.).
+**Alternatives**: (A) Let exceptions propagate — one bug kills the entire decision engine. (B) Logging on failure — adds I/O overhead in hot path. (C) Feature flags — adds config complexity.
+**Rationale**: Search robustness is paramount. A degraded search that plays vanilla Hearthstone is infinitely better than a crashed search. The 274 baseline tests already verify vanilla behavior works.
