@@ -212,6 +212,13 @@ def apply_action(state: GameState, action: Action) -> GameState:
         if overload_match:
             s.mana.overload_next += int(overload_match.group(1))
 
+        # V10 Phase 3: Check outcast bonus (before card is removed from hand)
+        outcast_active = False
+        try:
+            from hs_analysis.search.outcast import check_outcast
+            outcast_active = check_outcast(s, card_idx, card)
+        except Exception:
+            pass
         # Remove card from hand
         s.hand.pop(card_idx)
 
@@ -286,6 +293,19 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 s = recompute_auras(s)
             except Exception:
                 pass  # graceful degradation
+        # V10 Phase 3: Imbue hero power upgrade
+        try:
+            from hs_analysis.search.imbue import apply_imbue
+            s = apply_imbue(s, card)
+        except Exception:
+            pass
+        # V10 Phase 3: Apply outcast bonus if active
+        if outcast_active:
+            try:
+                from hs_analysis.search.outcast import apply_outcast_bonus
+                s = apply_outcast_bonus(s, card_idx, card)
+            except Exception:
+                pass
         # OTHER card types: just removed from hand
 
     elif action.action_type == "ATTACK":
@@ -393,6 +413,12 @@ def apply_action(state: GameState, action: Action) -> GameState:
     elif action.action_type == "HERO_POWER":
         s.mana.available -= 2
         s.hero.hero_power_used = True
+        # V10 Phase 3: Apply hero power effect
+        try:
+            from hs_analysis.search.imbue import apply_hero_power
+            s = apply_hero_power(s)
+        except Exception:
+            pass
 
     elif action.action_type == "ACTIVATE_LOCATION":
         try:
@@ -407,6 +433,19 @@ def apply_action(state: GameState, action: Action) -> GameState:
         s.mana.overload_next = 0
         # Deduct overloaded mana from available
         s.mana.available -= s.mana.overloaded
+        # V10 Phase 3: Snapshot races/schools for Kindred tracking (BEFORE clearing)
+        try:
+            s.last_turn_races = set()
+            s.last_turn_schools = set()
+            for card in s.cards_played_this_turn:
+                race = getattr(card, 'race', '') or ''
+                school = getattr(card, 'spell_school', '') or getattr(card, 'spellSchool', '') or ''
+                if race:
+                    s.last_turn_races.add(race.upper())
+                if school:
+                    s.last_turn_schools.add(school.upper())
+        except Exception:
+            pass
         # Reset per-turn states
         s.cards_played_this_turn = []
         s.fatigue_damage = 0

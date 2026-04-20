@@ -52,6 +52,7 @@ class HeroState:
     hero_class: str = ""
     weapon: Optional[Weapon] = None
     hero_power_used: bool = False
+    imbue_level: int = 0  # Imbue hero power upgrade counter
 
 
 @dataclass
@@ -95,6 +96,10 @@ class GameState:
     turn_number: int = 1
     cards_played_this_turn: list = field(default_factory=list)
     fatigue_damage: int = 0
+    herald_count: int = 0                              # Herald mechanic counter
+    last_turn_races: set = field(default_factory=set)   # Kindred: races played last turn
+    last_turn_schools: set = field(default_factory=set)  # Kindred: spell schools played last turn
+    active_quests: list = field(default_factory=list)    # Active quest tracking
 
     # ------------------------------------------------------------------
     # Utility helpers
