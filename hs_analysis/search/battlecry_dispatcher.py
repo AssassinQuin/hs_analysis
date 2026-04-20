@@ -134,8 +134,8 @@ class BattlecryDispatcher:
 
         if effect_type == 'direct_damage':
             amount = params
-            # Greedy: pick best enemy target (highest attack minion, or hero)
-            target = self._pick_damage_target(s)
+            # Exhaustive: pick best enemy target using actual damage amount
+            target = self._pick_damage_target(s, amount=amount)
             s = EffectApplier.apply_damage(s, target, amount)
 
         elif effect_type == 'random_damage':
@@ -253,14 +253,99 @@ class BattlecryDispatcher:
     # Target selection helpers
     # ---------------------------------------------------------------
 
-    def _pick_damage_target(self, state: GameState) -> str:
-        """Pick the best target for damage: highest-attack enemy minion, or hero."""
-        if state.opponent.board:
-            # Pick minion with highest attack
-            best_idx = max(range(len(state.opponent.board)),
-                           key=lambda i: state.opponent.board[i].attack)
-            return f'enemy_minion:{best_idx}'
-        return 'enemy_hero'
+    @staticmethod
+    def _quick_eval(state: GameState) -> float:
+        """Quick state evaluation for target selection.
+
+        Heuristic: friendly board strength - enemy board strength + hero delta
+        + removal bonus for dead enemy minions.
+        """
+        friendly_power = sum(m.attack + m.health for m in state.board if m.health > 0)
+        enemy_power = 0
+        dead_enemies = 0
+        for m in state.opponent.board:
+            if m.health <= 0:
+                dead_enemies += 1
+            else:
+                enemy_power += m.attack + m.health
+        removal_bonus = dead_enemies * 10  # kills are very valuable
+        if state.opponent.hero.hp <= 0:
+            return 1000  # lethal beats everything
+        hero_delta = state.hero.hp - state.opponent.hero.hp
+        return friendly_power - enemy_power + hero_delta + removal_bonus
+
+    def _select_best_target_exhaustive(
+        self,
+        state: GameState,
+        targets: list[tuple[str, int, int]],  # (target_id, ...)
+        effect_fn,
+    ) -> str | None:
+        """Exhaustive target selection: try each, evaluate, pick best.
+
+        Args:
+            state: current game state
+            targets: list of (target_id, ...) tuples
+            effect_fn: function(state, target_id) -> state that applies the effect
+
+        Returns:
+            best target_id or None
+        """
+        if not targets:
+            return None
+        if len(targets) == 1:
+            return targets[0]
+
+        best_score = float('-inf')
+        best_target = targets[0]
+
+        for target_id in targets:
+            try:
+                sim = state.copy()
+                sim = effect_fn(sim, target_id)
+                score = self._quick_eval(sim)
+                # Tiebreaker: prefer minion over hero, higher attack wins
+                tiebreaker = 0.0
+                if target_id.startswith('enemy_minion:'):
+                    idx = int(target_id.split(':')[1])
+                    if idx < len(state.opponent.board):
+                        tiebreaker = state.opponent.board[idx].attack * 0.01
+                if score + tiebreaker > best_score:
+                    best_score = score + tiebreaker
+                    best_target = target_id
+            except Exception:
+                continue  # fallback: skip failed evaluation
+
+        return best_target
+
+    def _pick_damage_target(self, state: GameState, amount: int = 1) -> str:
+        """Pick the best target for damage using exhaustive evaluation.
+
+        Tries: enemy hero + each enemy minion. Picks the one that yields
+        the best state after damage is applied. Uses actual damage amount
+        for the probe so removal (kills) are properly valued.
+
+        Args:
+            state: current game state
+            amount: damage amount to use in the evaluation probe
+        """
+        candidates = ['enemy_hero']
+        for i in range(len(state.opponent.board)):
+            candidates.append(f'enemy_minion:{i}')
+
+        if len(candidates) <= 1:
+            return candidates[0] if candidates else 'enemy_hero'
+
+        def apply_dmg(s, target_id):
+            if target_id == 'enemy_hero':
+                s.opponent.hero.hp -= amount
+            else:
+                idx = int(target_id.split(':')[1])
+                if idx < len(s.opponent.board):
+                    s.opponent.board[idx].health -= amount
+            return s
+
+        return self._select_best_target_exhaustive(state, candidates, apply_dmg)
+
 
     def _pick_heal_target(self, state: GameState) -> str:
         """Pick the best target for healing: most-damaged friendly, or hero."""
