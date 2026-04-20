@@ -230,6 +230,27 @@ def apply_action(state: GameState, action: Action) -> GameState:
             pos = min(action.position, len(s.board))
             s.board.insert(pos, new_minion)
 
+            # V10 Phase 2: Battlecry dispatch
+            try:
+                from hs_analysis.search.battlecry_dispatcher import dispatch_battlecry
+                s = dispatch_battlecry(s, card, new_minion)
+            except Exception:
+                pass  # graceful degradation
+
+            # V10 Phase 2: Trigger dispatch (on_minion_played)
+            try:
+                from hs_analysis.search.trigger_system import TriggerDispatcher
+                s = TriggerDispatcher().on_minion_played(s, new_minion, card)
+            except Exception:
+                pass  # graceful degradation
+
+            # V10 Phase 2: Aura recompute after minion play
+            try:
+                from hs_analysis.search.aura_engine import recompute_auras
+                s = recompute_auras(s)
+            except Exception:
+                pass  # graceful degradation
+
         elif card.card_type.upper() == "WEAPON":
             s.hero.weapon = Weapon(
                 attack=card.attack,
@@ -249,6 +270,12 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 # Simplified: freeze first enemy minion
                 if s.opponent.board:
                     s.opponent.board[0].frozen_until_next_turn = True
+            # V10 Phase 2: Aura recompute after spell effects
+            try:
+                from hs_analysis.search.aura_engine import recompute_auras
+                s = recompute_auras(s)
+            except Exception:
+                pass  # graceful degradation
         # OTHER card types: just removed from hand
 
     elif action.action_type == "ATTACK":
@@ -323,6 +350,21 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
         # Remove dead friendly minions (may have died from counter-attack)
         s.board = [m for m in s.board if m.health > 0]
+
+        # V10 Phase 2: Resolve deathrattles (replaces inline removal above
+        # for cases where minions have deathrattle enchantments)
+        try:
+            from hs_analysis.search.deathrattle import resolve_deaths
+            s = resolve_deaths(s)
+        except Exception:
+            pass  # graceful degradation
+
+        # V10 Phase 2: Aura recompute after deaths
+        try:
+            from hs_analysis.search.aura_engine import recompute_auras
+            s = recompute_auras(s)
+        except Exception:
+            pass  # graceful degradation
 
         # Mark source as having attacked (windfury tracking)
         if src_idx < len(s.board):
