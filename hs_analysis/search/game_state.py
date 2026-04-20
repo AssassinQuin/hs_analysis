@@ -87,6 +87,7 @@ class GameState:
     hero: HeroState = field(default_factory=HeroState)
     mana: ManaState = field(default_factory=ManaState)
     board: List[Minion] = field(default_factory=list)
+    locations: list = field(default_factory=list)  # List[Location]
     hand: list = field(default_factory=list)  # List of Card
     deck_list: Optional[List] = None  # remaining cards in player's deck (for draw probability)
     deck_remaining: int = 15

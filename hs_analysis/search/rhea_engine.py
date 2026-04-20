@@ -84,6 +84,8 @@ class Action:
             return "使用英雄技能"
         elif self.action_type == "END_TURN":
             return "结束回合"
+        elif self.action_type == "ACTIVATE_LOCATION":
+            return f"激活地标#{self.source_index}"
         return f"未知动作({self.action_type})"
 
 
@@ -164,6 +166,14 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
     # --- HERO_POWER action ---
     if not state.hero.hero_power_used and state.mana.available >= 2:
         actions.append(Action(action_type="HERO_POWER"))
+
+    # --- ACTIVATE_LOCATION actions ---
+    for loc_idx, loc in enumerate(state.locations):
+        if loc.durability > 0 and loc.cooldown_current == 0:
+            actions.append(Action(
+                action_type="ACTIVATE_LOCATION",
+                source_index=loc_idx,
+            ))
 
     # --- END_TURN (always legal) ---
     actions.append(Action(action_type="END_TURN"))
@@ -384,6 +394,13 @@ def apply_action(state: GameState, action: Action) -> GameState:
         s.mana.available -= 2
         s.hero.hero_power_used = True
 
+    elif action.action_type == "ACTIVATE_LOCATION":
+        try:
+            from hs_analysis.search.location import activate_location
+            s = activate_location(s, action.source_index)
+        except Exception:
+            pass  # graceful degradation
+
     elif action.action_type == "END_TURN":
         # Apply overload: this turn's overload_next becomes next turn's overloaded
         s.mana.overloaded = s.mana.overload_next
@@ -396,6 +413,12 @@ def apply_action(state: GameState, action: Action) -> GameState:
         # Unfreeze friendly minions at end of turn
         for m in s.board:
             m.frozen_until_next_turn = False
+        # V10 Phase 2: Tick location cooldowns
+        try:
+            from hs_analysis.search.location import tick_location_cooldowns
+            s = tick_location_cooldowns(s)
+        except Exception:
+            pass
 
     return s
 
