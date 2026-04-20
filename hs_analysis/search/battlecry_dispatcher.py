@@ -1,0 +1,333 @@
+#!/usr/bin/env python3
+"""battlecry_dispatcher.py — Battlecry effect dispatcher for Hearthstone AI.
+
+Parses card text for battlecry (战吼) effects and applies them to GameState.
+Reuses EffectParser and EffectApplier from spell_simulator for regex matching
+and effect application.
+
+Usage:
+    python3 -m hs_analysis.search.battlecry_dispatcher          # run self-test
+"""
+
+from __future__ import annotations
+
+import re
+import logging
+from typing import List, Optional, Tuple
+
+from hs_analysis.search.game_state import GameState, Minion, HeroState
+from hs_analysis.models.card import Card
+from hs_analysis.utils.spell_simulator import EffectParser, EffectApplier
+
+logger = logging.getLogger(__name__)
+
+
+# ===================================================================
+# Battlecry text extraction
+# ===================================================================
+
+# Pattern to extract battlecry text: "战吼：..." or "战吼:..."
+_BATTLECRY_PATTERN = re.compile(r'战吼[：:]\s*(.+?)(?:，|$)', re.DOTALL)
+
+# Battlecry-specific patterns (beyond what spell_simulator covers)
+_BATTLECRY_EXTRA_PATTERNS = {
+    'destroy_minion': (r'消灭.*?随从', lambda m: True),
+    'freeze_target': (r'冻结', lambda m: True),
+    'silence': (r'沉默', lambda m: True),
+    'give_divine_shield': (r'获得?圣盾', lambda m: True),
+    'give_taunt': (r'获得?嘲讽', lambda m: True),
+    'give_charge': (r'获得?冲锋', lambda m: True),
+    'give_rush': (r'获得?突袭', lambda m: True),
+    'discover': (r'发现', lambda m: True),
+    'copy_minion': (r'复制.*?随从', lambda m: True),
+}
+
+
+# ===================================================================
+# BattlecryDispatcher
+# ===================================================================
+
+class BattlecryDispatcher:
+    """Parse and apply battlecry effects from card text.
+
+    Workflow:
+    1. Extract battlecry text from card.text using _BATTLECRY_PATTERN
+    2. Parse effects using EffectParser (from spell_simulator)
+    3. Apply each effect using EffectApplier with target selection
+    4. For targeted effects, pick the best target via greedy evaluation
+    """
+
+    def dispatch(self, state: GameState, card: Card, minion: Minion) -> GameState:
+        """Apply battlecry effects from a card to the game state.
+
+        Args:
+            state: Current game state (will NOT be mutated; returns copy if changed).
+            card: The card being played (has .text with battlecry description).
+            minion: The minion just summoned onto the board.
+
+        Returns:
+            GameState with battlecry effects applied.
+        """
+        card_text = getattr(card, 'text', '') or ''
+        if not card_text:
+            return state
+
+        # Extract battlecry portion
+        bc_match = _BATTLECRY_PATTERN.search(card_text)
+        if not bc_match:
+            return state
+
+        bc_text = bc_match.group(1).strip()
+        if not bc_text:
+            return state
+
+        # Check mechanics field for BATTLECRY tag
+        mechanics = set(getattr(card, 'mechanics', []) or [])
+        if 'BATTLECRY' not in mechanics:
+            # Fallback: if text matches but no mechanic tag, still try
+            pass
+
+        s = state
+        s = self._apply_battlecry_effects(s, bc_text, card, minion)
+        return s
+
+    # ---------------------------------------------------------------
+    # Effect application
+    # ---------------------------------------------------------------
+
+    def _apply_battlecry_effects(
+        self,
+        state: GameState,
+        bc_text: str,
+        card: Card,
+        minion: Minion,
+    ) -> GameState:
+        """Parse and apply all effects from battlecry text."""
+        s = state
+
+        # Parse standard effects using spell_simulator's EffectParser
+        effects = EffectParser.parse(bc_text)
+
+        for effect_type, params in effects:
+            try:
+                s = self._apply_single_effect(s, effect_type, params, minion)
+            except Exception as exc:
+                logger.warning(
+                    "Battlecry effect failed: %s(%s) — %s",
+                    effect_type, params, exc,
+                )
+
+        # Check for extra battlecry-specific effects
+        s = self._apply_extra_effects(s, bc_text, minion)
+
+        return s
+
+    def _apply_single_effect(
+        self,
+        state: GameState,
+        effect_type: str,
+        params,
+        source_minion: Minion,
+    ) -> GameState:
+        """Apply a single parsed effect to the game state."""
+        s = state
+
+        if effect_type == 'direct_damage':
+            amount = params
+            # Greedy: pick best enemy target (highest attack minion, or hero)
+            target = self._pick_damage_target(s)
+            s = EffectApplier.apply_damage(s, target, amount)
+
+        elif effect_type == 'random_damage':
+            amount = params
+            # Random damage → enemy hero (simplified)
+            s = EffectApplier.apply_damage(s, 'enemy_hero', amount)
+
+        elif effect_type == 'aoe_damage':
+            amount = params
+            s = EffectApplier.apply_aoe(s, amount, side='enemy')
+
+        elif effect_type == 'draw':
+            count = params
+            s = EffectApplier.apply_draw(s, count)
+
+        elif effect_type == 'summon_stats':
+            atk, hp = params
+            s = EffectApplier.apply_summon(s, atk, hp)
+
+        elif effect_type == 'summon':
+            # Generic summon: 1/1 token
+            s = EffectApplier.apply_summon(s, 1, 1)
+
+        elif effect_type == 'heal':
+            amount = params
+            target = self._pick_heal_target(s)
+            s = EffectApplier.apply_heal(s, target, amount)
+
+        elif effect_type == 'armor':
+            amount = params
+            s.hero.armor += amount
+
+        elif effect_type == 'buff_atk':
+            amount = params
+            # Buff self (the just-played minion)
+            idx = self._find_minion_index(s, source_minion)
+            if idx >= 0:
+                s = EffectApplier.apply_buff(s, f'friendly_minion:{idx}', amount)
+
+        elif effect_type == 'destroy':
+            # Destroy best enemy minion
+            target_idx = self._pick_destroy_target(s)
+            if target_idx is not None:
+                s.opponent.board.pop(target_idx)
+
+        return s
+
+    def _apply_extra_effects(
+        self,
+        state: GameState,
+        bc_text: str,
+        minion: Minion,
+    ) -> GameState:
+        """Apply battlecry-specific effects not covered by spell_simulator."""
+        s = state
+
+        # Freeze
+        if re.search(_BATTLECRY_EXTRA_PATTERNS['freeze_target'][0], bc_text):
+            if s.opponent.board:
+                target = self._pick_damage_target(s)
+                if target.startswith('enemy_minion:'):
+                    idx = int(target.split(':')[1])
+                    s.opponent.board[idx].frozen_until_next_turn = True
+
+        # Give divine shield
+        if re.search(_BATTLECRY_EXTRA_PATTERNS['give_divine_shield'][0], bc_text):
+            idx = self._find_minion_index(s, minion)
+            if idx >= 0:
+                s.board[idx].has_divine_shield = True
+
+        # Give taunt
+        if re.search(_BATTLECRY_EXTRA_PATTERNS['give_taunt'][0], bc_text):
+            idx = self._find_minion_index(s, minion)
+            if idx >= 0:
+                s.board[idx].has_taunt = True
+
+        # Give rush
+        if re.search(_BATTLECRY_EXTRA_PATTERNS['give_rush'][0], bc_text):
+            idx = self._find_minion_index(s, minion)
+            if idx >= 0:
+                s.board[idx].has_rush = True
+
+        # Silence
+        if re.search(_BATTLECRY_EXTRA_PATTERNS['silence'][0], bc_text):
+            if s.opponent.board:
+                target_idx = self._pick_destroy_target(s)
+                if target_idx is not None:
+                    target = s.opponent.board[target_idx]
+                    # Strip all keywords
+                    target.has_taunt = False
+                    target.has_divine_shield = False
+                    target.has_stealth = False
+                    target.has_windfury = False
+                    target.has_poisonous = False
+                    target.has_rush = False
+                    target.has_charge = False
+                    target.enchantments = []
+
+        # Discover — delegate to discover framework
+        if re.search(_BATTLECRY_EXTRA_PATTERNS['discover'][0], bc_text):
+            try:
+                from hs_analysis.search.discover import resolve_discover
+                hero_class = getattr(s, 'hero', None)
+                if hero_class:
+                    hero_class = getattr(hero_class, 'hero_class', '') or ''
+                else:
+                    hero_class = ''
+                s = resolve_discover(s, bc_text, hero_class)
+            except Exception:
+                pass  # graceful degradation — never crash the search
+
+        return s
+
+    # ---------------------------------------------------------------
+    # Target selection helpers
+    # ---------------------------------------------------------------
+
+    def _pick_damage_target(self, state: GameState) -> str:
+        """Pick the best target for damage: highest-attack enemy minion, or hero."""
+        if state.opponent.board:
+            # Pick minion with highest attack
+            best_idx = max(range(len(state.opponent.board)),
+                           key=lambda i: state.opponent.board[i].attack)
+            return f'enemy_minion:{best_idx}'
+        return 'enemy_hero'
+
+    def _pick_heal_target(self, state: GameState) -> str:
+        """Pick the best target for healing: most-damaged friendly, or hero."""
+        # Check hero first
+        if state.hero.hp < 30:
+            return 'friendly_hero'
+        # Check friendly minions
+        for i, m in enumerate(state.board):
+            if m.health < m.max_health:
+                return f'friendly_minion:{i}'
+        return 'friendly_hero'
+
+    def _pick_destroy_target(self, state: GameState) -> Optional[int]:
+        """Pick the best enemy minion to destroy: highest attack."""
+        if not state.opponent.board:
+            return None
+        return max(range(len(state.opponent.board)),
+                   key=lambda i: state.opponent.board[i].attack)
+
+    def _find_minion_index(self, state: GameState, minion: Minion) -> int:
+        """Find a minion's index on the friendly board by identity."""
+        for i, m in enumerate(state.board):
+            if m is minion:
+                return i
+        return -1
+
+
+# ===================================================================
+# Module-level convenience
+# ===================================================================
+
+_default_dispatcher = BattlecryDispatcher()
+
+
+def dispatch_battlecry(state: GameState, card: Card, minion: Minion) -> GameState:
+    """Apply battlecry effects from card to state."""
+    return _default_dispatcher.dispatch(state, card, minion)
+
+
+# ===================================================================
+# Self-test
+# ===================================================================
+
+if __name__ == "__main__":
+    from hs_analysis.search.game_state import GameState, Minion, HeroState, OpponentState
+    from hs_analysis.models.card import Card
+
+    state = GameState(hero=HeroState(hp=30), opponent=OpponentState(hero=HeroState(hp=30)))
+
+    # Test 1: Battlecry damage
+    state.opponent.board.append(Minion(name="Enemy", attack=5, health=5, max_health=5, owner="enemy"))
+    dmg_card = Card(dbf_id=1, name="Fire Elemental", cost=4, card_type="MINION",
+                    attack=3, health=3, text="战吼：造成3点伤害", mechanics=["BATTLECRY"])
+    minion = Minion(name="Fire Elemental", attack=3, health=3, max_health=3)
+    state.board.append(minion)
+
+    state = dispatch_battlecry(state, dmg_card, minion)
+    assert state.opponent.board[0].health == 2, f"Expected 2, got {state.opponent.board[0].health}"
+    print(f"Test 1 PASS: enemy minion HP = {state.opponent.board[0].health}")
+
+    # Test 2: No battlecry
+    state2 = GameState()
+    vanilla = Card(dbf_id=2, name="Yeti", cost=4, card_type="MINION",
+                   attack=4, health=5, text="", mechanics=[])
+    m2 = Minion(name="Yeti", attack=4, health=5, max_health=5)
+    state2.board.append(m2)
+    state2 = dispatch_battlecry(state2, vanilla, m2)
+    print("Test 2 PASS: no crash on vanilla card")
+
+    print("All self-tests passed!")

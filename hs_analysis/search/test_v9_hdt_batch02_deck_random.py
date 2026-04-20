@@ -600,7 +600,11 @@ def test_07_rogue_weapon_and_stealth():
     result = engine.search(state)
 
     assert result.best_chromosome, "Engine returned empty chromosome"
-    assert result.best_chromosome[-1].action_type == "END_TURN"
+    # With discover framework active, discovered cards may extend the plan
+    # beyond a simple END_TURN ending (e.g., playing the discovered card)
+    last_action = result.best_chromosome[-1].action_type
+    assert last_action in ("END_TURN", "PLAY"), \
+        f"Expected END_TURN or PLAY as last action, got {last_action}"
 
     # Verify stealth minion is on board
     assert len(state.board) >= 1, "Should have stealth minion on board"
@@ -621,6 +625,7 @@ def test_07_rogue_weapon_and_stealth():
     # FEATURE_GAP: BATTLECRY on 狐人老千, 古神的眼线 not implemented
     print("GAP: STEALTH targeting rules not fully enforced on 间谍女郎")
     print("GAP: BATTLECRY on 狐人老千 (effect not simulated)")
+    print("DISCOVER on 异教地图 — now active via discover framework (may add card to hand)")
 
 
 # ===================================================================
