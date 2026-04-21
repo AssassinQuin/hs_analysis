@@ -16,7 +16,6 @@ import pytest
 from typing import List
 
 from hs_analysis.search.test_v9_hdt_batch02_deck_random import DeckTestGenerator
-from hs_analysis.search.test_v9_hdt_batch01 import HDTGameStateFactory
 from hs_analysis.search.rhea_engine import (
     RHEAEngine, Action, apply_action, enumerate_legal_actions,
 )

@@ -23,8 +23,8 @@ Tracked features:
 """
 
 import pytest
+from typing import List, Dict
 
-from hs_analysis.search.test_v9_hdt_batch01 import HDTGameStateFactory
 from hs_analysis.search.rhea_engine import (
     RHEAEngine, Action, apply_action, enumerate_legal_actions,
     next_turn_lethal_check,
@@ -37,6 +37,98 @@ from hs_analysis.search.game_state import (
     GameState, Minion, HeroState, ManaState, OpponentState, Weapon,
 )
 from hs_analysis.search.lethal_checker import check_lethal, max_damage_bound
+
+
+class HDTGameStateFactory:
+    @staticmethod
+    def create_state(
+        turn: int, player_hp: int = 30, player_armor: int = 0,
+        player_class: str = "DEMONHUNTER", player_mana: int = None,
+        player_overloaded: int = 0, player_overload_next: int = 0,
+        player_weapon: Dict = None, player_board: List[Dict] = None,
+        player_hand: List[Dict] = None, opponent_hp: int = 30,
+        opponent_armor: int = 0, opponent_class: str = "WARLOCK",
+        opponent_board: List[Dict] = None, opponent_hand_size: int = 5,
+        opponent_secrets: List[str] = None, player_deck_list: List = None,
+    ) -> GameState:
+        if player_mana is None:
+            player_mana = min(turn, 10)
+        if player_board is None:
+            player_board = []
+        if player_hand is None:
+            player_hand = []
+        if opponent_board is None:
+            opponent_board = []
+        if opponent_secrets is None:
+            opponent_secrets = []
+        weapon = None
+        if player_weapon:
+            weapon = Weapon(
+                name=player_weapon.get("name", ""),
+                attack=player_weapon.get("attack", 0),
+                health=player_weapon.get("durability", 0))
+        hero = HeroState(hp=player_hp, armor=player_armor,
+                         hero_class=player_class, weapon=weapon,
+                         hero_power_used=False)
+        mana = ManaState(available=player_mana - player_overloaded,
+                         overloaded=player_overloaded,
+                         max_mana=min(turn, 10),
+                         overload_next=player_overload_next)
+        board = []
+        for ent in player_board:
+            m = HDTGameStateFactory._entity_to_minion(ent)
+            if m:
+                board.append(m)
+        hand = []
+        for ent in player_hand:
+            c = HDTGameStateFactory._entity_to_card(ent)
+            if c:
+                hand.append(c)
+        opp_board = []
+        for ent in opponent_board:
+            m = HDTGameStateFactory._entity_to_minion(ent, owner="enemy")
+            if m:
+                opp_board.append(m)
+        opponent = OpponentState(
+            hero=HeroState(hp=opponent_hp, armor=opponent_armor,
+                           hero_class=opponent_class),
+            board=opp_board, hand_count=opponent_hand_size,
+            secrets=opponent_secrets)
+        return GameState(hero=hero, opponent=opponent, board=board,
+                         hand=hand, mana=mana, turn_number=turn,
+                         deck_list=player_deck_list)
+
+    @staticmethod
+    def _entity_to_minion(ent: Dict, owner: str = "friendly") -> Minion:
+        tags = ent.get("tags", {})
+        hp = tags.get("HEALTH", 1)
+        return Minion(
+            dbf_id=ent.get("dbf_id", 0), name=ent.get("name", "Unknown"),
+            attack=tags.get("ATK", 0), health=hp, max_health=hp,
+            cost=tags.get("COST", 0),
+            can_attack=not bool(tags.get("EXHAUSTED", 0)),
+            has_divine_shield=bool(tags.get("DIVINE_SHIELD", 0)),
+            has_taunt=bool(tags.get("TAUNT", 0)),
+            has_stealth=bool(tags.get("STEALTH", 0)),
+            has_windfury=bool(tags.get("WINDFURY", 0)),
+            has_rush=bool(tags.get("RUSH", 0)),
+            has_charge=bool(tags.get("CHARGE", 0)),
+            has_poisonous=bool(tags.get("POISONOUS", 0)),
+            enchantments=[], owner=owner)
+
+    @staticmethod
+    def _entity_to_card(ent: Dict) -> Card:
+        tags = ent.get("tags", {})
+        return Card(
+            dbf_id=ent.get("card_id", 0) if not isinstance(
+                ent.get("card_id"), str) else 0,
+            name=ent.get("name", "Unknown"), cost=tags.get("COST", 0),
+            original_cost=tags.get("COST", 0),
+            card_type=ent.get("type", "MINION"),
+            attack=tags.get("ATK", 0), health=tags.get("HEALTH", 0),
+            text=ent.get("text", ""), rarity=ent.get("rarity", ""),
+            card_class=ent.get("card_class", ""),
+            mechanics=ent.get("mechanics", []))
 
 
 # ===================================================================
