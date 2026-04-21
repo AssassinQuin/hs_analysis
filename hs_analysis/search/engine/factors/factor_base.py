@@ -8,11 +8,12 @@ from typing import Optional
 
 from hs_analysis.search.game_state import GameState
 from hs_analysis.search.rhea_engine import Action
+from hs_analysis.models.phase import Phase, detect_phase
 
 
 @dataclass
 class EvalContext:
-    phase: str = "mid"
+    phase: Phase = Phase.MID
     turn_number: int = 5
     is_lethal: bool = False
     time_budget_ms: float = 100.0
@@ -20,13 +21,7 @@ class EvalContext:
     @staticmethod
     def from_state(state: GameState) -> EvalContext:
         tn = state.turn_number
-        if tn <= 4:
-            phase = "early"
-        elif tn <= 7:
-            phase = "mid"
-        else:
-            phase = "late"
-        return EvalContext(phase=phase, turn_number=tn)
+        return EvalContext(phase=detect_phase(tn), turn_number=tn)
 
 
 class EvaluationFactor(ABC):

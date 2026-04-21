@@ -1,11 +1,11 @@
-﻿"""LethalThreatFactor — can we kill the opponent this or next turn."""
+"""LethalThreatFactor — can we kill the opponent this or next turn."""
 
 from __future__ import annotations
 
 from hs_analysis.search.game_state import GameState
 from hs_analysis.search.rhea_engine import Action
 from hs_analysis.search.engine.factors.factor_base import (
-    EvalContext, EvaluationFactor,
+    EvalContext, EvaluationFactor, Phase,
 )
 
 
@@ -39,8 +39,8 @@ class LethalThreatFactor(EvaluationFactor):
         return dmg
 
     def weight(self, context: EvalContext) -> float:
-        if context.phase == "late":
+        if context.phase == Phase.LATE:
             return 2.0
-        if context.phase == "mid":
+        if context.phase == Phase.MID:
             return 1.5
         return 1.0

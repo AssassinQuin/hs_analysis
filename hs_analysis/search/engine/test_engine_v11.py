@@ -434,18 +434,21 @@ class TestFactorScores:
 class TestEvalContext:
     def test_from_state_early(self):
         from hs_analysis.search.engine.factors.factor_base import EvalContext
+        from hs_analysis.models.phase import Phase
         state = _simple_state(turn=2)
         ctx = EvalContext.from_state(state)
-        assert ctx.phase == "early"
+        assert ctx.phase == Phase.EARLY
 
     def test_from_state_mid(self):
         from hs_analysis.search.engine.factors.factor_base import EvalContext
+        from hs_analysis.models.phase import Phase
         state = _simple_state(turn=6)
         ctx = EvalContext.from_state(state)
-        assert ctx.phase == "mid"
+        assert ctx.phase == Phase.MID
 
     def test_from_state_late(self):
         from hs_analysis.search.engine.factors.factor_base import EvalContext
+        from hs_analysis.models.phase import Phase
         state = _simple_state(turn=10)
         ctx = EvalContext.from_state(state)
-        assert ctx.phase == "late"
+        assert ctx.phase == Phase.LATE

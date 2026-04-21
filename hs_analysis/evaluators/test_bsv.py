@@ -1,4 +1,4 @@
-﻿"""Tests for V10 BSV (Board State Value) module."""
+"""Tests for V10 BSV (Board State Value) module."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from hs_analysis.evaluators.bsv import (
     eval_survival_v10,
     PHASE_WEIGHTS,
     ABSOLUTE_LETHAL_VALUE,
-    _get_phase,
 )
+from hs_analysis.models.phase import Phase, detect_phase
 from hs_analysis.search.game_state import HeroState, ManaState, Minion, OpponentState, Weapon
 
 
@@ -54,9 +54,9 @@ class TestSoftmax:
 # ──────────────────────────────────────────────
 
 class TestPhaseSelection:
-    @pytest.mark.parametrize("turn,phase", [(1, "early"), (4, "early"), (5, "mid"), (7, "mid"), (8, "late"), (15, "late")])
+    @pytest.mark.parametrize("turn,phase", [(1, Phase.EARLY), (4, Phase.EARLY), (5, Phase.MID), (7, Phase.MID), (8, Phase.LATE), (15, Phase.LATE)])
     def test_phase_mapping(self, turn, phase):
-        assert _get_phase(turn) == phase
+        assert detect_phase(turn) == phase
 
 
 # ──────────────────────────────────────────────

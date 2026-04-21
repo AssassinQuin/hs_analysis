@@ -24,6 +24,7 @@ from typing import Dict, Optional
 
 from hs_analysis.models.card import Card
 from hs_analysis.search.game_state import GameState
+from hs_analysis.models.phase import Phase, detect_phase
 from hs_analysis.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -113,20 +114,12 @@ class V8ContextualScorer:
 
     def _type_factor(self, card: Card, state: GameState) -> float:
         """Adjust value based on card type and game phase."""
-        # Phase: early(1-4), mid(5-7), late(8+)
-        turn = state.turn_number
-        if turn <= 4:
-            phase = "early"
-        elif turn <= 7:
-            phase = "mid"
-        else:
-            phase = "late"
+        phase = detect_phase(state.turn_number)
 
-        # Phase×Type table
         type_table = {
-            "MINION": {"early": 1.1, "mid": 1.0, "late": 0.85},
-            "SPELL":  {"early": 0.8, "mid": 1.0, "late": 1.2},
-            "WEAPON": {"early": 1.0, "mid": 1.1, "late": 0.9},
+            "MINION": {Phase.EARLY: 1.1, Phase.MID: 1.0, Phase.LATE: 0.85},
+            "SPELL":  {Phase.EARLY: 0.8, Phase.MID: 1.0, Phase.LATE: 1.2},
+            "WEAPON": {Phase.EARLY: 1.0, Phase.MID: 1.1, Phase.LATE: 0.9},
         }
         card_type = getattr(card, "card_type", "") or ""
         factor = type_table.get(card_type, {}).get(phase, 1.0)

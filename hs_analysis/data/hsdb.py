@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 
 _API_BASE = "https://api.hearthstonejson.com/v1"
 _UA = "hs_analysis/1.0"
-_CACHE_DIR = Path(os.environ.get("HSJSON_CACHE_DIR", Path.home() / ".cache" / "hsjson"))
+
+from hs_analysis.config import PROJECT_ROOT
+_CACHE_DIR = Path(os.environ.get("HSJSON_CACHE_DIR", str(PROJECT_ROOT / "cardData")))
 
 STANDARD_SETS: set = {
     "CATACLYSM", "TIME_TRAVEL", "THE_LOST_CITY", "EMERALD_DREAM",

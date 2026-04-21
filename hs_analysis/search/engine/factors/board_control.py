@@ -1,11 +1,11 @@
-﻿"""BoardControlFactor — who controls the board."""
+"""BoardControlFactor — who controls the board."""
 
 from __future__ import annotations
 
 from hs_analysis.search.game_state import GameState
 from hs_analysis.search.rhea_engine import Action
 from hs_analysis.search.engine.factors.factor_base import (
-    EvalContext, EvaluationFactor,
+    EvalContext, EvaluationFactor, Phase,
 )
 
 
@@ -28,8 +28,8 @@ class BoardControlFactor(EvaluationFactor):
         return max(-1.0, min(1.0, raw / scale))
 
     def weight(self, context: EvalContext) -> float:
-        if context.phase == "early":
+        if context.phase == Phase.EARLY:
             return 1.3
-        if context.phase == "late":
+        if context.phase == Phase.LATE:
             return 0.9
         return 1.1

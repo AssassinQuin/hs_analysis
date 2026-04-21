@@ -11,11 +11,11 @@ import json, math, os, sqlite3, sys
 from collections import defaultdict
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CARDS_PATH = os.path.join(BASE_DIR, "hs_cards", "unified_standard.json")
-V7_PATH = os.path.join(BASE_DIR, "hs_cards", "scoring_report.json")
-DB_PATH = os.path.join(BASE_DIR, "hs_cards", "hsreplay_cache.db")
-POOL_OUT = os.path.join(BASE_DIR, "hs_cards", "pool_quality_report.json")
-TURN_OUT = os.path.join(BASE_DIR, "hs_cards", "card_turn_data.json")
+CARDS_PATH = os.path.join(BASE_DIR, "cardData", "240397", "unified_standard.json")
+V7_PATH = os.path.join(BASE_DIR, "cardData", "240397", "scoring_report.json")
+DB_PATH = os.path.join(BASE_DIR, "cardData", "240397", "hsreplay_cache.db")
+POOL_OUT = os.path.join(BASE_DIR, "cardData", "240397", "pool_quality_report.json")
+TURN_OUT = os.path.join(BASE_DIR, "cardData", "240397", "card_turn_data.json")
 
 # Race pools to compute (English names matching card_cleaner output)
 RACE_POOLS = ["DRAGON", "DEMON", "BEAST", "MURLOC", "PIRATE", "ELEMENTAL", "UNDEAD", "TOTEM", "MECHANICAL", "NAGA", "DRAENEI"]

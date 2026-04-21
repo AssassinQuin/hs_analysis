@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""Build wild-only card database by deduplicating against standard pool.
+"""Build wild-only card database from HSJSON data.
 
-Reads ``iyingdi_all_normalized.json`` (all cards) and removes any card
-whose ``dbfId`` exists in ``unified_standard.json``.  Also removes cards
-that are standard-only (``standard=1, wild=0``).  The remaining wild-only
-cards are written to ``unified_wild.json``.
-
-Then runs the card cleaner on the wild cards for race/mechanic normalization.
+Reads zhCN + enUS collectible cards from cardData/BUILD/,
+removes cards in standard sets, writes remaining wild-only cards.
 
 Usage::
 
@@ -17,138 +13,118 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List
 
 from ..config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
+STANDARD_SETS = {
+    "CATACLYSM", "TIME_TRAVEL", "THE_LOST_CITY", "EMERALD_DREAM",
+    "CORE", "EVENT",
+}
 
-def load_dbfids(path: Path) -> Set[int]:
-    """Load a set of dbfIds from a JSON card array."""
-    if not path.exists():
-        return set()
-    cards: List[Dict[str, Any]] = json.loads(path.read_text(encoding="utf-8"))
-    ids = set()
-    for c in cards:
-        dbf = c.get("dbfId")
-        if dbf is not None:
-            ids.add(int(dbf))
-    return ids
+
+def _clean_text(text):
+    if not text:
+        return ""
+    cleaned = re.sub(r"</?[^>]+>", "", text)
+    cleaned = re.sub(r"[$#](\d+)", r"\1", cleaned)
+    cleaned = re.sub(r"\[x\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", "", cleaned).strip()
+    return cleaned
 
 
 def build_wild_db(
-    all_cards_path: Path | None = None,
-    standard_path: Path | None = None,
+    data_dir: Path | None = None,
     output_path: Path | None = None,
-    run_cleaner: bool = True,
 ) -> Dict[str, Any]:
-    """Build the wild-only card database.
+    """Build the wild-only card database from HSJSON data.
 
     Args:
-        all_cards_path:  Normalized all-cards file from ``fetch_wild``.
-        standard_path:   Standard pool to dedup against.
-        output_path:     Where to write wild-only cards.
-        run_cleaner:     Whether to apply card_cleaner to wild cards.
+        data_dir:   Directory containing zhCN/ and enUS/ subdirs.
+        output_path: Where to write wild-only cards.
 
     Returns:
         Statistics dict.
     """
-    if all_cards_path is None:
-        all_cards_path = DATA_DIR / "iyingdi_all_normalized.json"
-    if standard_path is None:
-        standard_path = DATA_DIR / "unified_standard.json"
+    if data_dir is None:
+        data_dir = DATA_DIR
     if output_path is None:
         output_path = DATA_DIR / "unified_wild.json"
 
-    # Load standard dbfIds for dedup
-    standard_dbfids = load_dbfids(standard_path)
-    logger.info("Standard pool: %d unique dbfIds", len(standard_dbfids))
+    zh_path = data_dir / "zhCN" / "cards.collectible.json"
+    en_path = data_dir / "enUS" / "cards.collectible.json"
 
-    # Load all cards
-    if not all_cards_path.exists():
-        raise FileNotFoundError(
-            f"All-cards file not found: {all_cards_path}\n"
-            "Run fetch_wild first: python -m hs_analysis.data.fetch_wild"
-        )
+    if not zh_path.exists():
+        raise FileNotFoundError(f"zhCN data not found: {zh_path}")
 
-    all_cards: List[Dict[str, Any]] = json.loads(
-        all_cards_path.read_text(encoding="utf-8")
-    )
-    logger.info("All cards loaded: %d", len(all_cards))
+    zh_data: List[Dict[str, Any]] = json.loads(zh_path.read_text(encoding="utf-8"))
+    en_data: List[Dict[str, Any]] = json.loads(en_path.read_text(encoding="utf-8"))
+    en_by_id = {c["id"]: c for c in en_data}
 
-    # Filter: keep only wild-eligible, non-standard cards
     wild_cards: List[Dict[str, Any]] = []
-    skipped_standard = 0
-    skipped_no_wild = 0
-    skipped_no_dbf = 0
+    standard_count = 0
 
-    for card in all_cards:
-        dbf = card.get("dbfId")
-
-        # Skip cards without dbfId
-        if dbf is None:
-            skipped_no_dbf += 1
+    for zh in zh_data:
+        card_set = zh.get("set", "")
+        if card_set in STANDARD_SETS:
+            standard_count += 1
             continue
 
-        dbf_int = int(dbf)
+        en = en_by_id.get(zh["id"], {})
+        text_raw = zh.get("text", "") or ""
 
-        # Skip cards already in standard pool (dedup)
-        if dbf_int in standard_dbfids:
-            skipped_standard += 1
-            continue
+        wild_cards.append({
+            "dbfId": zh.get("dbfId", 0),
+            "cardId": zh.get("id", ""),
+            "name": zh.get("name", ""),
+            "ename": en.get("name", ""),
+            "cost": zh.get("cost", 0),
+            "attack": zh.get("attack", 0),
+            "health": zh.get("health", 0),
+            "durability": zh.get("durability", 0),
+            "armor": zh.get("armor", 0),
+            "type": zh.get("type", ""),
+            "cardClass": zh.get("cardClass", "NEUTRAL"),
+            "race": zh.get("race", ""),
+            "rarity": zh.get("rarity", ""),
+            "text": _clean_text(text_raw),
+            "mechanics": zh.get("mechanics", []),
+            "overload": zh.get("overload", 0),
+            "spellDamage": zh.get("spellDamage", 0),
+            "set": card_set,
+            "format": "wild",
+        })
 
-        # Skip cards that are not wild-eligible
-        if not card.get("wild"):
-            skipped_no_wild += 1
-            continue
+    wild_cards.sort(key=lambda x: (x.get("cost", 0), x["name"]))
 
-        # Remove standard/wild helper fields before saving
-        cleaned = {k: v for k, v in card.items()
-                   if k not in ("standard", "wild")}
-        cleaned["format"] = "wild"
-        wild_cards.append(cleaned)
-
-    # Optionally run card cleaner on wild cards
-    if run_cleaner and wild_cards:
-        try:
-            from .card_cleaner import clean_card
-            for card in wild_cards:
-                clean_card(card)
-            logger.info("Applied card_cleaner to %d wild cards", len(wild_cards))
-        except ImportError:
-            logger.warning("card_cleaner not available, skipping cleaning")
-
-    # Write output
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        json.dumps(wild_cards, ensure_ascii=False, indent=2),
+        json.dumps(wild_cards, ensure_ascii=False, indent=1),
         encoding="utf-8",
     )
 
+    types = Counter(c["type"] for c in wild_cards)
+
     stats = {
-        "total_input": len(all_cards),
-        "standard_dbfids": len(standard_dbfids),
-        "skipped_standard": skipped_standard,
-        "skipped_no_wild": skipped_no_wild,
-        "skipped_no_dbf": skipped_no_dbf,
+        "total_collectible": len(zh_data),
+        "standard_count": standard_count,
         "wild_only": len(wild_cards),
         "output_path": str(output_path),
+        "types": dict(types),
     }
 
     logger.info(
-        "Wild DB: %d cards → %s (skipped: %d standard, %d no-wild, %d no-dbf)",
-        len(wild_cards), output_path,
-        skipped_standard, skipped_no_wild, skipped_no_dbf,
+        "Wild DB: %d wild-only cards -> %s (standard: %d)",
+        len(wild_cards), output_path, standard_count,
     )
 
     return stats
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -159,23 +135,11 @@ if __name__ == "__main__":
 
     stats = build_wild_db()
 
-    print(f"\n✅ Wild database built")
-    print(f"   Input (all cards):     {stats['total_input']}")
-    print(f"   Standard dbfIds:       {stats['standard_dbfids']}")
-    print(f"   Skipped (in standard): {stats['skipped_standard']}")
-    print(f"   Skipped (not wild):    {stats['skipped_no_wild']}")
-    print(f"   Skipped (no dbfId):    {stats['skipped_no_dbf']}")
-    print(f"   Wild-only cards:       {stats['wild_only']}")
+    print(f"\nWild database built")
+    print(f"   Total collectible:    {stats['total_collectible']}")
+    print(f"   Standard cards:       {stats['standard_count']}")
+    print(f"   Wild-only cards:      {stats['wild_only']}")
     print(f"   Output: {stats['output_path']}")
-
-    # Quick type breakdown
-    output_path = Path(stats["output_path"])
-    if output_path.exists():
-        cards = json.loads(output_path.read_text(encoding="utf-8"))
-        by_type: Dict[str, int] = {}
-        for c in cards:
-            t = c.get("type", "?")
-            by_type[t] = by_type.get(t, 0) + 1
-        print(f"\n   Wild cards by type:")
-        for t, n in sorted(by_type.items(), key=lambda x: -x[1]):
-            print(f"     {t}: {n}")
+    print(f"\n   Wild cards by type:")
+    for t, n in sorted(stats["types"].items(), key=lambda x: -x[1]):
+        print(f"     {t}: {n}")

@@ -11,9 +11,9 @@ import json, os, re, sys
 from difflib import SequenceMatcher
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CARDS_PATH = os.path.join(BASE_DIR, "hs_cards", "unified_standard.json")
-V7_PATH = os.path.join(BASE_DIR, "hs_cards", "scoring_report.json")
-OUT_PATH = os.path.join(BASE_DIR, "hs_cards", "rewind_delta_report.json")
+CARDS_PATH = os.path.join(BASE_DIR, "cardData", "240397", "unified_standard.json")
+V7_PATH = os.path.join(BASE_DIR, "cardData", "240397", "scoring_report.json")
+OUT_PATH = os.path.join(BASE_DIR, "cardData", "240397", "rewind_delta_report.json")
 
 
 def load_cards():

@@ -24,6 +24,7 @@ from typing import List, Optional, Tuple
 # ---------------------------------------------------------------------------
 from hs_analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
 from hs_analysis.models.card import Card
+from hs_analysis.models.phase import detect_phase
 from hs_analysis.evaluators.composite import evaluate, evaluate_delta, quick_eval
 from hs_analysis.utils.score_provider import load_scores_into_hand
 
@@ -1106,14 +1107,8 @@ class RHEAEngine:
     # ---------------------------------------------------------------
 
     def _detect_phase(self, state: GameState) -> str:
-        """Detect game phase: early (1-3), mid (4-7), late (8+)."""
-        turn = state.turn_number
-        if turn <= 3:
-            return "early"
-        elif turn <= 7:
-            return "mid"
-        else:
-            return "late"
+        """Detect game phase using unified Phase enum."""
+        return detect_phase(state.turn_number).value
 
     def _get_phase_params(self, phase: str) -> dict:
         """Get search parameters for game phase."""

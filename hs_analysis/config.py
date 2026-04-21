@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DATA_DIR = PROJECT_ROOT / "hs_cards"
+DATA_BUILD = "240397"
+DATA_DIR = PROJECT_ROOT / "cardData" / DATA_BUILD
 ENUMS_PATH = PROJECT_ROOT / "hearthstone_enums.json"
 RANKINGS_PATH = PROJECT_ROOT / "HSReplay_Card_Rankings.xlsx"
 

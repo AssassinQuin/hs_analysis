@@ -1,11 +1,11 @@
-﻿"""ResourceEfficiencyFactor — mana utilization."""
+"""ResourceEfficiencyFactor — mana utilization."""
 
 from __future__ import annotations
 
 from hs_analysis.search.game_state import GameState
 from hs_analysis.search.rhea_engine import Action
 from hs_analysis.search.engine.factors.factor_base import (
-    EvalContext, EvaluationFactor,
+    EvalContext, EvaluationFactor, Phase,
 )
 
 
@@ -29,6 +29,6 @@ class ResourceEfficiencyFactor(EvaluationFactor):
         return max(-1.0, min(1.0, raw))
 
     def weight(self, context: EvalContext) -> float:
-        if context.phase == "early":
+        if context.phase == Phase.EARLY:
             return 0.8
         return 0.5

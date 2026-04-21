@@ -15,6 +15,7 @@ import math
 from typing import List, Tuple
 
 from hs_analysis.search.game_state import GameState, Minion
+from hs_analysis.models.phase import Phase, detect_phase
 
 # Import SIV for per-card scoring
 from hs_analysis.evaluators.siv import siv_score
@@ -35,9 +36,9 @@ TEMPERATURE = 0.5
 
 # Phase weights: (tempo, value, survival)
 PHASE_WEIGHTS = {
-    "early": (1.3, 0.7, 0.5),  # turns 1-4: tempo matters most
-    "mid":   (1.0, 1.0, 1.0),  # turns 5-7: balanced
-    "late":  (0.7, 1.2, 1.5),  # turns 8+: value + survival
+    Phase.EARLY: (1.3, 0.7, 0.5),
+    Phase.MID:   (1.0, 1.0, 1.0),
+    Phase.LATE:  (0.7, 1.2, 1.5),
 }
 
 
@@ -75,19 +76,8 @@ def softmax(values: List[float], temperature: float = TEMPERATURE) -> List[float
 # Phase selection
 # ===================================================================
 
-def _get_phase(turn_number: int) -> str:
-    """Determine game phase from turn number."""
-    if turn_number <= 4:
-        return "early"
-    elif turn_number <= 7:
-        return "mid"
-    else:
-        return "late"
-
-
 def _get_phase_weights(turn_number: int) -> Tuple[float, float, float]:
-    """Get (tempo, value, survival) weights for the current turn."""
-    phase = _get_phase(turn_number)
+    phase = detect_phase(turn_number)
     return PHASE_WEIGHTS.get(phase, (1.0, 1.0, 1.0))
 
 

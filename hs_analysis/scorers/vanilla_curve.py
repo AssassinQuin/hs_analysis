@@ -128,14 +128,14 @@ def load_curve_params(path: str = None) -> tuple:
 
 
 def main():
-    """独立运行: 从分析数据拟合曲线."""
-    data_path = str(DATA_DIR / "standard_legendaries_analysis.json")
+    """独立运行: 从统一数据库拟合曲线."""
+    data_path = str(DATA_DIR / "unified_standard.json")
     output_path = str(CURVE_PARAMS_PATH)
 
     with open(data_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        all_cards = json.load(f)
 
-    legendaries = data["legendaries"]
+    legendaries = [c for c in all_cards if c.get("rarity") == "LEGENDARY"]
     minions = [c for c in legendaries if c.get("type") == "MINION" and c.get("cost", 0) < 99]
 
     print(f"Total legendaries: {len(legendaries)}")

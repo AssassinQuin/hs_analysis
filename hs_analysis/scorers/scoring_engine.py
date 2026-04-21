@@ -123,6 +123,28 @@ def calc_keyword_score(card, curve_popt):
     return total, details
 
 
+def calc_structured_bonuses(card):
+    bonuses = 0.0
+    details = []
+
+    overload_val = card.get("overload", 0)
+    if overload_val:
+        bonuses -= overload_val * 0.3
+        details.append(f"过载({overload_val})={-overload_val * 0.3:+.1f}")
+
+    sd_val = card.get("spellDamage", 0)
+    if sd_val:
+        bonuses += sd_val * 0.4
+        details.append(f"法强({sd_val})={sd_val * 0.4:+.1f}")
+
+    armor_val = card.get("armor", 0)
+    if armor_val:
+        bonuses += armor_val * 0.3
+        details.append(f"护甲({armor_val})={armor_val * 0.3:+.1f}")
+
+    return bonuses, details
+
+
 # ═══════════════════════════════════════════════════════════════════
 # 3. 类型协同层 (L2.5)
 # ═══════════════════════════════════════════════════════════════════
@@ -181,13 +203,29 @@ def calc_spell_school(card):
 # 4. 文本效果解析 (L3)
 # ═══════════════════════════════════════════════════════════════════
 
+_RE_HTML = re.compile(r"</?[^>]+>")
+_RE_VAR = re.compile(r"[$#](\d+)")
+_RE_BRACKET = re.compile(r"\[x\]", re.IGNORECASE)
+_RE_FULLWIDTH_PAREN = re.compile(r"（(\d+)）")
+_RE_MULTI_SPACE = re.compile(r"\s+")
+
+
+def _clean_card_text(text):
+    cleaned = _RE_HTML.sub("", text)
+    cleaned = _RE_VAR.sub(r"\1", cleaned)
+    cleaned = _RE_BRACKET.sub("", cleaned)
+    cleaned = _RE_MULTI_SPACE.sub(" ", cleaned).strip()
+    return cleaned
+
+
 def parse_text_effects(text):
     if not text:
         return 0.0, []
+    cleaned = _clean_card_text(text)
     total = 0.0
     details = []
     for ename, (pat, scorer) in EFFECT_PATTERNS.items():
-        m = re.search(pat, text)
+        m = re.search(pat, cleaned)
         if m:
             val = scorer(m)
             total += val
@@ -201,16 +239,21 @@ def parse_text_effects(text):
 
 def calc_conditional_ev(card, base_l2l3):
     text = card.get("text", "") or ""
-    mechs = " ".join(card.get("mechanics", []))
-    all_text = mechs + " " + text
+    mechs = set(card.get("mechanics", []))
     cond_score = 0.0
     cond_details = []
     matched = set()
 
-    for cname, pat, prob, mult in CONDITION_DEFS:
+    for entry in CONDITION_DEFS:
+        cname, mech_tag, pat, prob, mult = entry
         if cname in matched:
             continue
-        if re.search(pat, all_text):
+        triggered = False
+        if mech_tag is not None:
+            triggered = mech_tag in mechs
+        elif pat is not None:
+            triggered = bool(re.search(pat, text))
+        if triggered:
             ev = prob * base_l2l3 * (mult - 1.0)
             cond_score += ev
             cond_details.append(f"{cname}(P={prob:.1f},M={mult:.1f})={ev:+.1f}")
@@ -311,18 +354,19 @@ def score_minion(card, curve_popt, type_baselines):
     l1 = actual - expected
 
     l2, d2 = calc_keyword_score(card, curve_popt)
+    l_struct, d_struct = calc_structured_bonuses(card)
     l2_5_race, d2_5r = calc_race_synergy(card, mana)
     l2_5_spell, d2_5s = calc_spell_school(card)
     l3, d3 = parse_text_effects(card.get("text", ""))
 
-    base_l2l3 = l2 + l2_5_race + l2_5_spell + l3
+    base_l2l3 = l2 + l_struct + l2_5_race + l2_5_spell + l3
     l5, d5 = calc_conditional_ev(card, base_l2l3)
 
-    total = l1 + l2 + l2_5_race + l2_5_spell + l3 + l5
+    total = l1 + l2 + l_struct + l2_5_race + l2_5_spell + l3 + l5
     details = {
-        "L1": l1, "L2": l2, "L2_5_race": l2_5_race, "L2_5_spell": l2_5_spell,
-        "L3": l3, "L5": l5, "total_raw": total,
-        "breakdown": d2 + d2_5r + d2_5s + d3 + d5,
+        "L1": l1, "L2": l2, "L_struct": l_struct, "L2_5_race": l2_5_race,
+        "L2_5_spell": l2_5_spell, "L3": l3, "L5": l5, "total_raw": total,
+        "breakdown": d2 + d_struct + d2_5r + d2_5s + d3 + d5,
     }
     return total, details
 
@@ -331,21 +375,22 @@ def score_spell(card, curve_popt, type_baselines):
     mana = max(card.get("cost", 0), 0)
     cls_mult = CLASS_MULTIPLIER.get(card.get("cardClass", "NEUTRAL"), 1.0)
     l2, d2 = calc_keyword_score(card, curve_popt)
+    l_struct, d_struct = calc_structured_bonuses(card)
     l2_5_spell, d2_5s = calc_spell_school(card)
     l3, d3 = parse_text_effects(card.get("text", ""))
 
     bl = type_baselines.get("SPELL", {"params": None, "mean": 5.0})
     expected = get_type_expected(mana, bl) * cls_mult
-    l1 = (l2 + l2_5_spell + l3) - expected
+    l1 = (l2 + l_struct + l2_5_spell + l3) - expected
 
-    base_l2l3 = l2 + l2_5_spell + l3
+    base_l2l3 = l2 + l_struct + l2_5_spell + l3
     l5, d5 = calc_conditional_ev(card, base_l2l3)
 
     total = l1 + l5
     details = {
-        "L1": l1, "L2": l2, "L2_5_spell": l2_5_spell, "L3": l3, "L5": l5,
-        "total_raw": total,
-        "breakdown": d2 + d2_5s + d3 + d5,
+        "L1": l1, "L2": l2, "L_struct": l_struct, "L2_5_spell": l2_5_spell,
+        "L3": l3, "L5": l5, "total_raw": total,
+        "breakdown": d2 + d_struct + d2_5s + d3 + d5,
     }
     return total, details
 
@@ -359,18 +404,20 @@ def score_weapon(card, curve_popt, type_baselines):
     l1_raw = weapon_stats - expected_stats
 
     l2, d2 = calc_keyword_score(card, curve_popt)
+    l_struct, d_struct = calc_structured_bonuses(card)
     l3, d3 = parse_text_effects(card.get("text", ""))
 
     bl = type_baselines.get("WEAPON", {"params": None, "mean": 3.0})
     expected_effects = get_type_expected(mana, bl)
-    l1 = l1_raw + (l2 + l3) - expected_effects
+    l1 = l1_raw + (l2 + l_struct + l3) - expected_effects
 
-    l5, d5 = calc_conditional_ev(card, l2 + l3)
+    l5, d5 = calc_conditional_ev(card, l2 + l_struct + l3)
 
     total = l1 + l5
     details = {
-        "L1": l1, "L2": l2, "L3": l3, "L5": l5, "total_raw": total,
-        "breakdown": d2 + d3 + d5,
+        "L1": l1, "L2": l2, "L_struct": l_struct, "L3": l3, "L5": l5,
+        "total_raw": total,
+        "breakdown": d2 + d_struct + d3 + d5,
     }
     return total, details
 
@@ -380,39 +427,43 @@ def score_location(card, curve_popt, type_baselines):
     charges = max(card.get("health", 0), 1)
 
     l2, d2 = calc_keyword_score(card, curve_popt)
+    l_struct, d_struct = calc_structured_bonuses(card)
     l3_per_use, _ = parse_text_effects(card.get("text", ""))
     total_effect = l3_per_use * charges
 
     bl = type_baselines.get("LOCATION", {"params": None, "mean": 4.0})
     expected = get_type_expected(mana, bl)
-    l1 = total_effect + l2 - expected
+    l1 = total_effect + l2 + l_struct - expected
 
-    l5, d5 = calc_conditional_ev(card, l2 + total_effect)
+    l5, d5 = calc_conditional_ev(card, l2 + l_struct + total_effect)
 
     total = l1 + l5
     details = {
-        "L1": l1, "L2": l2, "L3": l3_per_use, "L3_total": total_effect,
-        "charges": charges, "L5": l5, "total_raw": total,
-        "breakdown": d2 + d5,
+        "L1": l1, "L2": l2, "L_struct": l_struct, "L3": l3_per_use,
+        "L3_total": total_effect, "charges": charges, "L5": l5,
+        "total_raw": total,
+        "breakdown": d2 + d_struct + d5,
     }
     return total, details
 
 
 def score_hero(card, curve_popt, type_baselines):
     l2, d2 = calc_keyword_score(card, curve_popt)
+    l_struct, d_struct = calc_structured_bonuses(card)
     l3, d3 = parse_text_effects(card.get("text", ""))
     armor_budget = 5.0
 
     bl = type_baselines.get("HERO", {"params": None, "mean": 7.0})
     expected = get_type_expected(card.get("cost", 5), bl)
-    l1 = l2 + l3 + armor_budget - expected
+    l1 = l2 + l_struct + l3 + armor_budget - expected
 
-    l5, d5 = calc_conditional_ev(card, l2 + l3)
+    l5, d5 = calc_conditional_ev(card, l2 + l_struct + l3)
 
     total = l1 + l5
     details = {
-        "L1": l1, "L2": l2, "L3": l3, "L5": l5, "total_raw": total,
-        "breakdown": d2 + d3 + d5,
+        "L1": l1, "L2": l2, "L_struct": l_struct, "L3": l3, "L5": l5,
+        "total_raw": total,
+        "breakdown": d2 + d_struct + d3 + d5,
     }
     return total, details
 

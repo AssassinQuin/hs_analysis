@@ -39,7 +39,7 @@ from hs_analysis.config import (
     HSREPLAY_ARCHETYPES_URL,
     DATA_DIR,
     UNIFIED_DB_PATH,
-    V2_REPORT_PATH,
+    SCORING_REPORT_PATH,
     HSREPLAY_CACHE_DB,
     CACHE_DAYS,
     get_api_headers,
@@ -49,7 +49,7 @@ from hs_analysis.config import (
 # ── Paths ──────────────────────────────────────────
 DB_PATH = str(HSREPLAY_CACHE_DB)
 UNIFIED_PATH = str(UNIFIED_DB_PATH)
-V2_REPORT_PATH = str(V2_REPORT_PATH)
+V2_REPORT_PATH = str(SCORING_REPORT_PATH)
 
 # ── API Config ─────────────────────────────────────
 API_HEADERS = get_api_headers()

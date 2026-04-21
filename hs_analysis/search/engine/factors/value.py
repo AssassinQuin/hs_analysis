@@ -1,11 +1,11 @@
-﻿"""ValueFactor — resource quantity and card advantage."""
+"""ValueFactor — resource quantity and card advantage."""
 
 from __future__ import annotations
 
 from hs_analysis.search.game_state import GameState
 from hs_analysis.search.rhea_engine import Action
 from hs_analysis.search.engine.factors.factor_base import (
-    EvalContext, EvaluationFactor,
+    EvalContext, EvaluationFactor, Phase,
 )
 
 
@@ -30,8 +30,8 @@ class ValueFactor(EvaluationFactor):
         return max(-1.0, min(1.0, raw))
 
     def weight(self, context: EvalContext) -> float:
-        if context.phase == "late":
+        if context.phase == Phase.LATE:
             return 1.3
-        if context.phase == "early":
+        if context.phase == Phase.EARLY:
             return 0.6
         return 1.0
