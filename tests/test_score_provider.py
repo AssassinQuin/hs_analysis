@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Unit tests for score_provider module.
 
 Run: python3 scripts/test_score_provider.py
@@ -21,14 +21,14 @@ from hs_analysis.utils.score_provider import ScoreProvider, load_scores_into_han
 def test_basic_lookup():
     """V7 scores loaded and returned by dbf_id."""
     data = [
-        {"dbfId": 100, "v7_score": 5.5, "L6": 3.0},
-        {"dbfId": 200, "v7_score": 8.1, "L6": 7.0},
+        {"dbfId": 100, "score": 5.5, "L6": 3.0},
+        {"dbfId": 200, "score": 8.1, "L6": 7.0},
     ]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
     try:
-        sp = ScoreProvider(path, score_field="v7_score")
+        sp = ScoreProvider(path, score_field="score")
         assert sp.get_score(100) == 5.5
         assert sp.get_score(200) == 8.1
         assert sp.get_score(999) == 0.0
@@ -38,12 +38,12 @@ def test_basic_lookup():
 
 def test_snake_case_dbf_id():
     """Handle entries using dbf_id (snake_case) instead of dbfId (camelCase)."""
-    data = [{"dbf_id": 300, "v7_score": 2.0}]
+    data = [{"dbf_id": 300, "score": 2.0}]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
     try:
-        sp = ScoreProvider(path, score_field="v7_score")
+        sp = ScoreProvider(path, score_field="score")
         assert sp.get_score(300) == 2.0
     finally:
         os.unlink(path)
@@ -51,7 +51,7 @@ def test_snake_case_dbf_id():
 
 def test_lazy_loading():
     """Cache is None until first get_score call."""
-    data = [{"dbfId": 1, "v7_score": 1.0}]
+    data = [{"dbfId": 1, "score": 1.0}]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
@@ -73,12 +73,12 @@ def test_missing_file():
 
 def test_malformed_score():
     """Non-numeric score defaults to 0.0 without crashing."""
-    data = [{"dbfId": 10, "v7_score": "bad"}]
+    data = [{"dbfId": 10, "score": "bad"}]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
     try:
-        sp = ScoreProvider(path, score_field="v7_score")
+        sp = ScoreProvider(path, score_field="score")
         assert sp.get_score(10) == 0.0
     finally:
         os.unlink(path)
@@ -86,33 +86,33 @@ def test_malformed_score():
 
 def test_malformed_dbf_id():
     """Non-numeric dbfId is skipped gracefully."""
-    data = [{"dbfId": "not_a_number", "v7_score": 5.0}]
+    data = [{"dbfId": "not_a_number", "score": 5.0}]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
     try:
-        sp = ScoreProvider(path, score_field="v7_score")
+        sp = ScoreProvider(path, score_field="score")
         assert sp.get_score(0) == 0.0  # nothing loaded
     finally:
         os.unlink(path)
 
 
 def test_load_into_hand():
-    """load_into_hand populates card.v7_score for matched cards."""
+    """load_into_hand populates card.score for matched cards."""
     data = [
-        {"dbfId": 500, "v7_score": 3.3},
-        {"dbfId": 501, "v7_score": 6.6},
+        {"dbfId": 500, "score": 3.3},
+        {"dbfId": 501, "score": 6.6},
     ]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
     try:
-        sp = ScoreProvider(path, score_field="v7_score")
+        sp = ScoreProvider(path, score_field="score")
         cards = [Card(dbf_id=500, name="A"), Card(dbf_id=501, name="B"), Card(dbf_id=999, name="Missing")]
         count = sp.load_into_hand(cards)
-        assert cards[0].v7_score == 3.3
-        assert cards[1].v7_score == 6.6
-        assert cards[2].v7_score == 0.0
+        assert cards[0].score == 3.3
+        assert cards[1].score == 6.6
+        assert cards[2].score == 0.0
         assert count == 2
     finally:
         os.unlink(path)
@@ -120,35 +120,35 @@ def test_load_into_hand():
 
 def test_load_scores_into_hand_with_gamestate():
     """Convenience function works with a GameState object."""
-    data = [{"dbfId": 600, "v7_score": 9.9}]
+    data = [{"dbfId": 600, "score": 9.9}]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
     try:
         state = GameState(hand=[Card(dbf_id=600, name="Test")])
-        load_scores_into_hand(state, source="v7", report_path=path)
-        assert state.hand[0].v7_score == 9.9
+        load_scores_into_hand(state, report_path=path)
+        assert state.hand[0].score == 9.9
     finally:
         os.unlink(path)
 
 
 def test_load_scores_into_hand_with_list():
     """Convenience function works with a plain list of Cards."""
-    data = [{"dbfId": 700, "v7_score": 4.4}]
+    data = [{"dbfId": 700, "score": 4.4}]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name
     try:
         cards = [Card(dbf_id=700, name="Test")]
-        load_scores_into_hand(cards, source="v7", report_path=path)
-        assert cards[0].v7_score == 4.4
+        load_scores_into_hand(cards, report_path=path)
+        assert cards[0].score == 4.4
     finally:
         os.unlink(path)
 
 
 def test_l6_source():
     """Source='l6' reads the L6 field from JSON."""
-    data = [{"dbfId": 800, "v7_score": 10.0, "L6": 5.0}]
+    data = [{"dbfId": 800, "score": 10.0, "L6": 5.0}]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(data, f)
         path = f.name

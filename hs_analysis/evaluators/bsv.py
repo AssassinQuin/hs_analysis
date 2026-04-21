@@ -106,7 +106,7 @@ class _MinionCardLike:
         self.card_type = "MINION"
         self.attack = minion.attack
         self.health = minion.health
-        self.v7_score = minion.attack * 1.0 + minion.health * 0.8  # crude estimate
+        self.score = minion.attack * 1.0 + minion.health * 0.8
         self.text = ""
         self.mechanics = []
         self.race = getattr(minion, "race", "") or ""

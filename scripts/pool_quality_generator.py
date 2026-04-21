@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Pool Quality Generator — Computes pool quality metrics for V8 contextual scoring.
 
 Reads unified_standard.json + v7_scoring_report.json + hsreplay_cache.db.
@@ -12,7 +12,7 @@ from collections import defaultdict
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CARDS_PATH = os.path.join(BASE_DIR, "hs_cards", "unified_standard.json")
-V7_PATH = os.path.join(BASE_DIR, "hs_cards", "v7_scoring_report.json")
+V7_PATH = os.path.join(BASE_DIR, "hs_cards", "scoring_report.json")
 DB_PATH = os.path.join(BASE_DIR, "hs_cards", "hsreplay_cache.db")
 POOL_OUT = os.path.join(BASE_DIR, "hs_cards", "pool_quality_report.json")
 TURN_OUT = os.path.join(BASE_DIR, "hs_cards", "card_turn_data.json")
@@ -30,11 +30,11 @@ def load_cards():
         return json.load(f)
 
 
-def load_v7_scores():
-    """Returns {dbfId: v7_score}"""
+def load_scores():
+    """Returns {dbfId: score}"""
     with open(V7_PATH, encoding="utf-8") as f:
         data = json.load(f)
-    return {entry["dbfId"]: entry.get("v7_score", 0.0) for entry in data if "dbfId" in entry}
+    return {entry["dbfId"]: entry.get("score", 0.0) for entry in data if "dbfId" in entry}
 
 
 def compute_pool_metrics(cards_in_pool, v7_map):
@@ -77,7 +77,7 @@ def build_pools(cards):
 
 def generate_pool_report():
     cards = load_cards()
-    v7_map = load_v7_scores()
+    v7_map = load_scores()
     pools = build_pools(cards)
     report = {}
     for pool_name, pool_cards in pools.items():

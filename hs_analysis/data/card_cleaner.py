@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Card data cleaner — normalize race, extract mechanics, parse spell schools.
 
-Reads ``hearthstone_enums.json`` as the canonical source for 56 keywords,
-13 races, and 7 spell schools.  Applies cleaning to every card in a pool
-and writes the result back to JSON (with optional backup).
+DEPRECATED for new code: Use ``hs_analysis.data.hsdb.HSCardDB`` instead,
+which provides authoritative card data from CardDefs.xml with proper enums.
+The regex-based cleaning in this module is kept for backward compatibility
+with legacy JSON data files.
 
-Usage::
+For new code::
 
-    python -m hs_analysis.data.card_cleaner
+    from hs_analysis.data.hsdb import get_db
+    db = get_db()
+    card = db.get_card("EX1_001")  # mechanics, race, school all pre-extracted
 """
 
 from __future__ import annotations

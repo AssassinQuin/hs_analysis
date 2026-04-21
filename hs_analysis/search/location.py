@@ -95,7 +95,9 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
     s = state
 
     # Damage: 造成N点伤害
-    dmg_match = re.search(r'造成\s*(\d+)\s*点伤害', text)
+    dmg_match = re.search(r"Deal\s*(\d+)\s*damage", text, re.IGNORECASE)
+    if not dmg_match:
+        dmg_match = re.search(r'造成\s*(\d+)\s*点伤害', text)
     if dmg_match:
         damage = int(dmg_match.group(1))
         # Default: damage enemy hero
@@ -103,14 +105,20 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
         return s
 
     # Heal: 恢复N点生命
-    heal_match = re.search(r'恢复\s*(\d+)\s*点生命', text)
+    heal_match = re.search(r"Restore\s*(\d+)\s*(?:Health|health)", text, re.IGNORECASE)
+    if not heal_match:
+        heal_match = re.search(r'恢复\s*(\d+)\s*点生命', text)
     if heal_match:
         heal_amount = int(heal_match.group(1))
         s.hero.hp = min(s.hero.hp + heal_amount, 30)
         return s
 
     # Buff: 使一个随从获得+ATK/+HP
-    buff_match = re.search(r'获得\+?(\d+)/\+?(\d+)', text)
+    buff_match = re.search(r"Give\s*\+(\d+)/\+(\d+)", text, re.IGNORECASE)
+    if not buff_match:
+        buff_match = re.search(r"Gain\s*\+(\d+)/\+(\d+)", text, re.IGNORECASE)
+    if not buff_match:
+        buff_match = re.search(r'获得\+?(\d+)/\+?(\d+)', text)
     if buff_match:
         atk_bonus = int(buff_match.group(1))
         hp_bonus = int(buff_match.group(2))
@@ -122,7 +130,9 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
         return s
 
     # Summon: 召唤一个N/N
-    summon_match = re.search(r'召唤一个(\d+)/(\d+)', text)
+    summon_match = re.search(r"Summon\s*(?:a\s+)?(\d+)/(\d+)", text, re.IGNORECASE)
+    if not summon_match:
+        summon_match = re.search(r'召唤一个(\d+)/(\d+)', text)
     if summon_match:
         from hs_analysis.search.game_state import Minion
         atk = int(summon_match.group(1))
@@ -140,7 +150,7 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
         return s
 
     # Discover: 发现 — delegate to discover framework
-    if '发现' in text:
+    if '发现' in text or re.search(r'Discover', text, re.IGNORECASE):
         try:
             from hs_analysis.search.discover import generate_discover_options
             # No-op for search: discover is too complex for deterministic simulation

@@ -29,6 +29,18 @@ from hs_analysis.models.card import Card
 # ===================================================================
 
 SPELL_EFFECT_PATTERNS = {
+    'aoe_damage_en': (r'Deal\s*(\d+)\s*damage\s*to\s*all\s*enemies', lambda m: int(m.group(1))),
+    'direct_damage_en': (r'Deal\s*(\d+)\s*damage', lambda m: int(m.group(1))),
+    'random_damage_en': (r'Deal\s*(\d+)\s*damage\s*randomly', lambda m: int(m.group(1))),
+    'draw_en': (r'Draw\s*(\d+)\s*(?:cards?)', lambda m: int(m.group(1))),
+    'summon_stats_en': (r'Summon\s*(?:a\s+)?(\d+)/(\d+)', lambda m: (int(m.group(1)), int(m.group(2)))),
+    'summon_en': (r'Summon', lambda m: True),
+    'destroy_en': (r'Destroy', lambda m: True),
+    'heal_en': (r'Restore\s*(\d+)\s*(?:Health|health)', lambda m: int(m.group(1))),
+    'armor_en': (r'Gain\s*(\d+)\s*(?:Armor|armor)', lambda m: int(m.group(1))),
+    'buff_atk_en': (r'\+\s*(\d+)\s*Attack', lambda m: int(m.group(1))),
+    'discard_en': (r'Discard\s*(\d+)', lambda m: int(m.group(1))),
+    'cost_reduce_en': (r'Costs?\s*(\d+)\s*less', lambda m: int(m.group(1))),
     'direct_damage': (r'造成\s*\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
     'random_damage': (r'随机.*?\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
     'draw': (r'抽\s*(\d+)\s*张牌', lambda m: int(m.group(1))),
@@ -70,26 +82,38 @@ class EffectParser:
 
         # Order matters: check specific patterns before generic ones
         pattern_order = [
-            'aoe_damage',       # "所有...N点伤害" before direct_damage
-            'direct_damage',    # "造成N点伤害"
-            'random_damage',    # "随机...N点伤害"
-            'summon_stats',     # "召唤...N/M" before generic summon
-            'summon',           # "召唤" (generic)
-            'draw',             # "抽N张牌"
-            'destroy',          # "消灭"
-            'heal',             # "恢复N点"
-            'armor',            # "获得N点护甲"
-            'buff_atk',         # "+N攻击力"
-            'hand_buff',        # "手牌+N/+N"
-            'discard',          # "弃掉N张"
-            'cost_reduce',      # "法力值消耗减少N"
+            'aoe_damage_en',
+            'aoe_damage',
+            'random_damage_en',
+            'direct_damage_en',
+            'random_damage',
+            'direct_damage',
+            'summon_stats_en',
+            'summon_stats',
+            'summon_en',
+            'summon',
+            'draw_en',
+            'draw',
+            'destroy_en',
+            'destroy',
+            'heal_en',
+            'heal',
+            'armor_en',
+            'armor',
+            'buff_atk_en',
+            'buff_atk',
+            'hand_buff',
+            'discard_en',
+            'discard',
+            'cost_reduce_en',
+            'cost_reduce',
         ]
 
         for effect_name in pattern_order:
             if effect_name not in SPELL_EFFECT_PATTERNS:
                 continue
             pattern, extractor = SPELL_EFFECT_PATTERNS[effect_name]
-            match = re.search(pattern, card_text)
+            match = re.search(pattern, card_text, re.IGNORECASE)
             if match:
                 # Check if this match overlaps with an already-matched span
                 span = match.span()

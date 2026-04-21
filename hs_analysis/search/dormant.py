@@ -13,13 +13,13 @@ from hs_analysis.search.game_state import GameState, Minion
 def parse_dormant_turns(text: str) -> int:
     if not text:
         return 0
-    m = re.search(r'休眠\s*(\d+)\s*个?回合', text)
-    if m:
-        return int(m.group(1))
     m = re.search(r'Dormant\s*(?:for\s*)?(\d+)', text)
     if m:
         return int(m.group(1))
-    if '休眠' in text or 'DORMANT' in text.upper():
+    m = re.search(r'休眠\s*(\d+)\s*个?回合', text)
+    if m:
+        return int(m.group(1))
+    if 'Dormant' in text or '休眠' in text:
         return 2
     return 0
 

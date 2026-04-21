@@ -28,19 +28,18 @@ logger = logging.getLogger(__name__)
 # ===================================================================
 
 _DEATHRATTLE_PATTERNS = [
-    # "亡语：对随机敌人造成N点伤害"
+    (re.compile(r"Deal\s*(\d+)\s*damage\s*to\s*a\s*random\s*enemy", re.IGNORECASE), 'random_damage'),
     (re.compile(r'对随机.*?(?:敌方|敌人).*?造成\s*(\d+)\s*点伤害'), 'random_damage'),
-    # "亡语：对所有敌人造成N点伤害"
+    (re.compile(r"Deal\s*(\d+)\s*damage\s*to\s*all\s*enemies", re.IGNORECASE), 'aoe_damage'),
     (re.compile(r'对所有.*?[敌对]方.*?造成\s*(\d+)\s*点伤害'), 'aoe_damage'),
-    # "亡语：召唤N/N"
+    (re.compile(r"Summon\s*a?\s*(\d+)/(\d+)", re.IGNORECASE), 'summon'),
     (re.compile(r'召唤.*?(\d+)/(\d+)'), 'summon'),
-    # "亡语：抽N张牌"
+    (re.compile(r"Draw\s*(\d+)\s*(?:cards?)", re.IGNORECASE), 'draw'),
     (re.compile(r'抽\s*(\d+)\s*张牌'), 'draw'),
-    # "亡语：+N/+N" (buff friendly)
     (re.compile(r'\+\s*(\d+)\s*/\s*\+\s*(\d+)'), 'buff'),
-    # "亡语：获得N点护甲"
+    (re.compile(r"Gain\s*(\d+)\s*(?:Armor|armor)", re.IGNORECASE), 'armor'),
     (re.compile(r'获得\s*(\d+)\s*点护甲'), 'armor'),
-    # "亡语：恢复N点生命"
+    (re.compile(r"Restore\s*(\d+)\s*(?:Health|health)", re.IGNORECASE), 'heal'),
     (re.compile(r'恢复\s*(\d+)\s*点'), 'heal'),
 ]
 
@@ -260,7 +259,9 @@ def parse_deathrattle_text(text: str) -> Optional[str]:
         return None
 
     # Extract deathrattle portion
-    dr_match = re.search(r'亡语[：:]\s*(.+?)(?:，|$)', text)
+    dr_match = re.search(r"Deathrattle[：:]\s*(.+?)(?:[,.]|$)", text, re.IGNORECASE)
+    if not dr_match:
+        dr_match = re.search(r'亡语[：:]\s*(.+?)(?:，|$)', text)
     if not dr_match:
         return None
 

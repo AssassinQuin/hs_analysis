@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Shared pytest fixtures for evaluator tests.
 
 Provides _make_card and _make_state helpers used across all evaluator test files.
@@ -31,7 +31,7 @@ def make_card():
             card_type="MINION",
             attack=3,
             health=3,
-            v7_score=5.0,
+            score=5.0,
             text="",
             mechanics=[],
         )

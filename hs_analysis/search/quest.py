@@ -75,20 +75,18 @@ def _parse_constraint(text: str) -> str:
     return ",".join(constraints)
 
 
-def _parse_threshold(text: str) -> int:
-    """Extract quest progress threshold from card text.
-
-    Tries multiple Chinese patterns. Returns 3 as default.
-    """
-    # "总计3张" or "总计4张"
+def _parse_threshold(text: str, structured_value: Optional[int] = None) -> int:
+    if structured_value is not None:
+        return structured_value
+    m = re.search(r'(\d+)\s*(?:cards?|spells?|minions?)', text)
+    if m:
+        return int(m.group(1))
     m = re.search(r'总计(\d+)张', text)
     if m:
         return int(m.group(1))
-    # "施放4个" or "施放3个"
     m = re.search(r'施放(\d+)个', text)
     if m:
         return int(m.group(1))
-    # generic "N张" (but not already matched by 总计)
     m = re.search(r'(\d+)张', text)
     if m:
         return int(m.group(1))
@@ -108,18 +106,19 @@ def _determine_quest_type(text: str) -> str:
     return "generic"
 
 
-def _parse_reward_name(text: str) -> str:
-    """Extract reward card name from quest text.
-
-    Looks for text after '奖励' tag. Returns '奖励卡牌' as fallback.
-    """
-    # Match Chinese bold tag: <b>奖励：</b>CardName
+def _parse_reward_name(text: str, structured_reward: Optional[str] = None) -> str:
+    if structured_reward:
+        return structured_reward
+    m = re.search(r'Reward[：:]\s*</?b?>\s*(.+?)(?:<|$)', text, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip().rstrip('.')
+        if name:
+            return name
     m = re.search(r'奖励[：:]</b>([^<]+)', text)
     if m:
         name = m.group(1).strip().rstrip('。')
         if name:
             return name
-    # Match without bold: 奖励：CardName
     m = re.search(r'奖励[：:](.+?)(?:<|$)', text)
     if m:
         name = m.group(1).strip().rstrip('。')
@@ -133,25 +132,31 @@ def _parse_reward_name(text: str) -> str:
 # ===================================================================
 
 def parse_quest(card) -> Optional[QuestState]:
-    """Parse a quest card into a QuestState.
-
-    Returns None if the card does not have the QUEST mechanic.
-    """
     mechanics = getattr(card, 'mechanics', None) or []
-    if "QUEST" not in mechanics:
+    has_quest = "QUEST" in mechanics or "SIDEBQUEST" in mechanics
+    if not has_quest:
+        text = getattr(card, 'text', '') or ''
+        if not text:
+            return None
+        has_quest = "quest" in text.lower() or "任务" in text
+    if not has_quest:
         return None
 
     text = getattr(card, 'text', '') or ''
     name = getattr(card, 'name', '') or ''
     dbf_id = getattr(card, 'dbf_id', 0) or getattr(card, 'dbfId', 0)
+    quest_progress_total = getattr(card, 'quest_progress_total', None)
+    quest_reward = getattr(card, 'quest_reward', None)
+
+    quest_type = _determine_quest_type(text) if not mechanics else _determine_quest_type(text)
 
     return QuestState(
         quest_name=name,
         quest_dbf_id=dbf_id,
-        quest_type=_determine_quest_type(text),
-        threshold=_parse_threshold(text),
-        reward_name=_parse_reward_name(text),
-        is_side_quest="SIDE_QUEST" in mechanics,
+        quest_type=quest_type,
+        threshold=_parse_threshold(text, structured_value=quest_progress_total),
+        reward_name=_parse_reward_name(text, structured_reward=quest_reward),
+        is_side_quest="SIDEBQUEST" in mechanics or "SIDE_QUEST" in mechanics,
         quest_constraint=_parse_constraint(text),
     )
 

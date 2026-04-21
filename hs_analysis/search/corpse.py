@@ -33,9 +33,9 @@ class CorpseEffect:
 # ---------------------------------------------------------------------------
 
 # "消耗N份残骸" or "消耗最多N份残骸"
-_CORPSE_SPEND_RE = re.compile(r'消耗最多\s*(\d+)\s*份\s*残骸|消耗\s*(\d+)\s*份\s*残骸')
+_CORPSE_SPEND_RE = re.compile(r"Spend\s*(\d+)\s*Corpse(?:s)?|Spend\s*up\s*to\s*(\d+)\s*Corpse(?:s)?|消耗最多\s*(\d+)\s*份\s*残骸|消耗\s*(\d+)\s*份\s*残骸")
 # "获得一份残骸" or "获得N份残骸"
-_CORPSE_GAIN_RE = re.compile(r'获得\s*(?:一份|(\d+)\s*份)\s*残骸')
+_CORPSE_GAIN_RE = re.compile(r"Gain\s*(?:a\s+)?(?:(\d+)\s+)?Corpse(?:s)?|获得\s*(?:一份|(\d+)\s*份)\s*残骸")
 
 
 def parse_corpse_effects(card_text: str) -> list[CorpseEffect]:
@@ -50,25 +50,25 @@ def parse_corpse_effects(card_text: str) -> list[CorpseEffect]:
     text = card_text or ""
 
     for m in _CORPSE_SPEND_RE.finditer(text):
-        max_cost = m.group(1)  # "消耗最多N份"
-        exact_cost = m.group(2)  # "消耗N份"
+        spend_exact = m.group(1)
+        spend_up_to = m.group(2)
+        cn_max_cost = m.group(3)
+        cn_exact_cost = m.group(4)
 
-        if max_cost:
-            cost = int(max_cost)
-            # Variable spend effects are treated as optional
+        if spend_up_to or cn_max_cost:
+            cost = int(spend_up_to or cn_max_cost)
             effects.append(CorpseEffect(
                 cost=cost,
                 is_optional=True,
                 effect_text=text[m.end():].strip()[:80],
             ))
-        elif exact_cost:
-            cost = int(exact_cost)
+        elif spend_exact or cn_exact_cost:
+            cost = int(spend_exact or cn_exact_cost)
             # Check if the corpse spend is an add-on bonus (optional)
             # Pattern: main effect。消耗N份残骸，bonus
-            is_optional = False
             effects.append(CorpseEffect(
                 cost=cost,
-                is_optional=is_optional,
+                is_optional=False,
                 effect_text=text[m.end():].strip()[:80],
             ))
 
@@ -85,7 +85,8 @@ def parse_corpse_gain(card_text: str) -> int:
 
     m = _CORPSE_GAIN_RE.search(card_text)
     if m:
-        return int(m.group(1)) if m.group(1) else 1
+        val = m.group(1) or m.group(2)
+        return int(val) if val else 1
 
     return 0
 
@@ -196,7 +197,9 @@ def _apply_corpse_bonus(state: GameState, effect_text: str, card: dict) -> GameS
         return s
 
     # Pattern: damage "造成N点伤害"
-    dmg_match = re.search(r'造成\s*[$(（]\s*(\d+)\s*[)）]?\s*点?\s*伤害', text)
+    dmg_match = re.search(r"Deal\s*(\d+)\s*damage", text, re.IGNORECASE)
+    if not dmg_match:
+        dmg_match = re.search(r'造成\s*[$(（]\s*(\d+)\s*[)）]?\s*点?\s*伤害', text)
     if not dmg_match:
         dmg_match = re.search(r'造成\s*(\d+)\s*点伤害', text)
     if dmg_match:

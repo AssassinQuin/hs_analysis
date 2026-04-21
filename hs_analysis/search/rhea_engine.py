@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """rhea_engine.py — RHEA (Rolling Horizon Evolutionary Algorithm) search engine.
 
 Searches for optimal action sequences within a single Hearthstone turn using
@@ -25,7 +25,6 @@ from typing import List, Optional, Tuple
 from hs_analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
 from hs_analysis.models.card import Card
 from hs_analysis.evaluators.composite import evaluate, evaluate_delta, quick_eval
-from hs_analysis.evaluators.multi_objective import evaluate as mo_evaluate, evaluate_delta as mo_evaluate_delta, EvaluationResult, pareto_filter
 from hs_analysis.utils.score_provider import load_scores_into_hand
 
 # V9: Layered decision pipeline imports (all optional for graceful degradation)
@@ -245,9 +244,13 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
         # Parse overload from card text (Chinese: "过载：(N)" or "过载：(N)")
         card_text = getattr(card, 'text', '') or ''
-        overload_match = re.search(r'过载[：:]\s*[（(]\s*(\d+)\s*[）)]', card_text)
-        if overload_match:
-            s.mana.overload_next += int(overload_match.group(1))
+        overload_val = getattr(card, 'overload', 0) or 0
+        if overload_val > 0:
+            s.mana.overload_next += overload_val
+        else:
+            overload_match = re.search(r'过载[：:]\s*[（(]\s*(\d+)\s*[）)]', card_text)
+            if overload_match:
+                s.mana.overload_next += int(overload_match.group(1))
 
         # V10 Phase 3: Check outcast bonus (before card is removed from hand)
         outcast_active = False
@@ -740,7 +743,7 @@ class SearchResult:
     time_elapsed: float
     population_diversity: float  # std of fitnesses
     confidence: float  # gap between best and 2nd-best, normalised
-    pareto_front: List[Tuple[List[Action], EvaluationResult]] = field(default_factory=list)
+    pareto_front: List[Tuple[List[Action], float]] = field(default_factory=list)
 
     def describe(self) -> str:
         """Return a formatted Chinese description of the search result."""
@@ -790,7 +793,9 @@ def next_turn_lethal_check(state: GameState) -> bool:
         if ct == 'SPELL' and c.cost <= next_mana:
             # Estimate damage from card text
             text = getattr(c, 'text', '') or ''
-            dmg_match = re.search(r'造成\s*(\d+)\s*点伤害', text)
+            dmg_match = re.search(r"Deal\s*\$?(\d+)\s*damage", text, re.IGNORECASE)
+            if not dmg_match:
+                dmg_match = re.search(r'造成\s*(\d+)\s*点伤害', text)
             if dmg_match:
                 spell_burst += int(dmg_match.group(1))
 
@@ -850,7 +855,7 @@ class RHEAEngine:
         t_start = time.perf_counter()
 
         # Load V7 scores into hand cards so evaluators see them
-        load_scores_into_hand(initial_state, source="v7")
+        load_scores_into_hand(initial_state)
 
         # ========== Layer 0: Lethal Check (5ms budget) ==========
         if check_lethal is not None:
@@ -1062,9 +1067,9 @@ class RHEAEngine:
         elapsed = (time.perf_counter() - t_start) * 1000.0
 
         # Pareto front
-        pareto_front_list: List[Tuple[List[Action], EvaluationResult]] = []
+        pareto_front_list: List[Tuple[List[Action], float]] = []
         try:
-            mo_results = []
+            scored = []
             for i, chromo in enumerate(population):
                 try:
                     current = initial_state.copy()
@@ -1074,14 +1079,14 @@ class RHEAEngine:
                             break
                         current = apply_action(current, action)
                     else:
-                        delta = mo_evaluate_delta(mo_evaluate(initial_state), mo_evaluate(current))
-                        mo_results.append((delta, i))
+                        delta = evaluate(current) - evaluate(initial_state)
+                        scored.append((delta, i))
                 except Exception:
                     pass
 
-            pareto_front_raw = pareto_filter(mo_results)
-            for eval_result, idx in pareto_front_raw[:5]:
-                pareto_front_list.append((list(population[idx]), eval_result))
+            scored.sort(key=lambda x: -x[0])
+            for score_val, idx in scored[:5]:
+                pareto_front_list.append((list(population[idx]), score_val))
         except Exception:
             pass
 
@@ -1114,11 +1119,11 @@ class RHEAEngine:
         """Get search parameters for game phase."""
         params = {
             "early": {"pop_size": 30, "max_gens": 100, "max_chromosome_length": 4,
-                      "weights": {"w_v7": 1.0, "w_board": 1.0, "w_threat": 0.8, "w_lingering": 0.8, "w_trigger": 0.5}},
+                      "weights": {"w_hand": 1.0, "w_board": 1.0, "w_threat": 0.8, "w_lingering": 0.8, "w_trigger": 0.5}},
             "mid":   {"pop_size": 50, "max_gens": 200, "max_chromosome_length": 6,
-                      "weights": {"w_v7": 1.0, "w_board": 1.0, "w_threat": 1.5, "w_lingering": 0.8, "w_trigger": 0.5}},
+                      "weights": {"w_hand": 1.0, "w_board": 1.0, "w_threat": 1.5, "w_lingering": 0.8, "w_trigger": 0.5}},
             "late":  {"pop_size": 60, "max_gens": 150, "max_chromosome_length": 8,
-                      "weights": {"w_v7": 1.0, "w_board": 1.0, "w_threat": 2.0, "w_lingering": 0.8, "w_trigger": 0.5}},
+                      "weights": {"w_hand": 1.0, "w_board": 1.0, "w_threat": 2.0, "w_lingering": 0.8, "w_trigger": 0.5}},
         }
         return params.get(phase, params["mid"])
 

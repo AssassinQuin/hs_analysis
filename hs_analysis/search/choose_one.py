@@ -51,16 +51,24 @@ def _parse_option_effects(text: str) -> list[tuple]:
     m = re.search(r'(\d+)/(\d+)', text)
     if m:
         effects.append(('transform_stats', int(m.group(1)), int(m.group(2))))
-    m = re.search(r'获得\s*\+?\s*(\d+)\s*点?护甲', text)
+    m = re.search(r"Gain\s*(\d+)\s*(?:Armor|armor)", text)
+    if not m:
+        m = re.search(r'获得\s*\+?\s*(\d+)\s*点?护甲', text)
     if m:
         effects.append(('armor', int(m.group(1))))
-    m = re.search(r'获得\s*\+?\s*(\d+)\s*点?攻击力', text)
+    m = re.search(r"Gain\s*\+?\s*(\d+)\s*(?:Attack|attack)", text)
+    if not m:
+        m = re.search(r'获得\s*\+?\s*(\d+)\s*点?攻击力', text)
     if m:
         effects.append(('buff_attack', int(m.group(1))))
-    m = re.search(r'召唤\s*(?:一个\s*)?(\d+)/(\d+)', text)
+    m = re.search(r"Summon\s*(?:a\s+)?(\d+)/(\d+)", text)
+    if not m:
+        m = re.search(r'召唤\s*(?:一个\s*)?(\d+)/(\d+)', text)
     if m:
         effects.append(('summon', int(m.group(1)), int(m.group(2))))
-    m = re.search(r'抽\s*(\d+)\s*张', text)
+    m = re.search(r"Draw\s*(\d+)", text)
+    if not m:
+        m = re.search(r'抽\s*(\d+)\s*张', text)
     if m:
         effects.append(('draw', int(m.group(1))))
     if '嘲讽' in text:

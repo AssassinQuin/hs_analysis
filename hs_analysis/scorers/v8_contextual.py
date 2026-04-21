@@ -1,6 +1,6 @@
 """V8 Contextual Scorer — Adjusts card scores based on game state.
 
-Applies 7 contextual modifiers on top of V7 static scores:
+Applies 7 contextual modifiers on top of static scores:
   1. Turn curve adjuster
   2. Type context modifier
   3. Pool quality assessor
@@ -9,7 +9,7 @@ Applies 7 contextual modifiers on top of V7 static scores:
   6. Rewind decision maker
   7. Combo synergy detector (hand-level)
 
-Graceful degradation: if data files are missing, returns raw v7_score.
+Graceful degradation: if data files are missing, returns raw card.score.
 
 Usage: python -c "from hs_analysis.scorers.v8_contextual import V8ContextualScorer"
 """
@@ -34,7 +34,7 @@ SCHOOL_NAMES_LIST = ["火焰", "冰霜", "奥术", "自然", "暗影", "神圣",
 
 
 class V8ContextualScorer:
-    """Contextual scoring layer on top of V7 static scores."""
+    """Contextual scoring layer on top of static scores."""
 
     def __init__(self, data_dir: Optional[str] = None):
         self._data_dir = data_dir or str(DATA_DIR)
@@ -71,7 +71,7 @@ class V8ContextualScorer:
 
     def contextual_score(self, card: Card, state: GameState) -> float:
         """Compute contextual score for a single card in the given state."""
-        base = getattr(card, "v7_score", 0.0)
+        base = getattr(card, "score", 0.0)
         if base == 0.0:
             return 0.0
         result = base

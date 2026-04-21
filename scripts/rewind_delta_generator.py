@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
-"""Rewind Delta Generator — Computes V7 score delta between rewind and original cards.
+﻿#!/usr/bin/env python3
+"""Rewind Delta Generator — Computes score delta between rewind and original cards.
 
-Reads unified_standard.json + v7_scoring_report.json.
+Reads unified_standard.json + scoring_report.json.
 Outputs hs_cards/rewind_delta_report.json.
 
 Usage: python scripts/rewind_delta_generator.py
@@ -12,7 +12,7 @@ from difflib import SequenceMatcher
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CARDS_PATH = os.path.join(BASE_DIR, "hs_cards", "unified_standard.json")
-V7_PATH = os.path.join(BASE_DIR, "hs_cards", "v7_scoring_report.json")
+V7_PATH = os.path.join(BASE_DIR, "hs_cards", "scoring_report.json")
 OUT_PATH = os.path.join(BASE_DIR, "hs_cards", "rewind_delta_report.json")
 
 
@@ -21,11 +21,11 @@ def load_cards():
         return json.load(f)
 
 
-def load_v7_scores():
-    """Returns {dbfId: v7_score}"""
+def load_scores():
+    """Returns {dbfId: score}"""
     with open(V7_PATH, encoding="utf-8") as f:
         data = json.load(f)
-    return {entry["dbfId"]: entry.get("v7_score", 0.0) for entry in data if "dbfId" in entry}
+    return {entry["dbfId"]: entry.get("score", 0.0) for entry in data if "dbfId" in entry}
 
 
 def strip_html(text):
@@ -90,7 +90,7 @@ def find_original(rewind_card, all_cards, v7_map):
 
 def generate_report():
     cards = load_cards()
-    v7_map = load_v7_scores()
+    v7_map = load_scores()
     rewind_cards = find_rewind_cards(cards)
     
     report = {}

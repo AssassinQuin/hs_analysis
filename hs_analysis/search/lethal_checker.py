@@ -46,9 +46,9 @@ def max_damage_bound(state: GameState) -> int:
     # Hand spell damage
     for card in state.hand:
         text = getattr(card, "text", "") or ""
-        dmg_match = re.search(r"造成\s*\$?\s*(\d+)\s*点伤害", text)
+        dmg_match = re.search(r"Deal\s*\$?(\d+)\s*damage", text, re.IGNORECASE)
         if not dmg_match:
-            dmg_match = re.search(r"Deal\s*\$?(\d+)\s*damage", text, re.IGNORECASE)
+            dmg_match = re.search(r"造成\s*\$?\s*(\d+)\s*点伤害", text)
         if dmg_match and card.cost <= state.mana.available:
             spell_power_bonus = sum(m.spell_power for m in state.board)
             total += int(dmg_match.group(1)) + spell_power_bonus
@@ -147,9 +147,11 @@ def _enumerate_damage_actions(state: GameState) -> list:
             continue
         if getattr(card, "card_type", "").upper() == "SPELL":
             text = getattr(card, "text", "") or ""
-            if re.search(r"造成\s*\d+\s*点伤害", text) or re.search(
-                r"Deal\s*\$?\d+\s*damage", text, re.IGNORECASE
-            ):
+            _is_dmg = re.search(r"Deal\s*\$?\d+\s*damage", text, re.IGNORECASE) or re.search(r"造成\s*\d+\s*点伤害", text)
+            mechanics = getattr(card, "mechanics", None)
+            if mechanics and not _is_dmg:
+                _is_dmg = any(k in mechanics for k in ("AFFECTED_BY_SPELL_POWER",))
+            if _is_dmg:
                 actions.append(Action(action_type="PLAY", card_index=idx))
 
     # Hero power damage

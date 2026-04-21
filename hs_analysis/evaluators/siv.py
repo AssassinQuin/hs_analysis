@@ -24,13 +24,12 @@ from hs_analysis.search.game_state import GameState, Minion
 from hs_analysis.scorers.keyword_interactions import get_interaction_multiplier
 
 # ---------------------------------------------------------------------------
-# V8 fallback — use contextual_score if available, else v7_score
+# V8 fallback — use contextual_score if available, else card.score
 # ---------------------------------------------------------------------------
 try:
     from hs_analysis.scorers.v8_contextual import get_scorer as _get_v8_scorer
 
     def _civ_base(card: Card, state: GameState) -> float:
-        """CIV base: V8 contextual score, falling back to v7_score."""
         try:
             scorer = _get_v8_scorer()
             score = scorer.contextual_score(card, state)
@@ -38,12 +37,12 @@ try:
                 return score
         except Exception:
             pass
-        return getattr(card, "v7_score", 0.0)
+        return getattr(card, "score", 0.0)
 
 except ImportError:
 
     def _civ_base(card: Card, state: GameState) -> float:
-        return getattr(card, "v7_score", 0.0)
+        return getattr(card, "score", 0.0)
 
 
 # ===================================================================
@@ -60,10 +59,10 @@ _DAMAGE_TEXT_PATTERNS = re.compile(
     r"造成|伤害|Deal|damage", re.IGNORECASE
 )
 _SILENCE_TEXT_PATTERNS = re.compile(
-    r"沉默|Silence", re.IGNORECASE
+    r"Silence|沉默", re.IGNORECASE
 )
 _DESTROY_TEXT_PATTERNS = re.compile(
-    r"消灭|Destroy", re.IGNORECASE
+    r"Destroy|消灭", re.IGNORECASE
 )
 
 # Trigger mechanic names (uppercase, matching Card.mechanics convention)
@@ -199,13 +198,13 @@ def position_modifier(card: Card, state: GameState) -> float:
     mechanics = set(getattr(card, "mechanics", []) or [])
 
     # Outcast check
-    if "OUTCAST" in mechanics or "外域" in text:
+    if "OUTCAST" in mechanics or "Outcast" in text or "外域" in text:
         if card_idx == 0 or card_idx == len(hand) - 1:
             return 1.0 + OUTCAST_BONUS
         return 1.0
 
     # Shatter check — rough merge probability based on hand density
-    if "SHATTER" in mechanics or "裂变" in text:
+    if "SHATTER" in mechanics or "Shatter" in text or "裂变" in text:
         # More cards in hand → higher chance of having merge targets
         merge_prob = min(1.0, (len(hand) - 1) / 7.0)
         return 1.0 + merge_prob * MERGE_BONUS
@@ -289,7 +288,7 @@ def synergy_modifier(card: Card, state: GameState) -> float:
 
     # Kindred (延系) bonus
     text = getattr(card, "text", "") or ""
-    if "延系" in text:
+    if "Kindred" in text or "延系" in text:
         result += 0.2
 
     return result
@@ -310,14 +309,14 @@ def progress_modifier(card: Card, state: GameState) -> float:
     text = getattr(card, "text", "") or ""
 
     # Imbue check
-    if "IMBUE" in mechanics or "灌注" in text:
+    if "IMBUE" in mechanics or "Imbue" in text or "灌注" in text:
         level = getattr(state, "imbue_level", None)
         if level is None:
             level = 0
         return 1.0 + 0.3 * (1.0 - 0.15 * level)
 
     # Herald check
-    if "HERALD" in mechanics or "先驱" in text:
+    if "HERALD" in mechanics or "Herald" in text or "先驱" in text:
         count = getattr(state, "herald_count", 0)
         if count >= 3:
             return 1.5
@@ -326,7 +325,7 @@ def progress_modifier(card: Card, state: GameState) -> float:
         return 1.0
 
     # Quest check
-    if "QUEST" in mechanics or "任务" in text:
+    if "QUEST" in mechanics or "Quest" in text or "任务" in text:
         completion_pct = getattr(state, "quest_completion_pct", 0.0)
         return 1.0 + completion_pct ** 2 * 2.0
 
@@ -371,7 +370,7 @@ def counter_modifier(card: Card, state: GameState) -> float:
     if enemy_board_size <= 1:
         # Weak enemy board suggests they might play AoE
         pass
-    if "STEALTH" in mechanics or "潜行" in text:
+    if "STEALTH" in mechanics or "Stealth" in text or "潜行" in text:
         # Check if enemy might have AoE (heuristic: mage/shaman/warlock)
         if opp_class in ("MAGE", "SHAMAN", "WARLOCK"):
             result += 0.2

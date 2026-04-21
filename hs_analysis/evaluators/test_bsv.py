@@ -1,4 +1,4 @@
-"""Tests for V10 BSV (Board State Value) module."""
+﻿"""Tests for V10 BSV (Board State Value) module."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ class TestEvalValue:
         assert isinstance(eval_value_v10(make_state()), float)
 
     def test_hand_cards_add_value(self, make_card, make_state):
-        with_cards = make_state(hand=[make_card(v7_score=5.0), make_card(dbf_id=2, v7_score=4.0)])
+        with_cards = make_state(hand=[make_card(score=5.0), make_card(dbf_id=2, score=4.0)])
         assert eval_value_v10(with_cards) > eval_value_v10(make_state())
 
     def test_card_advantage_bonus(self, make_card, make_state):
@@ -150,7 +150,7 @@ class TestBsvFusion:
             hero=HeroState(hp=30, armor=5),
             board=[Minion(name="Big1", attack=7, health=7, max_health=7),
                    Minion(name="Big2", attack=6, health=6, max_health=6)],
-            hand=[make_card(v7_score=6.0)],
+            hand=[make_card(score=6.0)],
             opponent=OpponentState(hero=HeroState(hp=15, armor=0),
                                    board=[Minion(name="Small", attack=1, health=1, max_health=1)]),
         )
@@ -163,5 +163,5 @@ class TestBsvFusion:
         assert bsv_fusion(winning) > bsv_fusion(losing)
 
     def test_phase_weights_applied(self, make_card, make_state):
-        card = make_card(v7_score=5.0)
+        card = make_card(score=5.0)
         assert bsv_fusion(make_state(hand=[card], turn_number=2)) != bsv_fusion(make_state(hand=[card], turn_number=10))

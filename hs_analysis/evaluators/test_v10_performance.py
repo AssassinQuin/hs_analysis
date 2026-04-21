@@ -1,4 +1,4 @@
-"""Performance benchmarks for V10 scoring pipeline."""
+﻿"""Performance benchmarks for V10 scoring pipeline."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ class TestV10Performance:
 
     def test_siv_many_cards_reasonable(self, make_card, make_state):
         """Evaluate 10 cards in hand should complete quickly."""
-        cards = [make_card(dbf_id=i, name=f"Card{i}", v7_score=3.0 + i * 0.5) for i in range(10)]
+        cards = [make_card(dbf_id=i, name=f"Card{i}", score=3.0 + i * 0.5) for i in range(10)]
         state = make_state(hand=cards)
 
         iters = 100

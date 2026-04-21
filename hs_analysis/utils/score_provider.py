@@ -1,5 +1,4 @@
-# hs_analysis/utils/score_provider.py
-"""ScoreProvider — loads card scores from V7 (or L6) scoring report JSON.
+"""ScoreProvider — loads card scores from scoring report JSON.
 
 Lazy-loads on first access, caches by dbf_id. Handles the camelCase
 dbfId / snake_case dbf_id naming mismatch between report and Card.
@@ -7,11 +6,10 @@ dbfId / snake_case dbf_id naming mismatch between report and Card.
 Usage:
     from hs_analysis.utils.score_provider import ScoreProvider, load_scores_into_hand
 
-    provider = ScoreProvider("hs_cards/v7_scoring_report.json")
-    score = provider.get_score(123146)   # returns 32.131
+    provider = ScoreProvider()
+    score = provider.get_score(123146)
 
-    # Or bulk-load into a GameState hand:
-    load_scores_into_hand(state, source="v7")
+    load_scores_into_hand(state)
 """
 
 from __future__ import annotations
@@ -21,7 +19,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-from hs_analysis.config import PROJECT_ROOT, V7_REPORT_PATH
+from hs_analysis.config import PROJECT_ROOT, SCORING_REPORT_PATH
 from hs_analysis.models.card import Card
 
 if TYPE_CHECKING:
@@ -29,8 +27,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default path from centralised config
-DEFAULT_V7_PATH = str(V7_REPORT_PATH)
+DEFAULT_REPORT_PATH = str(SCORING_REPORT_PATH)
 
 
 class ScoreProvider:
@@ -39,20 +36,16 @@ class ScoreProvider:
     Parameters
     ----------
     report_path : str
-        Path to the scoring report JSON (e.g. v7_scoring_report.json).
+        Path to the scoring report JSON.
     score_field : str
         Key to read from each card entry in the JSON.
-        V7 uses "v7_score", L6 uses "L6".
+        Default is "score".
     """
 
-    def __init__(self, report_path: str = DEFAULT_V7_PATH, score_field: str = "v7_score"):
+    def __init__(self, report_path: str = DEFAULT_REPORT_PATH, score_field: str = "score"):
         self._report_path = report_path
         self._score_field = score_field
         self._cache: Optional[Dict[int, float]] = None
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def get_score(self, dbf_id: int) -> float:
         """Return the score for *dbf_id*, or 0.0 if not found."""
@@ -61,7 +54,7 @@ class ScoreProvider:
         return self._cache.get(dbf_id, 0.0)
 
     def load_into_hand(self, hand: List[Card]) -> int:
-        """Populate card.v7_score for every Card in *hand*.
+        """Populate card.score for every Card in *hand*.
 
         Returns the number of cards that received a non-zero score.
         """
@@ -70,14 +63,10 @@ class ScoreProvider:
         loaded = 0
         for card in hand:
             score = self._cache.get(card.dbf_id, 0.0)
-            card.v7_score = score
+            card.score = score
             if score != 0.0:
                 loaded += 1
         return loaded
-
-    # ------------------------------------------------------------------
-    # Private
-    # ------------------------------------------------------------------
 
     def _load(self) -> None:
         """Parse JSON, build dbf_id → score mapping. Logs warnings on errors."""
@@ -100,7 +89,6 @@ class ScoreProvider:
             return
 
         for entry in data:
-            # Handle camelCase "dbfId" in report vs snake_case "dbf_id" on Card
             dbf_id = entry.get("dbfId") or entry.get("dbf_id")
             if dbf_id is None:
                 continue
@@ -120,10 +108,6 @@ class ScoreProvider:
             self._cache[dbf_id] = score
 
 
-# ======================================================================
-# Convenience bridge function
-# ======================================================================
-
 _PROVIDERS: Dict[str, "ScoreProvider"] = {}
 
 
@@ -135,8 +119,8 @@ def _get_provider(report_path: str, score_field: str) -> "ScoreProvider":
     return _PROVIDERS[key]
 
 
-def load_scores_into_hand(state_or_hand, source: str = "v7", report_path: Optional[str] = None):
-    from hs_analysis.search.game_state import GameState  # type: ignore[import]
+def load_scores_into_hand(state_or_hand, report_path: Optional[str] = None):
+    from hs_analysis.search.game_state import GameState
 
     if isinstance(state_or_hand, GameState):
         hand = state_or_hand.hand
@@ -145,9 +129,6 @@ def load_scores_into_hand(state_or_hand, source: str = "v7", report_path: Option
     else:
         raise TypeError(f"Expected GameState or list[Card], got {type(state_or_hand).__name__}")
 
-    field_map = {"v7": "v7_score", "l6": "L6"}
-    score_field = field_map.get(source.lower(), source)
-
-    path = report_path or DEFAULT_V7_PATH
-    provider = _get_provider(path, score_field)
+    path = report_path or DEFAULT_REPORT_PATH
+    provider = _get_provider(path, "score")
     provider.load_into_hand(hand)

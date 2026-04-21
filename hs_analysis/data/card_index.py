@@ -444,8 +444,8 @@ _index: Optional[CardIndex] = None
 def get_index(rebuild: bool = False) -> CardIndex:
     """Lazy-load the card index (singleton).
 
-    Loads from ``unified_standard.json`` and ``unified_wild.json`` (if it
-    exists).  Wild cards are tagged with ``format: "wild"``.
+    Primary source: ``HSCardDB`` (python-hearthstone CardDefs.xml).
+    Fallback: ``unified_standard.json`` + ``unified_wild.json``.
 
     Args:
         rebuild: Force rebuild even if already loaded.
@@ -459,25 +459,31 @@ def get_index(rebuild: bool = False) -> CardIndex:
 
     cards: List[CardDict] = []
 
-    # Standard pool
-    std_path = DATA_DIR / "unified_standard.json"
-    if std_path.exists():
-        std_cards = json.loads(std_path.read_text(encoding="utf-8"))
-        for c in std_cards:
-            c.setdefault("format", "standard")
-        cards.extend(std_cards)
-        logger.info("Loaded %d standard cards from %s", len(std_cards), std_path)
-    else:
-        logger.warning("Standard card pool not found: %s", std_path)
+    try:
+        from .hsdb import get_db
+        db = get_db(rebuild=rebuild)
+        cards = list(db._collectible.values())
+        logger.info("Loaded %d cards from HSCardDB (python-hearthstone)", len(cards))
+    except Exception as exc:
+        logger.warning("HSCardDB unavailable (%s), falling back to JSON", exc)
 
-    # Wild pool (optional)
-    wild_path = DATA_DIR / "unified_wild.json"
-    if wild_path.exists():
-        wild_cards = json.loads(wild_path.read_text(encoding="utf-8"))
-        for c in wild_cards:
-            c["format"] = "wild"
-        cards.extend(wild_cards)
-        logger.info("Loaded %d wild cards from %s", len(wild_cards), wild_path)
+        std_path = DATA_DIR / "unified_standard.json"
+        if std_path.exists():
+            std_cards = json.loads(std_path.read_text(encoding="utf-8"))
+            for c in std_cards:
+                c.setdefault("format", "standard")
+            cards.extend(std_cards)
+            logger.info("Loaded %d standard cards from %s", len(std_cards), std_path)
+        else:
+            logger.warning("Standard card pool not found: %s", std_path)
+
+        wild_path = DATA_DIR / "unified_wild.json"
+        if wild_path.exists():
+            wild_cards = json.loads(wild_path.read_text(encoding="utf-8"))
+            for c in wild_cards:
+                c["format"] = "wild"
+            cards.extend(wild_cards)
+            logger.info("Loaded %d wild cards from %s", len(wild_cards), wild_path)
 
     _index = CardIndex(cards)
     return _index

@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""共享评分常量 — 消除 V2/V7 重复代码.
-
-包含关键词层级、文本效果模式、条件EV定义等共享常量。
-V2 引擎使用基础常量，V7 引擎使用扩展后的常量。
-"""
-
 import re
 
 
@@ -12,27 +6,18 @@ import re
 # L2: 关键词层级 (Keyword Tiers)
 # ═══════════════════════════════════════════════════════════════════
 
-# V2 基础关键词层级
-KEYWORD_TIERS_V2 = {
+KEYWORD_TIERS = {
     "power": {
         "BATTLECRY", "DEATHRATTLE", "DISCOVER", "DIVINE_SHIELD", "RUSH",
         "CHARGE", "WINDFURY", "TAUNT", "LIFESTEAL", "STEALTH",
         "CHOOSE_ONE", "QUEST",
+        "FORGE", "EXCAVATE", "QUICKDRAW", "TITAN", "ECHO",
     },
     "mechanical": {
         "TRIGGER_VISUAL", "AURA", "COLOSSUS", "REBORN", "IMBUE",
         "OUTCAST", "IMMUNE", "SECRET", "OVERLOAD", "COMBO",
         "SPELLPOWER", "FREEZE", "POISONOUS", "SILENCE",
         "TRADEABLE", "SIDE_QUEST", "START_OF_GAME",
-    },
-}
-
-# V7 扩展关键词 (在 V2 基础上增加)
-KEYWORD_TIERS_V7 = {
-    "power": KEYWORD_TIERS_V2["power"] | {
-        "FORGE", "EXCAVATE", "QUICKDRAW", "TITAN", "ECHO",
-    },
-    "mechanical": KEYWORD_TIERS_V2["mechanical"] | {
         "SPELLBURST", "FRENZY", "CORRUPT", "DREDGE", "INFUSE",
         "HONORABLE_KILL", "OVERHEAL", "MANATHIRST", "OVERKILL",
         "INSPIRE", "MAGNETIC", "TWINSPELL", "MINIATURIZE", "GIGANTIFY",
@@ -40,7 +25,6 @@ KEYWORD_TIERS_V7 = {
     },
 }
 
-# 关键词中文映射 (V7 完整版, 包含所有)
 KEYWORD_CN = {
     "BATTLECRY": "战吼", "DEATHRATTLE": "亡语", "TAUNT": "嘲讽",
     "DIVINE_SHIELD": "圣盾", "CHARGE": "冲锋", "RUSH": "突袭",
@@ -55,27 +39,11 @@ KEYWORD_CN = {
     "INFUSE": "充能", "HONORABLE_KILL": "荣誉消灭", "OVERHEAL": "过量治疗",
     "MANATHIRST": "法力渴求", "OVERKILL": "超杀", "INSPIRE": "激励",
     "MAGNETIC": "磁力", "FORGE": "锻造", "QUICKDRAW": "速瞄",
-    "EXCAVATE": "挖掘", "COLOSSUS": "巨像", "TITAN": "泰坦",
+    "EXCAVATE": "挖掘", "COLOSSUS": "巨型", "TITAN": "泰坦",
     "IMBUE": "灌注", "IMMUNE": "免疫", "AURA": "光环",
     "TRIGGER_VISUAL": "触发", "START_OF_GAME": "开局",
     "MINIATURIZE": "迷你化", "GIGANTIFY": "巨大化", "MORPH": "变形",
     "COUNTER": "反制", "ENRAGED": "激怒", "CANT_ATTACK": "无法攻击",
-    # V2 额外的中文映射 (V2 使用但 V7 未列出的)
-    "COLOSSAL": "巨型",
-}
-
-# V2 关键词中文映射 (V2 专用的短版)
-KEYWORD_CN_V2 = {
-    "BATTLECRY": "战吼", "DEATHRATTLE": "亡语", "DISCOVER": "发现",
-    "DIVINE_SHIELD": "圣盾", "RUSH": "突袭", "CHARGE": "冲锋",
-    "WINDFURY": "风怒", "TAUNT": "嘲讽", "LIFESTEAL": "吸血",
-    "STEALTH": "潜行", "CHOOSE_ONE": "抉择", "QUEST": "任务",
-    "TRIGGER_VISUAL": "触发", "AURA": "光环", "COLOSSAL": "巨型",
-    "REBORN": "复生", "IMBUE": "灌注", "OUTCAST": "流放",
-    "IMMUNE": "免疫", "SECRET": "奥秘", "OVERLOAD": "过载",
-    "COMBO": "连击", "SPELLPOWER": "法强", "FREEZE": "冻结",
-    "POISONOUS": "剧毒", "SILENCE": "沉默", "TRADEABLE": "可交易",
-    "SIDE_QUEST": "支线任务", "START_OF_GAME": "开局触发",
 }
 
 TIER_BASES = {"power": 1.5, "mechanical": 0.75, "niche": 0.5}
@@ -85,8 +53,10 @@ TIER_BASES = {"power": 1.5, "mechanical": 0.75, "niche": 0.5}
 # L3: 文本效果模式 (Text Effect Patterns)
 # ═══════════════════════════════════════════════════════════════════
 
-# V2 原有 19 个效果模式
-EFFECT_PATTERNS_V2 = {
+RACE_NAMES = "龙|恶魔|野兽|鱼人|海盗|元素|亡灵|图腾|机械|纳迦|德莱尼"
+SCHOOL_NAMES = "火焰|冰霜|奥术|自然|暗影|神圣|邪能"
+
+EFFECT_PATTERNS = {
     "direct_damage":   (r"造成\s*(\d+)\s*点伤害",                    lambda m: int(m.group(1)) * 0.5),
     "random_damage":   (r"随机.*?(\d+)\s*点伤害",                    lambda m: int(m.group(1)) * 0.35),
     "draw":            (r"抽\s*(\d+)\s*张牌",                        lambda m: int(m.group(1)) * 1.2),
@@ -106,13 +76,6 @@ EFFECT_PATTERNS_V2 = {
     "discard":         (r"弃",                                       lambda m: -1.0),
     "condition":       (r"如果.*?(?:则|就|会)",                      lambda m: -0.3),
     "mana_thirst":     (r"延系",                                     lambda m: 0.8),
-}
-
-# V7 新增 9 个效果模式
-RACE_NAMES = "龙|恶魔|野兽|鱼人|海盗|元素|亡灵|图腾|机械|纳迦|德莱尼"
-SCHOOL_NAMES = "火焰|冰霜|奥术|自然|暗影|神圣|邪能"
-
-EFFECT_PATTERNS_V7 = {
     "discover_race":        (r"发现.*?(?:" + RACE_NAMES + ")",       lambda m: 1.0),
     "discover_spell":       (r"发现.*?法术",                          lambda m: 0.5),
     "discover_weapon":      (r"发现.*?武器",                          lambda m: 0.3),
@@ -124,16 +87,12 @@ EFFECT_PATTERNS_V7 = {
     "excavate_effect":      (r"挖掘",                                 lambda m: 0.7),
 }
 
-# 合并效果模式 (V7 使用)
-EFFECT_PATTERNS = EFFECT_PATTERNS_V2 | EFFECT_PATTERNS_V7
-
 
 # ═══════════════════════════════════════════════════════════════════
 # L5: 条件期望定义 (Conditional EV)
 # ═══════════════════════════════════════════════════════════════════
 
-# V2 原有 29 个条件
-CONDITION_DEFS_V2 = [
+CONDITION_DEFS = [
     ("dark_gift",          r"黑暗之赐",                                0.6, 1.8),
     ("discover_chain",     r"发现",                                    0.8, 1.2),
     ("quest_progress",     r"任务[:：]",                               0.7, 3.0),
@@ -163,10 +122,6 @@ CONDITION_DEFS_V2 = [
     ("combo_enabler",      r"连击",                                    0.5, 1.3),
     ("secret_bluff",       r"奥秘",                                    0.5, 1.2),
     ("tradeable_cycle",    r"可交易",                                  0.8, 1.1),
-]
-
-# V7 新增 8 个条件
-CONDITION_DEFS_V7 = CONDITION_DEFS_V2 + [
     ("condition_race_hand",  r"手牌中有.*?(?:" + RACE_NAMES + ")",     0.4, 1.5),
     ("condition_spell_cast", r"使用一张.*?法术|施放\d+个法术",          0.6, 1.2),
     ("condition_minion_died",r"友方.*?死亡|友方.*?消灭",               0.5, 1.3),
@@ -176,10 +131,6 @@ CONDITION_DEFS_V7 = CONDITION_DEFS_V2 + [
     ("excavate_chain",       r"挖掘",                                  0.6, 1.3),
     ("titan_ability",        r"泰坦",                                  0.8, 1.2),
 ]
-
-# 默认导出 (V7 合并版)
-KEYWORD_TIERS = KEYWORD_TIERS_V7
-CONDITION_DEFS = CONDITION_DEFS_V7
 
 
 # ═══════════════════════════════════════════════════════════════════

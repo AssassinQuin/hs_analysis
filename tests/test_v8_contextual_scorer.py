@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Tests for v8_contextual_scorer.py
 
 Run: python -m pytest scripts/test_v8_contextual_scorer.py -v
@@ -20,7 +20,7 @@ from hs_analysis.scorers.v8_contextual import V8ContextualScorer, get_scorer, re
 
 def _make_card(**kwargs) -> Card:
     defaults = dict(dbf_id=0, name="", cost=3, card_type="MINION",
-                    attack=2, health=2, v7_score=5.0, text="")
+                    attack=2, health=2, score=5.0, text="")
     defaults.update(kwargs)
     return Card(**defaults)
 
@@ -46,7 +46,7 @@ def test_v7_fallback_no_data():
     """Pure V7 fallback when no V8 data files exist."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=5.0)
+        card = _make_card(score=5.0)
         state = _make_state(hand=[card])
         # With no data files, all contextual modifiers should be identity
         # turn_factor=1.0 (optimal=cost+1=4, turn=5, delta=1, 1-0.08=0.92)
@@ -64,7 +64,7 @@ def test_turn_factor_variance():
     """Same card at turn 3 vs turn 8 gives different values."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(cost=3, v7_score=10.0)
+        card = _make_card(cost=3, score=10.0)
         state_early = _make_state(turn_number=3, hand=[card])
         state_late = _make_state(turn_number=10, hand=[card])
         score_early = scorer.contextual_score(card, state_early)
@@ -82,7 +82,7 @@ def test_turn_factor_clamped():
     """Turn factor is clamped to [0.5, 1.2]."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(cost=1, v7_score=10.0)
+        card = _make_card(cost=1, score=10.0)
         # Very late turn: delta = |20 - 2| = 18, factor = 1 - 0.08*18 = -0.44 -> clamped to 0.5
         state = _make_state(turn_number=20, hand=[card])
         factor = scorer._turn_factor(card, state)
@@ -97,8 +97,8 @@ def test_type_factor_early_late():
     """Minion valued higher early, spell higher late."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        minion = _make_card(card_type="MINION", v7_score=10.0)
-        spell = _make_card(card_type="SPELL", v7_score=10.0)
+        minion = _make_card(card_type="MINION", score=10.0)
+        spell = _make_card(card_type="SPELL", score=10.0)
 
         # Early: minion factor=1.1, spell factor=0.8
         state_early = _make_state(turn_number=2)
@@ -125,7 +125,7 @@ def test_type_factor_board_saturation():
     """Board saturation reduces minion factor."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        minion = _make_card(card_type="MINION", v7_score=10.0)
+        minion = _make_card(card_type="MINION", score=10.0)
         state_normal = _make_state(turn_number=5, board=[Minion() for _ in range(3)])
         state_full = _make_state(turn_number=5, board=[Minion() for _ in range(6)])
 
@@ -149,7 +149,7 @@ def test_pool_ev_discover_bonus():
             json.dump(pool_data, f)
 
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=5.0, text="发现一张龙牌")
+        card = _make_card(score=5.0, text="发现一张龙牌")
         bonus = scorer._pool_ev_bonus(card)
         assert bonus > 0, f"Dragon discover should get positive bonus, got {bonus}"
         # Expected: (30 - 10) * 0.15 = 3.0
@@ -167,7 +167,7 @@ def test_pool_ev_non_discover_zero():
             json.dump(pool_data, f)
 
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=5.0, text="一个普通的随从")
+        card = _make_card(score=5.0, text="一个普通的随从")
         bonus = scorer._pool_ev_bonus(card)
         assert bonus == 0.0, f"Non-discover card should get 0 bonus, got {bonus}"
 
@@ -180,7 +180,7 @@ def test_deathrattle_parsing():
     """Card with '亡语：召唤 3/3' parsed correctly."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=5.0, text="亡语：召唤一个3/3的随从")
+        card = _make_card(score=5.0, text="亡语：召唤一个3/3的随从")
         state = _make_state(board=[Minion() for _ in range(3)])
         bonus = scorer._deathrattle_ev_bonus(card, state)
         assert bonus > 0, f"Deathrattle with board should get bonus, got {bonus}"
@@ -195,7 +195,7 @@ def test_deathrattle_non_deathrattle_zero():
     """Non-deathrattle card gets zero bonus."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=5.0, text="战吼：造成3点伤害")
+        card = _make_card(score=5.0, text="战吼：造成3点伤害")
         state = _make_state()
         bonus = scorer._deathrattle_ev_bonus(card, state)
         assert bonus == 0.0, f"Non-deathrattle should get 0, got {bonus}"
@@ -209,7 +209,7 @@ def test_lethal_boost_low_hp():
     """Damage card boosted when opponent low HP."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=10.0, text="造成6点伤害")
+        card = _make_card(score=10.0, text="造成6点伤害")
         state = _make_state(
             board=[Minion(attack=4)],
             opponent=OpponentState(hero=HeroState(hp=6, armor=0), board=[]),
@@ -226,7 +226,7 @@ def test_lethal_boost_non_damage_not_boosted():
     """Non-damage card not boosted."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=10.0, text="抽两张牌")
+        card = _make_card(score=10.0, text="抽两张牌")
         state = _make_state(
             opponent=OpponentState(hero=HeroState(hp=5, armor=0), board=[]),
         )
@@ -242,7 +242,7 @@ def test_lethal_boost_full_hp():
     """No boost when opponent full HP."""
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(v7_score=10.0, text="造成6点伤害")
+        card = _make_card(score=10.0, text="造成6点伤害")
         state = _make_state(
             opponent=OpponentState(hero=HeroState(hp=30, armor=0), board=[]),
         )
@@ -262,7 +262,7 @@ def test_rewind_positive_delta():
             json.dump(rewind_data, f)
 
         scorer = V8ContextualScorer(data_dir=td)
-        card = _make_card(dbf_id=99999, v7_score=10.0, text="回溯。发现一张法术牌")
+        card = _make_card(dbf_id=99999, score=10.0, text="回溯。发现一张法术牌")
         state = _make_state()
         delta = scorer._rewind_ev_delta(card, state)
         assert delta > 0, f"Rewind card with positive delta should get bonus, got {delta}"
@@ -277,10 +277,10 @@ def test_synergy_three_same_race():
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
         cards = [
-            _make_card(v7_score=5.0, text="发现一张龙牌"),
-            _make_card(v7_score=5.0, text="召唤一条龙"),
-            _make_card(v7_score=5.0, text="龙获得+2攻击力"),
-            _make_card(v7_score=5.0, text="普通卡牌"),
+            _make_card(score=5.0, text="发现一张龙牌"),
+            _make_card(score=5.0, text="召唤一条龙"),
+            _make_card(score=5.0, text="龙获得+2攻击力"),
+            _make_card(score=5.0, text="普通卡牌"),
         ]
         state = _make_state(hand=cards)
         bonus = scorer._synergy_bonus(state)
@@ -296,8 +296,8 @@ def test_synergy_diverse_no_bonus():
     with tempfile.TemporaryDirectory() as td:
         scorer = V8ContextualScorer(data_dir=td)
         cards = [
-            _make_card(v7_score=5.0, cost=1, text="造成1点伤害"),
-            _make_card(v7_score=5.0, cost=2, text="抽一张牌"),
+            _make_card(score=5.0, cost=1, text="造成1点伤害"),
+            _make_card(score=5.0, cost=2, text="抽一张牌"),
         ]
         state = _make_state(hand=cards)
         bonus = scorer._synergy_bonus(state)
@@ -311,7 +311,7 @@ def test_synergy_diverse_no_bonus():
 # ------------------------------------------------------------------
 
 def test_integration_contextual_differs_from_v7():
-    """contextual_score != raw v7_score for a real card+state."""
+    """contextual_score != raw score for a real card+state."""
     reset_scorer()
     scorer = get_scorer()
     card = _make_card(
@@ -319,7 +319,7 @@ def test_integration_contextual_differs_from_v7():
         name="Alexstrasza",
         cost=7,
         card_type="MINION",
-        v7_score=32.0,
+        score=32.0,
         text="战吼：造成5点伤害",
     )
     state = _make_state(
@@ -329,5 +329,5 @@ def test_integration_contextual_differs_from_v7():
         opponent=OpponentState(hero=HeroState(hp=8, armor=0), board=[]),
     )
     ctx = scorer.contextual_score(card, state)
-    raw = card.v7_score
+    raw = card.score
     assert ctx != raw, f"Contextual ({ctx:.2f}) should differ from raw ({raw:.2f})"

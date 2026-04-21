@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Tests for pool_quality_generator.py
 
 Run: python -m pytest scripts/test_pool_quality_generator.py -v
@@ -9,7 +9,7 @@ import json, math, os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pool_quality_generator import (
-    load_cards, load_v7_scores, build_pools, compute_pool_metrics,
+    load_cards, load_scores, build_pools, compute_pool_metrics,
     generate_pool_report, load_turn_data,
     CARDS_PATH, V7_PATH, POOL_OUT, TURN_OUT,
     RACE_POOLS, SCHOOL_POOLS, TYPE_POOLS,

@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # Detection
 # ---------------------------------------------------------------------------
 
-_KINDRED_RE = re.compile(r'延系[：:]?\s*(.+?)(?:<|$)', re.DOTALL)
-_KINDRED_PRESENT_RE = re.compile(r'延系')
+_KINDRED_RE = re.compile(r'Kindred[：:]?\s*(.+?)(?:<|$)|延系[：:]?\s*(.+?)(?:<|$)', re.DOTALL)
+_KINDRED_PRESENT_RE = re.compile(r'Kindred|延系')
 
 
 def has_kindred(card_text: str) -> bool:
@@ -39,7 +39,9 @@ def parse_kindred_bonus(card_text: str) -> str | None:
     # Strip HTML-like tags for cleaner extraction
     clean = re.sub(r'<[^>]+>', ' ', card_text or "")
     # Find 延系 followed by optional colon, then capture until end or next keyword
-    m = re.search(r'延系[：:]?\s*(.+?)(?:\n|$)', clean)
+    m = re.search(r'Kindred[：:]?\s*(.+?)(?:\n|$)', clean, re.IGNORECASE)
+    if not m:
+        m = re.search(r'延系[：:]?\s*(.+?)(?:\n|$)', clean)
     if m:
         return m.group(1).strip()
     return None
@@ -137,7 +139,9 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
         return s
 
     # Pattern: "使其获得法术伤害+N"
-    spell_dmg = re.search(r'法术伤害[+＋](\d+)', text)
+    spell_dmg = re.search(r'Spell\s*Damage\s*\+(\d+)', text, re.IGNORECASE)
+    if not spell_dmg:
+        spell_dmg = re.search(r'法术伤害[+＋](\d+)', text)
     if spell_dmg:
         # Simplified: buff hero's spell damage notionally
         # (actual spell damage tracked in evaluation)
@@ -145,7 +149,9 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
         return s
 
     # Pattern: "法力值消耗减少（N）点" → cost reduction for next card
-    cost_red = re.search(r'消耗减少[（(]\s*(\d+)\s*[）)]', text)
+    cost_red = re.search(r'(?:Cost|cost)\s*(?:reduced?)?\s*(?:by\s*)?\(?(\d+)\)?', text)
+    if not cost_red:
+        cost_red = re.search(r'消耗减少[（(]\s*(\d+)\s*[）)]', text)
     if cost_red:
         # Simplified: adjust hand card costs
         amount = int(cost_red.group(1))

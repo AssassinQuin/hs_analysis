@@ -19,7 +19,7 @@ from scipy.optimize import curve_fit
 
 from hs_analysis.config import (
     DATA_DIR,
-    V2_CURVE_PARAMS_PATH,
+    CURVE_PARAMS_PATH,
 )
 
 
@@ -100,7 +100,7 @@ def fit_vanilla_curve(cards: list,
 def save_curve_params(popt: np.ndarray, output_path: str = None) -> dict:
     """保存曲线参数到 JSON 文件."""
     if output_path is None:
-        output_path = str(V2_CURVE_PARAMS_PATH)
+        output_path = str(CURVE_PARAMS_PATH)
     a, b, c = popt
     params = {
         "model": "power_law",
@@ -120,7 +120,7 @@ def save_curve_params(popt: np.ndarray, output_path: str = None) -> dict:
 def load_curve_params(path: str = None) -> tuple:
     """加载曲线参数."""
     if path is None:
-        path = str(V2_CURVE_PARAMS_PATH)
+        path = str(CURVE_PARAMS_PATH)
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     p = data["parameters"]
@@ -130,7 +130,7 @@ def load_curve_params(path: str = None) -> tuple:
 def main():
     """独立运行: 从分析数据拟合曲线."""
     data_path = str(DATA_DIR / "standard_legendaries_analysis.json")
-    output_path = str(V2_CURVE_PARAMS_PATH)
+    output_path = str(CURVE_PARAMS_PATH)
 
     with open(data_path, "r", encoding="utf-8") as f:
         data = json.load(f)

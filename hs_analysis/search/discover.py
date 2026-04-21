@@ -13,8 +13,33 @@ from typing import List, Optional
 
 from hs_analysis.data.card_index import get_index
 from hs_analysis.models.card import Card
+from hs_analysis.utils.score_provider import ScoreProvider
 
 logger = logging.getLogger(__name__)
+
+_score_provider: Optional[ScoreProvider] = None
+
+
+def _get_score_provider() -> ScoreProvider:
+    global _score_provider
+    if _score_provider is None:
+        _score_provider = ScoreProvider()
+    return _score_provider
+
+
+def _card_score(card: dict) -> float:
+    dbf_id = card.get('dbfId') or card.get('dbf_id')
+    if dbf_id is not None:
+        try:
+            siv = _get_score_provider().get_score(int(dbf_id))
+            if siv > 0:
+                return siv
+        except (TypeError, ValueError):
+            pass
+    card_type = (card.get('type') or '').upper()
+    if card_type == 'MINION':
+        return (card.get('attack', 0) + card.get('health', 0) + card.get('cost', 0)) / 3.0
+    return card.get('cost', 0) * 0.8
 
 # ===================================================================
 # Race name mapping (Chinese → JSON race value)
@@ -63,33 +88,33 @@ def _parse_discover_constraint(text: str) -> dict:
         return {}
     result = {}
     t = text
+    tl = t.lower()
 
-    if '法术' in t:
+    if 'spell' in tl:
         result['card_type'] = 'SPELL'
-    elif '随从' in t:
+    elif 'minion' in tl:
         result['card_type'] = 'MINION'
-    elif '武器' in t:
+    elif 'weapon' in tl:
         result['card_type'] = 'WEAPON'
 
-    for cn, race_val in _RACE_MAP.items():
-        if cn in t:
+    if 'card_type' not in result:
+        if '法术' in t:
+            result['card_type'] = 'SPELL'
+        elif '随从' in t:
+            result['card_type'] = 'MINION'
+        elif '武器' in t or '装备' in t:
+            result['card_type'] = 'WEAPON'
+
+    for en, race_val in _RACE_EN_MAP.items():
+        if en in tl:
             result['race'] = race_val
             if 'card_type' not in result:
                 result['card_type'] = 'MINION'
             break
 
-    tl = t.lower()
-    if not result:
-        if 'spell' in tl:
-            result['card_type'] = 'SPELL'
-        elif 'minion' in tl:
-            result['card_type'] = 'MINION'
-        elif 'weapon' in tl:
-            result['card_type'] = 'WEAPON'
-
     if 'race' not in result:
-        for en, race_val in _RACE_EN_MAP.items():
-            if en in tl:
+        for cn, race_val in _RACE_MAP.items():
+            if cn in t:
                 result['race'] = race_val
                 if 'card_type' not in result:
                     result['card_type'] = 'MINION'
@@ -147,7 +172,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         except Exception:
             pass
 
-        use_wild_pool = '来自过去' in card_text
+        use_wild_pool = '来自过去' in card_text or 'from the past' in card_text.lower()
 
         pool = generate_discover_pool(
             hero_class, card_type=ct, race=race,
@@ -196,9 +221,9 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
                     sample = [_apply_dg(c.copy()) for c in sample]
                 except Exception:
                     pass
-            chosen_raw = max(sample, key=lambda c: c.get('cost', 0))
+            chosen_raw = max(sample, key=lambda c: _card_score(c))
 
-        chosen_card = Card.from_unified(chosen_raw)
+        chosen_card = Card.from_hsdb_dict(chosen_raw)
 
         hand = getattr(state, 'hand', None)
         if hand is not None:

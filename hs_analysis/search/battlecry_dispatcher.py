@@ -27,18 +27,25 @@ logger = logging.getLogger(__name__)
 # ===================================================================
 
 # Pattern to extract battlecry text: "战吼：..." or "战吼:..."
+_BATTLECRY_PATTERN_EN = re.compile(r"Battlecry[：:]\s*(.+?)(?:[,.]|$)", re.DOTALL | re.IGNORECASE)
 _BATTLECRY_PATTERN = re.compile(r'战吼[：:]\s*(.+?)(?:，|$)', re.DOTALL)
 
 # Battlecry-specific patterns (beyond what spell_simulator covers)
 _BATTLECRY_EXTRA_PATTERNS = {
     'destroy_minion': (r'消灭.*?随从', lambda m: True),
-    'freeze_target': (r'冻结', lambda m: True),
+    'freeze_target': (r"Freeze\s+(?:a|an|the)?\s*(?:enemy|minion)", lambda m: True),
+    'freeze_target_cn': (r'冻结', lambda m: True),
+    'silence_en': (r"Silence\s+(?:a|an|the)?\s*(?:enemy|minion)", lambda m: True),
     'silence': (r'沉默', lambda m: True),
-    'give_divine_shield': (r'获得?圣盾', lambda m: True),
-    'give_taunt': (r'获得?嘲讽', lambda m: True),
+    'give_divine_shield': (r"Give.*?Divine\s+Shield", lambda m: True),
+    'give_divine_shield_cn': (r'获得?圣盾', lambda m: True),
+    'give_taunt': (r"Give.*?Taunt", lambda m: True),
+    'give_taunt_cn': (r'获得?嘲讽', lambda m: True),
     'give_charge': (r'获得?冲锋', lambda m: True),
-    'give_rush': (r'获得?突袭', lambda m: True),
-    'discover': (r'发现', lambda m: True),
+    'give_rush': (r"Give.*?Rush", lambda m: True),
+    'give_rush_cn': (r'获得?突袭', lambda m: True),
+    'discover': (r"Discover\s+(?:a\s+)?", lambda m: True),
+    'discover_cn': (r'发现', lambda m: True),
     'copy_minion': (r'复制.*?随从', lambda m: True),
 }
 
@@ -62,7 +69,9 @@ class BattlecryDispatcher:
         if not card_text:
             return state
 
-        bc_match = _BATTLECRY_PATTERN.search(card_text)
+        bc_match = _BATTLECRY_PATTERN_EN.search(card_text)
+        if not bc_match:
+            bc_match = _BATTLECRY_PATTERN.search(card_text)
         if not bc_match:
             return state
 
@@ -201,7 +210,8 @@ class BattlecryDispatcher:
         s = state
 
         # Freeze
-        if re.search(_BATTLECRY_EXTRA_PATTERNS['freeze_target'][0], bc_text):
+        if (re.search(_BATTLECRY_EXTRA_PATTERNS['freeze_target'][0], bc_text, re.IGNORECASE)
+                or re.search(_BATTLECRY_EXTRA_PATTERNS['freeze_target_cn'][0], bc_text)):
             if s.opponent.board:
                 target = self._pick_damage_target(s)
                 if target.startswith('enemy_minion:'):
@@ -209,25 +219,29 @@ class BattlecryDispatcher:
                     s.opponent.board[idx].frozen_until_next_turn = True
 
         # Give divine shield
-        if re.search(_BATTLECRY_EXTRA_PATTERNS['give_divine_shield'][0], bc_text):
+        if (re.search(_BATTLECRY_EXTRA_PATTERNS['give_divine_shield'][0], bc_text, re.IGNORECASE)
+                or re.search(_BATTLECRY_EXTRA_PATTERNS['give_divine_shield_cn'][0], bc_text)):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
                 s.board[idx].has_divine_shield = True
 
         # Give taunt
-        if re.search(_BATTLECRY_EXTRA_PATTERNS['give_taunt'][0], bc_text):
+        if (re.search(_BATTLECRY_EXTRA_PATTERNS['give_taunt'][0], bc_text, re.IGNORECASE)
+                or re.search(_BATTLECRY_EXTRA_PATTERNS['give_taunt_cn'][0], bc_text)):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
                 s.board[idx].has_taunt = True
 
         # Give rush
-        if re.search(_BATTLECRY_EXTRA_PATTERNS['give_rush'][0], bc_text):
+        if (re.search(_BATTLECRY_EXTRA_PATTERNS['give_rush'][0], bc_text, re.IGNORECASE)
+                or re.search(_BATTLECRY_EXTRA_PATTERNS['give_rush_cn'][0], bc_text)):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
                 s.board[idx].has_rush = True
 
         # Silence
-        if re.search(_BATTLECRY_EXTRA_PATTERNS['silence'][0], bc_text):
+        if (re.search(_BATTLECRY_EXTRA_PATTERNS['silence_en'][0], bc_text, re.IGNORECASE)
+                or re.search(_BATTLECRY_EXTRA_PATTERNS['silence'][0], bc_text)):
             if s.opponent.board:
                 target_idx = self._pick_destroy_target(s)
                 if target_idx is not None:
@@ -243,7 +257,8 @@ class BattlecryDispatcher:
                     target.enchantments = []
 
         # Discover — delegate to discover framework
-        if re.search(_BATTLECRY_EXTRA_PATTERNS['discover'][0], bc_text):
+        if (re.search(_BATTLECRY_EXTRA_PATTERNS['discover'][0], bc_text, re.IGNORECASE)
+                or re.search(_BATTLECRY_EXTRA_PATTERNS['discover_cn'][0], bc_text)):
             try:
                 from hs_analysis.search.discover import resolve_discover
                 hero_class = getattr(s, 'hero', None)

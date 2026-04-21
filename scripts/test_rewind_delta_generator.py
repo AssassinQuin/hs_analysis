@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Tests for rewind_delta_generator.py
 
 Run: python -m pytest scripts/test_rewind_delta_generator.py -v
@@ -9,7 +9,7 @@ import json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rewind_delta_generator import (
-    load_cards, load_v7_scores, find_rewind_cards, find_original,
+    load_cards, load_scores, find_rewind_cards, find_original,
     generate_report, strip_html,
     CARDS_PATH, V7_PATH, OUT_PATH,
 )

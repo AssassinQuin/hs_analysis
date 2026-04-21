@@ -42,16 +42,17 @@ def parse_colossal_value(card) -> int:
     mechanics = getattr(card, 'mechanics', []) or []
     text = getattr(card, 'text', '') or ''
 
-    is_colossal = 'COLOSSAL' in mechanics or '巨型' in text
-    if not is_colossal:
+    if 'COLOSSAL' not in mechanics and '巨型' not in text and 'Colossal' not in text:
         return 0
 
-    # Parse '巨型+N' from text
+    match = re.search(r'Colossal\s*\+\s*(\d+)', text)
+    if match:
+        return int(match.group(1))
+
     match = re.search(r'巨型\+(\d+)', text)
     if match:
         return int(match.group(1))
 
-    # Has COLOSSAL mechanic but no explicit number — default to 1
     return 1
 
 

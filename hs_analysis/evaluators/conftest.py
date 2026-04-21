@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Shared fixtures for evaluator tests (hs_analysis/evaluators/).
 
 Provides make_card and make_state fixtures used by all evaluator test files.
@@ -29,7 +29,7 @@ def make_card():
             card_type="MINION",
             attack=3,
             health=3,
-            v7_score=5.0,
+            score=5.0,
             text="",
             mechanics=[],
         )

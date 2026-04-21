@@ -1,4 +1,4 @@
-"""Tests for V10 SIV (State-Indexed Value) module."""
+﻿"""Tests for V10 SIV (State-Indexed Value) module."""
 
 from __future__ import annotations
 
@@ -307,29 +307,29 @@ class TestCounterModifier:
 
 class TestSivScore:
     def test_returns_nonzero_for_valid_card(self, make_card, make_state):
-        assert siv_score(make_card(v7_score=5.0), make_state()) > 0.0
+        assert siv_score(make_card(score=5.0), make_state()) > 0.0
 
     def test_zero_for_zero_v7_card(self, make_card, make_state):
-        assert siv_score(make_card(v7_score=0.0), make_state()) == 0.0
+        assert siv_score(make_card(score=0.0), make_state()) == 0.0
 
     def test_clamped_to_range(self, make_card, make_state):
-        result = siv_score(make_card(v7_score=5.0), make_state())
+        result = siv_score(make_card(score=5.0), make_state())
         assert 0.01 <= result <= 100.0
 
     def test_lethal_state_higher_than_safe(self, make_card, make_state):
-        card = make_card(v7_score=5.0, text="造成6点伤害", card_type="SPELL")
+        card = make_card(score=5.0, text="造成6点伤害", card_type="SPELL")
         safe = make_state()
         lethal = make_state(opponent=OpponentState(hero=HeroState(hp=1, armor=0)))
         assert siv_score(card, lethal) > siv_score(card, safe)
 
     def test_hand_siv_sum(self, make_card, make_state):
-        c1 = make_card(dbf_id=1, v7_score=3.0)
-        c2 = make_card(dbf_id=2, v7_score=4.0)
+        c1 = make_card(dbf_id=1, score=3.0)
+        c2 = make_card(dbf_id=2, score=4.0)
         total = hand_siv_sum(make_state(hand=[c1, c2]))
         assert total >= 3.0
 
     def test_multiple_modifiers_stack(self, make_card, make_state):
-        card = make_card(v7_score=5.0, text="造成3点伤害", card_type="SPELL", cost=5, mechanics=["BATTLECRY"])
+        card = make_card(score=5.0, text="造成3点伤害", card_type="SPELL", cost=5, mechanics=["BATTLECRY"])
         state = make_state(
             mana=ManaState(available=5, max_mana=5),
             board=[Minion(name="Brann Bronzebeard", attack=2, health=4)],

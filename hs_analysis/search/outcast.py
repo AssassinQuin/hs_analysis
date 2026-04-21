@@ -92,23 +92,31 @@ def _parse_outcast_bonus(text: str) -> dict:
         '流放：法力值消耗为（N）点' → {"type": "cost", "value": N}
         Fallback if '流放' present: {"type": "draw", "count": 1}
     """
-    # Draw N cards
+    m = re.search(r'Outcast[：:]\s*Draw\s*(\d+)', text)
+    if m:
+        return {"type": "draw", "count": int(m.group(1))}
+
     m = re.search(r'流放[：:]\s*再抽(\d+)张', text)
     if m:
         return {"type": "draw", "count": int(m.group(1))}
 
-    # Buff +N/+N
+    m = re.search(r'Outcast[：:]\s*\+(\d+)/\+(\d+)', text)
+    if m:
+        return {"type": "buff", "attack": int(m.group(1)), "health": int(m.group(2))}
+
     m = re.search(r'流放[：:]\s*\+(\d+)/\+(\d+)', text)
     if m:
         return {"type": "buff", "attack": int(m.group(1)), "health": int(m.group(2))}
 
-    # Cost reduction
+    m = re.search(r'Outcast[：:]\s*(?:costs?|Cost)\s*\(?(\d+)\)?', text)
+    if m:
+        return {"type": "cost", "value": int(m.group(1))}
+
     m = re.search(r'流放[：:]\s*法力值消耗为[（(]\s*(\d+)\s*[）)]点', text)
     if m:
         return {"type": "cost", "value": int(m.group(1))}
 
-    # Fallback: if '流放' present, default to draw 1
-    if '流放' in text:
+    if 'Outcast' in text or '流放' in text:
         return {"type": "draw", "count": 1}
 
     return {"type": "draw", "count": 1}
