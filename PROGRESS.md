@@ -1,7 +1,7 @@
 # 项目进展日志
 
 > 炉石传说 AI 决策引擎 — 完整开发记录
-> 最后更新：2026-04-19
+> 最后更新：2026-04-21
 
 ---
 
@@ -220,13 +220,98 @@ if lethal_possible → BSV = 999.0
 
 ---
 
-## 整体进度总览 (2026-04-19)
+## Phase 5: HDT 实时辅助决策 (2026-04-21 规划)
+
+### 目标
+
+将已有的 RHEA 决策引擎接入炉石传说实时游戏数据流，在玩家回合给出出牌/攻击建议。
+
+### 技术方案
+
+**选型**: Python 直接读取 Power.log（via python-hslog），无需 HDT 插件
+
+```
+Hearthstone Client → Power.log → LogWatcher(50ms轮询)
+    → GameTracker(python-hslog增量解析) → StateBridge(Entity→GameState)
+    → RHEAEngine.search() → DecisionPresenter(终端输出)
+```
+
+### 新增模块
+
+```
+hs_analysis/watcher/              # NEW
+├── __init__.py
+├── log_watcher.py                # 文件轮询 + 轮转检测 + 回合触发回调
+├── game_tracker.py               # 封装 LogParser + EntityTreeExporter
+├── state_bridge.py               # hearthstone.entities.Game → GameState 映射
+└── decision_loop.py              # 主循环：串联所有模块
+```
+
+### 实施步骤
+
+| Phase | 任务 | 文件 | 预估 |
+|-------|------|------|------|
+| 5a | 环境准备 | — | 1-2h |
+| 5b | LogWatcher | watcher/log_watcher.py ~100行 | 3-4h |
+| 5c | GameTracker | watcher/game_tracker.py ~150行 | 4-6h |
+| 5d | StateBridge | watcher/state_bridge.py ~200行 | 3-4h |
+| 5e | DecisionLoop | watcher/decision_loop.py ~150行 | 3-4h |
+| 5f | 输出展示 | 增强 scripts/decision_presenter.py | 2-3h |
+| 5g | 集成测试 | tests/test_live_integration.py | 3-4h |
+| **总计** | | ~600 行新代码 | **15-21h** |
+
+### 关键映射: python-hslog Entity → hs_analysis GameState
+
+| python-hslog 来源 | 目标字段 |
+|---|---|
+| `Card.tags[GameTag.ATK]` | `Minion.attack` |
+| `Card.tags[GameTag.HEALTH]` | `Minion.health` |
+| `Card.tags[GameTag.ZONE]` → PLAY/HAND/DECK | 分发到 board/hand/deck |
+| `Card.tags[GameTag.EXHAUSTED]` | `Minion.can_attack` |
+| `Card.tags[GameTag.TAUNT/CHARGE/RUSH/...]` | `Minion.has_taunt/has_charge/...` |
+| `Card.card_id` → CardIndex 查询 | `Card` 完整数据 |
+| `Player.tags[GameTag.RESOURCES]` | `ManaState.available` |
+| `Hero.tags[GameTag.ARMOR]` | `HeroState.armor` |
+
+### 决策输出格式
+
+```
+═══ 回合 5 — 法力 5/5 ═══
+推荐: [出牌] 瑞文的男性实验体 → 位置3, [攻击] 随从1 → 对面英雄, 结束回合
+  信心度: 87% | 评分: +12.3
+
+备选策略:
+  激进: [出牌] 火焰之地信使 → 位置1, [攻击] 全部走脸, 结束回合 (评分: +10.8)
+  稳健: [英雄技能], [出牌] 瑞文的男性实验体 → 位置3, 结束回合 (评分: +9.5)
+```
+
+### 关键风险
+
+| 风险 | 缓解措施 |
+|------|---------|
+| macOS 不生成 Power.log | 开发调试用录制日志，生产环境需 Windows |
+| python-hslog 版本滞后 | pin 版本，HearthSim 通常数天内更新 |
+| Enchantment 信息不完整 | 通过 CardIndex 补充卡牌文本解析 |
+
+### 前置研究成果
+
+- `thoughts/archive/designs/2026-04-18-hdt-analysis-report.md` — HDT 架构分析
+- `thoughts/shared/designs/2026-04-19-hdt-plugin-integration-research.md` — 三方案评估，选定方案B
+- `hs_analysis/search/test_v9_hdt_batch01-16.py` — 16批次 HDT 风格集成测试（`HDTGameStateFactory` 可复用）
+
+### 状态
+
+⏳ 待实施（设计 + 计划文档待创建）
+
+---
+
+## 整体进度总览 (2026-04-21)
 
 ### 已完成 ✅
 
 | # | 阶段 | 产出 | 测试 |
 |---|------|------|------|
-| 1 | 数据管线 | 1015 标准卡 + 5209 狂野卡, CardIndex | 51+35+6=92 |
+| 1 | 数据管线 | 1015 标准卡 + 5209 狂野卡, CardIndex | 92 |
 | 2 | V2 评分 | 幂律曲线 MAE 0.66 | 含 |
 | 3 | V7 评分 | HSReplay 校准完整管线 | 16 |
 | 4 | V8 评分 | 7 上下文修正因子 | 16 |
@@ -236,7 +321,11 @@ if lethal_possible → BSV = 999.0
 | 8 | 游戏规则 | 1017 行完整规则参考 | 0 (文档) |
 | 9 | V10 评分框架设计 | 三层架构 CIV+SIV+BSV | 0 (设计) |
 | 10 | V10 评分实现 | SIV+BSV+交互+机制+集成 | 260 |
-| **总计** | | **32 源文件, 10022 行** | **493 通过** |
+| 11 | V10 Phase 2 | 附魔+触发+战吼+亡语+光环+发现+地标 | 341 |
+| 12 | V10 Phase 3 | 灌注+流放+巨型+兆示+任务+回溯 | ~63 |
+| 13 | V10 Feedback | 延系+尸体+符文+黑暗之赐+目标选择+狂野发现 | 107 |
+| 14 | 检索优化 | CardIndex LRU + ScoreProvider 缓存 | 含 |
+| **总计** | | **32+ 源文件, 11000+ 行** | **~795 通过** |
 
 ### 进行中 🔄
 
@@ -246,20 +335,18 @@ if lethal_possible → BSV = 999.0
 
 | 优先级 | 任务 | 说明 | 前置依赖 |
 |--------|------|------|---------|
-| 🔴 P1 | V10 Phase 2: 附魔框架 | Enchantment + TriggerDispatcher | 设计完成 |
-| 🔴 P1 | V10 Phase 2: 战吼派发 | 文本解析→效果应用 | 附魔框架 |
-| 🔴 P1 | V10 Phase 2: 亡语队列 | 板位顺序执行，5层级联 | 触发系统 |
-| 🔴 P1 | V10 Phase 2: 光环引擎 | 连续附魔重算 | 附魔框架 |
-| 🔴 P1 | V10 Phase 2: 发现框架 | 池生成+三选一最优 | 评估器 |
-| 🔴 P1 | V10 Phase 2: 地标支持 | 新卡类型+耐久+冷却 | GameState |
-| 🟡 P2 | V10 Phase 3: 灌注系统 | 英雄技能升级 | Phase 2 |
-| 🟡 P2 | V10 Phase 3: 手牌位置 | 外域/裂变/手牌定位 | Phase 2 |
-| 🟡 P2 | V10 Phase 3: 兆示+巨型 | 计数器+附属物召唤 | Phase 2 |
-| 🟡 P2 | V10 Phase 3: 延系 | 上回合种族/学派追踪 | Phase 2 |
-| 🟡 P2 | V10 Phase 3: 任务/黑暗之赐/回溯 | 进度追踪+分支模拟 | Phase 2 |
-| 🟢 P3 | 评分校准 | 温度/斩杀比例调优 | 实战数据 |
-| 🟢 P3 | 性能基准 | 75ms RHEA 目标 | Phase 2 |
-| 🟢 P3 | 狂野评分 | 5209 卡池扩展 | Phase 3 |
+| 🔴 P0 | Phase 5a: 环境准备 | python-hearthstone + Power.log 样本 | 无 |
+| 🔴 P0 | Phase 5b: LogWatcher | 文件轮询 + 轮转检测 | Phase 5a |
+| 🔴 P0 | Phase 5c: GameTracker | python-hslog 封装 | Phase 5a |
+| 🔴 P0 | Phase 5d: StateBridge | Entity→GameState 映射 | Phase 5c |
+| 🔴 P0 | Phase 5e: DecisionLoop | 实时决策主循环 | Phase 5b-d |
+| 🔴 P0 | Phase 5f: 输出展示 | 终端/overlay 决策建议 | Phase 5e |
+| 🔴 P0 | Phase 5g: 集成测试 | Power.log 回放验证 | Phase 5e |
+| 🟡 P1 | 评分校准 | 温度/斩杀比例调优 | 实战数据 |
+| 🟡 P1 | 性能基准 | 75ms RHEA 目标 | 无 |
+| 🟡 P1 | 狂野评分 | 5209 卡池扩展 | 无 |
+| 🟢 P2 | 裂片机制 | 进入标准池时实现 | P1 |
+| 🟢 P3 | 完整回溯集成 | 2分支评估 | P1 |
 
 ---
 

@@ -1,14 +1,14 @@
 ---
-version: 7.0
+version: 10.0
 created: 2026-04-19
-last_changed: 2026-04-20 (Retrieval optimization — CardIndex LRU + ScoreProvider cache + discover refactor)
+last_changed: 2026-04-21 (V11 engine implemented, Need-Aware Discover EV designed)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V10 Engine Overhaul — Retrieval Optimized, Polish & Calibration Next
+## Current Phase: V11 Engine Implemented — Need-Aware Discover EV Designed, HDT Planned
 
 ## ✅ DONE
 
@@ -159,6 +159,16 @@ last_changed: 2026-04-20 (Retrieval optimization — CardIndex LRU + ScoreProvid
 - [x] V10 Phase 3 (state expansion+imbue+outcast+colossal+herald+quest+rewind): ~63
 - [x] V10 Feedback (kindred+corpse+rune+dark_gift+target_selection+wild_discover): 107
 
+### V11 Next-Gen Engine ✅ (2026-04-21, 22 files in engine_v11/)
+- [x] **MechanicRegistry** — 注册表模式，15 个 Handler 包装 V10 逻辑
+- [x] **FactorGraph Evaluator** — 7 个独立因子 (board_control, lethal_threat, tempo, value, survival, resource_efficiency, discover_ev)
+- [x] **Hierarchical Search** — StrategicMode(LETHAL/DEFENSIVE/DEVELOPMENT) → TacticalPlanner(BFS combo) → AttackPlanner(deterministic greedy)
+- [x] **ActionPruner** — 领域知识剪枝 (divine shield waste, bad trades, full board)
+- [x] **Probability Models** — DrawModel, DiscoverModel, RNGModel
+- [x] **DecisionPipeline** — 串联所有层，输出 Decision + FactorScores + confidence
+- [x] **37 V11 tests passing**, 783/784 total (1 pre-existing flaky)
+- **Design:** `thoughts/shared/designs/2026-04-21-next-gen-engine-architecture-design.md`
+
 ### Architecture & Research Documentation
 - [x] 9 design documents in `thoughts/shared/designs/`
 - [x] 6 implementation plans in `thoughts/shared/plans/`
@@ -172,6 +182,46 @@ last_changed: 2026-04-20 (Retrieval optimization — CardIndex LRU + ScoreProvid
 (none currently)
 
 ## ⏳ TODO (by priority)
+
+### P0: V11 Polish & A/B Validation
+- [ ] V11 vs V10 A/B 对比测试（场景级别）
+- [ ] FactorGraph 权重调优（phase-adaptive weights）
+- [ ] 性能基准测试（100ms budget）
+
+### P0: V11 Need-Aware Discover EV — 发现决策质量升级
+
+**设计完成，待实现。** 替代 V11 的静态 SIV 评分发现模型：
+
+1. **NeedAnalyzer** — 分析场面需求 (survival/removal/tempo/damage/draw)
+2. **PoolSimulator** — 对池中每张牌完整模拟打出 + FactorGraph 评估
+3. **OrderStatistics** — 精确计算 3 选 1 期望最大值
+4. **CardClassifier** — 牌面效果分类
+5. **DiscoverModelV2** — 整合以上，输出 EV + TOP 选项 + 需求分布
+6. **TacticalPlanner 扩展** — 发现牌 EV 参与出牌组合比较
+
+- [ ] Batch 1: NeedAnalyzer + CardClassifier (2h)
+- [ ] Batch 2: PoolSimulator + OrderStatistics (2h)
+- [ ] Batch 3: DiscoverModelV2 + TacticalPlanner 集成 (2-3h)
+- [ ] Batch 4: 测试 + 文档更新 (1h)
+- **Design:** `thoughts/shared/designs/2026-04-21-need-aware-discover-ev-design.md`
+- **Plan:** `thoughts/shared/plans/2026-04-21-need-aware-discover-ev.md`
+- **Estimated effort:** 6-8 hours
+- **Key insight:** 发现是"嵌套决策"，EV = E[max(3 random picks)] × 场面模拟评分
+
+### P0: HDT Live Integration (Phase 5) — 实时辅助决策
+- [ ] Phase 5a: 环境准备 — 安装 python-hearthstone, 获取 Power.log 样本
+- [ ] Phase 5b: `watcher/log_watcher.py` — 文件轮询(50ms) + 轮转检测 + 回合触发
+- [ ] Phase 5c: `watcher/game_tracker.py` — 封装 python-hslog LogParser + EntityTreeExporter
+- [ ] Phase 5d: `watcher/state_bridge.py` — hearthstone.entities.Game → GameState 映射
+- [ ] Phase 5e: `watcher/decision_loop.py` — 主循环串联 LogWatcher→GameTracker→StateBridge→RHEAEngine
+- [ ] Phase 5f: 决策输出展示 — 终端/overlay 实时展示推荐行动 + 备选策略
+- [ ] Phase 5g: 集成测试 — 用录制 Power.log 回放验证完整流程
+- **Design:** `thoughts/shared/designs/2026-04-21-hdt-live-integration-design.md`
+- **Plan:** `thoughts/shared/plans/2026-04-21-hdt-live-integration.md`
+- **Estimated effort:** 15-21 hours
+- **Key dependency:** python-hearthstone (pip install hearthstone), Windows Power.log
+- **Risk:** macOS 不生成 Power.log，开发调试需 Windows 环境或录制日志
+- **Note:** 建议先完成 V11 再接入 HDT，否则实时辅助决策质量不足
 
 ### P1: Polish & Calibration
 - [ ] Scoring calibration (temperature, LETHAL_SCALE, phase weights)
@@ -214,7 +264,8 @@ See `thoughts/DECISIONS.md` for full details (D001-D027).
 - `thoughts/shared/designs/2026-04-19-hearthstone-complete-rules.md` ⭐ (rules reference)
 
 ## Next Actions
-1. **Scoring calibration**: temperature/weight tuning with real game data
-2. **Performance**: benchmark and optimize to 75ms target
-3. **Full Rewind integration**: wire into _evaluate_chromosome for true 2-branch eval
-4. **Git commit**: commit retrieval optimization changes
+1. **V11 Discover EV Batch 1: NeedAnalyzer + CardClassifier** — 场面需求分析 + 牌面分类
+2. **V11 Discover EV Batch 2: PoolSimulator + OrderStatistics** — 单牌模拟 + 期望值计算
+3. **V11 Discover EV Batch 3: DiscoverModelV2 + TacticalPlanner** — 整合 + 搜索集成
+4. **V11 Polish & A/B Validation** — 与 V10 对比验证决策质量
+5. **Phase 5: HDT Live Integration** — V11 验证后再接入实时流

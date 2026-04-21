@@ -1,7 +1,7 @@
 ---
 version: 2.0
 created: 2026-04-19
-last_changed: 2026-04-20
+last_changed: 2026-04-21
 ---
 
 # Decision Log: hs_analysis
@@ -209,3 +209,15 @@ last_changed: 2026-04-20
 **Decision**: Clone→apply→evaluate loop: for each candidate target, clone the state, apply the effect, evaluate with `_quick_eval`, pick the best. Tiebreaker: prefer minions over hero, higher attack over lower.
 **Alternatives**: (A) Greedy (highest attack) — simple but misses kills. (B) Full game tree — too slow for search. (C) Exhaustive with eval — max 7 targets, ~2ms per call, captures kills and lethal.
 **Rationale**: Max 7 board slots means max 8 candidates (7 minions + hero). Clone+eval is fast enough. The removal bonus in `_quick_eval` (+10 per dead enemy) correctly values kills over chip damage.
+
+## D028 | 2026-04-21 | V11 engine as independent parallel module (not V10 refactor)
+**Context**: V10 RHEA engine has 783+ tests and complex interactions. Refactoring risks regressions.
+**Decision**: Implement V11 in `engine_v11/` as a completely independent directory. MechanicRegistry wraps V10 handlers via delegation. No V10 files modified.
+**Alternatives**: (A) Refactor V10 in-place — high regression risk. (B) Fork and modify — loses V10 test coverage. (C) Independent parallel — safe, A/B comparable.
+**Rationale**: Parallel architecture allows V10 vs V11 A/B testing. Zero regression risk. V10 remains as production fallback. 22 new files, 37 tests, 783/784 total passing.
+
+## D029 | 2026-04-21 | Need-Aware Discover EV with full pool simulation
+**Context**: V10 discover uses static SIV scoring (pick highest-cost card). Ignores board state needs (low HP → need heal, big enemy board → need removal).
+**Decision**: DiscoverModelV2 simulates every card in the discover pool: copy state → add card → simulate play → FactorGraph evaluate → score. Then compute E[max of 3 random picks] using order statistics. Output includes need distribution and top options with factor breakdowns.
+**Alternatives**: (A) Static SIV — fast but board-state-blind. (B) Category weights only — coarse, misses within-category value differences. (C) Full simulation — most accurate, ~50-100ms per discover decision.
+**Rationale**: Discover is a nested decision (play card → pick best of 3 → play that card). Full simulation with FactorGraph correctly captures how each discover option changes the board state. Pool size ~187 cards × FactorGraph eval ≈ acceptable within 100ms budget with per-card timeout protection.

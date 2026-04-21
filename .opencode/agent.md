@@ -102,6 +102,11 @@ hs_analysis/                    # 核心包
 │   ├── opponent_simulator.py   # 对手模拟
 │   ├── risk_assessor.py        # 风险评估
 │   └── action_normalize.py     # 动作归一化
+├── watcher/                    # 实时决策（Phase 5, 规划中）
+│   ├── log_watcher.py          # Power.log 文件轮询
+│   ├── game_tracker.py         # python-hslog 封装
+│   ├── state_bridge.py         # Entity→GameState 映射
+│   └── decision_loop.py        # 实时决策主循环
 └── utils/                      # 工具模块
     ├── score_provider.py       # 评分数据提供（懒加载 + 缓存）
     ├── bayesian_opponent.py    # 贝叶斯对手建模
@@ -144,7 +149,8 @@ pytest hs_analysis/search/      # search 模块内嵌测试
 - **V8** — 上下文感知（回合数、场面饱和度、种族协同、发现池期望）
 - **L6** — 真实世界综合评分
 - **V9** — RHEA 层叠决策管线（致命检测 → 进化搜索 → 对手模拟 → 风险评估）
-- **V10** — 2026 机制覆盖大修（附魔框架 + 触发系统 + 现代关键词）← 当前
+- **V10** — 2026 机制覆盖大修（附魔框架 + 触发系统 + 现代关键词）✅
+- **Phase 5** — HDT 实时辅助决策（Power.log + python-hslog + 实时 RHEA）← 当前规划
 
 ## 开发约定
 
