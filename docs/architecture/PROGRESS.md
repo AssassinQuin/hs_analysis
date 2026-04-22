@@ -1,7 +1,7 @@
 # 项目进展日志
 
 > 炉石传说 AI 决策引擎 — 完整开发记录
-> 最后更新：2026-04-21
+> 最后更新：2026-04-22
 
 ---
 
@@ -301,11 +301,71 @@ hs_analysis/watcher/              # NEW
 
 ### 状态
 
-⏳ 待实施（设计 + 计划文档待创建）
+✅ 已完成（2026-04-21 ~ 04-22）
+
+**Commit `61ae4be`** — 实时 Power.log 决策管道
+
+实现了 watcher 模块（log_watcher.py + game_tracker.py + state_bridge.py + decision_loop.py），
+通过 python-hslog 增量解析 Power.log，在每个 MAIN_ACTION 决策点运行 RHEA 搜索。
+
+**Commit `8922709`** — Power.log 审计，修复 18 个 Bug
+
+基于真实 Power.log 回放审计，发现并修复 18 个解析/状态追踪 Bug
+（P0×5 + P1×9 + P2×4）。审计报告见 `docs/architecture/BUG_REPORT_POWERLOG_AUDIT.md`。
+
+**Commit `de0554d`** — Power.log 逐行回放系统
+
+完整回放验证：12 个决策点全对局分析，法力曲线 1→10 正确。
 
 ---
 
-## 整体进度总览 (2026-04-21)
+## Phase 6: 自维护回放引擎 (2026-04-22)
+
+### Commit `5aabadb` — 自维护回放引擎
+
+**重大架构变更**: `game_replayer.py` 从依赖 `GameTracker`/`StateBridge`（python-hslog）
+改为**自维护 entity 状态的逐行回放引擎**，直接解析 Power.log 原始格式。
+
+### 修复的 10+ 解析 Bug
+
+| # | Bug | 根因 | 影响 | 修复 |
+|---|-----|------|------|------|
+| 1 | 所有 entity card_type=0 | FULL_ENTITY 嵌套 tag 字符串值(HERO/MINION)，`int()` 失败返回 0 | 无法区分英雄/随从/法术 | 添加 `cardtype_map` 字符串→int 映射 |
+| 2 | TAG_CHANGE ZONE=0 | ZONE 值(HAND/PLAY)为字符串，解析为 int→0 | 随从/手牌 zone 错误 | 添加 ZONE 字符串映射 |
+| 3 | 复杂 Entity 方括号 | `Entity=[entityName=初始之火 id=89 zone=SETASIDE ...]` 含空格 | 正则只捕获部分 | 更新正则 `(\[[^\]]*\]\|\S+)` + 方括号解析 |
+| 4 | Player MAXRESOURCES 丢失 | 玩家 entity 不在 `self.entities`，嵌套 tag 被跳过 | 无法获取法力上限 | PlayerState 新增 `max_mana`，特殊处理玩家嵌套 tag |
+| 5 | 法力计算错误 | 用 `max_mana`(固定10) 而非 `resources`(当前水晶 1-10) | 法力永远 10/10 | 改用 `our_player.resources` |
+| 6 | 游戏回合被覆盖 | 玩家级 `TURN` tag 覆盖 `game_turn`(如 6→11) | 回合号错误 | 仅处理 GameEntity 级 TURN |
+| 7 | Minion() 参数错误 | `Minion` dataclass 无 `card_id` 参数 | TypeError | 移除 `card_id=` 参数 |
+| 8 | 对手随从拷贝 Bug | 对手随从 append 到 `our_board` | 对手场面丢失 | 修正为 `opp_board.append()` |
+| 9 | 重复 MAIN_ACTION | GameState + PowerTaskList 都触发 | 决策点重复 | 添加 `source` 参数，跳过 PowerTaskList |
+| 10 | LIFESTEAL tag 值 | 误设为 238(=TAUNT) | 吸血=嘲讽 | 修正为 2145 |
+
+### 新增功能
+
+| 功能 | 说明 |
+|------|------|
+| FULL_ENTITY Updating 解析 | 1346 行 `Updating [entityName=... id=N]` 格式，更新已有 entity 的 card_id |
+| 6 因子抉择质量评估 | 致命检测 + 法力效率 + 场面控制 + 策略多样性 + RHEA 分数解读 + 血量压力 |
+| JSON 完整状态输出 | hand_cards / board_minions / opp_armor / opp_board_minions 写入 summary |
+| 中文卡牌名缓存 | 从 `card_data/zhCN/cards.collectible.json` 加载 |
+| 空手牌提示 | 早期回合卡牌在 MAIN_ACTION 后加入的提示信息 |
+
+### 验证结果
+
+| 指标 | 结果 |
+|------|------|
+| 决策点 | 13 (12 唯一回合 + 1 重复回合 23) |
+| 法力曲线 | 1/1 → 2/2 → ... → 10/10 ✅ |
+| 场面追踪 | 0→4→1→2→4 随从 ✅ |
+| 手牌追踪 | 0→2→1→4→5→6→7→10 ✅ |
+| RHEA 时间 | 136-318ms/决策 |
+| 抉择评级 | ✅合理 / ⚠️次优 / 🔴致命 / ❌错误 |
+| 对手场面 | 名字已知时显示中文，未知时"未知" |
+
+---
+
+## 整体进度总览 (2026-04-22)
 
 ### 已完成 ✅
 
@@ -325,7 +385,9 @@ hs_analysis/watcher/              # NEW
 | 12 | V10 Phase 3 | 灌注+流放+巨型+兆示+任务+回溯 | ~63 |
 | 13 | V10 Feedback | 延系+尸体+符文+黑暗之赐+目标选择+狂野发现 | 107 |
 | 14 | 检索优化 | CardIndex LRU + ScoreProvider 缓存 | 含 |
-| **总计** | | **32+ 源文件, 11000+ 行** | **~795 通过** |
+| 15 | Phase 5: 实时管道 | watcher 模块 + python-hslog + DecisionLoop | 含 |
+| 16 | Phase 6: 自维护回放 | 逐行 Power.log 解析 + 10+ bug 修复 + 6因子评估 | 回放验证 |
+| **总计** | | **34+ 源文件, 12000+ 行** | **~795 通过** |
 
 ### 进行中 🔄
 
@@ -335,17 +397,13 @@ hs_analysis/watcher/              # NEW
 
 | 优先级 | 任务 | 说明 | 前置依赖 |
 |--------|------|------|---------|
-| 🔴 P0 | Phase 5a: 环境准备 | python-hearthstone + Power.log 样本 | 无 |
-| 🔴 P0 | Phase 5b: LogWatcher | 文件轮询 + 轮转检测 | Phase 5a |
-| 🔴 P0 | Phase 5c: GameTracker | python-hslog 封装 | Phase 5a |
-| 🔴 P0 | Phase 5d: StateBridge | Entity→GameState 映射 | Phase 5c |
-| 🔴 P0 | Phase 5e: DecisionLoop | 实时决策主循环 | Phase 5b-d |
-| 🔴 P0 | Phase 5f: 输出展示 | 终端/overlay 决策建议 | Phase 5e |
-| 🔴 P0 | Phase 5g: 集成测试 | Power.log 回放验证 | Phase 5e |
-| 🟡 P1 | 评分校准 | 温度/斩杀比例调优 | 实战数据 |
+| 🟡 P1 | 评分校准 | ScoreProvider scoring_report.json 缺失，所有卡牌分数默认 0.0 | 无 |
+| 🟡 P1 | Token 卡牌名 | 非收藏卡(SW_108t, TIME_875t 等)显示为原始 ID | 无 |
 | 🟡 P1 | 性能基准 | 75ms RHEA 目标 | 无 |
 | 🟡 P1 | 狂野评分 | 5209 卡池扩展 | 无 |
-| 🟢 P2 | 裂片机制 | 进入标准池时实现 | P1 |
+| 🟢 P2 | 实战验证 | 多场 Power.log 回放对比 | Phase 6 |
+| 🟢 P2 | 实时模式测试 | macOS→Windows 环境验证 | Phase 5 |
+| 🟢 P3 | 裂片机制 | 进入标准池时实现 | P1 |
 | 🟢 P3 | 完整回溯集成 | 2分支评估 | P1 |
 
 ---
@@ -367,6 +425,10 @@ hs_analysis/watcher/              # NEW
 | `46f7007` | 04-19 | V10 评分实现设计 |
 | `1c4c3af` | 04-19 | V10 评分实现计划 |
 | `a1b3221` | 04-19 | V10 评分实现 (SIV+BSV+集成, 493测试) |
+| `61ae4be` | 04-21 | 实时 Power.log 决策管道 — watcher 模块 + RHEA 集成 |
+| `8922709` | 04-22 | Power.log 审计 — 修复 18 个 Bug（P0×5 + P1×9 + P2×4） |
+| `de0554d` | 04-22 | Power.log 逐行回放系统 — 12 决策点全对局分析 |
+| `5aabadb` | 04-22 | 自维护回放引擎 — 修复10+解析Bug，6因子抉择质量评估 |
 
 ---
 
