@@ -192,7 +192,7 @@ class HSCardDB:
 
     @staticmethod
     def _xml_to_dict(card) -> Dict[str, Any]:
-        from hearthstone.enums import CardType, CardClass, Race, Rarity
+        from hearthstone.enums import CardType, CardClass, Race, Rarity, GameTag
         card_class = card.card_class.name if card.card_class else "NEUTRAL"
         card_type = card.type.name if card.type else ""
         rarity = card.rarity.name if card.rarity else ""
@@ -216,10 +216,22 @@ class HSCardDB:
                 mechanics.append(name)
         mechanics.sort()
 
+        # Extract Chinese name from strings dict (card.name is always English)
+        zh_name = ""
+        cardname_strings = card.strings.get(GameTag.CARDNAME) if hasattr(card, "strings") else None
+        if isinstance(cardname_strings, dict):
+            zh_name = cardname_strings.get("zhCN", "")
+
+        # Extract Chinese description similarly
+        zh_text = ""
+        cardtext_strings = card.strings.get(GameTag.CARDTEXT) if hasattr(card, "strings") else None
+        if isinstance(cardtext_strings, dict):
+            zh_text = cardtext_strings.get("zhCN", "")
+
         return {
             "dbfId": card.dbf_id or 0,
             "cardId": card.id,
-            "name": card.english_name or "",
+            "name": zh_name or card.english_name or "",
             "englishName": card.english_name or "",
             "cost": card.cost or 0,
             "attack": card.atk or 0,
@@ -231,7 +243,7 @@ class HSCardDB:
             "race": races,
             "rarity": rarity,
             "mechanics": mechanics,
-            "text": card.english_description or "",
+            "text": zh_text or card.english_description or "",
             "englishText": card.english_description or "",
             "set": card.card_set.name if card.card_set else "",
             "collectible": bool(card.collectible),

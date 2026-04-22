@@ -343,6 +343,11 @@ class GlobalTracker:
         """
         is_opp = (controller == self.opp_controller)
 
+        # Clean up: remove from opp_hand_card_ids when leaving HAND zone
+        # This covers ALL exits (play, discard, mill, secret, return to deck, etc.)
+        if is_opp and old_zone == self.ZONE_HAND:
+            self.state.opp_hand_card_ids.pop(entity_id, None)
+
         # Card played: HAND -> PLAY
         if old_zone == self.ZONE_HAND and new_zone == self.ZONE_PLAY:
             self._on_card_played(entity_id, controller, card_id, card_type)
@@ -434,9 +439,8 @@ class GlobalTracker:
             if source == CardSource.GENERATED:
                 self.state.player_generated_seen.add(card_id)
 
-        # Remove from hand tracking if applicable
-        if is_opp and entity_id in self.state.opp_hand_card_ids:
-            del self.state.opp_hand_card_ids[entity_id]
+        # Note: opp_hand_card_ids cleanup is handled in on_zone_change()
+        # when any card leaves HAND zone, so no removal needed here.
 
     def _classify_source(self, entity_id: int, card_id: str) -> CardSource:
         """Determine if a card is from deck or generated.

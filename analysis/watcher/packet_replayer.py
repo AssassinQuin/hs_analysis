@@ -164,6 +164,7 @@ class PacketReplayer:
         self.game_turn: int = 0
         self._we_are_first: Optional[bool] = None
         self._game_count: int = 0
+        self._game_entity_id: int = 0
 
         # 英雄职业
         self._player_hero_class: str = "UNKNOWN"
@@ -214,6 +215,7 @@ class PacketReplayer:
         self._opp_hero_class = "UNKNOWN"
         self._player_entity_to_pid.clear()
         self._player_name_map.clear()
+        self._game_entity_id = 0
         self._our_player_id = 0
         self._opp_player_id = 0
         self._opp_name = ""
@@ -265,6 +267,7 @@ class PacketReplayer:
 
     def _handle_create_game(self, packet) -> None:
         """处理 CREATE_GAME — 初始化玩家映射"""
+        self._game_entity_id = self._resolve_id(packet.entity)
         for player in packet.players:
             pid = player.player_id
             # hslog stores name in PlayerReference (player.entity.name), not player.name
@@ -294,8 +297,17 @@ class PacketReplayer:
                     self.players[pid].temp_resources = value
 
             # Identify our player vs opponent
-            if name == self.player_name:
+            if self.player_name and name == self.player_name:
                 self._our_player_id = pid
+            elif name and not name.startswith("UNKNOWN"):
+                # Auto-detect: named player is our player (opponent shows as UNKNOWN)
+                if not self.player_name:
+                    self.player_name = name
+                if name == self.player_name:
+                    self._our_player_id = pid
+                else:
+                    self._opp_player_id = pid
+                    self._opp_name = name
             elif name:
                 self._opp_player_id = pid
                 self._opp_name = name
@@ -304,9 +316,8 @@ class PacketReplayer:
             our = self.players.get(self._our_player_id)
             opp = self.players.get(self._opp_player_id)
             if our:
-                first_str = "先手" if self._we_are_first else "后手"
                 self._main_logger.info(
-                    f"🎮 我方: {our.name} (PlayerID={self._our_player_id}, {first_str})"
+                    f"🎮 我方: {our.name} (PlayerID={self._our_player_id})"
                 )
             if opp:
                 self._main_logger.info(
@@ -327,20 +338,19 @@ class PacketReplayer:
         for tag, value in packet.tags:
             self._apply_tag(entity, tag, value)
 
-        # Detect hero class from hero cards (CardType.HERO with card_id)
-        if entity.card_type == CardType.HERO and cid:
-            from analysis.data.hsdb import HSCardDB
-            try:
-                db = HSCardDB()
-                card_data = db.get_card_by_id(cid)
-                if card_data and hasattr(card_data, 'card_class'):
-                    cls_name = str(card_data.card_class)
+        # Detect hero class from CLASS tag on hero entities
+        if entity.card_type == CardType.HERO and entity.controller in (self._our_player_id, self._opp_player_id):
+            for tag, value in packet.tags:
+                if tag == GameTag.CLASS:
+                    try:
+                        cls_name = CardClass(value).name
+                    except (ValueError, KeyError):
+                        cls_name = str(value)
                     if entity.controller == self._our_player_id:
                         self._player_hero_class = cls_name
-                    elif entity.controller == self._opp_player_id:
+                    else:
                         self._opp_hero_class = cls_name
-            except Exception:
-                pass
+                    break
 
         # Notify global tracker
         self.global_tracker.on_full_entity(
@@ -363,20 +373,19 @@ class PacketReplayer:
         for tag, value in packet.tags:
             self._apply_tag(entity, tag, value)
 
-        # Detect hero class from revealed hero cards
-        if entity.card_type == CardType.HERO and cid:
-            from analysis.data.hsdb import HSCardDB
-            try:
-                db = HSCardDB()
-                card_data = db.get_card_by_id(cid)
-                if card_data and hasattr(card_data, 'card_class'):
-                    cls_name = str(card_data.card_class)
+        # Detect hero class from CLASS tag on revealed hero entities
+        if entity.card_type == CardType.HERO and entity.controller in (self._our_player_id, self._opp_player_id):
+            for tag, value in packet.tags:
+                if tag == GameTag.CLASS:
+                    try:
+                        cls_name = CardClass(value).name
+                    except (ValueError, KeyError):
+                        cls_name = str(value)
                     if entity.controller == self._our_player_id:
                         self._player_hero_class = cls_name
-                    elif entity.controller == self._opp_player_id:
+                    else:
                         self._opp_hero_class = cls_name
-            except Exception:
-                pass
+                    break
 
         self.global_tracker.on_show_entity(
             entity_id=eid, card_id=cid,
@@ -398,10 +407,11 @@ class PacketReplayer:
             return
 
         if tag == GameTag.TURN:
-            old_turn = self.game_turn
-            self.game_turn = value
-            if old_turn != value:
-                self.global_tracker.on_turn_change(value)
+            if eid == self._game_entity_id:
+                old_turn = self.game_turn
+                self.game_turn = value
+                if old_turn != value:
+                    self.global_tracker.on_turn_change(value)
             return
 
         if tag == GameTag.FIRST_PLAYER:
