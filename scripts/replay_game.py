@@ -77,7 +77,8 @@ def main():
 
     for d in decisions:
         status = "✓" if not d.error else f"✗ {d.error}"
-        print(f"  回合{d.turn_number:2d} ({d.player[:10]:>10}): "
+        p = d.player_name[:10] if d.player_name else "?"
+        print(f"  回合{d.turn_number:2d} ({p:>10}): "
               f"HP={d.hero_hp} mana={d.mana_available}/{d.mana_max} "
               f"board={d.board_count} hand={d.hand_count} | "
               f"actions={d.legal_actions_count} "
