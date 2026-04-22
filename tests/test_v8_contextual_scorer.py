@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Tests for v8_contextual_scorer.py
 
 Run: python -m pytest scripts/test_v8_contextual_scorer.py -v
@@ -13,9 +13,9 @@ import json
 
 # migrated to tests/
 
-from hs_analysis.search.game_state import GameState, HeroState, ManaState, OpponentState, Minion
-from hs_analysis.models.card import Card
-from hs_analysis.scorers.v8_contextual import V8ContextualScorer, get_scorer, reset_scorer
+from analysis.search.game_state import GameState, HeroState, ManaState, OpponentState, Minion
+from analysis.models.card import Card
+from analysis.scorers.v8_contextual import V8ContextualScorer, get_scorer, reset_scorer
 
 
 def _make_card(**kwargs) -> Card:

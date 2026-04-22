@@ -1,7 +1,7 @@
 """Tests for mechanic_base_values module."""
 import math
 import pytest
-from hs_analysis.scorers.mechanic_base_values import (
+from analysis.scorers.mechanic_base_values import (
     MECHANIC_FORMULAS,
     get_mechanic_base_value,
 )

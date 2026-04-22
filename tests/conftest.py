@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Shared pytest fixtures for evaluator tests.
 
 Provides _make_card and _make_state helpers used across all evaluator test files.
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from hs_analysis.models.card import Card
-from hs_analysis.search.game_state import (
+from analysis.models.card import Card
+from analysis.search.game_state import (
     GameState,
     HeroState,
     ManaState,

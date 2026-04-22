@@ -1,4 +1,4 @@
-﻿﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Unit tests for score_provider module.
 
 Run: python3 scripts/test_score_provider.py
@@ -13,9 +13,9 @@ import tempfile
 
 # migrated to tests/
 
-from hs_analysis.search.game_state import GameState
-from hs_analysis.models.card import Card
-from hs_analysis.utils.score_provider import ScoreProvider, load_scores_into_hand
+from analysis.search.game_state import GameState
+from analysis.models.card import Card
+from analysis.utils.score_provider import ScoreProvider, load_scores_into_hand
 
 
 def test_basic_lookup():

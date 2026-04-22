@@ -1,0 +1,424 @@
+# -*- coding: utf-8 -*-
+"""Hearthstone card database backed by HearthstoneJSON API + python-hearthstone.
+
+Primary source: HearthstoneJSON API (api.hearthstonejson.com)
+  - ``zhCN/cards.collectible.json`` for Chinese card names/text
+  - ``enUS/cards.collectible.json`` for English names/text
+  - Provides authoritative collectible card data with proper locales
+
+Secondary source: python-hearthstone CardDefs.xml (hearthstone_data package)
+  - Full card database including non-collectible (tokens, enchantments, heroes, etc.)
+  - Enum definitions (GameTag, CardType, CardClass, etc.)
+  - Used for dbf_id lookups of non-collectible cards
+
+Usage::
+
+    from analysis.data.hsdb import get_db
+    db = get_db()
+    card = db.get_card("EX1_001")          # by card_id
+    card = db.get_by_dbf(1655)             # by dbf_id
+    pool = db.discover_pool("MAGE")        # discover-eligible cards
+    minions = db.get_pool(card_class="ROGUE", card_type="MINION")
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import urllib.request
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
+
+logger = logging.getLogger(__name__)
+
+_API_BASE = "https://api.hearthstonejson.com/v1"
+_UA = "hs_analysis/1.0"
+
+from analysis.config import PROJECT_ROOT
+_CACHE_DIR = Path(os.environ.get("HSJSON_CACHE_DIR", str(PROJECT_ROOT / "card_data")))
+
+STANDARD_SETS: set = {
+    "CATACLYSM", "TIME_TRAVEL", "THE_LOST_CITY", "EMERALD_DREAM",
+    "CORE", "EVENT",
+}
+
+_EXCLUDED_DISCOVER_TYPES: set = {
+    "HERO", "HERO_POWER", "ENCHANTMENT", "LOCATION",
+}
+
+
+def _fetch_json(url: str, timeout: int = 60) -> List[dict]:
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read()
+    return json.loads(raw.decode("utf-8"))
+
+
+def _cache_path(build: str, locale: str, name: str) -> Path:
+    p = _CACHE_DIR / build / locale / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _load_cached(path: Path) -> Optional[List[dict]]:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _save_cache(path: Path, data: list) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except Exception as exc:
+        logger.warning("Cache write failed: %s", exc)
+
+
+def _merge_locale(zh_data: List[dict], en_data: List[dict]) -> Dict[str, dict]:
+    merged: Dict[str, dict] = {}
+    en_by_id: Dict[str, dict] = {c["id"]: c for c in en_data}
+    for card in zh_data:
+        cid = card["id"]
+        en = en_by_id.get(cid, {})
+        merged[cid] = {
+            "dbfId": card.get("dbfId", 0),
+            "cardId": cid,
+            "name": card.get("name", ""),
+            "englishName": en.get("name", ""),
+            "cost": card.get("cost", 0),
+            "attack": card.get("attack", 0),
+            "health": card.get("health", 0),
+            "durability": card.get("durability", 0),
+            "armor": card.get("armor", 0),
+            "type": card.get("type", ""),
+            "cardClass": card.get("cardClass", card.get("classes", ["NEUTRAL"])[0] if card.get("classes") else "NEUTRAL"),
+            "race": card.get("race", ""),
+            "races": card.get("races", []),
+            "rarity": card.get("rarity", ""),
+            "spellSchool": card.get("spellSchool", ""),
+            "mechanics": card.get("mechanics", []),
+            "referencedTags": card.get("referencedTags", []),
+            "text": card.get("text", ""),
+            "englishText": en.get("text", ""),
+            "set": card.get("set", ""),
+            "collectible": card.get("collectible", False),
+            "elite": card.get("elite", False),
+            "classes": card.get("classes", []),
+            "overload": card.get("overload", 0),
+            "spellDamage": card.get("spellDamage", 0),
+            "quest": "QUEST" in card.get("mechanics", []),
+            "format": "",
+        }
+    return merged
+
+
+class HSCardDB:
+    """Card database with dual-locale data from HearthstoneJSON API.
+
+    Indexes all collectible cards for fast pool queries.
+    Non-collectible cards (tokens, enchantments) available via python-hearthstone fallback.
+    """
+
+    def __init__(self, build: str = "240397") -> None:
+        self._build = build
+        self._cards: Dict[str, Dict[str, Any]] = {}
+        self._dbf_index: Dict[int, str] = {}
+        self._collectible: Dict[str, Dict[str, Any]] = {}
+        self._standard: Dict[str, Dict[str, Any]] = {}
+        self._xml_db = None
+
+        self._by_class: Dict[str, List[Dict]] = {}
+        self._by_type: Dict[str, List[Dict]] = {}
+        self._by_race: Dict[str, List[Dict]] = {}
+        self._by_school: Dict[str, List[Dict]] = {}
+        self._by_cost: Dict[int, List[Dict]] = {}
+        self._by_mechanic: Dict[str, List[Dict]] = {}
+        self._by_set: Dict[str, List[Dict]] = {}
+        self._by_rarity: Dict[str, List[Dict]] = {}
+        self._by_format: Dict[str, List[Dict]] = {}
+
+        self._load_hsjson()
+        self._load_xml_fallback()
+        self._build_indexes()
+
+    def _load_hsjson(self) -> None:
+        build = self._build
+        zh_cache = _cache_path(build, "zhCN", "cards.collectible.json")
+        en_cache = _cache_path(build, "enUS", "cards.collectible.json")
+
+        zh_data = _load_cached(zh_cache)
+        if zh_data is None:
+            url = f"{_API_BASE}/{build}/zhCN/cards.collectible.json"
+            logger.info("Fetching zhCN cards from %s", url)
+            zh_data = _fetch_json(url)
+            _save_cache(zh_cache, zh_data)
+        logger.info("zhCN: %d collectible cards", len(zh_data))
+
+        en_data = _load_cached(en_cache)
+        if en_data is None:
+            url = f"{_API_BASE}/{build}/enUS/cards.collectible.json"
+            logger.info("Fetching enUS cards from %s", url)
+            en_data = _fetch_json(url)
+            _save_cache(en_cache, en_data)
+        logger.info("enUS: %d collectible cards", len(en_data))
+
+        merged = _merge_locale(zh_data, en_data)
+        self._cards.update(merged)
+        for cid, d in merged.items():
+            self._dbf_index[d["dbfId"]] = cid
+            if d["collectible"]:
+                self._collectible[cid] = d
+
+    def _load_xml_fallback(self) -> None:
+        try:
+            from hearthstone.cardxml import load as _load_xml
+            from hearthstone.enums import CardSet, CardType, Locale
+            self._xml_db, _ = _load_xml(locale=Locale.enUS)
+            count = 0
+            for cid, card_xml in self._xml_db.items():
+                if cid in self._cards:
+                    continue
+                d = self._xml_to_dict(card_xml)
+                self._cards[cid] = d
+                self._dbf_index[d["dbfId"]] = cid
+                count += 1
+            logger.info("XML fallback: %d non-collectible cards loaded", count)
+        except Exception as exc:
+            logger.warning("python-hearthstone XML fallback unavailable: %s", exc)
+
+    @staticmethod
+    def _xml_to_dict(card) -> Dict[str, Any]:
+        from hearthstone.enums import CardType, CardClass, Race, Rarity
+        card_class = card.card_class.name if card.card_class else "NEUTRAL"
+        card_type = card.type.name if card.type else ""
+        rarity = card.rarity.name if card.rarity else ""
+        races = " ".join(r.name for r in (card.races or []) if r) if card.races else ""
+        if not races and card.race:
+            races = card.race.name
+        mechanics = []
+        _BOOLS = {
+            "taunt": "TAUNT", "charge": "CHARGE", "divine_shield": "DIVINE_SHIELD",
+            "battlecry": "BATTLECRY", "deathrattle": "DEATHRATTLE",
+            "windfury": "WINDFURY", "lifesteal": "LIFESTEAL",
+            "poisonous": "POISONOUS", "rush": "RUSH", "reborn": "REBORN",
+            "discover": "DISCOVER", "secret": "SECRET", "quest": "QUEST",
+            "outcast": "OUTCAST", "corrupt": "CORRUPT", "echo": "ECHO",
+            "twinspell": "TWINSPELL", "tradeable": "TRADEABLE",
+            "colossal": "COLOSSAL", "titan": "TITAN", "forge": "FORGE",
+            "overheal": "OVERHEAL", "combo": "COMBO",
+        }
+        for prop, name in _BOOLS.items():
+            if getattr(card, prop, False):
+                mechanics.append(name)
+        mechanics.sort()
+
+        return {
+            "dbfId": card.dbf_id or 0,
+            "cardId": card.id,
+            "name": card.english_name or "",
+            "englishName": card.english_name or "",
+            "cost": card.cost or 0,
+            "attack": card.atk or 0,
+            "health": card.health or 0,
+            "durability": card.durability or 0,
+            "armor": card.armor or 0,
+            "type": card_type,
+            "cardClass": card_class,
+            "race": races,
+            "rarity": rarity,
+            "mechanics": mechanics,
+            "text": card.english_description or "",
+            "englishText": card.english_description or "",
+            "set": card.card_set.name if card.card_set else "",
+            "collectible": bool(card.collectible),
+            "format": "",
+        }
+
+    def _build_indexes(self) -> None:
+        for cid, d in self._collectible.items():
+            card_set = d.get("set", "")
+            if card_set in STANDARD_SETS:
+                self._standard[cid] = d
+                d["format"] = "standard"
+            else:
+                d["format"] = "wild"
+            self._index_card(d)
+
+        logger.info(
+            "HSCardDB indexed: %d total, %d collectible, %d standard",
+            len(self._cards), len(self._collectible), len(self._standard),
+        )
+
+    def _index_card(self, d: Dict) -> None:
+        cls = d.get("cardClass", "")
+        if cls:
+            self._by_class.setdefault(cls, []).append(d)
+        typ = d.get("type", "")
+        if typ:
+            self._by_type.setdefault(typ, []).append(d)
+        race = d.get("race", "")
+        if race:
+            for r in race.split():
+                self._by_race.setdefault(r, []).append(d)
+        school = d.get("spellSchool", "")
+        if school:
+            self._by_school.setdefault(school, []).append(d)
+        cost = d.get("cost", 0)
+        bucket = cost if cost <= 10 else 10
+        self._by_cost.setdefault(bucket, []).append(d)
+        fmt = d.get("format", "")
+        if fmt:
+            self._by_format.setdefault(fmt, []).append(d)
+        card_set = d.get("set", "")
+        if card_set:
+            self._by_set.setdefault(card_set, []).append(d)
+        rarity = d.get("rarity", "")
+        if rarity:
+            self._by_rarity.setdefault(rarity, []).append(d)
+        for mech in d.get("mechanics", []):
+            self._by_mechanic.setdefault(mech, []).append(d)
+
+    def get_card(self, card_id: str) -> Optional[Dict[str, Any]]:
+        return self._cards.get(card_id)
+
+    def get_card_xml(self, card_id: str):
+        if self._xml_db is not None:
+            return self._xml_db.get(card_id)
+        return None
+
+    def get_by_dbf(self, dbf_id: int) -> Optional[Dict[str, Any]]:
+        card_id = self._dbf_index.get(dbf_id)
+        if card_id is None:
+            return None
+        return self._cards.get(card_id)
+
+    def get_collectible_cards(self, fmt: str = "standard") -> List[Dict]:
+        source = self._standard if fmt == "standard" else self._collectible
+        return list(source.values())
+
+    def get_pool(
+        self,
+        *,
+        card_class: Optional[str] = None,
+        card_type: Optional[str] = None,
+        mechanics: Optional[str | List[str]] = None,
+        race: Optional[str] = None,
+        school: Optional[str] = None,
+        cost: Optional[int] = None,
+        cost_min: Optional[int] = None,
+        cost_max: Optional[int] = None,
+        format: Optional[str] = None,
+        rarity: Optional[str] = None,
+        card_set: Optional[str] = None,
+        exclude_dbfids: Optional[Set[int] | List[int]] = None,
+    ) -> List[Dict]:
+        pools: List[List[Dict]] = []
+        if card_class:
+            pools.append(self._by_class.get(card_class, []))
+        if card_type:
+            pools.append(self._by_type.get(card_type, []))
+        if mechanics is not None:
+            if isinstance(mechanics, str):
+                mechanics = [mechanics]
+            for m in mechanics:
+                pools.append(self._by_mechanic.get(m, []))
+        if race:
+            pools.append(self._by_race.get(race, []))
+        if school:
+            pools.append(self._by_school.get(school, []))
+        if cost is not None:
+            bucket = cost if cost <= 10 else 10
+            pools.append(self._by_cost.get(bucket, []))
+        if format:
+            pools.append(self._by_format.get(format, []))
+        if rarity:
+            pools.append(self._by_rarity.get(rarity, []))
+        if card_set:
+            pools.append(self._by_set.get(card_set, []))
+
+        if not pools:
+            result = list(self._collectible.values())
+        else:
+            pools.sort(key=len)
+            dbf_sets = [frozenset(c["dbfId"] for c in p) for p in pools]
+            result_ids = dbf_sets[0]
+            for s in dbf_sets[1:]:
+                result_ids = result_ids & s
+                if not result_ids:
+                    return []
+            id_map = {c["dbfId"]: c for c in pools[0] if c["dbfId"] in result_ids}
+            result = [id_map[dbf] for dbf in result_ids if dbf in id_map]
+
+        if cost_min is not None or cost_max is not None:
+            cmin = cost_min if cost_min is not None else 0
+            cmax = cost_max if cost_max is not None else 999
+            result = [c for c in result if cmin <= c.get("cost", 0) <= cmax]
+
+        if exclude_dbfids:
+            excl = set(exclude_dbfids)
+            result = [c for c in result if c.get("dbfId", -1) not in excl]
+
+        return result
+
+    def discover_pool(
+        self,
+        card_class: str,
+        *,
+        card_type: Optional[str] = None,
+        format: str = "standard",
+        exclude_dbfids: Optional[Set[int]] = None,
+    ) -> List[Dict]:
+        class_cards = self.get_pool(card_class=card_class, format=format)
+        neutral_cards = self.get_pool(card_class="NEUTRAL", format=format)
+        pool = class_cards + neutral_cards
+        pool = [c for c in pool if c.get("type", "") not in _EXCLUDED_DISCOVER_TYPES]
+        if card_type:
+            pool = [c for c in pool if c.get("type") == card_type]
+        if exclude_dbfids:
+            excl = set(exclude_dbfids)
+            pool = [c for c in pool if c.get("dbfId", -1) not in excl]
+        return pool
+
+    def stats(self) -> Dict[str, Any]:
+        return {
+            "total_cards": len(self._cards),
+            "collectible": len(self._collectible),
+            "standard": len(self._standard),
+            "by_class": {k: len(v) for k, v in sorted(self._by_class.items())},
+            "by_type": {k: len(v) for k, v in sorted(self._by_type.items())},
+            "by_race": {k: len(v) for k, v in sorted(self._by_race.items())},
+            "by_school": {k: len(v) for k, v in sorted(self._by_school.items())},
+            "by_cost": {k: len(v) for k, v in sorted(self._by_cost.items())},
+            "by_mechanic": {k: len(v) for k, v in sorted(self._by_mechanic.items())},
+        }
+
+    @property
+    def total(self) -> int:
+        return len(self._cards)
+
+    @property
+    def collectible_count(self) -> int:
+        return len(self._collectible)
+
+    @property
+    def standard_count(self) -> int:
+        return len(self._standard)
+
+    @property
+    def raw_db(self):
+        return self._xml_db
+
+
+_db: Optional[HSCardDB] = None
+
+
+def get_db(rebuild: bool = False, build: str = "240397") -> HSCardDB:
+    global _db
+    if _db is not None and not rebuild:
+        return _db
+    _db = HSCardDB(build=build)
+    return _db

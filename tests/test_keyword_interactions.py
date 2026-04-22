@@ -1,6 +1,6 @@
 """Tests for keyword_interactions module."""
 import pytest
-from hs_analysis.scorers.keyword_interactions import (
+from analysis.scorers.keyword_interactions import (
     INTERACTIONS,
     get_interaction_multiplier,
 )

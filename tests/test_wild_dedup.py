@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hs_analysis.data.build_wild_db import build_wild_db
+from analysis.data.build_wild_db import build_wild_db
 
 
 def _make_data_dir(tmp: Path, standard_cards=None, wild_cards=None):
