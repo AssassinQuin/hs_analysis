@@ -146,6 +146,9 @@
 ## Phase 6.5 — Opponent Card Intelligence (2026-04-22)
 
 ### Opponent hand inference not implemented
+
+> **Status: ✅ MOSTLY ADDRESSED (Phase 7 Task 1)** — BayesianOpponentModel integrated into pipeline. Opponent archetype locked by Turn 7+ with >90% confidence. Hand sampling via ParticleFilter available but not yet wired into RHEA search.
+
 - `get_opp_known_hand()` only returns cards explicitly revealed (via ShowEntity in HAND zone)
 - No probabilistic inference of opponent's remaining hand based on:
   - Cards already played (tracked)
@@ -156,18 +159,40 @@
 - **Workaround**: Opponent simulator uses greedy model without hand knowledge
 
 ### Opponent secret tracking limited
+
+> **Status: 🔄 RESEARCH DONE (Phase 7 Task 3)** — Secret pool enumerated: Hunter(24), Mage(22), Paladin(15), Rogue(13) = 74 total collectible secrets. Trigger categories documented. Probability model not yet coded.
+
 - Secrets are tracked as "played" via on_show_entity in SECRET zone
 - No tracking of which specific secret was played (only card_id if revealed)
 - No secret probability model (which secret is most likely given game state)
 - **Impact**: Cannot inform RHEA search about probable secret effects
 
 ### Chinese card name coverage
+
+> **Status: ⏳ PARTIAL (Phase 7 Task 4)** — python-hearthstone XML fallback loads non-collectible cards with zhCN names. Most tokens (TIME_875t, SW_108t) resolve correctly. Gap smaller than documented.
+
 - `hsdb.py` loads zhCN names from card strings
 - Non-collectible cards (tokens, generated cards like SW_108t, TIME_875t) may not have zhCN names
 - Falls back to raw card_id when name unavailable
 - **Impact**: Some generated cards display as raw IDs in opponent intelligence output
 
 ### No opponent deck archetype detection
+
+> **Status: ✅ ADDRESSED (Phase 7 Task 1)** — BayesianOpponentModel with archetype locking (>60% confidence). Identifies deck name + signature cards. Deck TYPE classification (aggro/control/combo) not yet implemented.
+
 - `get_opp_card_breakdown()` provides raw card lists but no archetype classification
 - Could classify opponent deck type based on played cards (aggro/control/combo)
 - **Impact**: Cannot adjust RHEA strategy based on opponent archetype
+
+## Phase 7 — Effect Simulation Layer (2026-04-22)
+
+### Spell target selection was ignored in tactical combo search
+- `tactical.py` used `-1` for all non-minion cards (spells, weapons)
+- `resolve_effects()` picked targets greedily regardless of action.target_index
+- **Status: ✅ FIXED** — SpellTargetResolver now enumerates targets in tactical combos, resolve_effects receives target_index parameter
+- **Impact**: Fireball can now target specific minions instead of always hitting face
+
+### Battlecry discover does not branch
+- `dispatch_battlecry()` returns single GameState instead of `List[Tuple[GameState, float]]`
+- Discover cards get greedy best-pick rather than proper top-3 branching
+- **Status: 🟡 DEFERRED** — Acceptable for current search depth; revisit for deeper search

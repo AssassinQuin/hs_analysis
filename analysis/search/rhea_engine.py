@@ -506,7 +506,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
             try:
                 from analysis.utils.spell_simulator import resolve_effects
 
-                s = resolve_effects(s, card)
+                s = resolve_effects(s, card, target_index=action.target_index)
             except Exception:
                 pass  # fallback to just removing from hand
             # V10 Phase 3: Activate quest if quest card

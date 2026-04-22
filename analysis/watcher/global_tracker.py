@@ -1,4 +1,4 @@
-"""global_tracker.py — 全局游戏状态追踪器
+﻿"""global_tracker.py — 全局游戏状态追踪器
 
 跨回合追踪双方的关键信息：
 - 对手手牌（从打出/揭示的卡牌推断）
@@ -239,6 +239,10 @@ class GlobalTracker:
         # Card DB reference for race/school lookup (lazy)
         self._card_db = None
 
+        # Bayesian opponent model (lazy init)
+        self._bayesian_model = None
+        self._bayesian_initialized = False
+
     def set_controllers(self, our: int, opp: int):
         self.our_controller = our
         self.opp_controller = opp
@@ -328,6 +332,12 @@ class GlobalTracker:
             elif zone == self.ZONE_SECRET:
                 self.state.opp_secrets.append(card_id)
                 self._on_card_played(entity_id, controller, card_id, card_type)
+
+            # Feed Bayesian model for opponent cards revealed into play/secret
+            if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id:
+                if not self._bayesian_initialized:
+                    self._init_bayesian_model(self.state.opp_hero_class)
+                self.feed_bayesian_update(card_id)
 
         if entity_id in self._entity_birth:
             self._entity_birth[entity_id].card_id = card_id
@@ -659,6 +669,102 @@ class GlobalTracker:
             },
             "school_counts": dict(stats.spell_schools),
             "race_counts": dict(stats.races_played),
+        }
+
+    # ---------------------------------------------------------------
+    # Bayesian opponent model integration
+    # ---------------------------------------------------------------
+
+    def _ensure_card_db(self):
+        """Lazy-load card database for dbfId lookups."""
+        if self._card_db is None:
+            from analysis.data.hsdb import get_db
+            self._card_db = get_db()
+        return self._card_db
+
+    def _init_bayesian_model(self, opponent_class: str = None):
+        """Initialize Bayesian opponent model from HSReplay cache or deck_codes.txt.
+
+        Args:
+            opponent_class: Optional class filter (e.g. 'ROGUE', 'WARLOCK')
+        """
+        if self._bayesian_initialized:
+            return
+        self._bayesian_initialized = True
+
+        try:
+            from analysis.utils.bayesian_opponent import BayesianOpponentModel
+            from analysis.data.fetch_hsreplay import init_db, build_archetype_db_from_deck_codes
+            from analysis.config import HSREPLAY_CACHE_DB
+            import os
+
+            # Try loading from existing cache
+            if os.path.exists(str(HSREPLAY_CACHE_DB)):
+                conn = init_db(str(HSREPLAY_CACHE_DB))
+                try:
+                    from analysis.data.fetch_hsreplay import get_meta_decks
+                    decks = get_meta_decks(conn)
+                    if not decks:
+                        # Cache exists but empty — build from deck codes
+                        build_archetype_db_from_deck_codes(conn)
+                finally:
+                    conn.close()
+            else:
+                # No cache — build from deck codes
+                conn = init_db(str(HSREPLAY_CACHE_DB))
+                try:
+                    build_archetype_db_from_deck_codes(conn)
+                finally:
+                    conn.close()
+
+            self._bayesian_model = BayesianOpponentModel(player_class=opponent_class)
+            if not self._bayesian_model.decks:
+                self._bayesian_model = None  # No data available
+        except Exception:
+            self._bayesian_model = None
+
+    def feed_bayesian_update(self, card_id: str):
+        """Feed an observed opponent card to the Bayesian model.
+
+        Converts card_id → dbfId and updates the model posterior.
+        Called automatically from on_show_entity() for opponent cards.
+        """
+        if self._bayesian_model is None:
+            return
+        db = self._ensure_card_db()
+        dbf = db.card_id_to_dbf(card_id)
+        if dbf is not None:
+            self._bayesian_model.update(dbf)
+
+    def get_bayesian_state(self) -> Dict:
+        """Get current Bayesian inference state.
+
+        Returns dict with:
+            - archetype_name: str or None — locked archetype name
+            - locked_deck_id: int or None — locked archetype ID
+            - deck_confidence: float — max posterior probability
+            - top_decks: list of (id, name, prob) — top 3 archetypes
+            - predicted_next: list of dicts — predicted next cards
+        """
+        if self._bayesian_model is None:
+            return {
+                "archetype_name": None,
+                "locked_deck_id": None,
+                "deck_confidence": 0.0,
+                "top_decks": [],
+                "predicted_next": [],
+            }
+
+        locked = self._bayesian_model.locked
+        top = self._bayesian_model.get_top_decks(3)
+        preds = self._bayesian_model.predict_next_actions(3)
+
+        return {
+            "archetype_name": self._bayesian_model._deck_name(locked[0]) if locked else None,
+            "locked_deck_id": locked[0] if locked else None,
+            "deck_confidence": locked[1] if locked else (top[0][2] if top else 0.0),
+            "top_decks": [(aid, name, round(prob, 4)) for aid, name, prob in top],
+            "predicted_next": preds,
         }
 
     def update_opp_weapon(self, opp_entities: list):

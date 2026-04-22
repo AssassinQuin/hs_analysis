@@ -1,7 +1,7 @@
 ---
-version: 2.1
+version: 2.2
 created: 2026-04-19
-last_changed: 2026-04-22 (D032: opponent card intelligence categorization)
+last_changed: 2026-04-22 (D033-D034: Bayesian opponent, spell targets)
 ---
 
 # Decision Log: hs_analysis
@@ -239,3 +239,15 @@ last_changed: 2026-04-22 (D032: opponent card intelligence categorization)
 **Decision**: Three-layer opponent intelligence: (1) track every revealed card's current zone via `Dict[int, Tuple[str, int]]`, (2) classify source as DECK/GENERATED based on initial deck list membership, (3) `get_opp_card_breakdown()` returns categorized dict with type/school/race statistics.
 **Alternatives**: (A) Single flat list — proven inadequate. (B) Cemetery-style tracking only — misses generated cards. (C) Full opponent model with probability — overkill for current needs.
 **Rationale**: Categorization enables meaningful opponent intelligence for both human-readable output and future RHEA integration. Zone-aware filtering ensures "known hand" only shows cards currently in hand. The `(card_id, zone)` tuple approach avoids entity rescans on every query.
+
+## D033 | 2026-04-22 | Bayesian opponent model integration with deck_codes.txt fallback
+**Context**: BayesianOpponentModel (666 lines) existed but had ZERO imports — completely disconnected from pipeline. No card_id→dbfId bridge. HSReplay cache DB doesn't exist.
+**Decision**: Three-layer integration: (1) `card_id_to_dbf()` bridge in hsdb.py, (2) `build_archetype_db_from_deck_codes()` to create SQLite from user-provided deck codes, (3) lazy Bayesian model init in GlobalTracker with HSReplay→deck_codes.txt fallback chain. Opponent archetype locked when posterior >60%.
+**Alternatives**: (A) Build from scratch — wastes existing 666-line model. (B) HSReplay-only — DB doesn't exist. (C) Manual archetype mapping — unmaintainable.
+**Rationale**: Leveraging existing Bayesian model + deck_codes.txt as data source avoids API dependency while providing accurate archetype detection (Imbue Rogue locked at 90.8% by Turn 7).
+
+## D034 | 2026-04-22 | Target-aware spell simulation in tactical search
+**Context**: `tactical.py` always used `position=-1` for non-minion cards. `resolve_effects()` picked targets greedily. SpellTargetResolver existed but was only used in `generate_actions()` (RHEA direct path), not tactical combo search.
+**Decision**: Two-part fix: (1) `tactical.py` imports SpellTargetResolver and enumerates spell targets as separate combo branches with `PLAY_WITH_TARGET` action type, (2) `resolve_effects()` accepts `target_index` parameter to respect caller-specified target.
+**Alternatives**: (A) Only fix resolve_effects — still no target enumeration in combos. (B) Only fix tactical — target passed but ignored. (C) Full branching for all card types — overkill, exponential blowup.
+**Rationale**: Minimal change that ensures Fireball/etc can target specific minions. Each target option becomes a separate branch evaluated by FactorGraph, so the best target is chosen by scoring rather than greedy heuristics.

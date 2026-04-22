@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 HSReplay Data Fetcher — Fetch card statistics from HSReplay API.
 Caches results to SQLite for offline use and fallback.
@@ -35,13 +35,13 @@ if not isinstance(sys.stdout, io.TextIOWrapper) or getattr(sys.stdout, 'encoding
 
 from analysis.config import (
     HSREPLAY_API_KEY,
-    HSREPLAY_CARDS_URL,
     HSREPLAY_ARCHETYPES_URL,
     DATA_DIR,
     UNIFIED_DB_PATH,
     SCORING_REPORT_PATH,
     HSREPLAY_CACHE_DB,
     CACHE_DAYS,
+    PROJECT_ROOT,
     get_api_headers,
     ensure_data_dir,
 )
@@ -474,6 +474,109 @@ def get_meta_decks(conn):
             "usage_rate": row[5],
         })
     return decks
+
+
+def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
+    """Build archetype DB from deck_codes.txt when HSReplay cache is unavailable.
+
+    Reads deck codes (AAE... format), decodes them via hearthstone.deckstrings,
+    and stores as custom archetypes (IDs 9000+) in SQLite.
+
+    Args:
+        conn: SQLite connection to hsreplay_cache.db
+        deck_codes_path: Optional path to deck_codes.txt. Defaults to PROJECT_ROOT/deck_codes.txt
+
+    Returns:
+        int: Number of deck archetypes stored
+    """
+    try:
+        from hearthstone.deckstrings import Deck
+    except ImportError:
+        log.warning("hearthstone.deckstrings not available — cannot decode deck codes")
+        return 0
+
+    if deck_codes_path is None:
+        deck_codes_path = os.path.join(str(PROJECT_ROOT), "deck_codes.txt")
+
+    if not os.path.exists(deck_codes_path):
+        log.info(f"No deck codes file at {deck_codes_path}")
+        return 0
+
+    # Use lightweight hero dbfId -> class map first; only fallback to card DB when unknown.
+    from analysis.data.hsdb import get_db, get_hero_class_map
+    hero_class_map = get_hero_class_map()
+    db = None
+
+    # Class mapping from cardClass string to enum-like
+    CLASS_MAP = {
+        "WARRIOR": "WARRIOR", "HUNTER": "HUNTER", "DRUID": "DRUID",
+        "MAGE": "MAGE", "PALADIN": "PALADIN", "PRIEST": "PRIEST",
+        "ROGUE": "ROGUE", "SHAMAN": "SHAMAN", "WARLOCK": "WARLOCK",
+        "DEMONHUNTER": "DEMONHUNTER", "DEATHKNIGHT": "DEATHKNIGHT",
+    }
+
+    # Read deck codes
+    codes = []
+    with open(deck_codes_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                codes.append(line)
+
+    if not codes:
+        return 0
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    stored = 0
+
+    for i, code in enumerate(codes):
+        try:
+            deck = Deck.from_deckstring(code)
+            # Get hero class from hero card
+            hero_dbf = list(deck.heroes)[0] if deck.heroes else None
+            hero_class = "UNKNOWN"
+            if hero_dbf:
+                cls = hero_class_map.get(hero_dbf)
+                if cls:
+                    hero_class = CLASS_MAP.get(cls.upper(), cls.upper())
+                else:
+                    # Rare fallback for unknown hero dbfId (e.g., unusual hero IDs).
+                    if db is None:
+                        db = get_db(load_xml=True, build_indexes=False)
+                    card = db.get_by_dbf(hero_dbf)
+                    if card:
+                        cls = card.get("cardClass", "")
+                        hero_class = CLASS_MAP.get(cls.upper(), cls.upper())
+
+            # Convert cards to dbfId list
+            cards_list = [dbf for dbf, count in deck.cards]
+
+            archetype_id = 9000 + i
+            name = f"Custom_{hero_class}_{i+1}"
+
+            conn.execute(
+                """INSERT OR REPLACE INTO meta_decks
+                   (archetype_id, class, name, cards_json, winrate,
+                    usage_rate, fetch_date)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    archetype_id,
+                    hero_class,
+                    name,
+                    json.dumps(cards_list),
+                    None,
+                    1.0 / len(codes),  # uniform usage rate
+                    today,
+                )
+            )
+            stored += 1
+        except Exception as e:
+            log.debug(f"Failed to decode deck code #{i+1}: {e}")
+            continue
+
+    conn.commit()
+    log.info(f"Built archetype DB from {stored} deck codes")
+    return stored
 
 
 def _row_to_dict(row):

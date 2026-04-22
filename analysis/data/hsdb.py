@@ -28,7 +28,7 @@ import logging
 import os
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -36,16 +36,40 @@ _API_BASE = "https://api.hearthstonejson.com/v1"
 _UA = "hs_analysis/1.0"
 
 from analysis.config import PROJECT_ROOT
+
 _CACHE_DIR = Path(os.environ.get("HSJSON_CACHE_DIR", str(PROJECT_ROOT / "card_data")))
 
 STANDARD_SETS: set = {
-    "CATACLYSM", "TIME_TRAVEL", "THE_LOST_CITY", "EMERALD_DREAM",
-    "CORE", "EVENT",
+    "CATACLYSM",
+    "TIME_TRAVEL",
+    "THE_LOST_CITY",
+    "EMERALD_DREAM",
+    "CORE",
+    "EVENT",
 }
 
 _EXCLUDED_DISCOVER_TYPES: set = {
-    "HERO", "HERO_POWER", "ENCHANTMENT", "LOCATION",
+    "HERO",
+    "HERO_POWER",
+    "ENCHANTMENT",
+    "LOCATION",
 }
+
+_DEFAULT_HERO_DBF_CLASS_MAP: Dict[int, str] = {
+    7: "WARRIOR",
+    31: "HUNTER",
+    274: "DRUID",
+    637: "MAGE",
+    671: "PALADIN",
+    813: "PRIEST",
+    893: "WARLOCK",
+    930: "ROGUE",
+    1066: "SHAMAN",
+    56550: "DEMONHUNTER",
+    78065: "DEATHKNIGHT",
+}
+
+_hero_class_map_cache: Dict[str, Dict[int, str]] = {}
 
 
 def _fetch_json(url: str, timeout: int = 60) -> List[dict]:
@@ -95,7 +119,12 @@ def _merge_locale(zh_data: List[dict], en_data: List[dict]) -> Dict[str, dict]:
             "durability": card.get("durability", 0),
             "armor": card.get("armor", 0),
             "type": card.get("type", ""),
-            "cardClass": card.get("cardClass", card.get("classes", ["NEUTRAL"])[0] if card.get("classes") else "NEUTRAL"),
+            "cardClass": card.get(
+                "cardClass",
+                card.get("classes", ["NEUTRAL"])[0]
+                if card.get("classes")
+                else "NEUTRAL",
+            ),
             "race": card.get("race", ""),
             "races": card.get("races", []),
             "rarity": card.get("rarity", ""),
@@ -123,8 +152,16 @@ class HSCardDB:
     Non-collectible cards (tokens, enchantments) available via python-hearthstone fallback.
     """
 
-    def __init__(self, build: str = "240397") -> None:
+    def __init__(
+        self,
+        build: str = "240397",
+        *,
+        load_xml: bool = True,
+        build_indexes: bool = True,
+    ) -> None:
         self._build = build
+        self._load_xml_enabled = load_xml
+        self._indexes_built = False
         self._cards: Dict[str, Dict[str, Any]] = {}
         self._dbf_index: Dict[int, str] = {}
         self._collectible: Dict[str, Dict[str, Any]] = {}
@@ -142,8 +179,14 @@ class HSCardDB:
         self._by_format: Dict[str, List[Dict]] = {}
 
         self._load_hsjson()
-        self._load_xml_fallback()
-        self._build_indexes()
+        if self._load_xml_enabled:
+            self._load_xml_fallback()
+        if build_indexes:
+            self._build_indexes()
+
+    def _ensure_indexes(self) -> None:
+        if not self._indexes_built:
+            self._build_indexes()
 
     def _load_hsjson(self) -> None:
         build = self._build
@@ -177,6 +220,7 @@ class HSCardDB:
         try:
             from hearthstone.cardxml import load as _load_xml
             from hearthstone.enums import CardSet, CardType, Locale
+
             self._xml_db, _ = _load_xml(locale=Locale.enUS)
             count = 0
             for cid, card_xml in self._xml_db.items():
@@ -193,6 +237,7 @@ class HSCardDB:
     @staticmethod
     def _xml_to_dict(card) -> Dict[str, Any]:
         from hearthstone.enums import CardType, CardClass, Race, Rarity, GameTag
+
         card_class = card.card_class.name if card.card_class else "NEUTRAL"
         card_type = card.type.name if card.type else ""
         rarity = card.rarity.name if card.rarity else ""
@@ -201,15 +246,29 @@ class HSCardDB:
             races = card.race.name
         mechanics = []
         _BOOLS = {
-            "taunt": "TAUNT", "charge": "CHARGE", "divine_shield": "DIVINE_SHIELD",
-            "battlecry": "BATTLECRY", "deathrattle": "DEATHRATTLE",
-            "windfury": "WINDFURY", "lifesteal": "LIFESTEAL",
-            "poisonous": "POISONOUS", "rush": "RUSH", "reborn": "REBORN",
-            "discover": "DISCOVER", "secret": "SECRET", "quest": "QUEST",
-            "outcast": "OUTCAST", "corrupt": "CORRUPT", "echo": "ECHO",
-            "twinspell": "TWINSPELL", "tradeable": "TRADEABLE",
-            "colossal": "COLOSSAL", "titan": "TITAN", "forge": "FORGE",
-            "overheal": "OVERHEAL", "combo": "COMBO",
+            "taunt": "TAUNT",
+            "charge": "CHARGE",
+            "divine_shield": "DIVINE_SHIELD",
+            "battlecry": "BATTLECRY",
+            "deathrattle": "DEATHRATTLE",
+            "windfury": "WINDFURY",
+            "lifesteal": "LIFESTEAL",
+            "poisonous": "POISONOUS",
+            "rush": "RUSH",
+            "reborn": "REBORN",
+            "discover": "DISCOVER",
+            "secret": "SECRET",
+            "quest": "QUEST",
+            "outcast": "OUTCAST",
+            "corrupt": "CORRUPT",
+            "echo": "ECHO",
+            "twinspell": "TWINSPELL",
+            "tradeable": "TRADEABLE",
+            "colossal": "COLOSSAL",
+            "titan": "TITAN",
+            "forge": "FORGE",
+            "overheal": "OVERHEAL",
+            "combo": "COMBO",
         }
         for prop, name in _BOOLS.items():
             if getattr(card, prop, False):
@@ -218,13 +277,17 @@ class HSCardDB:
 
         # Extract Chinese name from strings dict (card.name is always English)
         zh_name = ""
-        cardname_strings = card.strings.get(GameTag.CARDNAME) if hasattr(card, "strings") else None
+        cardname_strings = (
+            card.strings.get(GameTag.CARDNAME) if hasattr(card, "strings") else None
+        )
         if isinstance(cardname_strings, dict):
             zh_name = cardname_strings.get("zhCN", "")
 
         # Extract Chinese description similarly
         zh_text = ""
-        cardtext_strings = card.strings.get(GameTag.CARDTEXT) if hasattr(card, "strings") else None
+        cardtext_strings = (
+            card.strings.get(GameTag.CARDTEXT) if hasattr(card, "strings") else None
+        )
         if isinstance(cardtext_strings, dict):
             zh_text = cardtext_strings.get("zhCN", "")
 
@@ -251,6 +314,9 @@ class HSCardDB:
         }
 
     def _build_indexes(self) -> None:
+        if self._indexes_built:
+            return
+
         for cid, d in self._collectible.items():
             card_set = d.get("set", "")
             if card_set in STANDARD_SETS:
@@ -262,8 +328,11 @@ class HSCardDB:
 
         logger.info(
             "HSCardDB indexed: %d total, %d collectible, %d standard",
-            len(self._cards), len(self._collectible), len(self._standard),
+            len(self._cards),
+            len(self._collectible),
+            len(self._standard),
         )
+        self._indexes_built = True
 
     def _index_card(self, d: Dict) -> None:
         cls = d.get("cardClass", "")
@@ -308,7 +377,20 @@ class HSCardDB:
             return None
         return self._cards.get(card_id)
 
+    def card_id_to_dbf(self, card_id: str) -> Optional[int]:
+        """Look up dbfId by card_id string.
+
+        Reverse of get_by_dbf() — used by Bayesian opponent model
+        which operates on dbfId integers while the tracker uses card_id strings.
+        """
+        card = self._cards.get(card_id)
+        if card is not None:
+            return card.get("dbfId")
+        return None
+
     def get_collectible_cards(self, fmt: str = "standard") -> List[Dict]:
+        if fmt == "standard":
+            self._ensure_indexes()
         source = self._standard if fmt == "standard" else self._collectible
         return list(source.values())
 
@@ -328,6 +410,7 @@ class HSCardDB:
         card_set: Optional[str] = None,
         exclude_dbfids: Optional[Set[int] | List[int]] = None,
     ) -> List[Dict]:
+        self._ensure_indexes()
         pools: List[List[Dict]] = []
         if card_class:
             pools.append(self._by_class.get(card_class, []))
@@ -384,6 +467,7 @@ class HSCardDB:
         format: str = "standard",
         exclude_dbfids: Optional[Set[int]] = None,
     ) -> List[Dict]:
+        self._ensure_indexes()
         class_cards = self.get_pool(card_class=card_class, format=format)
         neutral_cards = self.get_pool(card_class="NEUTRAL", format=format)
         pool = class_cards + neutral_cards
@@ -396,6 +480,7 @@ class HSCardDB:
         return pool
 
     def stats(self) -> Dict[str, Any]:
+        self._ensure_indexes()
         return {
             "total_cards": len(self._cards),
             "collectible": len(self._collectible),
@@ -418,6 +503,7 @@ class HSCardDB:
 
     @property
     def standard_count(self) -> int:
+        self._ensure_indexes()
         return len(self._standard)
 
     @property
@@ -425,12 +511,52 @@ class HSCardDB:
         return self._xml_db
 
 
-_db: Optional[HSCardDB] = None
+_db_cache: Dict[Tuple[str, bool, bool], HSCardDB] = {}
 
 
-def get_db(rebuild: bool = False, build: str = "240397") -> HSCardDB:
-    global _db
-    if _db is not None and not rebuild:
-        return _db
-    _db = HSCardDB(build=build)
-    return _db
+def get_db(
+    rebuild: bool = False,
+    build: str = "240397",
+    *,
+    load_xml: bool = True,
+    build_indexes: bool = True,
+) -> HSCardDB:
+    key = (build, load_xml, build_indexes)
+    if not rebuild and key in _db_cache:
+        return _db_cache[key]
+    _db_cache[key] = HSCardDB(
+        build=build, load_xml=load_xml, build_indexes=build_indexes
+    )
+    return _db_cache[key]
+
+
+def get_hero_class_map(build: str = "240397") -> Dict[int, str]:
+    """Get a lightweight hero dbfId -> class map.
+
+    Prefers a tiny local JSON cache and ships sane defaults for common heroes.
+    """
+    if build in _hero_class_map_cache:
+        return _hero_class_map_cache[build]
+
+    path = _cache_path(build, "meta", "hero_class_map.json")
+    mapping: Dict[int, str] = dict(_DEFAULT_HERO_DBF_CLASS_MAP)
+
+    raw = _load_cached(path)
+    if raw:
+        for item in raw:
+            try:
+                dbf = int(item.get("dbfId"))
+                cls = str(item.get("cardClass", "")).upper()
+                if dbf > 0 and cls:
+                    mapping[dbf] = cls
+            except Exception:
+                continue
+    else:
+        # Seed cache with defaults so hot paths avoid heavyweight card DB init.
+        serializable = [
+            {"dbfId": dbf, "cardClass": cls} for dbf, cls in sorted(mapping.items())
+        ]
+        _save_cache(path, serializable)
+
+    _hero_class_map_cache[build] = mapping
+    return mapping

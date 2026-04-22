@@ -117,6 +117,10 @@ class TurnDecision:
     opp_card_type_counts: Dict[str, int] = field(default_factory=dict) # 卡牌类型统计
     opp_generated_played: int = 0
     opp_secrets: List[str] = field(default_factory=list)
+    # 对手卡组推理
+    opp_archetype_name: Optional[str] = None
+    opp_archetype_confidence: float = 0.0
+    opp_top_archetypes: List[tuple] = field(default_factory=list)  # [(name, prob)]
     # --- 全局 ---
     player_global_stats: Optional[Dict] = None
     # --- 合法动作 ---
@@ -732,6 +736,18 @@ class PacketReplayer:
                                     for cid in self.global_tracker.state.opp_secrets)
                 self._main_logger.info(f"  对手奥秘: {sec_str}")
 
+            # Log Bayesian archetype inference
+            bayesian = self.global_tracker.get_bayesian_state()
+            if bayesian["archetype_name"]:
+                self._main_logger.info(
+                    f"  对手卡组: {bayesian['archetype_name']} "
+                    f"(置信度={bayesian['deck_confidence']:.1%})")
+            elif bayesian["top_decks"]:
+                top_str = ", ".join(
+                    f"{name}({prob:.1%})" for _, name, prob in bayesian["top_decks"][:3]
+                )
+                self._main_logger.info(f"  对手可能卡组: {top_str}")
+
             # Build GameState
             game_state = self._build_game_state()
 
@@ -834,6 +850,10 @@ class PacketReplayer:
                     opp_card_type_counts=opp_breakdown["type_counts"],
                     opp_generated_played=opp_breakdown["total_generated"],
                     opp_secrets=[self._card_name(cid) for cid in self.global_tracker.state.opp_secrets],
+                    # Bayesian archetype inference
+                    opp_archetype_name=bayesian.get("archetype_name"),
+                    opp_archetype_confidence=bayesian.get("deck_confidence", 0.0),
+                    opp_top_archetypes=[(name, prob) for _, name, prob in bayesian.get("top_decks", [])],
                     player_global_stats=self.global_tracker.player_summary_str(self._card_name),
                     legal_action_count=len(legal_actions),
                     legal_actions=[a.describe(game_state) for a in legal_actions[:15]],
@@ -1074,6 +1094,11 @@ class PacketReplayer:
                     secrets=list(self.global_tracker.state.opp_secrets),
                 ),
             )
+
+            # Populate Bayesian inference state
+            bayesian = self.global_tracker.get_bayesian_state()
+            game_state.opponent.locked_deck_id = bayesian["locked_deck_id"]
+            game_state.opponent.deck_confidence = bayesian["deck_confidence"]
 
             return game_state
 
@@ -1399,6 +1424,9 @@ class PacketReplayer:
                 'opp_card_type_counts': d.opp_card_type_counts,
                 'opp_generated_played': d.opp_generated_played,
                 'opp_secrets': d.opp_secrets,
+                'opp_archetype_name': d.opp_archetype_name,
+                'opp_archetype_confidence': d.opp_archetype_confidence,
+                'opp_top_archetypes': d.opp_top_archetypes,
                 'player_global_stats': d.player_global_stats,
                 'legal_action_count': d.legal_action_count,
                 'legal_actions': d.legal_actions,

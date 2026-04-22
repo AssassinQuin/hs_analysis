@@ -12,6 +12,7 @@ from analysis.search.engine.factors.factor_graph import (
 )
 from analysis.search.engine.factors.factor_base import EvalContext
 from analysis.search.engine.attack_planner import AttackPlanner, AttackPlan
+from analysis.search.engine.mechanics.spell_target_resolver import SpellTargetResolver
 
 
 @dataclass
@@ -29,6 +30,7 @@ class TacticalPlanner:
                  max_combo_depth: int = 3) -> None:
         self._evaluator = evaluator
         self._max_combo_depth = max_combo_depth
+        self._target_resolver = SpellTargetResolver()
 
     def plan(self, state: GameState, mode: str = "DEVELOPMENT") -> List[TacticalCandidate]:
         combos = self._enumerate_card_combos(state)
@@ -48,11 +50,18 @@ class TacticalPlanner:
                     valid = False
                     break
 
-                action = Action(
-                    action_type="PLAY",
-                    card_index=card_idx,
-                    position=pos,
-                )
+                if (card.card_type or "").upper() == "SPELL" and pos >= 0:
+                    action = Action(
+                        action_type="PLAY_WITH_TARGET",
+                        card_index=card_idx,
+                        target_index=pos,
+                    )
+                else:
+                    action = Action(
+                        action_type="PLAY",
+                        card_index=card_idx,
+                        position=pos,
+                    )
                 play_actions.append(action)
                 current = apply_action(current, action)
 
@@ -139,6 +148,17 @@ class TacticalPlanner:
                     for pos in range(min(len(state.board) + depth, 7) + 1):
                         queue.append(
                             (current_combo + [(card_idx, pos)], new_cost, depth + 1)
+                        )
+                elif (card.card_type or "").upper() == "SPELL":
+                    targets = self._target_resolver.resolve_targets(state, card)
+                    if targets:
+                        for tgt in targets:
+                            queue.append(
+                                (current_combo + [(card_idx, tgt)], new_cost, depth + 1)
+                            )
+                    else:
+                        queue.append(
+                            (current_combo + [(card_idx, -1)], new_cost, depth + 1)
                         )
                 else:
                     queue.append(

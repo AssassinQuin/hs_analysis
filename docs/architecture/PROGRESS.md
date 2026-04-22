@@ -403,6 +403,41 @@ Turn 23 示例：
 
 ---
 
+## Phase 7: 对手智能 + 效果模拟层 (2026-04-22)
+
+### 概述
+
+实现 5 个 FEATURE_GAPS 中记录的缺失功能。完成 2/5，3 个待执行。
+
+### 已完成
+
+#### Task 1: 对手手牌推理 ✅
+- **hsdb.py**: 新增 `card_id_to_dbf()` — card_id→dbfId 桥接（Bayesian模型使用dbfId）
+- **fetch_hsreplay.py**: 新增 `build_archetype_db_from_deck_codes()` — 从 deck_codes.txt 构建 SQLite 奥秘库
+- **global_tracker.py**: 集成 `BayesianOpponentModel` — 懒加载→HSReplay缓存/deck_codes.txt→贝叶斯更新→锁定卡组
+- **packet_replayer.py**: TurnDecision 新增 `opp_archetype_name`/`opp_archetype_confidence`/`opp_top_archetypes` 字段
+- **测试结果**: Turn 5 "可能卡组: Imbue Rogue(32.1%)" → Turn 7+ "卡组=Imbue Rogue, 置信度=90.8%" (锁定)
+
+#### Task 2: 卡牌效果模拟层 (V12 Phase 1 核心) ✅
+- **tactical.py**: SpellTargetResolver 集成 — 法术目标枚举，每个目标生成独立分支（之前固定 -1）
+- **spell_simulator.py**: `resolve_effects()` 新增 `target_index` 参数 — 指定目标不再贪心选择
+- **rhea_engine.py**: 传递 `action.target_index` 到 `resolve_effects()` — 法术伤害打到正确目标
+- **预存组件已验证**: BattlecryDispatcher/SpellTargetResolver/HeroCardHandler/ManaModifier 全部已集成
+- **测试**: 676 tests passed, 0 failures
+
+### 未完成
+
+| # | 任务 | 状态 | 说明 |
+|---|------|------|------|
+| 3 | 对手奥秘概率模型 | 🔄 研究完成 | 已获取 4 职业 74 张奥秘数据，未编码 |
+| 4 | 非收藏卡中文名 | ⏳ 待开始 | python-hearthstone XML fallback 已覆盖大部分 token 卡 |
+| 5 | 对手卡组类型检测 | ⏳ 待开始 | Task 1 Bayesian 模型已部分覆盖（锁定卡组 → 类型推导） |
+
+### 变更统计
+7 files changed, +451 -39 lines
+
+---
+
 ## 整体进度总览 (2026-04-22)
 
 ### 已完成 ✅
@@ -426,18 +461,22 @@ Turn 23 示例：
 | 15 | Phase 5: 实时管道 | watcher 模块 + python-hslog + DecisionLoop | 含 |
 | 16 | Phase 6: 自维护回放 | 逐行 Power.log 解析 + 10+ bug 修复 + 6因子评估 | 回放验证 |
 | 17 | Phase 6.5: 对手情报 | 分类卡牌追踪 + 6 bug 修复 | 回放验证 |
-| **总计** | | **34+ 源文件, 12500+ 行** | **~795 通过** |
+| 18 | Phase 7: 对手智能+效果模拟 | 贝叶斯卡组识别 + 法术目标枚举 | 676 tests |
+| **总计** | | **34+ 源文件, 13000+ 行** | **~795 通过** |
 
 ### 进行中 🔄
 
-(none currently)
+| 优先级 | 任务 | 说明 |
+|--------|------|------|
+| 🔴 P0 | 对手奥秘概率模型 | 研究完成，待编码（4职业74张奥秘） |
 
 ### 待开始 ⏳
 
 | 优先级 | 任务 | 说明 | 前置依赖 |
 |--------|------|------|---------|
-| 🔴 P0 | 对手手牌推理 | 基于已知信息推断对手可能手牌（RHEA输入） | Phase 6.5 |
+| 🔴 P0 | 对手奥秘概率模型 | 基于已知信息推断对手可能奥秘 | Phase 6.5 |
 | 🟡 P1 | 评分校准 | ScoreProvider scoring_report.json 缺失，所有卡牌分数默认 0.0 | 无 |
+| 🟡 P1 | 非收藏卡中文名补全 | XML fallback 已覆盖大部分，边缘 case 待验证 | 无 |
 | 🟡 P1 | Token 卡牌名 | 非收藏卡(SW_108t, TIME_875t 等)显示为原始 ID | 无 |
 | 🟡 P1 | 性能基准 | 75ms RHEA 目标 | 无 |
 | 🟡 P1 | 狂野评分 | 5209 卡池扩展 | 无 |

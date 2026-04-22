@@ -463,8 +463,31 @@ def _resolve_deaths(state: GameState) -> GameState:
     return state
 
 
-def resolve_effects(state: GameState, card: Card) -> GameState:
+def _resolve_target_from_index(state: GameState, target_index: int) -> str:
+    """Convert numeric target_index to string target format.
+
+    Args:
+        state: current game state
+        target_index: 0 = enemy hero, 1..N = enemy minion (1-based)
+
+    Returns:
+        Target string like 'enemy_hero' or 'enemy_minion:N'
+    """
+    if target_index == 0:
+        return 'enemy_hero'
+    elif target_index > 0 and target_index <= len(state.opponent.board):
+        return f'enemy_minion:{target_index - 1}'
+    return 'enemy_hero'
+
+
+def resolve_effects(state: GameState, card: Card, target_index: int = -1) -> GameState:
     """Parse card text, extract effects, apply them to a state copy.
+
+    Args:
+        state: current game state
+        card: the card being played
+        target_index: if >= 0, use this target instead of greedy selection.
+            0 = enemy hero, 1..N = enemy minion index (1-based)
 
     Returns the modified state copy. The original state is never mutated.
     """
@@ -485,14 +508,20 @@ def resolve_effects(state: GameState, card: Card) -> GameState:
     for effect_type, params in effects:
         if effect_type == 'direct_damage':
             amount = params + spell_power_bonus
-            target = _pick_target_for_damage(s, amount=amount)
+            if target_index >= 0:
+                target = _resolve_target_from_index(s, target_index)
+            else:
+                target = _pick_target_for_damage(s, amount=amount)
             s = applier.apply_damage(s, target, amount)
             if has_lifesteal:
                 s.hero.hp = min(30, s.hero.hp + amount)
 
         elif effect_type == 'random_damage':
             amount = params + spell_power_bonus
-            target = _pick_target_for_damage(s, amount=amount)
+            if target_index >= 0:
+                target = _resolve_target_from_index(s, target_index)
+            else:
+                target = _pick_target_for_damage(s, amount=amount)
             s = applier.apply_damage(s, target, amount)
             if has_lifesteal:
                 s.hero.hp = min(30, s.hero.hp + amount)
