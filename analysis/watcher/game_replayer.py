@@ -15,6 +15,7 @@ from typing import Optional, Callable, Any, Dict, List
 from analysis.search.game_state import GameState, HeroState, ManaState, Minion, Weapon, OpponentState
 from analysis.search.rhea_engine import RHEAEngine, enumerate_legal_actions, Action
 from analysis.models.card import Card
+from analysis.watcher.global_tracker import GlobalTracker, CardSource
 
 # GameTag numeric values (from hearthstone.enums)
 TAG_RESOURCES = 26
@@ -127,6 +128,12 @@ class TurnDecision:
     opp_armor: int = 0
     opp_board_count: int = 0
     opp_board_minions: list = field(default_factory=list)
+    opp_hand_count: int = 0
+    opp_deck_remaining: int = 0
+    opp_known_hand_cards: list = field(default_factory=list)  # [{card_id, name, source}]
+    opp_generated_played: int = 0  # Total generated cards opponent has played
+    opp_secrets: list = field(default_factory=list)  # Current opponent secrets
+    player_global_stats: str = ""  # Summary of player global stats
     legal_actions_count: int = 0
     action_breakdown: dict = field(default_factory=dict)
     rhea_best_score: float = 0.0
@@ -163,6 +170,9 @@ class GameReplayer:
         # Track current entity being defined for nested tags
         self._current_full_entity: int = 0
 
+        # Global game state tracker
+        self.global_tracker = GlobalTracker()
+
         # Results
         self.decisions: list[TurnDecision] = []
 
@@ -193,12 +203,17 @@ class GameReplayer:
         self.log_errors.setLevel(logging.WARNING)
 
     def _load_card_names(self):
-        """Load card_id → Chinese name mapping from card data files."""
+        """Load card_id → Chinese name mapping from card data files.
+
+        Loads collectible, standard, and wild pools for full coverage
+        including generated/token cards.
+        """
         name_map = {}
         import json
         for path in [
             Path("card_data/240397/zhCN/cards.collectible.json"),
             Path("card_data/240397/unified_standard.json"),
+            Path("card_data/240397/unified_wild.json"),
         ]:
             if path.exists():
                 try:
@@ -215,11 +230,25 @@ class GameReplayer:
                         pass
                 except:
                     pass
+
+        # Also try HSCardDB for non-collectible (token) cards
+        try:
+            from analysis.data.hsdb import get_db
+            db = get_db()
+            for cid, card_data in db._cards.items():
+                if cid and cid not in name_map:
+                    name = card_data.get("name", "") or card_data.get("englishName", "")
+                    if name:
+                        name_map[cid] = name
+        except Exception:
+            pass
+
         return name_map
 
     def replay_file(self, path: str) -> list[TurnDecision]:
         """Replay Power.log line by line with full state tracking."""
         self._card_name_cache = self._load_card_names()
+        self.global_tracker.on_game_start()
 
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             for line in f:
@@ -259,6 +288,16 @@ class GameReplayer:
             else:
                 self.entities[entity_id] = Entity(id=entity_id, card_id=card_id)
             self._current_full_entity = entity_id  # Track for nested tags
+            # Notify global tracker of entity birth
+            entity = self.entities[entity_id]
+            self.global_tracker.on_full_entity(
+                entity_id=entity_id,
+                card_id=card_id,
+                controller=entity.controller,
+                zone=entity.zone,
+                card_type=entity.card_type,
+                cost=entity.cost,
+            )
             return
 
         # SHOW_ENTITY - reveals card_id for hidden entities
@@ -271,6 +310,16 @@ class GameReplayer:
             else:
                 self.entities[entity_id] = Entity(id=entity_id, card_id=card_id)
             self._current_full_entity = entity_id  # Track for nested tags
+            # Notify global tracker of card reveal (key for opponent hand tracking)
+            entity = self.entities[entity_id]
+            self.global_tracker.on_show_entity(
+                entity_id=entity_id,
+                card_id=card_id,
+                controller=entity.controller,
+                zone=entity.zone,
+                card_type=entity.card_type,
+                cost=entity.cost,
+            )
             return
 
         # TAG_CHANGE — handle both simple Entity=18 and complex Entity=[entityName=... id=89 ...]
@@ -359,6 +408,7 @@ class GameReplayer:
             'IMMUNE': ('immune', lambda e, v: self._update_entity_tag(e, 'immune', bool(v))),
             'SPELL_POWER': ('spell_power', lambda e, v: self._update_entity_tag(e, 'spell_power', v)),
             'FIRST_PLAYER': ('first_player', lambda e, v: self._handle_first_player(e, v)),
+            'OVERLOAD_OWED': ('overload_owed', lambda e, v: self._handle_overload_owed(e, v)),
         }
 
         handler = tag_map.get(tag_name)
@@ -473,7 +523,19 @@ class GameReplayer:
         if isinstance(entity, tuple) and entity[0] == 'entity':
             entity_id = entity[1]
             if entity_id in self.entities:
+                old_value = getattr(self.entities[entity_id], attr, 0)
                 setattr(self.entities[entity_id], attr, value)
+                # Track zone changes for global tracker
+                if attr == 'zone' and old_value != value:
+                    e = self.entities[entity_id]
+                    self.global_tracker.on_zone_change(
+                        entity_id=entity_id,
+                        controller=e.controller,
+                        old_zone=old_value,
+                        new_zone=value,
+                        card_id=e.card_id,
+                        card_type=e.card_type,
+                    )
 
     def _handle_first_player(self, entity, value):
         """Detect first player assignment."""
@@ -489,6 +551,7 @@ class GameReplayer:
                 self.players[self.opp_controller] = PlayerState(name="UNKNOWN HUMAN PLAYER")
                 self._player_name_map[self.player_name] = self.our_controller
                 self._player_name_map["UNKNOWN HUMAN PLAYER"] = self.opp_controller
+                self.global_tracker.set_controllers(self.our_controller, self.opp_controller)
                 self.log_main.info(f"🎮 我方: {self.player_name} (PlayerID={self.our_controller}, 先手)")
         elif isinstance(entity, tuple) and entity[0] == 'player':
             # Already resolved to player - this means player name matched
@@ -500,10 +563,17 @@ class GameReplayer:
             entity_id = entity[1]
             self.controller_map[entity_id] = value
 
+    def _handle_overload_owed(self, entity, value):
+        """Handle OVERLOAD_OWED tag — track overload for global state."""
+        if isinstance(entity, tuple) and entity[0] == 'player':
+            controller_id = entity[1]
+            self.global_tracker.on_overload_change(controller_id, int(value))
+
     def _handle_turn_change(self, value):
         """Handle TURN tag change."""
         try:
             self.game_turn = int(value)
+            self.global_tracker.on_turn_change(self.game_turn)
         except (ValueError, TypeError):
             pass
 
@@ -659,6 +729,14 @@ class GameReplayer:
                 if entity.zone == ZONE_PLAY and entity.card_type == CT_MINION:
                     opp_board_count += 1
 
+            # Count opponent deck (FIXED: count ZONE_DECK only, not total-PLAY)
+            opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
+            opp_hand_count = self.global_tracker.get_opp_hand_count(opp_entities)
+
+            # Update opponent weapon/location tracking
+            self.global_tracker.update_opp_weapon(opp_entities)
+            self.global_tracker.update_opp_locations(opp_entities)
+
             # Build summary
             summary = {
                 'turn_number': self.game_turn,
@@ -678,6 +756,10 @@ class GameReplayer:
                 'opp_hero_hp': opp_hero_hp,
                 'opp_hero_armor': opp_hero_armor,
                 'opp_board_count': opp_board_count,
+                'opp_hand_count': opp_hand_count,
+                'opp_deck_remaining': opp_deck_remaining,
+                'opp_known_hand': self.global_tracker.get_opp_known_hand(),
+                'opp_generated_count': len(self.global_tracker.state.opp_generated_seen),
             }
 
             self.log_main.info("=" * 70)
@@ -696,8 +778,27 @@ class GameReplayer:
                 self.log_main.info(f"    (空 — 卡牌可能在本决策点后加入)")
             for i, c in enumerate(our_hand[:8], 1):
                 self.log_main.info(f"    [{i}] {c['name']} ({c['cost']}费·{c['type']})")
-            self.log_main.info(f"对手: HP={opp_hero_hp} 护甲={opp_hero_armor} | 场面 {opp_board_count}随从 | "
-                             f"牌库: {len(opp_entities) - len([e for e in opp_entities if e.zone == ZONE_PLAY])}")
+            self.log_main.info(f"对手: HP={opp_hero_hp} 护甲={opp_hero_armor} | "
+                             f"场面 {opp_board_count}随从 | 手牌 {opp_hand_count}张 | "
+                             f"牌库 {opp_deck_remaining}张")
+
+            # Log opponent known hand cards
+            opp_known = self.global_tracker.get_opp_known_hand()
+            if opp_known:
+                known_str = ", ".join(self._card_name(cid) for _, cid in opp_known)
+                self.log_main.info(f"  对手已知手牌: {known_str}")
+
+            # Log opponent generated cards played so far
+            if self.global_tracker.state.opp_generated_seen:
+                gen_str = ", ".join(self._card_name(cid)
+                                    for cid in self.global_tracker.state.opp_generated_seen)
+                self.log_main.info(f"  对手衍生牌: {gen_str}")
+
+            # Log opponent secrets
+            if self.global_tracker.state.opp_secrets:
+                sec_str = ", ".join(self._card_name(cid)
+                                    for cid in self.global_tracker.state.opp_secrets)
+                self.log_main.info(f"  对手奥秘: {sec_str}")
 
             # Build GameState
             game_state = self._build_game_state(
@@ -807,6 +908,15 @@ class GameReplayer:
                         'atk': m['atk'],
                         'health': m['health'],
                     } for m in opp_board[:7]],
+                    opp_hand_count=opp_hand_count,
+                    opp_deck_remaining=opp_deck_remaining,
+                    opp_known_hand_cards=[
+                        {"card_id": cid, "name": self._card_name(cid)}
+                        for _, cid in self.global_tracker.get_opp_known_hand()
+                    ],
+                    opp_generated_played=len(self.global_tracker.state.opp_generated_seen),
+                    opp_secrets=list(self.global_tracker.state.opp_secrets),
+                    player_global_stats=self.global_tracker.player_summary_str(self._card_name),
                     legal_actions_count=len(legal_actions),
                     action_breakdown=action_breakdown,
                     rhea_best_score=search_result.best_fitness,
@@ -834,6 +944,9 @@ class GameReplayer:
                     opp_armor=opp_hero_armor,
                     opp_board_count=opp_board_count,
                     opp_board_minions=[],
+                    opp_hand_count=opp_hand_count,
+                    opp_deck_remaining=opp_deck_remaining,
+                    opp_secrets=list(self.global_tracker.state.opp_secrets),
                     legal_actions_count=len(legal_actions),
                     action_breakdown=action_breakdown,
                     rhea_best_score=0.0,
@@ -990,6 +1103,9 @@ class GameReplayer:
                 if entity.zone == ZONE_DECK:
                     deck_remaining += 1
 
+            # Count opponent deck remaining (FIXED: ZONE_DECK only)
+            opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
+
             # Create game state
             game_state = GameState(
                 turn_number=self.game_turn,
@@ -1008,6 +1124,18 @@ class GameReplayer:
                     ),
                     board=opp_board,
                     hand_count=len([e for e in opp_entities if e.zone == ZONE_HAND]),
+                    deck_remaining=opp_deck_remaining,
+                    opp_known_cards=[
+                        {"card_id": kc.card_id, "turn_seen": kc.turn_seen,
+                         "source": kc.source.value, "card_type": kc.card_type}
+                        for kc in self.global_tracker.state.opp_known_cards
+                    ],
+                    opp_generated_count=len(self.global_tracker.state.opp_generated_seen),
+                    opp_secrets_triggered=[
+                        {"card_id": kc.card_id, "turn_seen": kc.turn_seen}
+                        for kc in self.global_tracker.state.opp_secrets_triggered
+                    ],
+                    secrets=list(self.global_tracker.state.opp_secrets),
                 ),
             )
 
@@ -1163,6 +1291,12 @@ class GameReplayer:
                 'opp_armor': d.opp_armor,
                 'opp_board_count': d.opp_board_count,
                 'opp_board_minions': d.opp_board_minions,
+                'opp_hand_count': getattr(d, 'opp_hand_count', 0),
+                'opp_deck_remaining': getattr(d, 'opp_deck_remaining', 0),
+                'opp_known_hand_cards': getattr(d, 'opp_known_hand_cards', []),
+                'opp_generated_played': getattr(d, 'opp_generated_played', 0),
+                'opp_secrets': getattr(d, 'opp_secrets', []),
+                'player_global_stats': getattr(d, 'player_global_stats', ''),
                 'legal_actions_count': d.legal_actions_count,
                 'action_breakdown': d.action_breakdown,
                 'rhea_best_score': d.rhea_best_score,

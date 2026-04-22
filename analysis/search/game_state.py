@@ -151,6 +151,9 @@ class OpponentState:
     deck_remaining: int = 15
     locked_deck_id: Optional[int] = None  # Bayesian lock
     deck_confidence: float = 0.0
+    opp_known_cards: list = field(default_factory=list)  # List of known opponent cards (KnownCard dicts)
+    opp_generated_count: int = 0  # Number of generated cards opponent has played
+    opp_secrets_triggered: list = field(default_factory=list)  # Opponent secrets that have triggered
 
 
 @dataclass
