@@ -111,6 +111,10 @@ class TurnDecision:
     opp_hand_count: int = 0
     opp_deck_remaining: int = 0
     opp_known_hand_cards: List[str] = field(default_factory=list)
+    # 对手已打出牌分类
+    opp_deck_cards_played: List[str] = field(default_factory=list)     # 牌库牌（已打出）
+    opp_generated_cards_played: List[str] = field(default_factory=list) # 衍生牌（已打出）
+    opp_card_type_counts: Dict[str, int] = field(default_factory=dict) # 卡牌类型统计
     opp_generated_played: int = 0
     opp_secrets: List[str] = field(default_factory=list)
     # --- 全局 ---
@@ -311,6 +315,14 @@ class PacketReplayer:
             elif name:
                 self._opp_player_id = pid
                 self._opp_name = name
+
+        # Set controllers on global tracker immediately so subsequent
+        # on_full_entity / on_show_entity / on_zone_change calls can
+        # correctly classify cards as ours vs opponent's.
+        if self._our_player_id and self._opp_player_id:
+            self.global_tracker.set_controllers(
+                self._our_player_id, self._opp_player_id
+            )
 
         if self._main_logger and self._our_player_id:
             our = self.players.get(self._our_player_id)
@@ -701,17 +713,18 @@ class PacketReplayer:
                              f"场面 {opp_board_count}随从 | 手牌 {opp_hand_count}张 | "
                              f"牌库 {opp_deck_remaining}张")
 
-            # Log opponent known hand cards
-            opp_known = self.global_tracker.get_opp_known_hand()
-            if opp_known:
-                known_str = ", ".join(self._card_name(cid) for _, cid in opp_known)
-                self._main_logger.info(f"  对手已知手牌: {known_str}")
-
-            # Log opponent generated cards played so far
-            if self.global_tracker.state.opp_generated_seen:
-                gen_str = ", ".join(self._card_name(cid)
-                                    for cid in self.global_tracker.state.opp_generated_seen)
-                self._main_logger.info(f"  对手衍生牌: {gen_str}")
+            # Log opponent card intelligence
+            opp_breakdown = self.global_tracker.get_opp_card_breakdown(self._card_name)
+            if opp_breakdown["known_hand"]:
+                self._main_logger.info(f"  对手已知手牌: {', '.join(opp_breakdown['known_hand'])}")
+            if opp_breakdown["deck_cards_played"]:
+                self._main_logger.info(f"  对手牌库牌: {', '.join(opp_breakdown['deck_cards_played'])}")
+            if opp_breakdown["generated_cards_played"]:
+                self._main_logger.info(f"  对手衍生牌: {', '.join(opp_breakdown['generated_cards_played'])}")
+            tc = opp_breakdown["type_counts"]
+            type_parts = [f"{k}{v}" for k, v in tc.items() if v > 0]
+            if type_parts:
+                self._main_logger.info(f"  对手出牌类型: {' '.join(type_parts)}")
 
             # Log opponent secrets
             if self.global_tracker.state.opp_secrets:
@@ -815,10 +828,11 @@ class PacketReplayer:
                     opp_board_minions=[f"{m['name']} {m['atk']}/{m['health']}" for m in opp_board[:7]],
                     opp_hand_count=opp_hand_count,
                     opp_deck_remaining=opp_deck_remaining,
-                    opp_known_hand_cards=[
-                        self._card_name(cid) for _, cid in self.global_tracker.get_opp_known_hand()
-                    ],
-                    opp_generated_played=len(self.global_tracker.state.opp_generated_seen),
+                    opp_known_hand_cards=opp_breakdown["known_hand"],
+                    opp_deck_cards_played=opp_breakdown["deck_cards_played"],
+                    opp_generated_cards_played=opp_breakdown["generated_cards_played"],
+                    opp_card_type_counts=opp_breakdown["type_counts"],
+                    opp_generated_played=opp_breakdown["total_generated"],
                     opp_secrets=[self._card_name(cid) for cid in self.global_tracker.state.opp_secrets],
                     player_global_stats=self.global_tracker.player_summary_str(self._card_name),
                     legal_action_count=len(legal_actions),
@@ -1259,18 +1273,18 @@ class PacketReplayer:
                         f"    对手随从[{i}]: {m['name']} {m['atk']}/{m['health']}"
                     )
 
-            # Log opponent known hand cards
-            opp_known = self.global_tracker.get_opp_known_hand()
-            if opp_known:
-                known_str = ", ".join(self._card_name(cid) for _, cid in opp_known)
-                self._main_logger.info(f"    对手已知手牌: {known_str}")
-
-            # Log opponent generated cards played so far
-            if self.global_tracker.state.opp_generated_seen:
-                gen_str = ", ".join(
-                    self._card_name(cid) for cid in self.global_tracker.state.opp_generated_seen
-                )
-                self._main_logger.info(f"    对手衍生牌: {gen_str}")
+            # Log opponent card intelligence
+            opp_breakdown = self.global_tracker.get_opp_card_breakdown(self._card_name)
+            if opp_breakdown["known_hand"]:
+                self._main_logger.info(f"    对手已知手牌: {', '.join(opp_breakdown['known_hand'])}")
+            if opp_breakdown["deck_cards_played"]:
+                self._main_logger.info(f"    对手牌库牌: {', '.join(opp_breakdown['deck_cards_played'])}")
+            if opp_breakdown["generated_cards_played"]:
+                self._main_logger.info(f"    对手衍生牌: {', '.join(opp_breakdown['generated_cards_played'])}")
+            tc = opp_breakdown["type_counts"]
+            type_parts = [f"{k}{v}" for k, v in tc.items() if v > 0]
+            if type_parts:
+                self._main_logger.info(f"    对手出牌类型: {' '.join(type_parts)}")
 
             # Log opponent secrets
             if self.global_tracker.state.opp_secrets:
@@ -1380,6 +1394,9 @@ class PacketReplayer:
                 'opp_hand_count': d.opp_hand_count,
                 'opp_deck_remaining': d.opp_deck_remaining,
                 'opp_known_hand_cards': d.opp_known_hand_cards,
+                'opp_deck_cards_played': d.opp_deck_cards_played,
+                'opp_generated_cards_played': d.opp_generated_cards_played,
+                'opp_card_type_counts': d.opp_card_type_counts,
                 'opp_generated_played': d.opp_generated_played,
                 'opp_secrets': d.opp_secrets,
                 'player_global_stats': d.player_global_stats,

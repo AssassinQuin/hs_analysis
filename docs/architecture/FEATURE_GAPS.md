@@ -142,3 +142,32 @@
 - With empty enemy board, correctly targets face
 - But when enemy has minions, spell damage goes to minions, not face — limiting spell-based lethal setups
 - `check_lethal` DFS works around this by modeling direct damage application
+
+## Phase 6.5 — Opponent Card Intelligence (2026-04-22)
+
+### Opponent hand inference not implemented
+- `get_opp_known_hand()` only returns cards explicitly revealed (via ShowEntity in HAND zone)
+- No probabilistic inference of opponent's remaining hand based on:
+  - Cards already played (tracked)
+  - Cards known to be generated (tracked)
+  - Turn timing of draws
+  - Mulligan information
+- **Impact**: RHEA opponent simulator has zero knowledge of opponent hand composition
+- **Workaround**: Opponent simulator uses greedy model without hand knowledge
+
+### Opponent secret tracking limited
+- Secrets are tracked as "played" via on_show_entity in SECRET zone
+- No tracking of which specific secret was played (only card_id if revealed)
+- No secret probability model (which secret is most likely given game state)
+- **Impact**: Cannot inform RHEA search about probable secret effects
+
+### Chinese card name coverage
+- `hsdb.py` loads zhCN names from card strings
+- Non-collectible cards (tokens, generated cards like SW_108t, TIME_875t) may not have zhCN names
+- Falls back to raw card_id when name unavailable
+- **Impact**: Some generated cards display as raw IDs in opponent intelligence output
+
+### No opponent deck archetype detection
+- `get_opp_card_breakdown()` provides raw card lists but no archetype classification
+- Could classify opponent deck type based on played cards (aggro/control/combo)
+- **Impact**: Cannot adjust RHEA strategy based on opponent archetype

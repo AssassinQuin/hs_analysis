@@ -1,7 +1,7 @@
 ---
-version: 2.0
+version: 2.1
 created: 2026-04-19
-last_changed: 2026-04-22 (D030-D031: V12 Power.log gap analysis)
+last_changed: 2026-04-22 (D032: opponent card intelligence categorization)
 ---
 
 # Decision Log: hs_analysis
@@ -233,3 +233,9 @@ last_changed: 2026-04-22 (D030-D031: V12 Power.log gap analysis)
 **Decision**: V12 enhances V11 in-place within `engine/` directory. Add mechanics/ subdirectory for new handlers (BattlecryDispatcher, SpellTargetResolver, HeroCardHandler). Keep V11's FactorGraph + StrategicMode + AttackPlanner architecture.
 **Alternatives**: (A) Parallel engine_v12/ — safe but duplicates shared code. (B) In-place enhancement — less duplication, V11 tests become V12 regression tests. (C) Major rewrite — overkill, V11 architecture is sound.
 **Rationale**: V12's changes are additive (new handlers, extended factors, unified tactical planner). The 7-factor architecture and strategic mode system are sound. Only the simulation fidelity and search enumeration need improvement. In-place enhancement keeps the 37 V11 tests as regression baseline.
+
+## D032 | 2026-04-22 | Categorized opponent card tracking with zone-aware filtering
+**Context**: `opp_known_hand_cards` was showing all revealed opponent cards (played, generated, dead) as "hand cards". No distinction between deck origin cards and generated cards.
+**Decision**: Three-layer opponent intelligence: (1) track every revealed card's current zone via `Dict[int, Tuple[str, int]]`, (2) classify source as DECK/GENERATED based on initial deck list membership, (3) `get_opp_card_breakdown()` returns categorized dict with type/school/race statistics.
+**Alternatives**: (A) Single flat list — proven inadequate. (B) Cemetery-style tracking only — misses generated cards. (C) Full opponent model with probability — overkill for current needs.
+**Rationale**: Categorization enables meaningful opponent intelligence for both human-readable output and future RHEA integration. Zone-aware filtering ensures "known hand" only shows cards currently in hand. The `(card_id, zone)` tuple approach avoids entity rescans on every query.

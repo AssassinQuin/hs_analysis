@@ -365,6 +365,44 @@ hs_analysis/watcher/              # NEW
 
 ---
 
+## Phase 6.5: 对手卡牌情报系统 (2026-04-22)
+
+### 问题
+
+回放引擎输出 `opp_known_hand_cards` 包含 24 张对手"已知手牌"，但实际是对手所有被揭示的牌（打出、生成等），
+没有区分牌库牌/衍生牌/类型统计。此外发现多个常量和追踪 Bug。
+
+### 修复的 6 个 Bug
+
+| # | Bug | 根因 | 影响 | 修复 |
+|---|-----|------|------|------|
+| 1 | `CT_LOCATION = 6` | 与 `CT_ENCHANTMENT = 6` 撞值 | 所有地标被统计为附魔 | `CT_LOCATION = 39` (Hearthstone enum) |
+| 2 | `ZONE_GRAVEYARD = 5` | 值不正确 | 墓地区域判断错误 | `ZONE_GRAVEYARD = 4` |
+| 3 | `set_controllers()` 调用时机 | 在 FIRST_PLAYER tag 事件时才设置 | 后续 FullEntity/ShowEntity 无 controller 信息 | 移到 `_handle_create_game()` |
+| 4 | 对手出牌未追踪 | `_on_card_played()` 只在 HAND→PLAY 触发，对手牌通过 ShowEntity 直接在 PLAY 揭示 | 对手出牌统计为 0 | `on_show_entity()` 对 PLAY/SECRET 区域的对手牌调用 `_on_card_played()` |
+| 5 | `opp_hand_card_ids` 无 zone 追踪 | 类型为 `Dict[int, str]`，不记录 zone 变化 | 已打出牌仍显示在已知手牌 | 改为 `Dict[int, Tuple[str, int]]` 存储 `(card_id, zone)` |
+| 6 | `get_opp_known_hand()` 不过滤 zone | 返回所有曾经见过的手牌 | 已打出/已死亡的牌仍在列表 | 添加 `zone == ZONE_HAND` 过滤 |
+
+### 新增功能
+
+| 功能 | 文件 | 说明 |
+|------|------|------|
+| `get_opp_card_breakdown()` | global_tracker.py | 分类别返回对手情报：牌库牌/衍生牌/已知手牌/类型统计/学派统计/种族统计 |
+| `opp_deck_cards_played` | packet_replayer.py | TurnDecision 新字段：对手已打出牌库牌列表 |
+| `opp_generated_cards_played` | packet_replayer.py | TurnDecision 新字段：对手已打出衍生牌列表 |
+| `opp_card_type_counts` | packet_replayer.py | TurnDecision 新字段：对手出牌类型统计 {随从:N, 法术:N, ...} |
+| 分类日志输出 | packet_replayer.py | "对手牌库牌" / "对手衍生牌" / "对手出牌类型" 分类显示 |
+| JSON 分类输出 | packet_replayer.py | summary JSON 包含新字段 |
+
+### 测试结果
+
+Turn 23 示例：
+- 牌库牌: 18张（不测之变, 弑君者, 梦魇供能, ...）
+- 衍生牌: 27张（黑暗之赐, 米罗克, 幸运币, ...）
+- 类型: {随从:16, 法术:27, 武器:1, 英雄:1}
+
+---
+
 ## 整体进度总览 (2026-04-22)
 
 ### 已完成 ✅
@@ -387,16 +425,18 @@ hs_analysis/watcher/              # NEW
 | 14 | 检索优化 | CardIndex LRU + ScoreProvider 缓存 | 含 |
 | 15 | Phase 5: 实时管道 | watcher 模块 + python-hslog + DecisionLoop | 含 |
 | 16 | Phase 6: 自维护回放 | 逐行 Power.log 解析 + 10+ bug 修复 + 6因子评估 | 回放验证 |
-| **总计** | | **34+ 源文件, 12000+ 行** | **~795 通过** |
+| 17 | Phase 6.5: 对手情报 | 分类卡牌追踪 + 6 bug 修复 | 回放验证 |
+| **总计** | | **34+ 源文件, 12500+ 行** | **~795 通过** |
 
 ### 进行中 🔄
 
-无当前进行中的任务。
+(none currently)
 
 ### 待开始 ⏳
 
 | 优先级 | 任务 | 说明 | 前置依赖 |
 |--------|------|------|---------|
+| 🔴 P0 | 对手手牌推理 | 基于已知信息推断对手可能手牌（RHEA输入） | Phase 6.5 |
 | 🟡 P1 | 评分校准 | ScoreProvider scoring_report.json 缺失，所有卡牌分数默认 0.0 | 无 |
 | 🟡 P1 | Token 卡牌名 | 非收藏卡(SW_108t, TIME_875t 等)显示为原始 ID | 无 |
 | 🟡 P1 | 性能基准 | 75ms RHEA 目标 | 无 |
@@ -429,6 +469,7 @@ hs_analysis/watcher/              # NEW
 | `8922709` | 04-22 | Power.log 审计 — 修复 18 个 Bug（P0×5 + P1×9 + P2×4） |
 | `de0554d` | 04-22 | Power.log 逐行回放系统 — 12 决策点全对局分析 |
 | `5aabadb` | 04-22 | 自维护回放引擎 — 修复10+解析Bug，6因子抉择质量评估 |
+| *(uncommitted)* | 04-22 | 对手卡牌情报系统 — 分类追踪 + 6 bug 修复 |
 
 ---
 

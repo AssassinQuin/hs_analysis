@@ -111,8 +111,8 @@ class GlobalGameState:
     opp_known_cards: List[KnownCard] = field(default_factory=list)
     """对手已知的卡牌（打出/揭示时记录）"""
 
-    opp_hand_card_ids: Dict[int, str] = field(default_factory=dict)
-    """对手手牌 entity_id -> card_id（SHOW_ENTITY 揭示的）"""
+    opp_hand_card_ids: Dict[int, Tuple[str, int]] = field(default_factory=dict)
+    """对手手牌 entity_id -> (card_id, zone)（SHOW_ENTITY 揭示的）"""
 
     # ---- 对手牌库追踪 ----
     opp_deck_remaining: int = 0
@@ -217,14 +217,14 @@ class GlobalTracker:
     ZONE_SETASIDE = 6
     ZONE_SECRET = 7
 
-    # CardType constants
+    # CardType constants (matching hearthstone.enums.CardType)
     CT_HERO = 3
     CT_MINION = 4
     CT_SPELL = 5
-    CT_LOCATION = 6
+    CT_ENCHANTMENT = 6
     CT_WEAPON = 7
     CT_HERO_POWER = 10
-    CT_ENCHANTMENT = 6  # Not used as card_type, enchantment is tracked separately
+    CT_LOCATION = 39
 
     # Known coin card IDs
     COIN_CARD_IDS = {"GAME_005", "TB_BlingBrawl_Coin", "NEW1_008t"}
@@ -310,9 +310,24 @@ class GlobalTracker:
 
     def on_show_entity(self, entity_id: int, card_id: str, controller: int,
                        zone: int, card_type: int = 0, cost: int = 0):
-        """Called when SHOW_ENTITY reveals a hidden entity."""
+        """Called when SHOW_ENTITY reveals a hidden entity.
+        
+        For opponent cards revealed directly into PLAY/SECRET zone (the typical
+        case — opponent plays a card and we see it appear), we track it as a
+        "played" card since we never see the HAND→PLAY zone change for opponent.
+        """
         if controller == self.opp_controller:
-            self.state.opp_hand_card_ids[entity_id] = card_id
+            self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
+
+            # Track opponent cards revealed into PLAY/SECRET as "played".
+            # Opponent cards are never visible during HAND→PLAY; they appear
+            # directly via SHOW_ENTITY in their final zone.
+            if zone == self.ZONE_PLAY and card_type not in (self.CT_ENCHANTMENT,):
+                # Skip enchantments (type 6) — they're buffs, not played cards
+                self._on_card_played(entity_id, controller, card_id, card_type)
+            elif zone == self.ZONE_SECRET:
+                self.state.opp_secrets.append(card_id)
+                self._on_card_played(entity_id, controller, card_id, card_type)
 
         if entity_id in self._entity_birth:
             self._entity_birth[entity_id].card_id = card_id
@@ -343,12 +358,13 @@ class GlobalTracker:
         """
         is_opp = (controller == self.opp_controller)
 
-        # Clean up: remove from opp_hand_card_ids when leaving HAND zone
-        # Covers ALL exits (play, discard, mill, secret, transfer to player, etc.)
+        # Update zone in opp_hand_card_ids when zone changes.
+        # Keeps card_id but updates zone so get_opp_known_hand() can filter.
         # NOTE: Don't check is_opp here — controller may have already changed
         # (e.g., opponent card transferred to player deck at turn start)
-        if old_zone == self.ZONE_HAND:
-            self.state.opp_hand_card_ids.pop(entity_id, None)
+        if entity_id in self.state.opp_hand_card_ids:
+            card_id = self.state.opp_hand_card_ids[entity_id][0]
+            self.state.opp_hand_card_ids[entity_id] = (card_id, new_zone)
 
         # Card played: HAND -> PLAY
         if old_zone == self.ZONE_HAND and new_zone == self.ZONE_PLAY:
@@ -584,8 +600,66 @@ class GlobalTracker:
         return sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_HAND)
 
     def get_opp_known_hand(self) -> List[Tuple[int, str]]:
-        """Return list of (entity_id, card_id) for known opponent hand cards."""
-        return list(self.state.opp_hand_card_ids.items())
+        """Return list of (entity_id, card_id) for known opponent hand cards.
+
+        Only returns cards currently in HAND zone — filters out cards that
+        have been played, discarded, or moved to other zones.
+        """
+        return [
+            (eid, card_id)
+            for eid, (card_id, zone) in self.state.opp_hand_card_ids.items()
+            if zone == self.ZONE_HAND
+        ]
+
+    def get_opp_card_breakdown(self, card_name_fn=None) -> Dict:
+        """Generate categorized breakdown of all revealed opponent cards.
+
+        Returns dict with:
+            - deck_cards_played: list of card names from original deck
+            - generated_cards_played: list of card names from generated sources
+            - known_hand: list of card names currently in opponent's HAND zone
+            - total_played: int — total cards played
+            - total_generated: int — total generated cards
+            - type_counts: dict — {MINION: n, SPELL: n, WEAPON: n, HERO: n, LOCATION: n}
+            - school_counts: dict — spell school distribution
+            - race_counts: dict — race distribution
+        """
+        name_fn = card_name_fn or (lambda cid: cid)
+        state = self.state
+        stats = state.opp_stats
+
+        # Categorize played cards by source
+        deck_cards = []
+        generated_cards = []
+        for kc in state.opp_known_cards:
+            name = name_fn(kc.card_id) if kc.card_id else "未知"
+            if kc.source == CardSource.DECK:
+                deck_cards.append(name)
+            elif kc.source == CardSource.GENERATED:
+                generated_cards.append(name)
+            else:
+                # UNKNOWN — treat as deck card (conservative)
+                deck_cards.append(name)
+
+        # Known hand (zone-filtered)
+        known_hand = [name_fn(cid) for _, cid in self.get_opp_known_hand()]
+
+        return {
+            "deck_cards_played": deck_cards,
+            "generated_cards_played": generated_cards,
+            "known_hand": known_hand,
+            "total_played": len(state.opp_known_cards),
+            "total_generated": len(state.opp_generated_seen),
+            "type_counts": {
+                "随从": stats.minions_played,
+                "法术": stats.spells_played,
+                "武器": stats.weapons_played,
+                "英雄": stats.heroes_played,
+                "地点": stats.locations_played,
+            },
+            "school_counts": dict(stats.spell_schools),
+            "race_counts": dict(stats.races_played),
+        }
 
     def update_opp_weapon(self, opp_entities: list):
         """Update opponent weapon from entities in PLAY zone."""

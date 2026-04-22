@@ -1,14 +1,14 @@
 ---
-version: 11.0
+version: 12.0
 created: 2026-04-19
-last_changed: 2026-04-22 (V12 Power.log gap analysis, design doc, cleanup)
+last_changed: 2026-04-22 (Phase 6.5 opponent card intelligence)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: V12 Design Complete — Power.log Gap Analysis Driven, Awaiting Implementation
+## Current Phase: V12 Design Complete — Phase 6.5 Replay Engine Improvements Done
 
 ## ✅ DONE
 
@@ -96,6 +96,14 @@ last_changed: 2026-04-22 (V12 Power.log gap analysis, design doc, cleanup)
 - **Design:** `thoughts/shared/designs/2026-04-22-v12-powerlog-driven-engine-gaps-design.md`
 - **Plan:** `thoughts/shared/plans/2026-04-22-v12-powerlog-driven-engine-plan.md`
 
+### Phase 6.5: Opponent Card Intelligence ✅ (2026-04-22)
+- [x] **6 bug fixes** — CT_LOCATION/ZONE_GRAVEYARD constants, set_controllers timing, opponent card tracking, zone filtering
+- [x] **get_opp_card_breakdown()** — categorized opponent card intelligence (deck/generated/hand/type/school/race)
+- [x] **TurnDecision extension** — opp_deck_cards_played, opp_generated_cards_played, opp_card_type_counts
+- [x] **Categorized logging** — 对手牌库牌/衍生牌/出牌类型 instead of flat list
+- [x] **JSON output** — new fields in summary JSON
+- **Files**: analysis/watcher/global_tracker.py, analysis/watcher/packet_replayer.py
+
 ### Test Coverage
 - [x] **~795 tests passing** (as of 2026-04-21)
 - [x] V10/V11 test suites fully passing
@@ -113,6 +121,11 @@ last_changed: 2026-04-22 (V12 Power.log gap analysis, design doc, cleanup)
 (none currently)
 
 ## ⏳ TODO (by priority)
+
+### P0: 对手手牌推理 (RHEA 输入增强)
+- [ ] 基于已知出牌信息推断对手可能的剩余手牌
+- [ ] 与 RHEA 搜索集成，提高对手模拟精度
+- **Dependency:** Phase 6.5 完成
 
 ### P0: V12 Phase 1 — 卡牌效果模拟层 (致命缺陷)
 - [ ] Task 1.1: BattlecryDispatcher — 战吼文本解析 + 效果分发 + 分支展开
@@ -192,3 +205,4 @@ See `thoughts/DECISIONS.md` for full details (D001-D030).
 3. **V12 Phase 1: HeroCardHandler** — 英雄牌替换
 4. **V12 Phase 1: ManaModifier** — 法力修改器栈
 5. **V12 Phase 2: UnifiedTacticalPlanner** — 统一行动序列
+6. **对手手牌推理** — 基于已知出牌推断对手手牌范围
