@@ -128,7 +128,6 @@ class StateBridge:
                 armor=armor,
                 weapon=weapon,
                 hero_class=hero_class,
-                hero_power_used=bool(hero.tags.get(GameTag.HERO_POWER_USED, 0)),
             )
         except Exception as e:
             log.warning(f"Error extracting hero state: {e}")

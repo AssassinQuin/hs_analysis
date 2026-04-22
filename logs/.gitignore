@@ -1,0 +1,4 @@
+# Keep directory but ignore generated logs
+*.log
+*.json
+!.gitkeep
