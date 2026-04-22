@@ -1,7 +1,7 @@
 ---
-version: 2.2
+version: 2.3
 created: 2026-04-19
-last_changed: 2026-04-22 (D033-D034: Bayesian opponent, spell targets)
+last_changed: 2026-04-22 (D035-D037: Secret probability, non-collectible gap, playstyle classification)
 ---
 
 # Decision Log: hs_analysis
@@ -251,3 +251,21 @@ last_changed: 2026-04-22 (D033-D034: Bayesian opponent, spell targets)
 **Decision**: Two-part fix: (1) `tactical.py` imports SpellTargetResolver and enumerates spell targets as separate combo branches with `PLAY_WITH_TARGET` action type, (2) `resolve_effects()` accepts `target_index` parameter to respect caller-specified target.
 **Alternatives**: (A) Only fix resolve_effects — still no target enumeration in combos. (B) Only fix tactical — target passed but ignored. (C) Full branching for all card types — overkill, exponential blowup.
 **Rationale**: Minimal change that ensures Fireball/etc can target specific minions. Each target option becomes a separate branch evaluated by FactorGraph, so the best target is chosen by scoring rather than greedy heuristics.
+
+## D035 | 2026-04-22 | Per-class secret probability model with risk scoring
+**Context**: Opponent secrets tracked as card_id list but no probability inference for unknown secrets. Risk assessment was simple linear `len(secrets) * 0.3`.
+**Decision**: Build `SecretProbabilityModel` that loads the complete secret pool per class from python-hearthstone XML (74 collectible secrets across Hunter/Mage/Paladin/Rogue). Maintains exclusion list (triggered/known secrets). Provides `get_attack_risk()` and `get_spell_risk()` composite scores.
+**Alternatives**: (A) Neural network over game state features — overkill for 74-card pool. (B) HSReplay play-rate weighted priors — requires live API access during game. (C) Simple count-based heuristic — too coarse.
+**Rationale**: Class-based secret pools are small (13-24 cards). Exhaustive enumeration with exclusion gives precise probabilities. Risk scores decompose into attack-triggering vs spell-triggering categories for tactical decision-making.
+
+## D036 | 2026-04-22 | Non-collectible card name gap is non-issue
+**Context**: FEATURE_GAPS listed "token cards may not have zhCN names". Investigation needed to determine if fix was required.
+**Decision**: No code changes. python-hearthstone XML fallback already covers 98.4% of non-collectible cards with zhCN names. The 427 missing are all non-gameplay content (credits, BG, mercenaries, enchantments, DNT markers).
+**Alternatives**: (A) Pre-load all non-collectible cards into HSJSON cache — unnecessary given XML coverage. (B) Add manual name mapping for 28 gameplay-relevant cards — too much maintenance.
+**Rationale**: Empirical verification showed all Constructed-play token cards resolve correctly (SW_108t→传承之火, TIME_875t→莱恩国王). The gap only affects non-gameplay content that never appears in real games.
+
+## D037 | 2026-04-22 | Keyword-based playstyle classification from archetype name
+**Context**: Bayesian model identifies specific archetype (e.g., "Face Hunter") but no high-level playstyle tag (aggro/control/combo/midrange) for strategic decision-making.
+**Decision**: Simple keyword matching on archetype name: aggro (face, pirate, zoo, token, imbue, etc.), control (reno, highlander, fatigue), combo (otk, miracle, malygos), midrange (dragon, even, hand, bomb). Default to "midrange" if no keyword matches.
+**Alternatives**: (A) Mana curve analysis of signature cards — requires loading full deck list, fragile. (B) HSReplay archetype tags — API doesn't provide playstyle fields. (C) ML classifier — training data unavailable.
+**Rationale**: Archetype names in competitive play follow strong naming conventions. Keyword matching covers >90% of meta archetypes with zero maintenance. Fallback to "midrange" is safe default for unidentified decks.

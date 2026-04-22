@@ -121,6 +121,8 @@ class TurnDecision:
     opp_archetype_name: Optional[str] = None
     opp_archetype_confidence: float = 0.0
     opp_top_archetypes: List[tuple] = field(default_factory=list)  # [(name, prob)]
+    opp_playstyle: str = "unknown"  # aggro/control/combo/midrange
+    opp_secret_report: Dict = field(default_factory=dict)  # secret probability report
     # --- 全局 ---
     player_global_stats: Optional[Dict] = None
     # --- 合法动作 ---
@@ -748,6 +750,14 @@ class PacketReplayer:
                 )
                 self._main_logger.info(f"  对手可能卡组: {top_str}")
 
+            # Secret probability report
+            secret_report = self.global_tracker.get_secret_report()
+            if secret_report.get("active_secrets", 0) > 0:
+                summary = secret_report.get("summary", "")
+                attack_risk = secret_report.get("attack_risk", "0.00")
+                spell_risk = secret_report.get("spell_risk", "0.00")
+                self._main_logger.info(f"  对手奥秘风险: 攻击={attack_risk}, 施法={spell_risk}, {summary}")
+
             # Build GameState
             game_state = self._build_game_state()
 
@@ -854,6 +864,8 @@ class PacketReplayer:
                     opp_archetype_name=bayesian.get("archetype_name"),
                     opp_archetype_confidence=bayesian.get("deck_confidence", 0.0),
                     opp_top_archetypes=[(name, prob) for _, name, prob in bayesian.get("top_decks", [])],
+                    opp_playstyle=bayesian.get("playstyle", "unknown"),
+                    opp_secret_report=secret_report if secret_report.get("active_secrets", 0) > 0 else {},
                     player_global_stats=self.global_tracker.player_summary_str(self._card_name),
                     legal_action_count=len(legal_actions),
                     legal_actions=[a.describe(game_state) for a in legal_actions[:15]],
@@ -1427,6 +1439,8 @@ class PacketReplayer:
                 'opp_archetype_name': d.opp_archetype_name,
                 'opp_archetype_confidence': d.opp_archetype_confidence,
                 'opp_top_archetypes': d.opp_top_archetypes,
+                'opp_playstyle': d.opp_playstyle,
+                'opp_secret_risk': d.opp_secret_report,
                 'player_global_stats': d.player_global_stats,
                 'legal_action_count': d.legal_action_count,
                 'legal_actions': d.legal_actions,

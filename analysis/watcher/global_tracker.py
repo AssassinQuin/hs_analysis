@@ -1,4 +1,4 @@
-﻿"""global_tracker.py — 全局游戏状态追踪器
+"""global_tracker.py — 全局游戏状态追踪器
 
 跨回合追踪双方的关键信息：
 - 对手手牌（从打出/揭示的卡牌推断）
@@ -28,6 +28,8 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
+
+from analysis.search.secret_probability import SecretProbabilityModel
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +244,7 @@ class GlobalTracker:
         # Bayesian opponent model (lazy init)
         self._bayesian_model = None
         self._bayesian_initialized = False
+        self._secret_model: Optional['SecretProbabilityModel'] = None
 
     def set_controllers(self, our: int, opp: int):
         self.our_controller = our
@@ -332,6 +335,10 @@ class GlobalTracker:
             elif zone == self.ZONE_SECRET:
                 self.state.opp_secrets.append(card_id)
                 self._on_card_played(entity_id, controller, card_id, card_type)
+                # Update secret probability model
+                self._ensure_secret_model()
+                if self._secret_model and card_id:
+                    self._secret_model.exclude(card_id)
 
             # Feed Bayesian model for opponent cards revealed into play/secret
             if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id:
@@ -420,6 +427,9 @@ class GlobalTracker:
                     source=self._classify_source(entity_id, card_id),
                     card_type="SPELL",
                 ))
+                # Update secret probability model
+                if self._secret_model and card_id:
+                    self._secret_model.exclude(card_id)
 
         # Weapon equipped: implicit — tracked via weapon entities in PLAY
         # Location played: tracked via location entities in PLAY
@@ -682,6 +692,14 @@ class GlobalTracker:
             self._card_db = get_db()
         return self._card_db
 
+    def _ensure_secret_model(self):
+        """Initialize secret probability model based on opponent hero class."""
+        if self._secret_model is not None:
+            return
+        opp_cls = self.state.opp_hero_class
+        if opp_cls:
+            self._secret_model = SecretProbabilityModel(opp_cls)
+
     def _init_bayesian_model(self, opponent_class: str = None):
         """Initialize Bayesian opponent model from HSReplay cache or deck_codes.txt.
 
@@ -759,12 +777,39 @@ class GlobalTracker:
         top = self._bayesian_model.get_top_decks(3)
         preds = self._bayesian_model.predict_next_actions(3)
 
+        from analysis.utils.bayesian_opponent import classify_playstyle
+        archetype_name = self._bayesian_model._deck_name(locked[0]) if locked else None
+        playstyle = classify_playstyle(archetype_name) if archetype_name else "unknown"
+
         return {
-            "archetype_name": self._bayesian_model._deck_name(locked[0]) if locked else None,
+            "archetype_name": archetype_name,
             "locked_deck_id": locked[0] if locked else None,
             "deck_confidence": locked[1] if locked else (top[0][2] if top else 0.0),
             "top_decks": [(aid, name, round(prob, 4)) for aid, name, prob in top],
             "predicted_next": preds,
+            "playstyle": playstyle,
+        }
+
+    def get_secret_report(self) -> Dict:
+        """Get secret probability report for logging/decision-making."""
+        if not self._secret_model:
+            return {"active_secrets": len(self.state.opp_secrets),
+                    "model": "uninitialized"}
+        
+        probs = self._secret_model.get_probabilities()
+        most_likely = self._secret_model.get_most_likely(3)
+        attack_risk = self._secret_model.get_attack_risk()
+        spell_risk = self._secret_model.get_spell_risk()
+        
+        return {
+            "active_secrets": len(self.state.opp_secrets),
+            "known_secrets": list(self.state.opp_secrets),
+            "triggered_secrets": len(self.state.opp_secrets_triggered),
+            "remaining_pool": len(probs),
+            "most_likely": [(cid, name, f"{p:.1%}") for cid, name, p in most_likely],
+            "attack_risk": f"{attack_risk:.2f}",
+            "spell_risk": f"{spell_risk:.2f}",
+            "summary": self._secret_model.get_summary(),
         }
 
     def update_opp_weapon(self, opp_entities: list):

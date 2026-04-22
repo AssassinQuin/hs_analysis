@@ -1,14 +1,14 @@
 ---
-version: 13.0
+version: 14.0
 created: 2026-04-19
-last_changed: 2026-04-22 (Phase 7: Bayesian opponent + spell target simulation)
+last_changed: 2026-04-22 (Phase 7 complete: 5/5 tasks done)
 ---
 
 # Project State: hs_analysis
 
 > Single source of truth for progress. Update after each significant change.
 
-## Current Phase: Phase 7 In Progress — 2/5 Tasks Done, 3 Remaining
+## Current Phase: Phase 7 Complete — Opponent Intelligence System Fully Built
 
 ## ✅ DONE
 
@@ -104,12 +104,12 @@ last_changed: 2026-04-22 (Phase 7: Bayesian opponent + spell target simulation)
 - [x] **JSON output** — new fields in summary JSON
 - **Files**: analysis/watcher/global_tracker.py, analysis/watcher/packet_replayer.py
 
-### Phase 7: Opponent Intelligence + Effect Simulation 🔄 (2026-04-22)
+### Phase 7: Opponent Intelligence System ✅ (2026-04-22)
 - [x] **Task 1: 对手手牌推理** — BayesianOpponentModel 集成 (hsdb bridge + deck_codes DB + tracker feed + decision output)
 - [x] **Task 2: 卡牌效果模拟层** — tactical spell target enumeration + resolve_effects target passthrough
-- [ ] **Task 3: 对手奥秘概率模型** — 研究完成（4职业74张奥秘），待编码
-- [ ] **Task 4: 非收藏卡中文名** — python-hearthstone XML fallback 已覆盖大部分
-- [ ] **Task 5: 对手卡组类型检测** — Bayesian lock 已部分覆盖
+- [x] **Task 3: 对手奥秘概率模型** — SecretProbabilityModel + attack/spell risk
+- [x] **Task 4: 非收藏卡中文名** — 98.4% verified, no changes needed
+- [x] **Task 5: 对手卡组类型检测** — classify_playstyle() + playstyle field
 - **Files**: hsdb.py, fetch_hsreplay.py, global_tracker.py, packet_replayer.py, tactical.py, spell_simulator.py, rhea_engine.py
 - **Stats**: 7 files, +451/-39 lines, 676 tests passing
 
@@ -136,6 +136,17 @@ last_changed: 2026-04-22 (Phase 7: Bayesian opponent + spell target simulation)
 - [x] build_archetype_db_from_deck_codes() in fetch_hsreplay.py
 - [x] BayesianOpponentModel integrated in GlobalTracker
 - [x] Archetype name/confidence in TurnDecision + logs + JSON
+
+### ~~P0: 对手奥秘概率模型~~ ✅ DONE (Phase 7 Task 3)
+- [x] SecretProbabilityModel — 基于职业+已触发排除推断未知奥秘
+- [x] Attack/spell risk assessment
+
+### ~~P1: 对手卡组类型检测~~ ✅ DONE (Phase 7 Task 5)
+- [x] classify_playstyle() — 快攻/控制/组合分类
+- [x] playstyle field in output
+
+### ~~P2: 非收藏卡中文名~~ ✅ DONE (Phase 7 Task 4)
+- [x] 98.4% verified, no changes needed
 
 ### P0: V12 Phase 1 — 卡牌效果模拟层 (致命缺陷)
 - [ ] Task 1.1: BattlecryDispatcher — 战吼文本解析 + 效果分发 + 分支展开
@@ -210,9 +221,7 @@ See `thoughts/DECISIONS.md` for full details (D001-D030).
 - `thoughts/shared/plans/2026-04-20-retrieval-optimization.md` (retrieval opt.)
 
 ## Next Actions
-1. **Task 3: 对手奥秘概率模型** — 基于职业+已触发排除推断未知奥秘
-2. **V12 Phase 1: SpellTargetResolver** — 法术目标枚举
-3. **V12 Phase 1: HeroCardHandler** — 英雄牌替换
-4. **V12 Phase 1: ManaModifier** — 法力修改器栈
-5. **Task 5: 对手卡组类型检测** — 快攻/控制/组合分类
-6. **Task 4: 非收藏卡中文名** — 验证 XML fallback 覆盖率
+1. **V12 Phase 1 remaining work** — Battlecry discover branching
+2. **V12 Phase 2: UnifiedTacticalPlanner** — 统一行动序列
+3. **HDT Live Integration** — 实时集成管线
+4. **Polish & Calibration** — A/B测试, 权重调优, 性能基准

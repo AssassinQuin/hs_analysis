@@ -50,6 +50,43 @@ EPSILON_LIKELIHOOD = 0.02    # P(seen_X | deck_i) when X is NOT in signature
 LOCK_THRESHOLD = 0.60        # Confidence threshold for deck lock
 
 
+# ── Playstyle classification ──────────────────────
+_AGGRO_KEYWORDS = {'face', 'aggro', 'rush', 'hyper', 'pirate', 'odd', 'murloc', 'zoo', 'token', 'tempo', 'imbue'}
+_CONTROL_KEYWORDS = {'control', 'reno', 'highlander', 'wall', 'greed', 'fatigue', 'soul', 'reason'}
+_COMBO_KEYWORDS = {'combo', 'otk', 'malygos', 'miracle', 'toggwaggle', 'mechathun', 'raleigh', 'soulfire'}
+_MIDRANGE_KEYWORDS = {'midrange', 'dragon', 'even', 'hand', 'bomb', 'ramp', 'menagerie'}
+
+
+def classify_playstyle(archetype_name: str) -> str:
+    """Classify an archetype name into a playstyle category.
+    
+    Args:
+        archetype_name: Archetype name like 'Face Hunter', 'Control Warrior'
+    
+    Returns:
+        One of: 'aggro', 'control', 'combo', 'midrange', 'unknown'
+    """
+    if not archetype_name:
+        return 'unknown'
+    
+    name_lower = archetype_name.lower()
+    
+    for kw in _COMBO_KEYWORDS:
+        if kw in name_lower:
+            return 'combo'
+    for kw in _AGGRO_KEYWORDS:
+        if kw in name_lower:
+            return 'aggro'
+    for kw in _CONTROL_KEYWORDS:
+        if kw in name_lower:
+            return 'control'
+    for kw in _MIDRANGE_KEYWORDS:
+        if kw in name_lower:
+            return 'midrange'
+    
+    return 'unknown'
+
+
 @dataclass
 class Particle:
     """A single particle in the particle filter representing a hypothesized opponent deck."""

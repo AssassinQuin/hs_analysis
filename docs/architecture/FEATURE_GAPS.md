@@ -160,7 +160,9 @@
 
 ### Opponent secret tracking limited
 
-> **Status: 🔄 RESEARCH DONE (Phase 7 Task 3)** — Secret pool enumerated: Hunter(24), Mage(22), Paladin(15), Rogue(13) = 74 total collectible secrets. Trigger categories documented. Probability model not yet coded.
+> **Status: ✅ ADDRESSED (Phase 7)** — `SecretProbabilityModel` at `analysis/search/secret_probability.py` 
+> provides per-class secret pools (74 total), probability distribution, attack/spell risk scores.
+> Integrated into `global_tracker.get_secret_report()` and `packet_replayer.TurnDecision`.
 
 - Secrets are tracked as "played" via on_show_entity in SECRET zone
 - No tracking of which specific secret was played (only card_id if revealed)
@@ -169,7 +171,9 @@
 
 ### Chinese card name coverage
 
-> **Status: ⏳ PARTIAL (Phase 7 Task 4)** — python-hearthstone XML fallback loads non-collectible cards with zhCN names. Most tokens (TIME_875t, SW_108t) resolve correctly. Gap smaller than documented.
+> **Status: ✅ VERIFIED (Phase 7)** — python-hearthstone XML fallback covers 98.4% of non-collectible cards 
+> (26,556/26,983). Remaining 427 are all non-gameplay (credits, BG, mercenaries, DNT markers). 
+> No code changes needed.
 
 - `hsdb.py` loads zhCN names from card strings
 - Non-collectible cards (tokens, generated cards like SW_108t, TIME_875t) may not have zhCN names
@@ -179,6 +183,8 @@
 ### No opponent deck archetype detection
 
 > **Status: ✅ ADDRESSED (Phase 7 Task 1)** — BayesianOpponentModel with archetype locking (>60% confidence). Identifies deck name + signature cards. Deck TYPE classification (aggro/control/combo) not yet implemented.
+> `classify_playstyle()` in bayesian_opponent.py maps archetype names to aggro/control/combo/midrange.
+> `playstyle` field exposed in `get_bayesian_state()` and `TurnDecision.opp_playstyle`.
 
 - `get_opp_card_breakdown()` provides raw card lists but no archetype classification
 - Could classify opponent deck type based on played cards (aggro/control/combo)
@@ -196,3 +202,15 @@
 - `dispatch_battlecry()` returns single GameState instead of `List[Tuple[GameState, float]]`
 - Discover cards get greedy best-pick rather than proper top-3 branching
 - **Status: 🟡 DEFERRED** — Acceptable for current search depth; revisit for deeper search
+
+### Secret probability model built
+- `SecretProbabilityModel` loads per-class secret pools from python-hearthstone (74 collectible secrets)
+- Provides `get_probabilities()`, `get_attack_risk()`, `get_spell_risk()`, `get_most_likely()`
+- Integrated into GlobalTracker with `get_secret_report()` method
+- TurnDecision includes `opp_secret_report` dict
+
+### Playstyle classification added
+- `classify_playstyle(archetype_name)` in bayesian_opponent.py
+- Keyword-based: aggro (face, pirate, zoo, token, imbue), control (reno, highlander, fatigue), 
+  combo (otk, miracle, malygos), midrange (dragon, even, hand, bomb)
+- Exposed via `get_bayesian_state()['playstyle']` and `TurnDecision.opp_playstyle`
