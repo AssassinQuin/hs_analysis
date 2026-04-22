@@ -43,6 +43,13 @@ class Minion:
     cant_attack: bool = False  # cannot attack (e.g. Watcher)
     is_dormant: bool = False  # dormant: can't attack until awaken
     dormant_turns_remaining: int = 0  # turns until dormant minion awakens
+    has_magnetic: bool = False  # magnetic: attaches to friendly mech
+    has_invoke: bool = False  # invoke galakrond mechanic
+    has_corrupt: bool = False  # corrupt: upgrades when higher-cost card played
+    has_spellburst: bool = False  # spellburst: triggers when spell is cast
+    is_outcast: bool = False  # outcast: bonus when played from leftmost/rightmost
+    race: str = ""  # minion race/type (beast, demon, mech, dragon, etc.)
+    spell_school: str = ""  # spell school for spell-related interactions
     spell_power: int = 0  # spell damage +N
     has_attacked_once: bool = False  # windfury first-attack tracking
     frozen_until_next_turn: bool = False  # freeze effect
