@@ -123,11 +123,12 @@ class StateBridge:
             hero_class = hero.tags.get(GameTag.CLASS, "UNKNOWN")
 
             return HeroState(
-                current_health=current_health,
-                max_health=max_health,
+                hp=current_health,
+                max_hp=max_health,
                 armor=armor,
                 weapon=weapon,
                 hero_class=hero_class,
+                hero_power_used=bool(hero.tags.get(GameTag.HERO_POWER_USED, 0)),
             )
         except Exception as e:
             log.warning(f"Error extracting hero state: {e}")
@@ -140,16 +141,15 @@ class StateBridge:
 
             max_mana = tags.get(GameTag.RESOURCES, 0)
             resources_used = tags.get(GameTag.RESOURCES_USED, 0)
-            available = max_mana - resources_used
-
+            temp = tags.get(GameTag.TEMP_RESOURCES, 0)
             overloaded = tags.get(GameTag.OVERLOAD_LOCKED, 0)
-            overload_next = tags.get(GameTag.OVERLOAD_OWED, 0)
+            available = max(0, max_mana - resources_used - overloaded + temp)
 
             return ManaState(
                 max_mana=max_mana,
                 available=available,
                 overloaded=overloaded,
-                overload_next=overload_next,
+                overload_next=0,  # NOT extracted - this is next turn's overload
             )
         except Exception as e:
             log.warning(f"Error extracting mana state: {e}")
@@ -240,7 +240,7 @@ class StateBridge:
             for entity in player.entities:
                 if entity.tags.get(GameTag.ZONE) == Zone.HAND:
                     card_type = entity.tags.get(GameTag.CARDTYPE)
-                    if card_type in (CardType.MINION, CardType.SPELL):
+                    if card_type is None or card_type in (CardType.MINION, CardType.SPELL, CardType.WEAPON, CardType.HERO, CardType.LOCATION):
                         zone_pos = entity.tags.get(GameTag.ZONE_POSITION, 0)
                         zone_position[entity] = zone_pos
 
@@ -258,11 +258,14 @@ class StateBridge:
                     # If lookup failed or not provided, create minimal card
                     if card is None:
                         tags = entity.tags
+                        # Convert IntEnum to string
+                        raw_ct = tags.get(GameTag.CARDTYPE, CardType.MINION)
+                        ct_str = {CardType.MINION: "MINION", CardType.SPELL: "SPELL", CardType.WEAPON: "WEAPON", CardType.HERO: "HERO", CardType.LOCATION: "LOCATION"}.get(raw_ct, "MINION")
                         card = Card(
-                            id=entity.card_id,
-                            name=entity.card_id,
+                            dbf_id=getattr(entity, "dbf_id", 0),
+                            name=entity.card_id or "",
                             cost=tags.get(GameTag.COST, 0),
-                            card_type=tags.get(GameTag.CARDTYPE, CardType.MINION),
+                            card_type=ct_str,
                         )
 
                     hand_cards.append(card)
@@ -324,7 +327,7 @@ class StateBridge:
             for entity in player.entities:
                 if entity.tags.get(GameTag.ZONE) == Zone.HAND:
                     card_type = entity.tags.get(GameTag.CARDTYPE)
-                    if card_type in (CardType.MINION, CardType.SPELL):
+                    if card_type is None or card_type in (CardType.MINION, CardType.SPELL, CardType.WEAPON, CardType.HERO, CardType.LOCATION):
                         count += 1
             return count
         except Exception as e:
@@ -335,18 +338,14 @@ class StateBridge:
         """Create a Weapon from an hslog entity."""
         try:
             tags = entity.tags
-
-            current_damage = tags.get(GameTag.DAMAGE, 0)
-            durability = tags.get(GameTag.DURABILITY, 0)
-            max_damage = durability
             attack = tags.get(GameTag.ATK, 0)
+            durability = tags.get(GameTag.DURABILITY, 0)
 
             return Weapon(
                 attack=attack,
-                durability=durability,
-                max_damage=max_damage,
-                current_damage=current_damage,
+                health=durability,
+                name=getattr(entity, "card_id", "") or "",
             )
         except Exception as e:
             log.warning(f"Error creating weapon: {e}")
-            return Weapon(attack=0, durability=0, max_damage=0, current_damage=0)
+            return Weapon(attack=0, health=0, name="")

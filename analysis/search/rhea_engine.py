@@ -190,6 +190,15 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                     card_index=idx,
                 )
             )
+        elif card.card_type.upper() == "LOCATION":
+            if not state.location_full():
+                actions.append(
+                    Action(
+                        action_type="PLAY",
+                        card_index=idx,
+                        position=0,
+                    )
+                )
 
     # --- ATTACK actions ---
     # Check if enemy has taunt minions
@@ -200,7 +209,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
         can_act = minion.can_attack or (
             minion.has_windfury and minion.has_attacked_once
         )
-        if not (can_act or minion.has_charge or minion.has_rush):
+        if not can_act:
             continue
         # Frozen minions cannot attack
         if minion.frozen_until_next_turn:
@@ -237,8 +246,10 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                         target_index=0,
                     )
                 )
-            # Enemy minions
-            for tgt_idx in range(len(state.opponent.board)):
+            # Enemy minions (skip stealthed)
+            for tgt_idx, enemy_minion in enumerate(state.opponent.board):
+                if enemy_minion.has_stealth:
+                    continue
                 actions.append(
                     Action(
                         action_type="ATTACK",
@@ -268,7 +279,10 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                     target_index=0,
                 )
             )
-            for tgt_idx in range(len(state.opponent.board)):
+            # Weapon attack enemy minions (skip stealthed)
+            for tgt_idx, enemy_minion in enumerate(state.opponent.board):
+                if enemy_minion.has_stealth:
+                    continue
                 actions.append(
                     Action(
                         action_type="ATTACK",
@@ -510,7 +524,13 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 getattr(card, "mechanics", None) or []
             ):
                 if s.opponent.board:
-                    s.opponent.board[0].frozen_until_next_turn = True
+                    if action.target_index > 0 and action.target_index <= len(s.opponent.board):
+                        # Freeze specific target (e.g., Frostbolt, Polymorph)
+                        s.opponent.board[action.target_index - 1].frozen_until_next_turn = True
+                    elif action.target_index == 0 or "所有" in card_text or "all" in card_text.lower():
+                        # Freeze all enemy minions (e.g., Blizzard, Glacial Mysteries)
+                        for em in s.opponent.board:
+                            em.frozen_until_next_turn = True
             # V10 Phase 2: Aura recompute after spell effects
             try:
                 from analysis.search.aura_engine import recompute_auras
@@ -597,8 +617,14 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 return s
             if tgt_idx == 0:
                 # Attack enemy hero (check immune)
+                # V10 Fix P0-4: damage should reduce armor first
+                damage = weapon.attack
+                if s.opponent.hero.armor > 0:
+                    absorbed = min(s.opponent.hero.armor, damage)
+                    s.opponent.hero.armor -= absorbed
+                    damage -= absorbed
                 if not s.opponent.hero.is_immune:
-                    s.opponent.hero.hp -= weapon.attack
+                    s.opponent.hero.hp -= damage
                 # V10 Phase 2: Check opponent secrets (e.g. Explosive Trap)
                 try:
                     from analysis.search.secret_triggers import check_secrets
@@ -615,8 +641,14 @@ def apply_action(state: GameState, action: Action) -> GameState:
                     target.has_divine_shield = False
                 else:
                     target.health -= weapon.attack
+                # V10 Fix P0-4: hero damage should reduce armor first
                 # Hero takes counter-damage from minion
-                s.hero.hp -= target.attack
+                damage = target.attack
+                if s.hero.armor > 0:
+                    absorbed = min(s.hero.armor, damage)
+                    s.hero.armor -= absorbed
+                    damage -= absorbed
+                s.hero.hp -= damage
                 # Remove dead enemy minions
                 s.opponent.board = [m for m in s.opponent.board if m.health > 0]
             # Reduce weapon durability
@@ -630,13 +662,19 @@ def apply_action(state: GameState, action: Action) -> GameState:
         source = s.board[src_idx]
 
         if tgt_idx == 0:
+            # V10 Fix P0-4: damage should reduce armor first
             # Check opponent immune
             if s.opponent.hero.is_immune:
                 pass  # damage prevented
             else:
-                s.opponent.hero.hp -= source.attack
+                damage = source.attack
+                if s.opponent.hero.armor > 0:
+                    absorbed = min(s.opponent.hero.armor, damage)
+                    s.opponent.hero.armor -= absorbed
+                    damage -= absorbed
+                s.opponent.hero.hp -= damage
                 if source.has_lifesteal:
-                    s.hero.hp = min(30, s.hero.hp + source.attack)
+                    s.hero.hp = min(s.hero.max_hp, s.hero.hp + source.attack)
             # V10 Phase 2: Check opponent secrets (e.g. Explosive Trap)
             try:
                 from analysis.search.secret_triggers import check_secrets
@@ -659,7 +697,8 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 target.health -= source.attack
 
             # Poisonous: instant kill if hit connected (target had no divine shield)
-            if source.has_poisonous and not target_had_divine_shield:
+            # V10 Fix P0-3: poisonous should not kill immune targets
+            if source.has_poisonous and not target_had_divine_shield and not target.has_immune:
                 target.health = 0
 
             # Counter-attack: deal target attack to source
@@ -758,9 +797,21 @@ def apply_action(state: GameState, action: Action) -> GameState:
         s.mana.available -= hp_cost
         s.hero.hero_power_used = True
 
-        if s.hero.hero_power_damage > 0 and s.opponent.board:
+        # Spell power boosts damage-dealing hero powers
+        total_damage = s.hero.hero_power_damage
+        if total_damage > 0:
+            for m in s.board:
+                total_damage += m.spell_power
+
+        if total_damage > 0 and s.opponent.board:
             target = s.opponent.board[0]
-            target.health -= s.hero.hero_power_damage
+            # V10 Fix P0-4: hero power damage should reduce armor first
+            damage = total_damage
+            if target.armor > 0:
+                absorbed = min(target.armor, damage)
+                target.armor -= absorbed
+                damage -= absorbed
+            target.health -= damage
 
         try:
             from analysis.search.imbue import apply_hero_power
@@ -840,7 +891,9 @@ def apply_action(state: GameState, action: Action) -> GameState:
             pass
         # Reset per-turn states
         s.cards_played_this_turn = []
-        s.fatigue_damage = 0
+        # Fatigue: if deck is empty, increment; otherwise stay at 0
+        if s.deck_remaining <= 0:
+            s.fatigue_damage += 1
         s.mana.modifiers = []
         # Unfreeze friendly minions at end of turn
         for m in s.board:
@@ -1245,8 +1298,15 @@ class RHEAEngine:
             self._adaptive_mutation_rate = self.mutation_rate
 
         sorted_fits = sorted(fitnesses, reverse=True)
-        if len(sorted_fits) >= 2 and abs(sorted_fits[0]) > 1e-9:
-            confidence = 1.0 - (sorted_fits[1] / sorted_fits[0])
+        # V10 Fix P1-9: negative fitness confidence fix
+        if len(sorted_fits) >= 2:
+            if sorted_fits[0] == 0:
+                confidence = 0.5
+            elif sorted_fits[1] < 0 and sorted_fits[0] > 0:
+                confidence = 1.0  # clearly positive vs negative
+            else:
+                ratio = sorted_fits[1] / sorted_fits[0] if sorted_fits[0] != 0 else 0
+                confidence = max(0.0, min(1.0, 1.0 - ratio))
         else:
             confidence = 1.0
 
