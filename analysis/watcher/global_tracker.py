@@ -344,8 +344,10 @@ class GlobalTracker:
         is_opp = (controller == self.opp_controller)
 
         # Clean up: remove from opp_hand_card_ids when leaving HAND zone
-        # This covers ALL exits (play, discard, mill, secret, return to deck, etc.)
-        if is_opp and old_zone == self.ZONE_HAND:
+        # Covers ALL exits (play, discard, mill, secret, transfer to player, etc.)
+        # NOTE: Don't check is_opp here — controller may have already changed
+        # (e.g., opponent card transferred to player deck at turn start)
+        if old_zone == self.ZONE_HAND:
             self.state.opp_hand_card_ids.pop(entity_id, None)
 
         # Card played: HAND -> PLAY
