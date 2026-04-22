@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+﻿﻿#!/usr/bin/env python3
 """rhea_engine.py — RHEA (Rolling Horizon Evolutionary Algorithm) search engine.
 
 Searches for optimal action sequences within a single Hearthstone turn using

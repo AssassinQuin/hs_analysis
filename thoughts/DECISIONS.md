@@ -1,7 +1,7 @@
 ---
 version: 2.0
 created: 2026-04-19
-last_changed: 2026-04-21
+last_changed: 2026-04-22 (D030-D031: V12 Power.log gap analysis)
 ---
 
 # Decision Log: hs_analysis
@@ -221,3 +221,15 @@ last_changed: 2026-04-21
 **Decision**: DiscoverModelV2 simulates every card in the discover pool: copy state → add card → simulate play → FactorGraph evaluate → score. Then compute E[max of 3 random picks] using order statistics. Output includes need distribution and top options with factor breakdowns.
 **Alternatives**: (A) Static SIV — fast but board-state-blind. (B) Category weights only — coarse, misses within-category value differences. (C) Full simulation — most accurate, ~50-100ms per discover decision.
 **Rationale**: Discover is a nested decision (play card → pick best of 3 → play that card). Full simulation with FactorGraph correctly captures how each discover option changes the board state. Pool size ~187 cards × FactorGraph eval ≈ acceptable within 100ms budget with per-card timeout protection.
+
+## D030 | 2026-04-22 | Power.log-driven gap analysis for V12 engine design
+**Context**: V11 engine has 7 factors and hierarchical search but was never validated against real game scenarios. Academic/test-driven design may miss practical gaps.
+**Decision**: Extract 10 complex decision scenarios from a real 23-turn Power.log game (Deathshadow Valeera vs Khadgar). Analyze each scenario against V11 code to identify gaps. Use gaps to drive V12 design with 5 prioritized phases.
+**Alternatives**: (A) Continue feature-driven development — no real-world validation. (B) HSReplay data analysis — aggregate stats, not decision-level. (C) Power.log scenario extraction — ground truth of what the engine should handle but can't.
+**Rationale**: Power.log captures the full game state at each decision point, including mechanics the engine doesn't support (hero replacement, discover branches, combo chains, game reset). The 20 gaps identified (5 architecture + 5 factor + 5 search + 5 data model) would not have been found through unit testing alone. Key finding: V11 is a "number evaluator" not a "game simulator" — the critical bottleneck is the card effect simulation layer.
+
+## D031 | 2026-04-22 | V12 as incremental enhancement of V11 (not parallel module)
+**Context**: V11 was built as independent parallel to V10 (D028). V12 could follow same pattern or enhance V11 in-place.
+**Decision**: V12 enhances V11 in-place within `engine/` directory. Add mechanics/ subdirectory for new handlers (BattlecryDispatcher, SpellTargetResolver, HeroCardHandler). Keep V11's FactorGraph + StrategicMode + AttackPlanner architecture.
+**Alternatives**: (A) Parallel engine_v12/ — safe but duplicates shared code. (B) In-place enhancement — less duplication, V11 tests become V12 regression tests. (C) Major rewrite — overkill, V11 architecture is sound.
+**Rationale**: V12's changes are additive (new handlers, extended factors, unified tactical planner). The 7-factor architecture and strategic mode system are sound. Only the simulation fidelity and search enumeration need improvement. In-place enhancement keeps the 37 V11 tests as regression baseline.

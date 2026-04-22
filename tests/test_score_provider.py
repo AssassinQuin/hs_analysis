@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+﻿﻿#!/usr/bin/env python3
 """Unit tests for score_provider module.
 
 Run: python3 scripts/test_score_provider.py

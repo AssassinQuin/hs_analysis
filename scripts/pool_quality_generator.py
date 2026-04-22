@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+﻿﻿#!/usr/bin/env python3
 """Pool Quality Generator — Computes pool quality metrics for V8 contextual scoring.
 
 Reads unified_standard.json + v7_scoring_report.json + hsreplay_cache.db.

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+﻿﻿#!/usr/bin/env python3
 """Rewind Delta Generator — Computes score delta between rewind and original cards.
 
 Reads unified_standard.json + scoring_report.json.
