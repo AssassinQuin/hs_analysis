@@ -301,7 +301,11 @@ class GameReplayer:
             return
 
         # SHOW_ENTITY - reveals card_id for hidden entities
-        m = re.match(r'.*SHOW_ENTITY - Updating ID=(\d+) CardID=(\S+)', line)
+        # Format 1: Entity=63 CardID=TLC_460 (simple numeric)
+        # Format 2: Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=63 ...] CardID=TLC_460 (bracketed with nested [])
+        m = re.match(r'.*SHOW_ENTITY - Updating Entity=(\d+) CardID=(\S+)', line)
+        if not m:
+            m = re.match(r'.*SHOW_ENTITY - Updating.*?id=(\d+).*?CardID=(\S+)', line)
         if m:
             entity_id = int(m.group(1))
             card_id = m.group(2)
@@ -593,7 +597,7 @@ class GameReplayer:
             if is_our_turn:
                 self._analyze_decision_point()
             else:
-                self.log_main.debug(f"⏭️ 跳过对手回合 {self.game_turn}")
+                self._collect_opponent_turn_info()
 
     def _analyze_decision_point(self):
         """Build GameState from tracked entities and run RHEA."""
@@ -960,6 +964,102 @@ class GameReplayer:
         except Exception as e:
             self.log_errors.error(f"分析回合 {self.game_turn} 时出错: {e}", exc_info=True)
 
+    def _collect_opponent_turn_info(self):
+        """Collect and log opponent state during their turn for decision support."""
+        try:
+            # Find opponent player state
+            opp_player = None
+            for controller_id, player_state in self.players.items():
+                if player_state.name != self.player_name:
+                    opp_player = player_state
+                    break
+            if not opp_player:
+                return
+
+            # Find opponent controller
+            opp_controller = None
+            for controller_id, player_state in self.players.items():
+                if player_state.name != self.player_name:
+                    opp_controller = controller_id
+                    break
+            if opp_controller is None:
+                return
+
+            # Collect opponent entities
+            opp_entities = [e for e in self.entities.values() if e.controller == opp_controller]
+
+            # Opponent hero
+            opp_hero_hp = 30
+            opp_hero_armor = 0
+            opp_hero_class = self.global_tracker.state.opp_hero_class or "未知"
+            for entity in opp_entities:
+                if entity.card_type == CT_HERO:
+                    opp_hero_hp = entity.health
+                    opp_hero_armor = entity.armor
+                    break
+
+            # Opponent board
+            opp_board = []
+            for entity in opp_entities:
+                if entity.zone == ZONE_PLAY and entity.card_type == CT_MINION:
+                    opp_board.append({
+                        'name': self._card_name(entity.card_id),
+                        'atk': entity.atk,
+                        'health': entity.health,
+                    })
+
+            # Opponent hand count & deck
+            opp_hand_count = self.global_tracker.get_opp_hand_count(opp_entities)
+            opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
+
+            # Update opponent weapon/location tracking
+            self.global_tracker.update_opp_weapon(opp_entities)
+            self.global_tracker.update_opp_locations(opp_entities)
+
+            # Log opponent turn info
+            self.log_main.info(f"📋 对手回合 {self.game_turn}: "
+                             f"HP={opp_hero_hp} 护甲={opp_hero_armor} "
+                             f"职业={opp_hero_class} | "
+                             f"场面 {len(opp_board)}随从 | "
+                             f"手牌 {opp_hand_count}张 | "
+                             f"牌库 {opp_deck_remaining}张")
+
+            # Log opponent board minions if any
+            if opp_board:
+                for i, m in enumerate(opp_board[:7], 1):
+                    self.log_main.info(f"    对手随从[{i}]: {m['name']} {m['atk']}/{m['health']}")
+
+            # Log opponent known hand cards
+            opp_known = self.global_tracker.get_opp_known_hand()
+            if opp_known:
+                known_str = ", ".join(self._card_name(cid) for _, cid in opp_known)
+                self.log_main.info(f"    对手已知手牌: {known_str}")
+
+            # Log opponent generated cards played so far
+            if self.global_tracker.state.opp_generated_seen:
+                gen_str = ", ".join(self._card_name(cid)
+                                    for cid in self.global_tracker.state.opp_generated_seen)
+                self.log_main.info(f"    对手衍生牌: {gen_str}")
+
+            # Log opponent secrets
+            if self.global_tracker.state.opp_secrets:
+                sec_str = ", ".join(self._card_name(cid)
+                                    for cid in self.global_tracker.state.opp_secrets)
+                self.log_main.info(f"    对手奥秘: {sec_str}")
+
+            # Log opponent weapon
+            if self.global_tracker.state.opp_weapon:
+                w = self.global_tracker.state.opp_weapon
+                self.log_main.info(f"    对手武器: {self._card_name(w['card_id'])} {w['atk']}/{w['durability']}")
+
+            # Log opponent locations
+            for loc in self.global_tracker.state.opp_locations:
+                self.log_main.info(f"    对手地标: {self._card_name(loc['card_id'])} "
+                                 f"HP={loc['current_hp']} CD={loc['cooldown']}")
+
+        except Exception as e:
+            self.log_errors.error(f"收集对手回合 {self.game_turn} 信息时出错: {e}", exc_info=True)
+
     def _build_game_state(
         self,
         our_entities: List[Entity],
@@ -1018,7 +1118,7 @@ class GameReplayer:
                         frozen_until_next_turn=entity.frozen,
                         has_divine_shield=entity.divine_shield,
                         cant_attack=entity.exhausted,
-                        name=entity.card_id or "",
+                        name=self._card_name(entity.card_id) or "",
                         can_attack=not entity.exhausted,
                     ))
 
@@ -1044,7 +1144,7 @@ class GameReplayer:
 
                     hand.append(Card(
                         dbf_id=0,
-                        name=entity.card_id or "",
+                        name=self._card_name(entity.card_id) or "",
                         cost=entity.cost,
                         card_type=ct,
                     ))
@@ -1093,7 +1193,7 @@ class GameReplayer:
                         frozen_until_next_turn=entity.frozen,
                         has_divine_shield=entity.divine_shield,
                         cant_attack=entity.exhausted,
-                        name=entity.card_id or "",
+                        name=self._card_name(entity.card_id) or "",
                         can_attack=not entity.exhausted,
                     ))
 
