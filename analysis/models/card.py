@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -21,10 +21,89 @@ class Card:
     mechanics: list = None
     set_name: str = ""
     ename: str = ""
+    overload: int = 0
+    spell_damage: int = 0
+    armor: int = 0
+    durability: int = 0
+    spell_school: str = ""
 
     def __post_init__(self):
         if self.mechanics is None:
             self.mechanics = []
+
+    # ── Mechanics helpers ──────────────────────────────────────────
+
+    @property
+    def mechanics_set(self) -> set:
+        return set(self.mechanics or [])
+
+    def has_mechanic(self, keyword: str) -> bool:
+        return keyword in (self.mechanics or [])
+
+    # ── Effect parsing ─────────────────────────────────────────────
+
+    def get_effects(self):
+        """Return structured CardEffects for this card."""
+        from analysis.data.card_effects import get_effects
+        return get_effects(self)
+
+    def compute_mechanics(self) -> list:
+        """Re-extract mechanics from text + existing tags via card_cleaner."""
+        from analysis.data.card_cleaner import extract_mechanics
+        self.mechanics = extract_mechanics(
+            self.text, self.mechanics, self.card_type,
+        )
+        return self.mechanics
+
+    # ── Structured field accessors (with text fallback) ────────────
+
+    def effective_overload(self) -> int:
+        """Overload value: structured field first, text regex fallback."""
+        if self.overload > 0:
+            return self.overload
+        import re
+        m = re.search(r"过载[：:]\s*[（(]\s*(\d+)\s*[）)]", self.text or "")
+        return int(m.group(1)) if m else 0
+
+    def effective_armor(self) -> int:
+        """Armor value: structured field first, text regex fallback."""
+        if self.armor > 0:
+            return self.armor
+        import re
+        m = re.search(r"获得\s*(\d+)\s*点护甲", self.text or "")
+        return int(m.group(1)) if m else 0
+
+    def effective_spell_damage(self) -> int:
+        return self.spell_damage
+
+    def total_damage(self) -> int:
+        """Quick accessor: direct + random damage."""
+        eff = self.get_effects()
+        return eff.damage + eff.random_damage
+
+    # ── Type predicates ────────────────────────────────────────────
+
+    @property
+    def is_minion(self) -> bool:
+        return (self.card_type or "").upper() == "MINION"
+
+    @property
+    def is_spell(self) -> bool:
+        return (self.card_type or "").upper() == "SPELL"
+
+    @property
+    def is_weapon(self) -> bool:
+        return (self.card_type or "").upper() == "WEAPON"
+
+    @property
+    def is_hero(self) -> bool:
+        return (self.card_type or "").upper() == "HERO"
+
+    @property
+    def is_location(self) -> bool:
+        return (self.card_type or "").upper() == "LOCATION"
+
+    # ── Construction from external formats ─────────────────────────
 
     @classmethod
     def from_cardxml(cls, card_xml) -> "Card":
@@ -71,6 +150,9 @@ class Card:
                 mechanics.append(name)
         mechanics.sort()
 
+        overload_val = card_xml.tags.get(GameTag.OVERLOAD, 0) if hasattr(card_xml, "tags") else 0
+        spellpower_val = card_xml.tags.get(GameTag.SPELLPOWER, 0) if hasattr(card_xml, "tags") else 0
+
         return cls(
             dbf_id=card_xml.dbf_id,
             name=card_xml.name or "",
@@ -86,6 +168,10 @@ class Card:
             mechanics=mechanics,
             set_name=card_xml.card_set.name if card_xml.card_set else "",
             ename=card_xml.english_name or "",
+            overload=overload_val,
+            spell_damage=spellpower_val,
+            armor=card_xml.armor or 0,
+            durability=card_xml.durability or 0,
         )
 
     @classmethod
@@ -105,6 +191,11 @@ class Card:
             mechanics=data.get("mechanics", []),
             set_name=data.get("set", ""),
             ename=data.get("englishName", ""),
+            overload=data.get("overload", 0),
+            spell_damage=data.get("spellDamage", 0),
+            armor=data.get("armor", 0),
+            durability=data.get("durability", 0),
+            spell_school=data.get("spellSchool", ""),
         )
 
     @classmethod
@@ -124,6 +215,11 @@ class Card:
             mechanics=data.get("mechanics", []),
             set_name=data.get("set", ""),
             ename=data.get("ename", ""),
+            overload=data.get("overload", 0),
+            spell_damage=data.get("spellDamage", 0),
+            armor=data.get("armor", 0),
+            durability=data.get("durability", 0),
+            spell_school=data.get("spellSchool", ""),
         )
 
     def to_dict(self) -> dict:

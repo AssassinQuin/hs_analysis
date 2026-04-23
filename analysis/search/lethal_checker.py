@@ -12,10 +12,10 @@ Design principles:
 
 from __future__ import annotations
 
-import re
 import time
 from typing import List, Optional
 
+from analysis.data.card_effects import get_card_damage, _DAMAGE_CN, _DAMAGE_EN
 from analysis.search.game_state import GameState, Minion
 from analysis.search.rhea_engine import Action, apply_action, enumerate_legal_actions
 
@@ -46,13 +46,10 @@ def max_damage_bound(state: GameState) -> int:
 
     # Hand spell damage
     for card in state.hand:
-        text = getattr(card, "text", "") or ""
-        dmg_match = re.search(r"Deal\s*\$?(\d+)\s*damage", text, re.IGNORECASE)
-        if not dmg_match:
-            dmg_match = re.search(r"造成\s*\$?\s*(\d+)\s*点伤害", text)
-        if dmg_match and card.cost <= state.mana.available:
+        dmg = get_card_damage(card)
+        if dmg > 0 and card.cost <= state.mana.available:
             spell_power_bonus = sum(m.spell_power for m in state.board)
-            total += int(dmg_match.group(1)) + spell_power_bonus
+            total += dmg + spell_power_bonus
 
     # Weapon
     if state.hero.weapon is not None:
@@ -149,9 +146,9 @@ def _enumerate_damage_actions(state: GameState) -> list:
             continue
         if getattr(card, "card_type", "").upper() == "SPELL":
             text = getattr(card, "text", "") or ""
-            _is_dmg = re.search(
-                r"Deal\s*\$?\d+\s*damage", text, re.IGNORECASE
-            ) or re.search(r"造成\s*\d+\s*点伤害", text)
+            _is_dmg = bool(
+                _DAMAGE_CN.search(text) or _DAMAGE_EN.search(text)
+            )
             mechanics = getattr(card, "mechanics", None)
             if mechanics and not _is_dmg:
                 _is_dmg = any(k in mechanics for k in ("AFFECTED_BY_SPELL_POWER",))

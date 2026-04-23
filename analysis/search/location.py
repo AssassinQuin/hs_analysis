@@ -94,26 +94,23 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
     text = loc.text or ""
     s = state
 
-    # Damage: 造成N点伤害
-    dmg_match = re.search(r"Deal\s*(\d+)\s*damage", text, re.IGNORECASE)
-    if not dmg_match:
-        dmg_match = re.search(r'造成\s*(\d+)\s*点伤害', text)
+    from analysis.data.card_effects import (
+        _DAMAGE_CN, _DAMAGE_EN, _HEAL_CN, _HEAL_EN,
+        _BUFF_ATK_CN, _BUFF_ATK_EN, _SUMMON_STATS_CN, _SUMMON_STATS_EN,
+    )
+
+    dmg_match = _DAMAGE_EN.search(text) or _DAMAGE_CN.search(text)
     if dmg_match:
         damage = int(dmg_match.group(1))
-        # Default: damage enemy hero
         s.opponent.hero.hp -= damage
         return s
 
-    # Heal: 恢复N点生命
-    heal_match = re.search(r"Restore\s*(\d+)\s*(?:Health|health)", text, re.IGNORECASE)
-    if not heal_match:
-        heal_match = re.search(r'恢复\s*(\d+)\s*点生命', text)
+    heal_match = _HEAL_EN.search(text) or _HEAL_CN.search(text)
     if heal_match:
         heal_amount = int(heal_match.group(1))
         s.hero.hp = min(s.hero.hp + heal_amount, 30)
         return s
 
-    # Buff: 使一个随从获得+ATK/+HP
     buff_match = re.search(r"Give\s*\+(\d+)/\+(\d+)", text, re.IGNORECASE)
     if not buff_match:
         buff_match = re.search(r"Gain\s*\+(\d+)/\+(\d+)", text, re.IGNORECASE)
@@ -123,16 +120,13 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
         atk_bonus = int(buff_match.group(1))
         hp_bonus = int(buff_match.group(2))
         if s.board:
-            target = s.board[0]  # buff first friendly minion
+            target = s.board[0]
             target.attack += atk_bonus
             target.health += hp_bonus
             target.max_health += hp_bonus
         return s
 
-    # Summon: 召唤一个N/N
-    summon_match = re.search(r"Summon\s*(?:a\s+)?(\d+)/(\d+)", text, re.IGNORECASE)
-    if not summon_match:
-        summon_match = re.search(r'召唤一个(\d+)/(\d+)', text)
+    summon_match = _SUMMON_STATS_EN.search(text) or _SUMMON_STATS_CN.search(text)
     if summon_match:
         from analysis.search.game_state import Minion
         atk = int(summon_match.group(1))
@@ -149,15 +143,12 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
             s.board.append(token)
         return s
 
-    # Discover: 发现 — delegate to discover framework
     if '发现' in text or re.search(r'Discover', text, re.IGNORECASE):
         try:
             from analysis.search.discover import generate_discover_options
-            # No-op for search: discover is too complex for deterministic simulation
             pass
         except Exception:
             pass
         return s
 
-    # Unknown effect — no-op
     return s

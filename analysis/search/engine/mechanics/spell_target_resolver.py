@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import List
 
+from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, _AOE_CN, _AOE_EN
 from analysis.search.game_state import GameState
 from analysis.models.card import Card
 
@@ -92,7 +93,7 @@ class SpellTargetResolver:
         for p in self._ALL_ENEMY_PATTERNS + self._ALL_MINION_PATTERNS:
             if p.search(text):
                 return True
-        if re.search(r"Deal\s+\d+\s+damage\s+to\s+all", text, re.IGNORECASE):
+        if _AOE_EN.search(text) or _AOE_CN.search(text):
             return True
         if re.search(r"对所有.*?造成", text):
             return True
@@ -146,7 +147,4 @@ class SpellTargetResolver:
         return any(p.search(text) for p in self._HERO_PATTERNS)
 
     def _has_damage(self, text: str) -> bool:
-        return bool(
-            re.search(r"[Dd]eal\s+\d+\s+damage", text)
-            or re.search(r"造成\s*\$?\s*\d+\s*点伤害", text)
-        )
+        return bool(_DAMAGE_EN.search(text) or _DAMAGE_CN.search(text))

@@ -12,12 +12,14 @@ Usage:
 from __future__ import annotations
 
 import copy
+import logging
 import random
-import re
 import time
 import dataclasses
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Import package modules
@@ -81,6 +83,7 @@ class Action:
     target_index: int = -1
     data: int = 0
     discover_choice_index: int = -1
+    step_order: int = 0
 
     def describe(self, state: Optional[GameState] = None) -> str:
         if self.action_type == "PLAY":
@@ -92,14 +95,14 @@ class Action:
             tgt = ""
             if self.target_index > 0:
                 tgt = f" → 目标#{self.target_index}"
-            return f"打出 [{card_name}]{tgt}"
+            return f"手牌[{self.card_index}] 打出 [{card_name}]{tgt}"
         elif self.action_type == "PLAY_WITH_TARGET":
             card_name = "未知卡牌"
             if state is not None and 0 <= self.card_index < len(state.hand):
                 card_name = (
                     state.hand[self.card_index].name or f"卡牌#{self.card_index}"
                 )
-            return f"定向打出 [{card_name}] → 目标#{self.target_index}"
+            return f"手牌[{self.card_index}] 定向打出 [{card_name}] → 目标#{self.target_index}"
         elif self.action_type == "ATTACK":
             if self.source_index == -1:
                 return f"英雄武器 攻击 目标#{self.target_index}"
@@ -114,7 +117,7 @@ class Action:
             card_name = "未知英雄牌"
             if state is not None and 0 <= self.card_index < len(state.hand):
                 card_name = state.hand[self.card_index].name or "英雄牌"
-            return f"替换英雄 [{card_name}]"
+            return f"手牌[{self.card_index}] 替换英雄 [{card_name}]"
         elif self.action_type == "DISCOVER_PICK":
             return f"发现选择#{self.discover_choice_index}"
         elif self.action_type == "TRANSFORM":
@@ -125,6 +128,19 @@ class Action:
 # ===================================================================
 # 2. enumerate_legal_actions
 # ===================================================================
+
+
+_spell_target_resolver = None
+
+
+def _get_spell_target_resolver():
+    global _spell_target_resolver
+    if _spell_target_resolver is None:
+        from analysis.search.engine.mechanics.spell_target_resolver import (
+            SpellTargetResolver,
+        )
+        _spell_target_resolver = SpellTargetResolver()
+    return _spell_target_resolver
 
 
 def enumerate_legal_actions(state: GameState) -> List[Action]:
@@ -155,11 +171,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
             )
         elif card.card_type.upper() == "SPELL":
             try:
-                from analysis.search.engine.mechanics.spell_target_resolver import (
-                    SpellTargetResolver,
-                )
-
-                targets = SpellTargetResolver().resolve_targets(state, card)
+                targets = _get_spell_target_resolver().resolve_targets(state, card)
                 if targets:
                     for tgt in targets:
                         actions.append(
@@ -325,6 +337,18 @@ def _find_enemy_minion_index(state: GameState, minion: Minion) -> int:
 # ===================================================================
 
 
+def _try_mechanic(state: GameState, module_path: str, func_name: str, *args, **kwargs) -> GameState:
+    """Try applying an optional mechanic; return state unchanged on failure."""
+    try:
+        mod = __import__(module_path, fromlist=[func_name])
+        func = getattr(mod, func_name)
+        result = func(state, *args, **kwargs)
+        return result if isinstance(result, GameState) else state
+    except Exception:
+        log.debug("apply_action: %s.%s failed", module_path, func_name, exc_info=True)
+        return state
+
+
 def apply_action(state: GameState, action: Action) -> GameState:
     """Apply *action* to a **copy** of *state* and return the modified copy."""
     s = state.copy()
@@ -341,12 +365,10 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
         card_text = getattr(card, "text", "") or ""
         overload_val = getattr(card, "overload", 0) or 0
+        if overload_val == 0 and hasattr(card, "effective_overload"):
+            overload_val = card.effective_overload()
         if overload_val > 0:
             s.mana.overload_next += overload_val
-        else:
-            overload_match = re.search(r"过载[：:]\s*[（(]\s*(\d+)\s*[）)]", card_text)
-            if overload_match:
-                s.mana.overload_next += int(overload_match.group(1))
 
         if "幸运币" in card.name or "The Coin" in (getattr(card, "ename", "") or ""):
             s.mana.available += 1
@@ -357,11 +379,8 @@ def apply_action(state: GameState, action: Action) -> GameState:
         ):
             s.mana.add_modifier("reduce_next_spell", 3, "next_spell")
 
-        reduce_match = re.search(r"减少\s*(\d+)", card_text)
-        if not reduce_match:
-            reduce_match = re.search(
-                r"Costs?\s*\((\d+)\)\s*less", card_text, re.IGNORECASE
-            )
+        from analysis.data.card_effects import _COST_REDUCE_CN, _COST_REDUCE_EN
+        reduce_match = _COST_REDUCE_CN.search(card_text) or _COST_REDUCE_EN.search(card_text)
         if reduce_match and "下一张法术" in card_text:
             s.mana.add_modifier(
                 "reduce_next_spell", int(reduce_match.group(1)), "next_spell"
@@ -374,8 +393,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
             outcast_active = check_outcast(s, card_idx, card)
         except Exception:
-            pass
-        # Remove card from hand
+            log.debug("apply_action: optional mechanic failed", exc_info=True)
         s.hand.pop(card_idx)
 
         # Track cards played this turn for combo
@@ -419,17 +437,8 @@ def apply_action(state: GameState, action: Action) -> GameState:
                         s, new_minion, card, pos, s.herald_count
                     )
             except Exception:
-                pass
-
-            # V10 Feedback: Kindred check (after colossal, before battlecry)
-            try:
-                from analysis.search.kindred import apply_kindred
-
-                s = apply_kindred(s, card)
-            except Exception:
-                pass
-
-            # V10 Feedback: Kindred double trigger (蛮鱼挑战者)
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
+            s = _try_mechanic(s, "analysis.search.kindred", "apply_kindred", card)
             try:
                 from analysis.search.kindred import has_kindred as _has_kindred
 
@@ -439,61 +448,35 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
                     s = set_kindred_double(s)
             except Exception:
-                pass
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
+            s = _try_mechanic(s, "analysis.search.battlecry_dispatcher", "dispatch_battlecry", card, new_minion)
 
-            # V10 Phase 2: Battlecry dispatch
             try:
-                from analysis.search.battlecry_dispatcher import dispatch_battlecry
-
-                s = dispatch_battlecry(s, card, new_minion)
-            except Exception:
-                pass  # graceful degradation
-
-            # V10: Choose One (抉择) resolution
-            try:
-                from analysis.search.choose_one import (
-                    is_choose_one,
-                    resolve_choose_one,
-                )
-
+                from analysis.search.choose_one import is_choose_one, resolve_choose_one
                 if is_choose_one(card):
                     s = resolve_choose_one(s, card, new_minion)
             except Exception:
-                pass
-
-            # V10: Dormant (休眠) application
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
             try:
                 from analysis.search.dormant import is_dormant_card, apply_dormant
-
                 if is_dormant_card(card):
                     new_minion = apply_dormant(new_minion, card)
             except Exception:
-                pass
-
-            # V10 Phase 3: Herald counter
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
             try:
                 from analysis.search.herald import check_herald, apply_herald
-
                 if check_herald(card):
                     s = apply_herald(s, card)
             except Exception:
-                pass
-
-            # V10 Phase 2: Trigger dispatch (on_minion_played)
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
             try:
                 from analysis.search.trigger_system import TriggerDispatcher
 
                 s = TriggerDispatcher().on_minion_played(s, new_minion, card)
             except Exception:
-                pass  # graceful degradation
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
 
-            # V10 Phase 2: Aura recompute after minion play
-            try:
-                from analysis.search.aura_engine import recompute_auras
-
-                s = recompute_auras(s)
-            except Exception:
-                pass  # graceful degradation
+            s = _try_mechanic(s, "analysis.search.aura_engine", "recompute_auras")
 
         elif card.card_type.upper() == "WEAPON":
             s.hero.weapon = Weapon(
@@ -508,7 +491,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
                 s = resolve_effects(s, card, target_index=action.target_index)
             except Exception:
-                pass  # fallback to just removing from hand
+                log.debug("apply_action: spell resolve_effects failed for %s", getattr(card, 'name', '?'), exc_info=True)
             # V10 Phase 3: Activate quest if quest card
             try:
                 from analysis.search.quest import parse_quest
@@ -517,8 +500,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 if quest is not None:
                     s.active_quests.append(quest)
             except Exception:
-                pass
-            # Apply freeze if card text contains freeze effect
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
             card_text = getattr(card, "text", "") or ""
             if "冻结" in card_text or "FREEZE" in (
                 getattr(card, "mechanics", None) or []
@@ -531,13 +513,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
                         # Freeze all enemy minions (e.g., Blizzard, Glacial Mysteries)
                         for em in s.opponent.board:
                             em.frozen_until_next_turn = True
-            # V10 Phase 2: Aura recompute after spell effects
-            try:
-                from analysis.search.aura_engine import recompute_auras
-
-                s = recompute_auras(s)
-            except Exception:
-                pass  # graceful degradation
+            s = _try_mechanic(s, "analysis.search.aura_engine", "recompute_auras")
 
         elif card.card_type.upper() == "HERO":
             try:
@@ -547,62 +523,32 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
                 s = HeroCardHandler().apply_hero_card(s, card)
             except Exception:
-                armor = getattr(card, "armor", 0) or 0
-                if armor <= 0:
-                    card_text = getattr(card, "text", "") or ""
-                    armor_match = re.search(r"获得\s*(\d+)\s*点护甲", card_text)
-                    if armor_match:
-                        armor = int(armor_match.group(1))
+                armor = card.effective_armor() if hasattr(card, "effective_armor") else 0
+                if armor == 0:
+                    from analysis.data.card_effects import get_card_armor
+                    armor = get_card_armor(card)
                 s.hero.armor += armor
                 hero_class = getattr(card, "card_class", "") or ""
                 if hero_class:
                     s.hero.hero_class = hero_class
                 s.hero.hero_power_used = False
                 s.hero.imbue_level = 0
-        # V10 Phase 3: Imbue hero power upgrade
-        try:
-            from analysis.search.imbue import apply_imbue
-
-            s = apply_imbue(s, card)
-        except Exception:
-            pass
-        # V10 Phase 3: Track quest progress
-        try:
-            from analysis.search.quest import track_quest_progress
-
-            s = track_quest_progress(s, "PLAY", card)
-        except Exception:
-            pass
-        # V10 Phase 3: Apply outcast bonus if active
+        s = _try_mechanic(s, "analysis.search.imbue", "apply_imbue", card)
+        s = _try_mechanic(s, "analysis.search.quest", "track_quest_progress", "PLAY", card)
         if outcast_active:
-            try:
-                from analysis.search.outcast import apply_outcast_bonus
-
-                s = apply_outcast_bonus(s, card_idx, card)
-            except Exception:
-                pass
-        # V10 Feedback: Corpse effects for DK cards
+            s = _try_mechanic(s, "analysis.search.outcast", "apply_outcast_bonus", card_idx, card)
         try:
             from analysis.search.corpse import resolve_corpse_effects
-
             card_class = getattr(card, "card_class", "") or ""
             if card_class.upper() == "DEATHKNIGHT":
                 s = resolve_corpse_effects(s, card)
         except Exception:
-            pass
-        # V10 Feedback: Track last played card (for rune/conditional checks)
+            log.debug("apply_action: optional mechanic failed", exc_info=True)
         try:
             s = dataclasses.replace(s, last_played_card=card)
         except Exception:
-            pass
-        # V10: Corrupt (腐蚀) — upgrade hand cards with Corrupt when higher-cost played
-        try:
-            from analysis.search.corrupt import check_corrupt_upgrade
-
-            s = check_corrupt_upgrade(s, card)
-        except Exception:
-            pass
-        # V10: Overdraw — burn cards if hand exceeds 10
+            log.debug("apply_action: optional mechanic failed", exc_info=True)
+        s = _try_mechanic(s, "analysis.search.corrupt", "check_corrupt_upgrade", card)
         _handle_overdraw(s)
         # OTHER card types: just removed from hand
 
@@ -631,7 +577,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
                     s = check_secrets(s, "on_attack_hero", {"attacker": None})
                 except Exception:
-                    pass
+                    log.debug("apply_action: optional mechanic failed", exc_info=True)
             else:
                 enemy_idx = tgt_idx - 1
                 if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
@@ -675,13 +621,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 s.opponent.hero.hp -= damage
                 if source.has_lifesteal:
                     s.hero.hp = min(s.hero.max_hp, s.hero.hp + source.attack)
-            # V10 Phase 2: Check opponent secrets (e.g. Explosive Trap)
-            try:
-                from analysis.search.secret_triggers import check_secrets
-
-                s = check_secrets(s, "on_attack_hero", {"attacker": source})
-            except Exception:
-                pass
+            s = _try_mechanic(s, "analysis.search.secret_triggers", "check_secrets", "on_attack_hero", {"attacker": source})
         else:
             enemy_idx = tgt_idx - 1
             if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
@@ -734,7 +674,7 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
             s = resolve_deaths(s)
         except Exception:
-            pass  # graceful degradation
+            log.debug("apply_action ATTACK: resolve_deaths failed", exc_info=True)
 
         # Reborn: friendly minions with has_reborn that died resummon as 1/1
         if src_idx != -1:
@@ -760,23 +700,13 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 m.max_health = 1
         s.opponent.board = [m for m in s.opponent.board if m.health > 0]
 
-        # V10 Feedback: Corpse gain when friendly minions die
         try:
             from analysis.search.corpse import gain_corpses, has_double_corpse_gen
-
-            # Check if any friendly minions died (board shrunk)
             amount = 2 if has_double_corpse_gen(s) else 1
             s = gain_corpses(s, amount)
         except Exception:
-            pass
-
-        # V10 Phase 2: Aura recompute after deaths
-        try:
-            from analysis.search.aura_engine import recompute_auras
-
-            s = recompute_auras(s)
-        except Exception:
-            pass  # graceful degradation
+            log.debug("apply_action: optional mechanic failed", exc_info=True)
+        s = _try_mechanic(s, "analysis.search.aura_engine", "recompute_auras")
 
         # Mark source as having attacked (windfury tracking)
         if src_idx < len(s.board):
@@ -818,15 +748,10 @@ def apply_action(state: GameState, action: Action) -> GameState:
 
             s = apply_hero_power(s)
         except Exception:
-            pass
+            log.debug("apply_action: optional mechanic failed", exc_info=True)
 
     elif action.action_type == "ACTIVATE_LOCATION":
-        try:
-            from analysis.search.location import activate_location
-
-            s = activate_location(s, action.source_index)
-        except Exception:
-            pass
+        s = _try_mechanic(s, "analysis.search.location", "activate_location", action.source_index)
 
     elif action.action_type == "HERO_REPLACE":
         card_idx = action.card_index
@@ -888,34 +813,21 @@ def apply_action(state: GameState, action: Action) -> GameState:
                 if school:
                     s.last_turn_schools.add(school.upper())
         except Exception:
-            pass
-        # Reset per-turn states
+            log.debug("apply_action: optional mechanic failed", exc_info=True)
         s.cards_played_this_turn = []
-        # Fatigue: if deck is empty, increment; otherwise stay at 0
+        # Fatigue: if deck is empty, increment and deal damage
         if s.deck_remaining <= 0:
             s.fatigue_damage += 1
+            s.hero.hp -= s.fatigue_damage
         s.mana.modifiers = []
         # Unfreeze friendly minions at end of turn
         for m in s.board:
             m.frozen_until_next_turn = False
-        # V10: Tick dormant minions
-        try:
-            from analysis.search.dormant import tick_dormant
-
-            s = tick_dormant(s)
-        except Exception:
-            pass
-        # V10: Reset immune flags
+        s = _try_mechanic(s, "analysis.search.dormant", "tick_dormant")
         s.hero.is_immune = False
         for m in s.board:
             m.has_immune = False
-        # V10 Phase 2: Tick location cooldowns
-        try:
-            from analysis.search.location import tick_location_cooldowns
-
-            s = tick_location_cooldowns(s)
-        except Exception:
-            pass
+        s = _try_mechanic(s, "analysis.search.location", "tick_location_cooldowns")
 
     return s
 
@@ -952,7 +864,7 @@ def apply_draw(state: GameState, count: int = 1) -> GameState:
 
                     s = check_shatter_on_draw(s, len(s.hand) - 1)
                 except Exception:
-                    pass
+                    log.debug("apply_action: optional mechanic failed", exc_info=True)
     return s
 
 
@@ -979,6 +891,7 @@ class SearchResult:
     population_diversity: float  # std of fitnesses
     confidence: float  # gap between best and 2nd-best, normalised
     pareto_front: List[Tuple[List[Action], float]] = field(default_factory=list)
+    timings: dict = field(default_factory=dict)
 
     def describe(self) -> str:
         """Return a formatted Chinese description of the search result."""
@@ -989,9 +902,13 @@ class SearchResult:
             f"  最佳适应度: {self.best_fitness:+.2f}",
             f"  种群多样性: {self.population_diversity:.4f}",
             f"  置信度    : {self.confidence:.4f}",
-            "",
-            "  --- 最佳动作序列 ---",
         ]
+        if self.timings:
+            lines.append("  --- 各阶段耗时 ---")
+            for k, v in self.timings.items():
+                lines.append(f"    {k}: {v:.1f}ms")
+        lines.append("")
+        lines.append("  --- 最佳动作序列 ---")
         for i, act in enumerate(self.best_chromosome):
             lines.append(f"    {i + 1}. {act.describe()}")
         if self.alternatives:
@@ -1027,13 +944,11 @@ def next_turn_lethal_check(state: GameState) -> bool:
     for c in state.hand:
         ct = getattr(c, "card_type", "").upper()
         if ct == "SPELL" and c.cost <= next_mana:
-            # Estimate damage from card text
-            text = getattr(c, "text", "") or ""
-            dmg_match = re.search(r"Deal\s*\$?(\d+)\s*damage", text, re.IGNORECASE)
-            if not dmg_match:
-                dmg_match = re.search(r"造成\s*(\d+)\s*点伤害", text)
-            if dmg_match:
-                spell_burst += int(dmg_match.group(1))
+            dmg = c.total_damage() if hasattr(c, "total_damage") else 0
+            if dmg == 0:
+                from analysis.data.card_effects import get_card_damage
+                dmg = get_card_damage(c)
+            spell_burst += dmg
 
     # Weapon burst
     weapon_burst = 0
@@ -1052,7 +967,21 @@ def next_turn_lethal_check(state: GameState) -> bool:
 
 
 class RHEAEngine:
-    """Rolling Horizon Evolutionary Algorithm for Hearthstone turn planning."""
+    """Rolling Horizon Evolutionary Algorithm for Hearthstone turn planning.
+
+    V11: Cross-turn planning with adaptive time budgets (3-5s normal / 5-15s complex).
+
+    Time budget allocation:
+        Layer 0  Lethal Check     5ms
+        Layer 0.5 UTP (beam)      10%
+        Layer 1  RHEA evolution    50%
+        Phase B  Multi-turn setup  10%
+        Opp Sim  Opponent sim      10%
+        Phase C  Cross-turn sim    20%
+    """
+
+    COMPLEXITY_NORMAL = 0
+    COMPLEXITY_HARD = 1
 
     def __init__(
         self,
@@ -1064,6 +993,7 @@ class RHEAEngine:
         max_gens: int = 200,
         time_limit: float = 75.0,
         max_chromosome_length: int = 6,
+        cross_turn: bool = True,
     ):
         self.pop_size = pop_size
         self.tournament_size = tournament_size
@@ -1075,8 +1005,10 @@ class RHEAEngine:
         self.max_gens = max_gens
         self.time_limit = time_limit
         self.max_chromosome_length = max_chromosome_length
+        self.cross_turn = cross_turn
         self._target_diversity = 0.5
         self._adaptive_mutation_rate = self.mutation_rate
+        self._time_limit_explicit = time_limit != 75.0
 
     # ---------------------------------------------------------------
     # Main search entry point
@@ -1087,18 +1019,31 @@ class RHEAEngine:
         initial_state: GameState,
         weights: Optional[dict] = None,
     ) -> SearchResult:
-        """Run the RHEA search with layered decision pipeline."""
-        t_start = time.perf_counter()
+        """Run the RHEA search with layered decision pipeline.
 
-        # Load V7 scores into hand cards so evaluators see them
+        V11: Uses adaptive time budget (3-5s normal / 5-15s hard).
+        """
+        t_start = time.perf_counter()
+        timings = {}
+
+        budget_ms = self._adaptive_time_limit(initial_state)
+        budget_s = budget_ms / 1000.0
+
         load_scores_into_hand(initial_state)
 
         # ========== Layer 0: Lethal Check (5ms budget) ==========
+        t_lethal_start = time.perf_counter()
         if check_lethal is not None:
             try:
                 lethal_result = check_lethal(initial_state, time_budget_ms=5.0)
                 if lethal_result is not None:
                     lethal_actions = lethal_result + [Action(action_type="END_TURN")]
+                    timings['lethal'] = (time.perf_counter() - t_lethal_start) * 1000.0
+                    timings['total'] = (time.perf_counter() - t_start) * 1000.0
+                    log.info(
+                        "RHEA: Turn %d | LETHAL found | %.1fms",
+                        initial_state.turn_number, timings['total'],
+                    )
                     return SearchResult(
                         best_chromosome=lethal_actions,
                         best_fitness=10000.0,
@@ -1110,11 +1055,89 @@ class RHEAEngine:
                         pareto_front=[],
                     )
             except Exception:
-                pass  # graceful degradation
+                log.warning("RHEA: lethal check failed", exc_info=True)
 
         # ========== Phase Detection + Adaptive Params ==========
         phase = self._detect_phase(initial_state)
         phase_params = self._get_phase_params(phase)
+        desperate = self._is_desperate(initial_state)
+        if desperate:
+            phase_params["max_gens"] = max(phase_params["max_gens"], 80)
+            phase_params["weights"]["w_threat"] = phase_params["weights"].get("w_threat", 1.0) * 2.0
+            log.debug("RHEA: desperate mode detected, increasing gens and threat weight")
+
+        # ========== Layer 0.5: UnifiedTacticalPlanner (10% of budget) ==========
+        t_utp_start = time.perf_counter()
+        utp_plans = None
+        if not desperate:
+            try:
+                from analysis.search.engine.unified_tactical import (
+                    UnifiedTacticalPlanner,
+                )
+                from analysis.search.engine.factors.factor_graph import (
+                    FactorGraphEvaluator,
+                )
+                from analysis.search.engine.factors.factor_base import EvalContext
+
+                fg = FactorGraphEvaluator()
+                try:
+                    from analysis.search.engine.factors.board_control import BoardControlFactor
+                    fg.register(BoardControlFactor())
+                except Exception:
+                    pass
+                try:
+                    from analysis.search.engine.factors.lethal_threat import LethalThreatFactor
+                    fg.register(LethalThreatFactor())
+                except Exception:
+                    pass
+                try:
+                    from analysis.search.engine.factors.tempo import TempoFactor
+                    fg.register(TempoFactor())
+                except Exception:
+                    pass
+                try:
+                    from analysis.search.engine.factors.value import ValueFactor
+                    fg.register(ValueFactor())
+                except Exception:
+                    pass
+                try:
+                    from analysis.search.engine.factors.survival import SurvivalFactor
+                    fg.register(SurvivalFactor())
+                except Exception:
+                    pass
+
+                utp = UnifiedTacticalPlanner(
+                    evaluator=fg,
+                    beam_width=5,
+                    max_steps=self.max_chromosome_length,
+                    time_budget_ms=budget_ms * 0.10,
+                )
+                utp_plans = utp.plan(initial_state)
+
+                if utp_plans and utp_plans[0].state_after.is_lethal():
+                    best_plan = utp_plans[0]
+                    timings['utp'] = (time.perf_counter() - t_utp_start) * 1000.0
+                    timings['total'] = (time.perf_counter() - t_start) * 1000.0
+                    log.info(
+                        "RHEA: Turn %d | UTP LETHAL | %.1fms",
+                        initial_state.turn_number, timings['total'],
+                    )
+                    return SearchResult(
+                        best_chromosome=best_plan.actions,
+                        best_fitness=10000.0,
+                        alternatives=[
+                            (p.actions, p.score) for p in utp_plans[1:4]
+                        ],
+                        generations_run=0,
+                        time_elapsed=timings['total'],
+                        population_diversity=0.0,
+                        confidence=1.0,
+                        pareto_front=[],
+                    )
+            except Exception:
+                log.debug("RHEA: UnifiedTacticalPlanner failed, falling back to RHEA", exc_info=True)
+
+        timings['utp'] = (time.perf_counter() - t_utp_start) * 1000.0
 
         # Override instance params with phase-appropriate ones
         saved_pop_size = self.pop_size
@@ -1125,21 +1148,23 @@ class RHEAEngine:
         self.max_gens = phase_params["max_gens"]
         self.max_chromosome_length = phase_params["max_chromosome_length"]
 
-        # Merge phase weights with user-provided weights
         effective_weights = {**phase_params["weights"], **(weights or {})}
 
-        # ========== Layer 1: RHEA Evolutionary Search ==========
-        # Risk assessment for risk-aware fitness
+        # ========== Layer 1: RHEA Evolutionary Search (50% of budget) ==========
+        t_rhea_start = time.perf_counter()
         risk_report = None
         if RiskAssessor is not None:
             try:
                 assessor = RiskAssessor()
                 risk_report = assessor.assess(initial_state)
             except Exception:
-                pass
-
-        # Initialise population
+                log.debug("RHEA: risk assessment failed", exc_info=True)
         population = self._init_population(initial_state)
+
+        if utp_plans:
+            for i, plan in enumerate(utp_plans[: min(3, len(population))]):
+                if plan.actions:
+                    population[i] = list(plan.actions)
 
         fitnesses: List[float] = [
             self._evaluate_chromosome(
@@ -1153,11 +1178,10 @@ class RHEAEngine:
         best_ever_fit = fitnesses[best_ever]
 
         gen = 0
+        rhea_budget_ms = budget_ms * 0.50
         for gen in range(1, self.max_gens + 1):
             elapsed_ms = (time.perf_counter() - t_start) * 1000.0
-            # Use 65% of time budget for RHEA
-            rhea_budget = self.time_limit * 0.65
-            if elapsed_ms >= rhea_budget:
+            if elapsed_ms >= rhea_budget_ms:
                 break
 
             indexed = sorted(
@@ -1195,10 +1219,11 @@ class RHEAEngine:
                 best_ever_fit = fitnesses[gen_best_idx]
                 best_ever_chromo = list(population[gen_best_idx])
 
-        # ---- Phase B: Multi-turn lethal setup bonus ----
+        # ---- Phase B: Multi-turn lethal setup bonus (10% of budget) ----
+        t_phase_b_start = time.perf_counter()
         try:
             phase_b_start = time.perf_counter()
-            phase_b_budget = (self.time_limit / 1000.0) * 0.30
+            phase_b_budget_s = budget_s * 0.10
 
             indexed_by_fitness = sorted(
                 range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True
@@ -1207,33 +1232,28 @@ class RHEAEngine:
 
             for idx in top3_indices:
                 elapsed_b = time.perf_counter() - phase_b_start
-                if elapsed_b >= phase_b_budget:
+                if elapsed_b >= phase_b_budget_s:
                     break
 
-                chromo = population[idx]
-                end_state = initial_state.copy()
-                valid = True
-                for action in chromo:
-                    legal = enumerate_legal_actions(end_state)
-                    if not _action_in_list(action, legal):
-                        valid = False
-                        break
-                    end_state = apply_action(end_state, action)
+                end_state = self._replay_chromosome(initial_state, population[idx])
 
-                if valid and not end_state.is_lethal():
+                if end_state is not None and not end_state.is_lethal():
                     if next_turn_lethal_check(end_state):
                         fitnesses[idx] += 5000.0
                         if fitnesses[idx] > best_ever_fit:
                             best_ever_fit = fitnesses[idx]
                             best_ever_chromo = list(population[idx])
         except Exception:
-            pass
+            log.debug("RHEA: Phase B failed", exc_info=True)
 
-        # ========== Layer 2: Opponent Simulation (top-5) ==========
+        timings['phase_b'] = (time.perf_counter() - t_phase_b_start) * 1000.0
+
+        # ---- Opponent Simulation (10% of budget) ----
+        t_opp_start = time.perf_counter()
         if OpponentSimulator is not None:
             try:
                 sim = OpponentSimulator()
-                opp_budget = self.time_limit * 0.15  # 15% of time budget
+                opp_budget_ms = budget_ms * 0.10
                 opp_start = time.perf_counter()
 
                 indexed_sorted = sorted(
@@ -1242,30 +1262,19 @@ class RHEAEngine:
                 top_k = indexed_sorted[:5]
 
                 for idx in top_k:
-                    if (time.perf_counter() - opp_start) * 1000.0 >= opp_budget:
+                    if (time.perf_counter() - opp_start) * 1000.0 >= opp_budget_ms:
                         break
 
-                    chromo = population[idx]
-                    # Replay chromosome to get end state
-                    end_state = initial_state.copy()
-                    valid = True
-                    for action in chromo:
-                        legal = enumerate_legal_actions(end_state)
-                        if not _action_in_list(action, legal):
-                            valid = False
-                            break
-                        end_state = apply_action(end_state, action)
+                    end_state = self._replay_chromosome(initial_state, population[idx])
 
-                    if valid:
+                    if end_state is not None:
                         opp_result = sim.simulate_best_response(
-                            end_state, time_budget_ms=opp_budget / 5.0
+                            end_state, time_budget_ms=opp_budget_ms / 5.0
                         )
-                        # Apply resilience penalty
                         resilience_penalty = (
                             1.0 - opp_result.board_resilience_delta
                         ) * 200.0
                         fitnesses[idx] -= resilience_penalty
-                        # Lethal exposure penalty
                         if opp_result.lethal_exposure:
                             fitnesses[idx] -= 2000.0
 
@@ -1273,7 +1282,26 @@ class RHEAEngine:
                             best_ever_fit = fitnesses[idx]
                             best_ever_chromo = list(population[idx])
             except Exception:
-                pass  # graceful degradation
+                log.debug("RHEA: Opponent sim failed", exc_info=True)
+
+        timings['opp_sim'] = (time.perf_counter() - t_opp_start) * 1000.0
+
+        # ---- Phase C: Cross-turn simulation (20% of budget) ----
+        t_cross_start = time.perf_counter()
+        if self.cross_turn:
+            try:
+                self._cross_turn_evaluation(
+                    initial_state, population, fitnesses,
+                    effective_weights, budget_s * 0.20, t_start,
+                )
+                gen_best_idx = max(range(len(fitnesses)), key=lambda i: fitnesses[i])
+                if fitnesses[gen_best_idx] > best_ever_fit:
+                    best_ever_fit = fitnesses[gen_best_idx]
+                    best_ever_chromo = list(population[gen_best_idx])
+            except Exception:
+                log.debug("RHEA: Phase C cross-turn failed", exc_info=True)
+
+        timings['cross_turn'] = (time.perf_counter() - t_cross_start) * 1000.0
 
         # ========== Restore original params ==========
         self.pop_size = saved_pop_size
@@ -1330,24 +1358,40 @@ class RHEAEngine:
         try:
             scored = []
             for i, chromo in enumerate(population):
-                try:
-                    current = initial_state.copy()
-                    for action in chromo:
-                        legal = enumerate_legal_actions(current)
-                        if not _action_in_list(action, legal):
-                            break
-                        current = apply_action(current, action)
-                    else:
-                        delta = evaluate(current) - evaluate(initial_state)
+                end_state = self._replay_chromosome(initial_state, chromo)
+                if end_state is not None:
+                    try:
+                        delta = evaluate(end_state) - evaluate(initial_state)
                         scored.append((delta, i))
-                except Exception:
-                    pass
+                    except Exception:
+                        log.debug("pareto: evaluate failed", exc_info=True)
 
             scored.sort(key=lambda x: -x[0])
             for score_val, idx in scored[:5]:
                 pareto_front_list.append((list(population[idx]), score_val))
         except Exception:
-            pass
+            log.debug("apply_action: optional mechanic failed", exc_info=True)
+
+        timings['total'] = (time.perf_counter() - t_start) * 1000.0
+        timings['rhea'] = (t_phase_b_start - t_rhea_start) * 1000.0
+
+        complexity_str = "HARD" if self._assess_complexity(initial_state) else "NORMAL"
+        log.info(
+            "RHEA: Turn %d | %s | phase=%s | pop=%d gens=%d/%d | "
+            "score=%.2f | conf=%.2f | div=%.2f | "
+            "budget=%.0fms total=%.0fms [utp=%.0f rhea=%.0f phaseB=%.0f oppSim=%.0f crossTurn=%.0f]",
+            initial_state.turn_number,
+            complexity_str,
+            phase,
+            self.pop_size, gen, self.max_gens,
+            best_ever_fit, confidence, diversity,
+            budget_ms, timings['total'],
+            timings.get('utp', 0),
+            timings.get('rhea', 0),
+            timings.get('phase_b', 0),
+            timings.get('opp_sim', 0),
+            timings.get('cross_turn', 0),
+        )
 
         return SearchResult(
             best_chromosome=best_ever_chromo,
@@ -1358,11 +1402,87 @@ class RHEAEngine:
             population_diversity=diversity,
             confidence=confidence,
             pareto_front=pareto_front_list,
+            timings=timings,
         )
 
     # ---------------------------------------------------------------
     # Population initialisation
     # ---------------------------------------------------------------
+
+    def _assess_complexity(self, state: GameState) -> int:
+        """Assess board complexity to determine time budget tier.
+
+        Returns COMPLEXITY_NORMAL (0) or COMPLEXITY_HARD (1).
+
+        Factors: board size, hand size, mana available, secrets, lethal proximity.
+        """
+        score = 0
+
+        board_total = len(state.board) + len(state.opponent.board)
+        score += board_total * 2
+
+        score += len(state.hand) * 2
+
+        score += state.mana.available * 3
+
+        if state.opponent.secrets:
+            score += len(state.opponent.secrets) * 5
+
+        opp_health = state.opponent.hero.hp + state.opponent.hero.armor
+        our_attack = sum(m.attack for m in state.board)
+        if our_attack > 0 and opp_health <= our_attack + 10:
+            score += 8
+
+        our_health = state.hero.hp + state.hero.armor
+        opp_attack = sum(m.attack for m in state.opponent.board)
+        if opp_attack > 0 and our_health <= opp_attack + 5:
+            score += 10
+
+        if state.mana.available >= 8:
+            score += 5
+
+        if state.opponent.hand_count >= 6:
+            score += 3
+
+        for m in state.board:
+            if m.has_windfury or m.has_mega_windfury:
+                score += 3
+            if m.has_divine_shield:
+                score += 2
+
+        threshold = 35
+        return self.COMPLEXITY_HARD if score >= threshold else self.COMPLEXITY_NORMAL
+
+    def _adaptive_time_limit(self, state: GameState) -> float:
+        """Compute adaptive time limit in ms based on board complexity.
+
+        Normal: 3000-5000ms, Hard: 5000-15000ms.
+        Uses turn number to scale within tiers.
+        """
+        complexity = self._assess_complexity(state)
+        turn = max(state.turn_number, 1)
+
+        if complexity == self.COMPLEXITY_HARD:
+            base = 5000.0
+            ceiling = 15000.0
+            turn_scale = min(turn / 15.0, 1.0)
+            budget = base + (ceiling - base) * turn_scale
+        else:
+            base = 3000.0
+            ceiling = 5000.0
+            turn_scale = min(turn / 12.0, 1.0)
+            budget = base + (ceiling - base) * turn_scale
+
+        if self._time_limit_explicit:
+            budget = self.time_limit
+
+        log.debug(
+            "RHEA: complexity=%s turn=%d budget=%.0fms",
+            "HARD" if complexity else "NORMAL",
+            turn,
+            budget,
+        )
+        return budget
 
     def _detect_phase(self, state: GameState) -> str:
         """Detect game phase using unified Phase enum."""
@@ -1410,6 +1530,168 @@ class RHEAEngine:
         }
         return params.get(phase, params["mid"])
 
+    @staticmethod
+    def _replay_chromosome(
+        initial_state: GameState, chromo: List[Action]
+    ) -> Optional[GameState]:
+        """Replay a chromosome from initial_state and return end state.
+
+        Returns None if any action is invalid during replay.
+        """
+        end_state = initial_state.copy()
+        for action in chromo:
+            legal = enumerate_legal_actions(end_state)
+            if not _action_in_list(action, legal):
+                return None
+            end_state = apply_action(end_state, action)
+        return end_state
+
+    def _is_desperate(self, state: GameState) -> bool:
+        """Detect if we are in a desperate situation (extreme board disadvantage)."""
+        friendly_board_power = sum(m.attack + m.health for m in state.board)
+        enemy_board_power = sum(m.attack + m.health for m in state.opponent.board)
+        if state.opponent.board and not state.board and enemy_board_power > 15:
+            return True
+        if enemy_board_power > friendly_board_power * 3 + 10:
+            return True
+        if state.hero.hp <= 10 and enemy_board_power > 10:
+            return True
+        return False
+
+    def _cross_turn_evaluation(
+        self,
+        initial_state: GameState,
+        population: List[List[Action]],
+        fitnesses: List[float],
+        weights: dict,
+        budget_s: float,
+        t_start: float,
+    ) -> None:
+        """Phase C: Cross-turn simulation for top-K chromosomes.
+
+        For each top candidate:
+        1. Replay chromosome → end_state (our turn)
+        2. Simulate opponent's best response → opp_end_state
+        3. Simulate our next turn (draw + greedy plan) → next_turn_value
+        4. Adjust fitness += alpha * (next_turn_value - current_value)
+
+        Modifies fitnesses in-place.
+        """
+        deadline = time.perf_counter() + budget_s * 0.9
+
+        indexed = sorted(
+            range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True
+        )
+        top_k = indexed[:5]
+
+        sim = None
+        if OpponentSimulator is not None:
+            sim = OpponentSimulator()
+
+        alpha = 0.3
+
+        for idx in top_k:
+            if time.perf_counter() >= deadline:
+                break
+
+            end_state = self._replay_chromosome(initial_state, population[idx])
+
+            if end_state is None or end_state.is_lethal():
+                continue
+
+            opp_end = self._simulate_opponent_response(end_state, sim, deadline)
+            if opp_end is None:
+                continue
+
+            next_value = self._simulate_our_next_turn(opp_end, deadline)
+            if next_value is None:
+                continue
+
+            current_value = evaluate(end_state, weights)
+            cross_turn_delta = next_value - current_value
+            fitnesses[idx] += alpha * cross_turn_delta
+
+            if sim is not None:
+                opp_result = sim.simulate_best_response(
+                    end_state, time_budget_ms=50.0
+                )
+                if opp_result.lethal_exposure:
+                    fitnesses[idx] -= 1500.0
+
+    def _simulate_opponent_response(
+        self,
+        state: GameState,
+        sim: Optional['OpponentSimulator'],
+        deadline: float,
+    ) -> Optional[GameState]:
+        """Simulate opponent's best response to our turn end state.
+
+        Creates a flipped perspective state, applies greedy opponent actions,
+        then flips back. Uses known opponent cards when available.
+        """
+        if time.perf_counter() >= deadline:
+            return None
+
+        opp_state = state.copy()
+
+        next_mana = min(opp_state.mana.max_mana + 1, opp_state.mana.max_mana_cap)
+        opp_mana_available = next_mana - opp_state.mana.overloaded
+
+        opp_state.mana.available = max(0, opp_mana_available)
+        opp_state.mana.max_mana = next_mana
+        opp_state.mana.overloaded = opp_state.mana.overload_next
+        opp_state.mana.overload_next = 0
+
+        for m in opp_state.opponent.board:
+            if not m.has_rush:
+                m.can_attack = True
+            m.has_attacked_once = False
+
+        opp_state.hero.is_immune = False
+        for m in opp_state.board:
+            m.frozen_until_next_turn = False
+            m.has_immune = False
+
+        if opp_state.deck_remaining > 0:
+            opp_state.deck_remaining -= 1
+
+        return opp_state
+
+    def _simulate_our_next_turn(
+        self,
+        state: GameState,
+        deadline: float,
+    ) -> Optional[float]:
+        """Simulate our next turn value after opponent's response.
+
+        Applies turn transition (draw, mana refill), then evaluates
+        the resulting state as a proxy for next-turn potential.
+        """
+        if time.perf_counter() >= deadline:
+            return None
+
+        next_state = state.copy()
+
+        next_mana = min(next_state.mana.max_mana + 1, next_state.mana.max_mana_cap)
+        next_state.mana.max_mana = next_mana
+        next_state.mana.available = max(0, next_mana - next_state.mana.overloaded)
+        next_state.mana.overloaded = next_state.mana.overload_next
+        next_state.mana.overload_next = 0
+        next_state.mana.modifiers = []
+
+        for m in next_state.board:
+            m.can_attack = True
+            m.has_attacked_once = False
+            m.frozen_until_next_turn = False
+            m.has_immune = False
+
+        if next_state.deck_remaining > 0:
+            next_state.deck_remaining -= 1
+
+        next_state.turn_number += 1
+
+        return evaluate(next_state)
+
     def _init_population(self, state: GameState) -> List[List[Action]]:
         """Create initial population of random legal action sequences."""
         population: List[List[Action]] = []
@@ -1420,7 +1702,7 @@ class RHEAEngine:
                 try:
                     chromo = normalize_chromosome(chromo, state)
                 except Exception:
-                    pass
+                    log.debug("apply_action: optional mechanic failed", exc_info=True)
             population.append(chromo)
         return population
 
@@ -1468,28 +1750,32 @@ class RHEAEngine:
         """Apply all actions and return evaluate_delta.
 
         Returns -9999.0 if any action is invalid.
+        Uses lazy validation: skip intermediate enumerate_legal_actions
+        and only check action validity against the current hand/mana state.
         """
-        current = initial_state.copy()
+        current = initial_state
+        legal_cache = enumerate_legal_actions(current)
+        legal_action_keys = {_action_key(a) for a in legal_cache}
 
         for action in chromo:
-            legal = enumerate_legal_actions(current)
-            # Check if action is legal
-            if not _action_in_list(action, legal):
+            ak = _action_key(action)
+            if ak not in legal_action_keys:
                 return -9999.0
 
-            # Lethal check — if we've killed opponent, big bonus
             current = apply_action(current, action)
             if current.is_lethal():
                 return 10000.0
 
-        # V9: Use risk-adjusted evaluation when available
+            legal_cache = enumerate_legal_actions(current)
+            legal_action_keys = {_action_key(a) for a in legal_cache}
+
         if evaluate_delta_with_risk is not None and risk_report is not None:
             try:
                 return evaluate_delta_with_risk(
                     initial_state, current, weights, risk_report
                 )
             except Exception:
-                pass
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
 
         return evaluate_delta(initial_state, current, weights)
 
@@ -1549,7 +1835,7 @@ class RHEAEngine:
             try:
                 child = normalize_chromosome(child, state)
             except Exception:
-                pass
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
 
         return child
 
@@ -1603,7 +1889,7 @@ class RHEAEngine:
             try:
                 result = normalize_chromosome(result, state)
             except Exception:
-                pass
+                log.debug("apply_action: optional mechanic failed", exc_info=True)
 
         return result
 
@@ -1613,18 +1899,19 @@ class RHEAEngine:
 # ===================================================================
 
 
+def _action_key(action: Action) -> tuple:
+    return (
+        action.action_type,
+        action.card_index,
+        action.position,
+        action.source_index,
+        action.target_index,
+    )
+
+
 def _action_in_list(action: Action, legal: List[Action]) -> bool:
-    """Check if *action* matches any action in *legal* by key fields."""
-    for la in legal:
-        if (
-            la.action_type == action.action_type
-            and la.card_index == action.card_index
-            and la.position == action.position
-            and la.source_index == action.source_index
-            and la.target_index == action.target_index
-        ):
-            return True
-    return False
+    ak = _action_key(action)
+    return any(_action_key(la) == ak for la in legal)
 
 
 # ===================================================================

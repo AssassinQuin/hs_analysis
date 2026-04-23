@@ -12,65 +12,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable, Any, Dict, List
 
+from analysis.config import COLLECTIBLE_JSON, RHEA_TIME_BUDGET_NORMAL_MS, RHEA_TIME_BUDGET_HARD_MS
+from analysis.constants.hs_enums import (
+    ZONE_PLAY, ZONE_DECK, ZONE_HAND, ZONE_GRAVEYARD, ZONE_SECRET, ZONE_SETASIDE,
+    CT_MINION, CT_SPELL, CT_WEAPON, CT_HERO, CT_HERO_POWER, CT_LOCATION, CT_PLAYER,
+    ZONE_NAME_MAP, CARDTYPE_NAME_MAP, CARDTYPE_CN, CARDTYPE_EN,
+    ENTITY_TAG_TO_ATTR, BOOL_TAG_NAMES,
+    KEYWORD_BOOL_FIELDS, KEYWORD_CN_MAP,
+)
 from analysis.search.game_state import GameState, HeroState, ManaState, Minion, Weapon, OpponentState
 from analysis.search.rhea_engine import RHEAEngine, enumerate_legal_actions, Action
 from analysis.models.card import Card
 from analysis.watcher.global_tracker import GlobalTracker, CardSource
-
-# GameTag numeric values (from hearthstone.enums)
-TAG_RESOURCES = 26
-TAG_RESOURCES_USED = 25
-TAG_MAXRESOURCES = 37
-TAG_TURN = 20
-TAG_STEP = 19
-TAG_ZONE = 49
-TAG_CARDTYPE = 202
-TAG_COST = 54
-TAG_ATK = 47
-TAG_HEALTH = 71
-TAG_ARMOR = 292
-TAG_ZONE_POSITION = 341
-TAG_CONTROLLER = 3
-TAG_EXHAUSTED = 424
-TAG_TAUNT = 238
-TAG_DIVINE_SHIELD = 191
-TAG_CHARGE = 188
-TAG_RUSH = 187
-TAG_WINDFURY = 189
-TAG_STEALTH = 225
-TAG_POISONOUS = 237
-TAG_LIFESTEAL = 2145  # correct enum value
-TAG_FROZEN = 260
-TAG_REBORN = 2185
-TAG_OVERLOAD_LOCKED = 393
-TAG_TEMP_RESOURCES = 295
-TAG_OVERLOAD_OWED = 394
-TAG_IMMUNE = 477
-TAG_HERO_POWER_USED = 426  # might not exist
-TAG_SPELL_POWER = 215
-
-# Zone values
-ZONE_PLAY = 1
-ZONE_DECK = 2
-ZONE_HAND = 3
-ZONE_GRAVEYARD = 5
-ZONE_SECRET = 7
-ZONE_SETASIDE = 6
-
-# CardType values
-CT_MINION = 4
-CT_SPELL = 5
-CT_WEAPON = 7
-CT_HERO = 3
-CT_HERO_POWER = 10
-CT_LOCATION = 6
-CT_PLAYER = 2
-
-# Step values
-STEP_MAIN_READY = 9
-STEP_MAIN_START = 10
-STEP_MAIN_ACTION = 11
-STEP_MAIN_END = 12
+from analysis.utils.player_name import (
+    normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
+)
 
 
 @dataclass
@@ -145,21 +101,29 @@ class TurnDecision:
 
 
 class GameReplayer:
-    def __init__(self, log_dir="logs", player_name="湫然#51704", engine_params=None):
+    _RE_CREATE_GAME = re.compile(r'CREATE_GAME')
+    _RE_PLAYER = re.compile(r'Player EntityID=(\d+) PlayerID=(\d+)')
+    _RE_PLAYER_NAME = re.compile(r'PlayerID=(\d+),\s*PlayerName=(.+?)(?:\s*$)')
+    _RE_FULL_CREATE = re.compile(r'FULL_ENTITY - Creating ID=(\d+) CardID=(\S*)')
+    _RE_FULL_UPDATE = re.compile(r'FULL_ENTITY - Updating \[.*?id=(\d+)\s.*?\] CardID=(\S*)')
+    _RE_SHOW_NUM = re.compile(r'SHOW_ENTITY - Updating Entity=(\d+) CardID=(\S+)')
+    _RE_SHOW_BRACKET = re.compile(r'SHOW_ENTITY - Updating.*?id=(\d+).*?CardID=(\S+)')
+    _RE_TAG_CHANGE = re.compile(r'TAG_CHANGE Entity=(\[[^\]]*\]|\S+) tag=(\w+) value=(\S+)')
+    _RE_NESTED_TAG = re.compile(r'tag=(\w+) value=(\S+)')
+
+    def __init__(self, log_dir="logs", player_name="", engine_params=None):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
         self.player_name = player_name
-        self.engine_params = engine_params or {"pop_size": 20, "max_gens": 40, "time_limit": 200.0}
+        self.engine_params = engine_params or {"pop_size": 20, "max_gens": 40, "cross_turn": True}
 
         # Entity tracking
         self.entities: dict[int, Entity] = {}
         self.players: dict[int, PlayerState] = {}  # controller_id -> PlayerState
-        self.controller_map: dict[int, int] = {}  # entity_id -> controller_id
         self.game_turn = 0
         self.current_step = 0
         self.our_controller = 0
         self.opp_controller = 0
-        self._player_entities: dict[int, int] = {}  # entity_id -> controller_id
         self._player_name_map: dict[str, int] = {}  # player_name -> controller_id
         self._player_entity_to_pid: dict[int, int] = {}  # entity_id -> player_id
         self._first_player_entity: int = 0  # entity_id of first player
@@ -202,53 +166,54 @@ class GameReplayer:
         self.log_errors.addHandler(fh3)
         self.log_errors.setLevel(logging.WARNING)
 
-    def _load_card_names(self):
-        """Load card_id → Chinese name mapping from card data files.
+    def _load_card_names(self) -> Dict[str, str]:
+        """Load card_id → Chinese name mapping via unified hsdb interface.
 
-        Loads collectible, standard, and wild pools for full coverage
-        including generated/token cards.
+        Priority: hsdb (covers collectible + non-collectible) > COLLECTIBLE_JSON fallback.
         """
-        name_map = {}
-        import json
-        for path in [
-            Path("card_data/240397/zhCN/cards.collectible.json"),
-            Path("card_data/240397/unified_standard.json"),
-            Path("card_data/240397/unified_wild.json"),
-        ]:
-            if path.exists():
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    if isinstance(data, list):
-                        for card in data:
-                            cid = card.get("id", "")
-                            name = card.get("name", "") or card.get("zhName", "")
-                            if cid and name:
-                                name_map[cid] = name
-                    elif isinstance(data, dict):
-                        # unified format might be different
-                        pass
-                except:
-                    pass
+        name_map: Dict[str, str] = {}
 
-        # Also try HSCardDB for non-collectible (token) cards
         try:
             from analysis.data.hsdb import get_db
             db = get_db()
             for cid, card_data in db._cards.items():
-                if cid and cid not in name_map:
-                    name = card_data.get("name", "") or card_data.get("englishName", "")
-                    if name:
-                        name_map[cid] = name
+                if not cid:
+                    continue
+                name = card_data.get("name", "")
+                if name and not name.isascii():
+                    name_map[cid] = name
+                else:
+                    ename = card_data.get("englishName", "")
+                    if ename:
+                        name_map[cid] = ename
         except Exception:
-            pass
+            self.log_errors.warning("hsdb 加载失败，回退到 COLLECTIBLE_JSON", exc_info=True)
+
+        if not name_map:
+            collectible_path = COLLECTIBLE_JSON
+            if collectible_path.exists():
+                try:
+                    with open(collectible_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    if isinstance(data, list):
+                        for card in data:
+                            cid = card.get("id", "")
+                            name = card.get("name", "")
+                            if cid and name:
+                                name_map[cid] = name
+                except Exception:
+                    self.log_errors.warning("COLLECTIBLE_JSON 加载失败: %s", collectible_path, exc_info=True)
 
         return name_map
 
     def replay_file(self, path: str) -> list[TurnDecision]:
-        """Replay Power.log line by line with full state tracking."""
+        """Replay Power.log line by line with full state tracking.
+
+        Supports multi-game logs: each CREATE_GAME triggers a state reset.
+        Returns all decisions across all games.
+        """
         self._card_name_cache = self._load_card_names()
-        self.global_tracker.on_game_start()
+        self._on_new_game()
 
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             for line in f:
@@ -257,27 +222,74 @@ class GameReplayer:
         self._save_summary()
         return self.decisions
 
+    def _on_new_game(self):
+        """Reset all state for a new game (triggered by CREATE_GAME)."""
+        if self.entities or self.game_turn > 0:
+            self.log_main.info("===== 检测到新对局 ===== 重置状态")
+            self._save_summary()
+
+        self.entities.clear()
+        self.players.clear()
+        self._player_entity_to_pid.clear()
+        self._player_name_map.clear()
+        self._current_full_entity = 0
+        self.game_turn = 0
+        self.our_controller = 0
+        self.opp_controller = 0
+        self._first_player_seen = False
+        self._mulligan_seen = False
+
+        self.global_tracker.on_game_start()
+
+    def _handle_game_debug_line(self, line: str):
+        """Handle DebugPrintGame lines — extract PlayerName for auto-detection."""
+        m = self._RE_PLAYER_NAME.search(line)
+        if not m:
+            return
+        pid = int(m.group(1))
+        raw_name = m.group(2).strip()
+        name = normalize_player_name(raw_name)
+        if not name:
+            return
+        if not self.player_name and not is_anonymous_name(name):
+            self.player_name = name
+            self.log_main.info(f"🔍 自动检测玩家名: {name}")
+        if pid not in self.players:
+            self.players[pid] = PlayerState(name=name)
+        elif not self.players[pid].name or is_anonymous_name(self.players[pid].name):
+            self.players[pid].name = name
+        self._player_name_map[name] = pid
+        if raw_name != name:
+            self._player_name_map[raw_name] = pid
+
     def _process_line(self, line: str):
         """Process a single Power.log line."""
-        # Only process DebugPrintPower and PowerTaskList lines
+        if 'DebugPrintGame()' in line:
+            self._handle_game_debug_line(line)
+            return
+
         if 'GameState.DebugPrintPower()' not in line and 'PowerTaskList.DebugPrintPower()' not in line:
             return
 
-        # Player definition: Player EntityID=2 PlayerID=1
-        m_player = re.match(r'.*Player EntityID=(\d+) PlayerID=(\d+)', line)
+        if self._RE_CREATE_GAME.search(line):
+            if 'GameState.DebugPrintPower()' in line:
+                self._on_new_game()
+            return
+
+        m_player = self._RE_PLAYER.search(line)
         if m_player:
             entity_id = int(m_player.group(1))
             player_id = int(m_player.group(2))
             self._player_entity_to_pid[entity_id] = player_id
-            self._current_full_entity = entity_id  # Track for nested tags
+            self._current_full_entity = entity_id
             return
 
         # FULL_ENTITY (Creating or Updating)
         # Creating format: "FULL_ENTITY - Creating ID=123 CardID=XXX"
         # Updating format: "FULL_ENTITY - Updating [entityName=... id=123 ...] CardID=XXX"
-        m = re.match(r'.*FULL_ENTITY - Creating ID=(\d+) CardID=(\S*)', line)
+        m = self._RE_FULL_CREATE.search(line)
         if not m:
-            m = re.match(r'.*FULL_ENTITY - Updating \[.*?id=(\d+)\s.*?\] CardID=(\S*)', line)
+            m = self._RE_FULL_UPDATE.search(line)
         if m:
             entity_id = int(m.group(1))
             card_id = m.group(2) or ""
@@ -303,9 +315,9 @@ class GameReplayer:
         # SHOW_ENTITY - reveals card_id for hidden entities
         # Format 1: Entity=63 CardID=TLC_460 (simple numeric)
         # Format 2: Entity=[entityName=UNKNOWN ENTITY [cardType=INVALID] id=63 ...] CardID=TLC_460 (bracketed with nested [])
-        m = re.match(r'.*SHOW_ENTITY - Updating Entity=(\d+) CardID=(\S+)', line)
+        m = self._RE_SHOW_NUM.search(line)
         if not m:
-            m = re.match(r'.*SHOW_ENTITY - Updating.*?id=(\d+).*?CardID=(\S+)', line)
+            m = self._RE_SHOW_BRACKET.search(line)
         if m:
             entity_id = int(m.group(1))
             card_id = m.group(2)
@@ -327,7 +339,7 @@ class GameReplayer:
             return
 
         # TAG_CHANGE — handle both simple Entity=18 and complex Entity=[entityName=... id=89 ...]
-        m = re.match(r'.*TAG_CHANGE Entity=(\[[^\]]*\]|\S+) tag=(\w+) value=(\S+)', line)
+        m = self._RE_TAG_CHANGE.search(line)
         if m:
             entity_str = m.group(1)
             tag_name = m.group(2)
@@ -336,8 +348,8 @@ class GameReplayer:
             return
 
         # Tag line within FULL_ENTITY/Player block (indented)
-        m_tag = re.match(r'.*DebugPrintPower\(\) -\s+tag=(\w+) value=(\S+)', line)
-        if m_tag and self._current_full_entity > 0:
+        m_tag = self._RE_NESTED_TAG.search(line)
+        if m_tag and self._current_full_entity is not None and self._current_full_entity > 0:
             tag_name = m_tag.group(1)
             value_str = m_tag.group(2).strip()
             entity_id = self._current_full_entity
@@ -368,6 +380,7 @@ class GameReplayer:
 
         # Resolve entity for player/entity-level tags
         entity = self._resolve_entity(entity_str)
+
         if entity is None:
             return
 
@@ -375,53 +388,31 @@ class GameReplayer:
         if tag_name in ('STEP', 'TURN', 'FIRST_PLAYER'):
             value = value_str
         elif tag_name == 'ZONE':
-            zone_map = {
-                'PLAY': ZONE_PLAY, 'DECK': ZONE_DECK, 'HAND': ZONE_HAND,
-                'GRAVEYARD': ZONE_GRAVEYARD, 'SECRET': ZONE_SECRET, 'SETASIDE': ZONE_SETASIDE,
-            }
-            value = zone_map.get(value_str, self._parse_value(value_str))
+            value = ZONE_NAME_MAP.get(value_str, self._parse_value(value_str))
         else:
             value = self._parse_value(value_str)
 
-        # Map tag name to our tracking
-        tag_map = {
-            'RESOURCES': ('resources', lambda e, v: self._update_player_tag(e, 'resources', v)),
-            'RESOURCES_USED': ('resources_used', lambda e, v: self._update_player_tag(e, 'resources_used', v)),
-            'MAXRESOURCES': ('max_mana', lambda e, v: self._update_player_tag(e, 'max_mana', v)),
-            'TURN': ('turn', lambda e, v: self._handle_turn_change(v)),
-            'STEP': ('step', lambda e, v: self._handle_step_change(v)),
-            'ZONE': ('zone', lambda e, v: self._update_entity_tag(e, 'zone', v)),
-            'ZONE_POSITION': ('zone_position', lambda e, v: self._update_entity_tag(e, 'zone_position', v)),
-            'CONTROLLER': ('controller', lambda e, v: self._update_controller(e, v)),
-            'CARDTYPE': ('card_type', lambda e, v: self._update_entity_tag(e, 'card_type', v)),
-            'COST': ('cost', lambda e, v: self._update_entity_tag(e, 'cost', v)),
-            'ATK': ('atk', lambda e, v: self._update_entity_tag(e, 'atk', v)),
-            'HEALTH': ('health', lambda e, v: self._update_entity_tag(e, 'health', v)),
-            'ARMOR': ('armor', lambda e, v: self._update_entity_tag(e, 'armor', v)),
-            'EXHAUSTED': ('exhausted', lambda e, v: self._update_entity_tag(e, 'exhausted', bool(v))),
-            'TAUNT': ('taunt', lambda e, v: self._update_entity_tag(e, 'taunt', bool(v))),
-            'DIVINE_SHIELD': ('divine_shield', lambda e, v: self._update_entity_tag(e, 'divine_shield', bool(v))),
-            'CHARGE': ('charge', lambda e, v: self._update_entity_tag(e, 'charge', bool(v))),
-            'RUSH': ('rush', lambda e, v: self._update_entity_tag(e, 'rush', bool(v))),
-            'WINDFURY': ('windfury', lambda e, v: self._update_entity_tag(e, 'windfury', bool(v))),
-            'STEALTH': ('stealth', lambda e, v: self._update_entity_tag(e, 'stealth', bool(v))),
-            'POISONOUS': ('poisonous', lambda e, v: self._update_entity_tag(e, 'poisonous', bool(v))),
-            'LIFESTEAL': ('lifesteal', lambda e, v: self._update_entity_tag(e, 'lifesteal', bool(v))),
-            'FROZEN': ('frozen', lambda e, v: self._update_entity_tag(e, 'frozen', bool(v))),
-            'REBORN': ('reborn', lambda e, v: self._update_entity_tag(e, 'reborn', bool(v))),
-            'IMMUNE': ('immune', lambda e, v: self._update_entity_tag(e, 'immune', bool(v))),
-            'SPELL_POWER': ('spell_power', lambda e, v: self._update_entity_tag(e, 'spell_power', v)),
-            'FIRST_PLAYER': ('first_player', lambda e, v: self._handle_first_player(e, v)),
-            'OVERLOAD_OWED': ('overload_owed', lambda e, v: self._handle_overload_owed(e, v)),
-        }
-
-        handler = tag_map.get(tag_name)
-        if handler:
-            handler[1](entity, value)
+        if tag_name == 'FIRST_PLAYER':
+            self._handle_first_player(entity, value)
+        elif tag_name == 'OVERLOAD_OWED':
+            self._handle_overload_owed(entity, value)
+        elif tag_name in ('RESOURCES', 'RESOURCES_USED', 'MAXRESOURCES'):
+            attr_map = {
+                'RESOURCES': 'resources',
+                'RESOURCES_USED': 'resources_used',
+                'MAXRESOURCES': 'max_mana',
+            }
+            self._update_player_tag(entity, attr_map[tag_name], value)
+        elif tag_name == 'CONTROLLER':
+            self._update_entity_tag(entity, 'controller', value)
+        else:
+            attr = ENTITY_TAG_TO_ATTR.get(tag_name)
+            if attr:
+                coerced = bool(value) if tag_name in BOOL_TAG_NAMES else value
+                self._update_entity_tag(entity, attr, coerced)
 
     def _resolve_entity(self, entity_str: str):
         """Resolve entity string to entity ID or player controller."""
-        # Handle complex bracketed entity strings: [entityName=... id=89 ...]
         if entity_str.startswith('['):
             m_id = re.search(r'id=(\d+)', entity_str)
             if m_id:
@@ -430,20 +421,20 @@ class GameReplayer:
 
         if entity_str == 'GameEntity':
             return None
-        # Check player name map first
+
         if entity_str in self._player_name_map:
             return ('player', self._player_name_map[entity_str])
-        # Known player names
-        if entity_str == self.player_name:
-            # Lazy init if FIRST_PLAYER not yet seen
+
+        if name_matches(entity_str, self.player_name):
             if self.our_controller == 0:
-                return None  # skip until we know the mapping
+                return None
             return ('player', self.our_controller)
-        if entity_str == 'UNKNOWN HUMAN PLAYER':
+
+        if is_anonymous_name(entity_str):
             if self.opp_controller == 0:
                 return None
             return ('player', self.opp_controller)
-        # Try as numeric entity ID
+
         try:
             return ('entity', int(entity_str))
         except ValueError:
@@ -457,62 +448,21 @@ class GameReplayer:
 
     def _apply_entity_tag(self, entity: Entity, tag_name: str, value_str: str):
         """Apply a tag from FULL_ENTITY/SHOW_ENTITY nested tags."""
-        tag_map = {
-            'CONTROLLER': 'controller',
-            'ZONE': 'zone',
-            'ZONE_POSITION': 'zone_position',
-            'CARDTYPE': 'card_type',
-            'COST': 'cost',
-            'ATK': 'atk',
-            'HEALTH': 'health',
-            'ARMOR': 'armor',
-            'EXHAUSTED': 'exhausted',
-            'TAUNT': 'taunt',
-            'DIVINE_SHIELD': 'divine_shield',
-            'CHARGE': 'charge',
-            'RUSH': 'rush',
-            'WINDFURY': 'windfury',
-            'STEALTH': 'stealth',
-            'POISONOUS': 'poisonous',
-            'LIFESTEAL': 'lifesteal',
-            'FROZEN': 'frozen',
-            'REBORN': 'reborn',
-            'IMMUNE': 'immune',
-            'SPELL_POWER': 'spell_power',
-        }
+        attr = ENTITY_TAG_TO_ATTR.get(tag_name)
+        if not attr:
+            return
 
-        # Handle string-valued tags in FULL_ENTITY blocks
         if tag_name == 'ZONE':
-            zone_map = {
-                'PLAY': ZONE_PLAY,
-                'DECK': ZONE_DECK,
-                'HAND': ZONE_HAND,
-                'GRAVEYARD': ZONE_GRAVEYARD,
-                'SECRET': ZONE_SECRET,
-                'SETASIDE': ZONE_SETASIDE,
-            }
-            value = zone_map.get(value_str, 0)
+            value = ZONE_NAME_MAP.get(value_str, 0) if value_str.isalpha() else self._parse_value(value_str)
         elif tag_name == 'CARDTYPE':
-            cardtype_map = {
-                'GAME': 0,
-                'PLAYER': CT_PLAYER,
-                'HERO': CT_HERO,
-                'MINION': CT_MINION,
-                'SPELL': CT_SPELL,
-                'WEAPON': CT_WEAPON,  # Not seen but include
-                'HERO_POWER': CT_HERO_POWER,
-                'LOCATION': CT_LOCATION,
-            }
-            value = cardtype_map.get(value_str, 0)
+            value = CARDTYPE_NAME_MAP.get(value_str, 0)
         else:
             value = self._parse_value(value_str)
 
-        attr = tag_map.get(tag_name)
-        if attr:
-            if isinstance(getattr(entity, attr, None), bool):
-                setattr(entity, attr, bool(value))
-            else:
-                setattr(entity, attr, value)
+        if isinstance(getattr(entity, attr, None), bool):
+            setattr(entity, attr, bool(value))
+        else:
+            setattr(entity, attr, value)
 
     def _update_player_tag(self, entity, attr: str, value: int):
         """Update player state for a tag change."""
@@ -542,30 +492,31 @@ class GameReplayer:
                     )
 
     def _handle_first_player(self, entity, value):
-        """Detect first player assignment."""
+        """Detect first player assignment from TAG_CHANGE FIRST_PLAYER."""
+        if not value:
+            return
+
         if isinstance(entity, tuple) and entity[0] == 'entity':
             entity_id = entity[1]
             self._first_player_entity = entity_id
-            # Map entity_id -> player_id
             pid = self._player_entity_to_pid.get(entity_id, 0)
             if pid > 0:
                 self.our_controller = pid
                 self.opp_controller = 3 - pid
-                self.players[self.our_controller] = PlayerState(name=self.player_name)
-                self.players[self.opp_controller] = PlayerState(name="UNKNOWN HUMAN PLAYER")
-                self._player_name_map[self.player_name] = self.our_controller
-                self._player_name_map["UNKNOWN HUMAN PLAYER"] = self.opp_controller
-                self.global_tracker.set_controllers(self.our_controller, self.opp_controller)
-                self.log_main.info(f"🎮 我方: {self.player_name} (PlayerID={self.our_controller}, 先手)")
+                self._init_players()
         elif isinstance(entity, tuple) and entity[0] == 'player':
-            # Already resolved to player - this means player name matched
             pass
 
-    def _update_controller(self, entity, value: int):
-        """Update controller mapping."""
-        if isinstance(entity, tuple) and entity[0] == 'entity':
-            entity_id = entity[1]
-            self.controller_map[entity_id] = value
+    def _init_players(self):
+        """Initialize player states after controller mapping is known."""
+        if self.our_controller <= 0:
+            return
+        self.players[self.our_controller] = PlayerState(name=self.player_name)
+        self.players[self.opp_controller] = PlayerState(name=ANON_DISPLAY)
+        self._player_name_map[self.player_name] = self.our_controller
+        self._player_name_map[ANON_DISPLAY] = self.opp_controller
+        self.global_tracker.set_controllers(self.our_controller, self.opp_controller)
+        self.log_main.info(f"🎮 我方: {self.player_name} (PlayerID={self.our_controller}, 先手)")
 
     def _handle_overload_owed(self, entity, value):
         """Handle OVERLOAD_OWED tag — track overload for global state."""
@@ -607,7 +558,7 @@ class GameReplayer:
             opp_player = None
 
             for controller_id, player_state in self.players.items():
-                if player_state.name == self.player_name:
+                if name_matches(player_state.name, self.player_name):
                     our_player = player_state
                 else:
                     opp_player = player_state
@@ -616,15 +567,13 @@ class GameReplayer:
                 self.log_errors.error(f"无法找到玩家 {self.player_name}")
                 return
 
-            # Find our controller
             for controller_id, player_state in self.players.items():
-                if player_state.name == self.player_name:
+                if name_matches(player_state.name, self.player_name):
                     self.our_controller = controller_id
                     break
 
-            # Find opponent controller
             for controller_id, player_state in self.players.items():
-                if player_state.name != self.player_name:
+                if not name_matches(player_state.name, self.player_name):
                     self.opp_controller = controller_id
                     break
 
@@ -650,12 +599,18 @@ class GameReplayer:
                     our_hero_hp = entity.health
                     our_hero_armor = entity.armor
                 elif entity.card_type == CT_MINION:
-                    pass  # minions on board
+                    pass
 
             for entity in opp_entities:
                 if entity.card_type == CT_HERO:
                     opp_hero_hp = entity.health
                     opp_hero_armor = entity.armor
+
+            our_hero_max_hp = our_hero_hp
+            for entity in our_entities:
+                if entity.card_type == CT_HERO and hasattr(entity, 'max_health') and entity.max_health > 0:
+                    our_hero_max_hp = entity.max_health
+                    break
 
             # Extract board minions
             our_board = []
@@ -663,16 +618,11 @@ class GameReplayer:
 
             for entity in our_entities:
                 if entity.zone == ZONE_PLAY and entity.card_type == CT_MINION:
-                    keywords = []
-                    if entity.taunt: keywords.append("嘲讽")
-                    if entity.divine_shield: keywords.append("圣盾")
-                    if entity.charge: keywords.append("冲锋")
-                    if entity.rush: keywords.append("突袭")
-                    if entity.windfury: keywords.append("风怒")
-                    if entity.stealth: keywords.append("潜行")
-                    if entity.poisonous: keywords.append("剧毒")
-                    if entity.frozen: keywords.append("冻结")
-                    if entity.reborn: keywords.append("亡语")
+                    keywords = [
+                        cn for attr, _ in KEYWORD_BOOL_FIELDS
+                        if getattr(entity, attr, False)
+                        for cn in [KEYWORD_CN_MAP[attr]]
+                    ]
 
                     our_board.append({
                         'name': self._card_name(entity.card_id),
@@ -695,21 +645,7 @@ class GameReplayer:
 
             for entity in our_entities:
                 if entity.zone == ZONE_HAND:
-                    # Card type filtering
-                    if entity.card_type == CT_MINION:
-                        type_str = "随从"
-                    elif entity.card_type == CT_SPELL:
-                        type_str = "法术"
-                    elif entity.card_type == CT_WEAPON:
-                        type_str = "武器"
-                    elif entity.card_type == CT_HERO:
-                        type_str = "英雄牌"
-                    elif entity.card_type == CT_LOCATION:
-                        type_str = "地点"
-                    elif entity.card_type == CT_HERO_POWER:
-                        type_str = "英雄技能"
-                    else:
-                        type_str = "未知"
+                    type_str = CARDTYPE_CN.get(entity.card_type, "未知")
 
                     our_hand.append({
                         'name': self._card_name(entity.card_id),
@@ -769,7 +705,7 @@ class GameReplayer:
             self.log_main.info("=" * 70)
             self.log_main.info(f"🎯 回合 {self.game_turn} (湫然#51704)")
             self.log_main.info("=" * 70)
-            self.log_main.info(f"状态: 英雄 HP={our_hero_hp}/{30} 护甲={our_hero_armor} | "
+            self.log_main.info(f"状态: 英雄 HP={our_hero_hp} 护甲={our_hero_armor} | "
                              f"法力 {mana_available}/{mana_max} (已用{mana_used}, "
                              f"临时{mana_temp}, 超载{mana_overload}) | "
                              f"场面 {len(our_board)}随从 | 手牌 {len(our_hand)}张")
@@ -782,27 +718,58 @@ class GameReplayer:
                 self.log_main.info(f"    (空 — 卡牌可能在本决策点后加入)")
             for i, c in enumerate(our_hand[:8], 1):
                 self.log_main.info(f"    [{i}] {c['name']} ({c['cost']}费·{c['type']})")
+
+            # Log our play history
+            history = self.global_tracker.state.player_cards_played_history
+            if history:
+                played_names = [self._card_name(cid) for cid in history[-10:]]
+                suffix = f" (最近{len(played_names)}张)" if len(history) > 10 else ""
+                self.log_main.info(f"  我方已打出{suffix}: {', '.join(played_names)}")
+
+            died = self.global_tracker.state.player_minions_died
+            if died:
+                died_names = [self._card_name(cid) for cid in died[-10:]]
+                self.log_main.info(f"  我方死亡随从: {', '.join(died_names)}")
             self.log_main.info(f"对手: HP={opp_hero_hp} 护甲={opp_hero_armor} | "
                              f"场面 {opp_board_count}随从 | 手牌 {opp_hand_count}张 | "
                              f"牌库 {opp_deck_remaining}张")
 
-            # Log opponent known hand cards
-            opp_known = self.global_tracker.get_opp_known_hand()
-            if opp_known:
-                known_str = ", ".join(self._card_name(cid) for _, cid in opp_known)
-                self.log_main.info(f"  对手已知手牌: {known_str}")
+            opp_intel = self.global_tracker.get_opp_hand_intelligence(self._card_name, hand_count=opp_hand_count)
 
-            # Log opponent generated cards played so far
-            if self.global_tracker.state.opp_generated_seen:
-                gen_str = ", ".join(self._card_name(cid)
-                                    for cid in self.global_tracker.state.opp_generated_seen)
-                self.log_main.info(f"  对手衍生牌: {gen_str}")
+            if opp_intel.confirmed_hand:
+                pct = min(len(opp_intel.confirmed_hand) * 100 // max(opp_hand_count, 1), 100)
+                self.log_main.info(f"  对手确认手牌 ({pct}%): "
+                                 f"{', '.join(opp_intel.confirmed_hand)}")
+            elif opp_hand_count > 0:
+                self.log_main.info(f"  对手手牌: 均未知 ({opp_hand_count}张)")
 
-            # Log opponent secrets
-            if self.global_tracker.state.opp_secrets:
-                sec_str = ", ".join(self._card_name(cid)
-                                    for cid in self.global_tracker.state.opp_secrets)
-                self.log_main.info(f"  对手奥秘: {sec_str}")
+            if opp_intel.returned_to_hand:
+                recent = opp_intel.returned_to_hand[-8:]
+                self.log_main.info(f"  对手回手(100%): {', '.join(recent)}")
+
+            if opp_intel.graveyard_cards:
+                recent = opp_intel.graveyard_cards[-8:]
+                suffix = f" ...等{len(opp_intel.graveyard_cards)}张" if len(opp_intel.graveyard_cards) > 8 else ""
+                self.log_main.info(f"  对手入墓: {', '.join(recent)}{suffix}")
+
+            if opp_intel.deck_cards_played:
+                recent = opp_intel.deck_cards_played[-8:]
+                suffix = f" ...等{len(opp_intel.deck_cards_played)}张" if len(opp_intel.deck_cards_played) > 8 else ""
+                self.log_main.info(f"  对手已打出(牌库): {', '.join(recent)}{suffix}")
+
+            if opp_intel.generated_cards:
+                recent = opp_intel.generated_cards[-8:]
+                suffix = f" ...等{len(opp_intel.generated_cards)}张" if len(opp_intel.generated_cards) > 8 else ""
+                self.log_main.info(f"  对手衍生牌: {', '.join(recent)}{suffix}")
+
+            if opp_intel.secrets_active:
+                self.log_main.info(f"  对手活跃奥秘: {', '.join(opp_intel.secrets_active)}")
+
+            if opp_intel.secrets_triggered:
+                self.log_main.info(f"  对手已触发奥秘: {', '.join(opp_intel.secrets_triggered)}")
+
+            if opp_intel.probable_hand_over_50:
+                self.log_main.info(f"  对手高概率手牌(>50%): {', '.join(opp_intel.probable_hand_over_50)}")
 
             # Build GameState
             game_state = self._build_game_state(
@@ -858,7 +825,7 @@ class GameReplayer:
                 self.log_decisions.info("=" * 70)
                 self.log_decisions.info(f"回合 {self.game_turn} (湫然#51704)")
                 self.log_decisions.info("=" * 70)
-                self.log_decisions.info(f"状态: 英雄 HP={our_hero_hp}/{30} 护甲={our_hero_armor} | "
+                self.log_decisions.info(f"状态: 英雄 HP={our_hero_hp} 护甲={our_hero_armor} | "
                                       f"法力 {mana_available}/{mana_max} | "
                                       f"场面 {len(our_board)}随从 | 手牌 {len(our_hand)}张")
                 self.log_decisions.info(f"对手: HP={opp_hero_hp} | 场面 {opp_board_count}随从")
@@ -870,6 +837,16 @@ class GameReplayer:
                 self.log_decisions.info("")
                 self.log_decisions.info(f"RHEA 搜索: {rhea_time_ms:.1f}ms, {search_result.generations_run} 代")
                 self.log_decisions.info(f"最佳适应度: {search_result.best_fitness:+.2f}")
+
+                if search_result.timings:
+                    t = search_result.timings
+                    self.log_decisions.info(
+                        f"耗时分解: utp={t.get('utp', 0):.0f}ms "
+                        f"rhea={t.get('rhea', 0):.0f}ms "
+                        f"phaseB={t.get('phase_b', 0):.0f}ms "
+                        f"oppSim={t.get('opp_sim', 0):.0f}ms "
+                        f"crossTurn={t.get('cross_turn', 0):.0f}ms"
+                    )
 
                 self.log_decisions.info("")
                 self.log_decisions.info("最佳序列:")
@@ -933,7 +910,12 @@ class GameReplayer:
                 self.decisions.append(decision)
 
             except Exception as e:
-                self.log_errors.error(f"RHEA 搜索失败: {e}", exc_info=True)
+                self.log_errors.error(
+                    "RHEA 搜索失败 [回合=%d, 手牌=%d, 场面=%d, 法力=%d/%d]: %s",
+                    self.game_turn, len(our_hand), len(our_board),
+                    mana_available, mana_max, e,
+                    exc_info=True,
+                )
                 self.decisions.append(TurnDecision(
                     turn_number=self.game_turn,
                     player_name=self.player_name,
@@ -962,7 +944,11 @@ class GameReplayer:
                 ))
 
         except Exception as e:
-            self.log_errors.error(f"分析回合 {self.game_turn} 时出错: {e}", exc_info=True)
+            self.log_errors.error(
+                "分析回合 %d 时出错 [entities=%d, players=%d]: %s",
+                self.game_turn, len(self.entities), len(self.players), e,
+                exc_info=True,
+            )
 
     def _collect_opponent_turn_info(self):
         """Collect and log opponent state during their turn for decision support."""
@@ -1030,35 +1016,58 @@ class GameReplayer:
                     self.log_main.info(f"    对手随从[{i}]: {m['name']} {m['atk']}/{m['health']}")
 
             # Log opponent known hand cards
-            opp_known = self.global_tracker.get_opp_known_hand()
-            if opp_known:
-                known_str = ", ".join(self._card_name(cid) for _, cid in opp_known)
-                self.log_main.info(f"    对手已知手牌: {known_str}")
+            opp_intel = self.global_tracker.get_opp_hand_intelligence(self._card_name, hand_count=opp_hand_count)
 
-            # Log opponent generated cards played so far
-            if self.global_tracker.state.opp_generated_seen:
-                gen_str = ", ".join(self._card_name(cid)
-                                    for cid in self.global_tracker.state.opp_generated_seen)
-                self.log_main.info(f"    对手衍生牌: {gen_str}")
+            if opp_intel.confirmed_hand:
+                pct = min(len(opp_intel.confirmed_hand) * 100 // max(opp_hand_count, 1), 100)
+                self.log_main.info(f"    对手确认手牌 ({pct}%): "
+                                 f"{', '.join(opp_intel.confirmed_hand)}")
 
-            # Log opponent secrets
-            if self.global_tracker.state.opp_secrets:
-                sec_str = ", ".join(self._card_name(cid)
-                                    for cid in self.global_tracker.state.opp_secrets)
-                self.log_main.info(f"    对手奥秘: {sec_str}")
+            if opp_intel.returned_to_hand:
+                recent = opp_intel.returned_to_hand[-8:]
+                self.log_main.info(f"    对手回手(100%): {', '.join(recent)}")
+
+            if opp_intel.graveyard_cards:
+                recent = opp_intel.graveyard_cards[-8:]
+                suffix = f" ...等{len(opp_intel.graveyard_cards)}张" if len(opp_intel.graveyard_cards) > 8 else ""
+                self.log_main.info(f"    对手入墓: {', '.join(recent)}{suffix}")
+
+            if opp_intel.deck_cards_played:
+                recent = opp_intel.deck_cards_played[-8:]
+                suffix = f" ...等{len(opp_intel.deck_cards_played)}张" if len(opp_intel.deck_cards_played) > 8 else ""
+                self.log_main.info(f"    对手已打出(牌库): {', '.join(recent)}{suffix}")
+
+            if opp_intel.generated_cards:
+                recent = opp_intel.generated_cards[-8:]
+                suffix = f" ...等{len(opp_intel.generated_cards)}张" if len(opp_intel.generated_cards) > 8 else ""
+                self.log_main.info(f"    对手衍生牌: {', '.join(recent)}{suffix}")
+
+            if opp_intel.secrets_active:
+                self.log_main.info(f"    对手活跃奥秘: {', '.join(opp_intel.secrets_active)}")
+
+            if opp_intel.secrets_triggered:
+                self.log_main.info(f"    对手已触发奥秘: {', '.join(opp_intel.secrets_triggered)}")
+
+            if opp_intel.probable_hand_over_50:
+                self.log_main.info(f"    对手高概率手牌(>50%): {', '.join(opp_intel.probable_hand_over_50)}")
 
             # Log opponent weapon
             if self.global_tracker.state.opp_weapon:
-                w = self.global_tracker.state.opp_weapon
-                self.log_main.info(f"    对手武器: {self._card_name(w['card_id'])} {w['atk']}/{w['durability']}")
+                w = self.global_tracker.state
+                self.log_main.info(f"    对手武器: {self._card_name(w.opp_weapon)} {w.opp_weapon_atk}/{w.opp_weapon_durability}")
 
             # Log opponent locations
-            for loc in self.global_tracker.state.opp_locations:
-                self.log_main.info(f"    对手地标: {self._card_name(loc['card_id'])} "
-                                 f"HP={loc['current_hp']} CD={loc['cooldown']}")
+            for loc_id in self.global_tracker.state.opp_locations:
+                self.log_main.info(f"    对手地标: {self._card_name(loc_id)}")
 
         except Exception as e:
-            self.log_errors.error(f"收集对手回合 {self.game_turn} 信息时出错: {e}", exc_info=True)
+            self.log_errors.error(
+                "收集对手回合 %d 信息时出错 [opp_entities=%d]: %s",
+                self.game_turn,
+                len([e for e in self.entities.values() if e.controller == self.opp_controller]),
+                e,
+                exc_info=True,
+            )
 
     def _build_game_state(
         self,
@@ -1090,57 +1099,13 @@ class GameReplayer:
             board = []
             for entity in our_entities:
                 if entity.zone == ZONE_PLAY and entity.card_type == CT_MINION:
-                    keywords = []
-                    if entity.taunt: keywords.append('TAUNT')
-                    if entity.divine_shield: keywords.append('DIVINE_SHIELD')
-                    if entity.charge: keywords.append('CHARGE')
-                    if entity.rush: keywords.append('RUSH')
-                    if entity.windfury: keywords.append('WINDFURY')
-                    if entity.stealth: keywords.append('STEALTH')
-                    if entity.poisonous: keywords.append('POISONOUS')
-                    if entity.frozen: keywords.append('FROZEN')
-                    if entity.reborn: keywords.append('REBORN')
-
-                    board.append(Minion(
-                        attack=entity.atk,
-                        health=entity.health,
-                        max_health=entity.health,
-                        cost=entity.cost,
-                        has_taunt=entity.taunt,
-                        has_stealth=entity.stealth,
-                        has_windfury=entity.windfury,
-                        has_rush=entity.rush,
-                        has_charge=entity.charge,
-                        has_poisonous=entity.poisonous,
-                        has_lifesteal=False,
-                        has_reborn=entity.reborn,
-                        has_immune=entity.immune,
-                        frozen_until_next_turn=entity.frozen,
-                        has_divine_shield=entity.divine_shield,
-                        cant_attack=entity.exhausted,
-                        name=self._card_name(entity.card_id) or "",
-                        can_attack=not entity.exhausted,
-                    ))
+                    board.append(self._entity_to_minion(entity))
 
             # Extract hand cards
             hand = []
             for entity in our_entities:
                 if entity.zone == ZONE_HAND:
-                    # Map card type
-                    if entity.card_type == CT_MINION:
-                        ct = "MINION"
-                    elif entity.card_type == CT_SPELL:
-                        ct = "SPELL"
-                    elif entity.card_type == CT_WEAPON:
-                        ct = "WEAPON"
-                    elif entity.card_type == CT_HERO:
-                        ct = "HERO"
-                    elif entity.card_type == CT_LOCATION:
-                        ct = "LOCATION"
-                    elif entity.card_type == CT_HERO_POWER:
-                        ct = "HERO_POWER"
-                    else:
-                        ct = "MINION"
+                    ct = CARDTYPE_EN.get(entity.card_type, "MINION")
 
                     hand.append(Card(
                         dbf_id=0,
@@ -1176,26 +1141,7 @@ class GameReplayer:
             opp_board = []
             for entity in opp_entities:
                 if entity.zone == ZONE_PLAY and entity.card_type == CT_MINION:
-                    opp_board.append(Minion(
-                        attack=entity.atk,
-                        health=entity.health,
-                        max_health=entity.health,
-                        cost=entity.cost,
-                        has_taunt=entity.taunt,
-                        has_stealth=entity.stealth,
-                        has_windfury=entity.windfury,
-                        has_rush=entity.rush,
-                        has_charge=entity.charge,
-                        has_poisonous=entity.poisonous,
-                        has_lifesteal=False,
-                        has_reborn=entity.reborn,
-                        has_immune=entity.immune,
-                        frozen_until_next_turn=entity.frozen,
-                        has_divine_shield=entity.divine_shield,
-                        cant_attack=entity.exhausted,
-                        name=self._card_name(entity.card_id) or "",
-                        can_attack=not entity.exhausted,
-                    ))
+                    opp_board.append(self._entity_to_minion(entity))
 
             # Count deck remaining
             deck_remaining = 0
@@ -1242,7 +1188,11 @@ class GameReplayer:
             return game_state
 
         except Exception as e:
-            self.log_errors.error(f"构建 GameState 失败: {e}", exc_info=True)
+            self.log_errors.error(
+                "构建 GameState 失败 [回合=%d, 我方entities=%d]: %s",
+                self.game_turn, len(our_entities), e,
+                exc_info=True,
+            )
             return None
 
     def _evaluate_decision(
@@ -1360,6 +1310,29 @@ class GameReplayer:
             'rating': rating,
             'reasons': reasons + [f"✓ {r}" for r in positive_reasons],
         }
+
+    def _entity_to_minion(self, entity: Entity) -> Minion:
+        """Convert a tracked Entity to a search-layer Minion."""
+        return Minion(
+            attack=entity.atk,
+            health=entity.health,
+            max_health=entity.health,
+            cost=entity.cost,
+            has_taunt=entity.taunt,
+            has_stealth=entity.stealth,
+            has_windfury=entity.windfury,
+            has_rush=entity.rush,
+            has_charge=entity.charge,
+            has_poisonous=entity.poisonous,
+            has_lifesteal=False,
+            has_reborn=entity.reborn,
+            has_immune=entity.immune,
+            frozen_until_next_turn=entity.frozen,
+            has_divine_shield=entity.divine_shield,
+            cant_attack=entity.exhausted,
+            name=self._card_name(entity.card_id) or "",
+            can_attack=not entity.exhausted,
+        )
 
     def _card_name(self, card_id: str) -> str:
         """Get Chinese name for a card_id."""

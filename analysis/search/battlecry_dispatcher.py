@@ -30,24 +30,25 @@ logger = logging.getLogger(__name__)
 _BATTLECRY_PATTERN_EN = re.compile(r"Battlecry[：:]\s*(.+?)(?:[,.]|$)", re.DOTALL | re.IGNORECASE)
 _BATTLECRY_PATTERN = re.compile(r'战吼[：:]\s*(.+?)(?:，|$)', re.DOTALL)
 
-# Battlecry-specific patterns (beyond what spell_simulator covers)
-_BATTLECRY_EXTRA_PATTERNS = {
-    'destroy_minion': (r'消灭.*?随从', lambda m: True),
-    'freeze_target': (r"Freeze\s+(?:a|an|the)?\s*(?:enemy|minion)", lambda m: True),
-    'freeze_target_cn': (r'冻结', lambda m: True),
-    'silence_en': (r"Silence\s+(?:a|an|the)?\s*(?:enemy|minion)", lambda m: True),
-    'silence': (r'沉默', lambda m: True),
-    'give_divine_shield': (r"Give.*?Divine\s+Shield", lambda m: True),
-    'give_divine_shield_cn': (r'获得?圣盾', lambda m: True),
-    'give_taunt': (r"Give.*?Taunt", lambda m: True),
-    'give_taunt_cn': (r'获得?嘲讽', lambda m: True),
-    'give_charge': (r'获得?冲锋', lambda m: True),
-    'give_rush': (r"Give.*?Rush", lambda m: True),
-    'give_rush_cn': (r'获得?突袭', lambda m: True),
-    'discover': (r"Discover\s+(?:a\s+)?", lambda m: True),
-    'discover_cn': (r'发现', lambda m: True),
-    'copy_minion': (r'复制.*?随从', lambda m: True),
-}
+_DESTROY_MINION_CN = re.compile(r'消灭.*?随从')
+_FREEZE_EN = re.compile(r"Freeze\s+(?:a|an|the)?\s*(?:enemy|minion)", re.IGNORECASE)
+_SILENCE_EN = re.compile(r"Silence\s+(?:a|an|the)?\s*(?:enemy|minion)", re.IGNORECASE)
+_DIVINE_SHIELD_EN = re.compile(r"Give.*?Divine\s+Shield", re.IGNORECASE)
+_TAUNT_EN = re.compile(r"Give.*?Taunt", re.IGNORECASE)
+_RUSH_EN = re.compile(r"Give.*?Rush", re.IGNORECASE)
+_DISCOVER_EN = re.compile(r"Discover\s+(?:a\s+)?", re.IGNORECASE)
+
+_BATTLECRY_CHECKS = [
+    ('destroy_minion', lambda t: bool(_DESTROY_MINION_CN.search(t))),
+    ('freeze_target', lambda t: bool(_FREEZE_EN.search(t)) or '冻结' in t),
+    ('silence', lambda t: bool(_SILENCE_EN.search(t)) or '沉默' in t),
+    ('give_divine_shield', lambda t: bool(_DIVINE_SHIELD_EN.search(t)) or bool(re.search(r'获得?圣盾', t))),
+    ('give_taunt', lambda t: bool(_TAUNT_EN.search(t)) or bool(re.search(r'获得?嘲讽', t))),
+    ('give_charge', lambda t: bool(re.search(r'获得?冲锋', t))),
+    ('give_rush', lambda t: bool(_RUSH_EN.search(t)) or bool(re.search(r'获得?突袭', t))),
+    ('discover', lambda t: bool(_DISCOVER_EN.search(t)) or '发现' in t),
+    ('copy_minion', lambda t: bool(re.search(r'复制.*?随从', t))),
+]
 
 
 # ===================================================================
@@ -209,44 +210,33 @@ class BattlecryDispatcher:
         """Apply battlecry-specific effects not covered by spell_simulator."""
         s = state
 
-        # Freeze
-        if (re.search(_BATTLECRY_EXTRA_PATTERNS['freeze_target'][0], bc_text, re.IGNORECASE)
-                or re.search(_BATTLECRY_EXTRA_PATTERNS['freeze_target_cn'][0], bc_text)):
+        if _FREEZE_EN.search(bc_text) or '冻结' in bc_text:
             if s.opponent.board:
                 target = self._pick_damage_target(s)
                 if target.startswith('enemy_minion:'):
                     idx = int(target.split(':')[1])
                     s.opponent.board[idx].frozen_until_next_turn = True
 
-        # Give divine shield
-        if (re.search(_BATTLECRY_EXTRA_PATTERNS['give_divine_shield'][0], bc_text, re.IGNORECASE)
-                or re.search(_BATTLECRY_EXTRA_PATTERNS['give_divine_shield_cn'][0], bc_text)):
+        if _DIVINE_SHIELD_EN.search(bc_text) or re.search(r'获得?圣盾', bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
                 s.board[idx].has_divine_shield = True
 
-        # Give taunt
-        if (re.search(_BATTLECRY_EXTRA_PATTERNS['give_taunt'][0], bc_text, re.IGNORECASE)
-                or re.search(_BATTLECRY_EXTRA_PATTERNS['give_taunt_cn'][0], bc_text)):
+        if _TAUNT_EN.search(bc_text) or re.search(r'获得?嘲讽', bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
                 s.board[idx].has_taunt = True
 
-        # Give rush
-        if (re.search(_BATTLECRY_EXTRA_PATTERNS['give_rush'][0], bc_text, re.IGNORECASE)
-                or re.search(_BATTLECRY_EXTRA_PATTERNS['give_rush_cn'][0], bc_text)):
+        if _RUSH_EN.search(bc_text) or re.search(r'获得?突袭', bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
                 s.board[idx].has_rush = True
 
-        # Silence
-        if (re.search(_BATTLECRY_EXTRA_PATTERNS['silence_en'][0], bc_text, re.IGNORECASE)
-                or re.search(_BATTLECRY_EXTRA_PATTERNS['silence'][0], bc_text)):
+        if _SILENCE_EN.search(bc_text) or '沉默' in bc_text:
             if s.opponent.board:
                 target_idx = self._pick_destroy_target(s)
                 if target_idx is not None:
                     target = s.opponent.board[target_idx]
-                    # Strip all keywords
                     target.has_taunt = False
                     target.has_divine_shield = False
                     target.has_stealth = False
@@ -256,9 +246,7 @@ class BattlecryDispatcher:
                     target.has_charge = False
                     target.enchantments = []
 
-        # Discover — delegate to discover framework
-        if (re.search(_BATTLECRY_EXTRA_PATTERNS['discover'][0], bc_text, re.IGNORECASE)
-                or re.search(_BATTLECRY_EXTRA_PATTERNS['discover_cn'][0], bc_text)):
+        if _DISCOVER_EN.search(bc_text) or '发现' in bc_text:
             try:
                 from analysis.search.discover import resolve_discover
                 hero_class = getattr(s, 'hero', None)
@@ -268,7 +256,7 @@ class BattlecryDispatcher:
                     hero_class = ''
                 s = resolve_discover(s, bc_text, hero_class)
             except Exception:
-                pass  # graceful degradation — never crash the search
+                pass
 
         return s
 
@@ -406,6 +394,57 @@ _default_dispatcher = BattlecryDispatcher()
 def dispatch_battlecry(state: GameState, card: Card, minion: Minion) -> GameState:
     """Apply battlecry effects from card to state."""
     return _default_dispatcher.dispatch(state, card, minion)
+
+
+def dispatch_battlecry_branches(
+    state: GameState, card: Card, minion: Minion, k: int = 3,
+) -> List[Tuple[GameState, float]]:
+    """Return top-k battlecry branches as (state, probability) pairs.
+
+    For non-discover battlecries, returns [(state, 1.0)].
+    For discover battlecries, returns up to k branches with different
+    discovered cards added to hand.
+    """
+    card_text = getattr(card, 'text', '') or ''
+    has_discover = (
+        _DISCOVER_EN.search(card_text) or '发现' in card_text
+    )
+    if not has_discover:
+        result = _default_dispatcher.dispatch(state, card, minion)
+        return [(result, 1.0)]
+
+    bc_match = _BATTLECRY_PATTERN_EN.search(card_text)
+    if not bc_match:
+        bc_match = _BATTLECRY_PATTERN.search(card_text)
+    if not bc_match:
+        result = _default_dispatcher.dispatch(state, card, minion)
+        return [(result, 1.0)]
+
+    bc_text = bc_match.group(1).strip()
+
+    base_state = state.copy()
+    mechanics = set(getattr(card, 'mechanics', []) or [])
+
+    s = base_state
+    s = _default_dispatcher._apply_battlecry_effects(s, bc_text, card, minion)
+
+    if _default_dispatcher._has_battlecry_doubler(s, minion):
+        s = _default_dispatcher._apply_battlecry_effects(s, bc_text, card, minion)
+
+    try:
+        from analysis.search.discover import resolve_discover_top_k
+        hero_class = getattr(s, 'hero', None)
+        if hero_class:
+            hero_class = getattr(hero_class, 'hero_class', '') or ''
+        else:
+            hero_class = ''
+        branches = resolve_discover_top_k(s, bc_text, hero_class, k=k)
+        if len(branches) > 1:
+            return branches
+    except Exception:
+        pass
+
+    return [(s, 1.0)]
 
 
 # ===================================================================

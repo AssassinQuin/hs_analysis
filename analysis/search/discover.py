@@ -236,3 +236,50 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         logger.warning('Discover resolution failed: %s', exc)
 
     return state
+
+
+def resolve_discover_top_k(
+    state, card_text: str, hero_class: str = '', k: int = 3,
+) -> List[tuple]:
+    """Return top-k discover choices as (state, probability) pairs.
+
+    Each state has the respective discovered card added to hand.
+    Probability is uniform 1/k (random pick from pool).
+    """
+    if not hero_class:
+        hero = getattr(state, 'hero', None)
+        if hero:
+            hero_class = getattr(hero, 'hero_class', '') or ''
+
+    constraints = _parse_discover_constraint(card_text)
+    ct = constraints.get('card_type')
+    race = constraints.get('race')
+
+    use_wild_pool = '来自过去' in card_text or 'from the past' in card_text.lower()
+
+    pool = generate_discover_pool(
+        hero_class, card_type=ct, race=race,
+        use_wild_pool=use_wild_pool,
+    )
+
+    if not pool:
+        s = state.copy()
+        return [(s, 1.0)]
+
+    sample = random.sample(pool, min(3, len(pool)))
+    sample.sort(key=lambda c: _card_score(c), reverse=True)
+    sample = sample[:k]
+
+    branches: List[tuple] = []
+    for chosen_raw in sample:
+        chosen_card = Card.from_hsdb_dict(chosen_raw)
+        s = state.copy()
+        if len(s.hand) < 10:
+            s.hand.append(chosen_card)
+        prob = 1.0 / len(sample)
+        branches.append((s, prob))
+
+    if not branches:
+        branches.append((state.copy(), 1.0))
+
+    return branches

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from analysis.search.game_state import GameState, Minion
 from analysis.search.engine.factors.factor_base import (
@@ -77,6 +77,22 @@ class BoardControlFactor(EvaluationFactor):
 
         if getattr(m, 'has_ward', False):
             multiplier += 0.2
+
+        # Keyword combos: synergistic pairs worth more than sum
+        if m.has_taunt and m.has_divine_shield:
+            multiplier += 0.35
+        if m.has_taunt and m.has_reborn:
+            multiplier += 0.25
+        if m.has_poisonous and m.has_stealth:
+            multiplier += 0.4
+        if m.has_windfury and m.has_divine_shield:
+            multiplier += 0.3
+        if m.has_charge and m.has_windfury:
+            multiplier += 0.25
+        if m.has_rush and m.has_divine_shield:
+            multiplier += 0.2
+        if m.has_poisonous and m.has_rush:
+            multiplier += 0.3
 
         return multiplier
 

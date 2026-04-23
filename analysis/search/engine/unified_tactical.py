@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
@@ -63,6 +63,8 @@ class UnifiedTacticalPlanner:
                     continue
 
                 for action in non_end:
+                    if time.perf_counter() > deadline:
+                        break
                     new_state = apply_action(plan.state_after.copy(), action)
                     step_score = self._evaluator.evaluate(
                         state, new_state, context=ctx,

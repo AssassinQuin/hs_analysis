@@ -18,12 +18,24 @@ from analysis.search.game_state import GameState, Minion
 
 logger = logging.getLogger(__name__)
 
+
+def _card_attr(card, key: str, default=None):
+    if isinstance(card, dict):
+        return card.get(key, default)
+    return getattr(card, key, default)
+
+
 # ---------------------------------------------------------------------------
 # Detection
 # ---------------------------------------------------------------------------
 
 _KINDRED_RE = re.compile(r'Kindred[：:]?\s*(.+?)(?:<|$)|延系[：:]?\s*(.+?)(?:<|$)', re.DOTALL)
 _KINDRED_PRESENT_RE = re.compile(r'Kindred|延系')
+_KINDRED_STAT_RE = re.compile(r'[+＋](\d+)/[+＋](\d+)')
+_KINDRED_SPELL_DMG_EN = re.compile(r'Spell\s*Damage\s*\+(\d+)', re.IGNORECASE)
+_KINDRED_SPELL_DMG_CN = re.compile(r'法术伤害[+＋](\d+)')
+_KINDRED_COST_RED_EN = re.compile(r'(?:Cost|cost)\s*(?:reduced?)?\s*(?:by\s*)?\(?(\d+)\)?')
+_KINDRED_COST_RED_CN = re.compile(r'消耗减少[（(]\s*(\d+)\s*[）)]')
 
 
 def has_kindred(card_text: str) -> bool:
@@ -51,14 +63,13 @@ def parse_kindred_bonus(card_text: str) -> str | None:
 # Condition check
 # ---------------------------------------------------------------------------
 
-def check_kindred_active(state: GameState, card: dict) -> bool:
+def check_kindred_active(state: GameState, card) -> bool:
     """Check if the card's race/spellSchool overlaps with last turn's plays.
 
     Cards can have multi-race like "MURLOC ELEMENTAL" — we split on whitespace
     and check each individually.
     """
-    # Race check
-    race_str = card.get("race", "") or ""
+    race_str = _card_attr(card, "race", "") or ""
     if isinstance(race_str, str):
         card_races = {r.upper() for r in race_str.split() if r}
     else:
@@ -67,8 +78,7 @@ def check_kindred_active(state: GameState, card: dict) -> bool:
     if card_races & state.last_turn_races:
         return True
 
-    # SpellSchool check
-    school = card.get("spellSchool", "") or card.get("spell_school", "") or ""
+    school = _card_attr(card, "spellSchool", "") or _card_attr(card, "spell_school", "") or ""
     if isinstance(school, str) and school:
         card_schools = {s.upper() for s in school.split() if s}
         if card_schools & state.last_turn_schools:
@@ -107,7 +117,7 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
         if not s.board_full():
             # Find the card's minion on board (last played)
             for m in reversed(s.board):
-                if m.name == (card.get("name") or ""):
+                if m.name == (_card_attr(card, "name") or ""):
                     copy_minion = Minion(
                         dbf_id=m.dbf_id, name=m.name,
                         attack=m.attack, health=m.health,
@@ -127,7 +137,7 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
         return s
 
     # Pattern: stat buff like "获得+2/+2" or "+1/+3"
-    stat_match = re.search(r'[+＋](\d+)/[+＋](\d+)', text)
+    stat_match = _KINDRED_STAT_RE.search(text)
     if stat_match:
         atk_bonus = int(stat_match.group(1))
         hp_bonus = int(stat_match.group(2))
@@ -139,9 +149,9 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
         return s
 
     # Pattern: "使其获得法术伤害+N"
-    spell_dmg = re.search(r'Spell\s*Damage\s*\+(\d+)', text, re.IGNORECASE)
+    spell_dmg = _KINDRED_SPELL_DMG_EN.search(text)
     if not spell_dmg:
-        spell_dmg = re.search(r'法术伤害[+＋](\d+)', text)
+        spell_dmg = _KINDRED_SPELL_DMG_CN.search(text)
     if spell_dmg:
         # Simplified: buff hero's spell damage notionally
         # (actual spell damage tracked in evaluation)
@@ -149,9 +159,9 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
         return s
 
     # Pattern: "法力值消耗减少（N）点" → cost reduction for next card
-    cost_red = re.search(r'(?:Cost|cost)\s*(?:reduced?)?\s*(?:by\s*)?\(?(\d+)\)?', text)
+    cost_red = _KINDRED_COST_RED_EN.search(text)
     if not cost_red:
-        cost_red = re.search(r'消耗减少[（(]\s*(\d+)\s*[）)]', text)
+        cost_red = _KINDRED_COST_RED_CN.search(text)
     if cost_red:
         # Simplified: adjust hand card costs
         amount = int(cost_red.group(1))
@@ -172,12 +182,12 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def apply_kindred(state: GameState, card: dict) -> GameState:
+def apply_kindred(state: GameState, card) -> GameState:
     """Apply 延系 effect if card has it and condition is met.
 
     Integrates with kindred_double_next flag (蛮鱼挑战者).
     """
-    card_text = card.get("text", "") or ""
+    card_text = _card_attr(card, "text", "") or ""
     if not isinstance(card_text, str):
         card_text = str(card_text)
 

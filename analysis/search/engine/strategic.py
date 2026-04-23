@@ -89,14 +89,9 @@ def _max_damage_bound(state: GameState) -> int:
     if state.hero.weapon is not None:
         dmg += state.hero.weapon.attack
     try:
-        import re
         for card in state.hand:
-            text = getattr(card, "text", "") or ""
-            m = re.search(r'Deal\s*(\d+)\s*damage', text, re.IGNORECASE)
-            if not m:
-                m = re.search(r'造成\s*(\d+)\s*点伤害', text)
-            if m and card.cost <= state.mana.available:
-                dmg += int(m.group(1))
+            if card.cost <= state.mana.available:
+                dmg += card.total_damage() if hasattr(card, "total_damage") else 0
     except Exception:
         pass
     return dmg

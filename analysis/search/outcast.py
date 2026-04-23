@@ -83,36 +83,24 @@ def apply_outcast_bonus(state: GameState, card_index: int, card) -> GameState:
 # _parse_outcast_bonus
 # ===================================================================
 
+_OUTCAST_DRAW_EN = re.compile(r'Outcast[：:]\s*Draw\s*(\d+)')
+_OUTCAST_DRAW_CN = re.compile(r'流放[：:]\s*再抽(\d+)张')
+_OUTCAST_BUFF_EN = re.compile(r'Outcast[：:]\s*\+(\d+)/\+(\d+)')
+_OUTCAST_BUFF_CN = re.compile(r'流放[：:]\s*\+(\d+)/\+(\d+)')
+_OUTCAST_COST_EN = re.compile(r'Outcast[：:]\s*(?:costs?|Cost)\s*\(?(\d+)\)?')
+_OUTCAST_COST_CN = re.compile(r'流放[：:]\s*法力值消耗为[（(]\s*(\d+)\s*[）)]点')
+
+
 def _parse_outcast_bonus(text: str) -> dict:
-    """Parse Chinese outcast bonus text and return bonus descriptor.
-
-    Patterns:
-        '流放：再抽N张'     → {"type": "draw", "count": N}
-        '流放：+N/+N'       → {"type": "buff", "attack": N, "health": N}
-        '流放：法力值消耗为（N）点' → {"type": "cost", "value": N}
-        Fallback if '流放' present: {"type": "draw", "count": 1}
-    """
-    m = re.search(r'Outcast[：:]\s*Draw\s*(\d+)', text)
+    m = _OUTCAST_DRAW_EN.search(text) or _OUTCAST_DRAW_CN.search(text)
     if m:
         return {"type": "draw", "count": int(m.group(1))}
 
-    m = re.search(r'流放[：:]\s*再抽(\d+)张', text)
-    if m:
-        return {"type": "draw", "count": int(m.group(1))}
-
-    m = re.search(r'Outcast[：:]\s*\+(\d+)/\+(\d+)', text)
+    m = _OUTCAST_BUFF_EN.search(text) or _OUTCAST_BUFF_CN.search(text)
     if m:
         return {"type": "buff", "attack": int(m.group(1)), "health": int(m.group(2))}
 
-    m = re.search(r'流放[：:]\s*\+(\d+)/\+(\d+)', text)
-    if m:
-        return {"type": "buff", "attack": int(m.group(1)), "health": int(m.group(2))}
-
-    m = re.search(r'Outcast[：:]\s*(?:costs?|Cost)\s*\(?(\d+)\)?', text)
-    if m:
-        return {"type": "cost", "value": int(m.group(1))}
-
-    m = re.search(r'流放[：:]\s*法力值消耗为[（(]\s*(\d+)\s*[）)]点', text)
+    m = _OUTCAST_COST_EN.search(text) or _OUTCAST_COST_CN.search(text)
     if m:
         return {"type": "cost", "value": int(m.group(1))}
 

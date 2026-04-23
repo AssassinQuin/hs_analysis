@@ -6,10 +6,19 @@ import random
 import re
 from typing import Optional
 
+from analysis.data.card_effects import (
+    _DAMAGE_CN, _DAMAGE_EN, _HEAL_CN, _HEAL_EN,
+    _DRAW_CN, _DRAW_EN, _BUFF_ATK_CN, _BUFF_ATK_EN,
+    _SUMMON_STATS_CN, _SUMMON_STATS_EN,
+)
 from analysis.search.game_state import GameState
 
 
 class RNGModel:
+
+    _DMG_RANGE = re.compile(r'damage.*?(\d+)\s*[-~]\s*(\d+)', re.IGNORECASE)
+    _DMG_RANGE_CN = re.compile(r'damage.*?(\d+)\s*[到至]\s*(\d+)', re.IGNORECASE)
+    _DMG_SIMPLE = re.compile(r'damage.*?(\d+)', re.IGNORECASE)
 
     def expected_value(self, effect: str, state: GameState,
                        n_samples: int = 8) -> float:
@@ -25,39 +34,37 @@ class RNGModel:
     def _resolve_random(self, effect: str, state: GameState) -> float:
         effect_lower = effect.lower()
 
-        dmg_match = re.search(r'damage.*?(\d+)\s*[-~]\s*(\d+)', effect_lower)
+        dmg_match = self._DMG_RANGE.search(effect_lower)
         if not dmg_match:
-            dmg_match = re.search(r'damage.*?(\d+)\s*[到至]\s*(\d+)', effect_lower)
+            dmg_match = self._DMG_RANGE_CN.search(effect_lower)
         if dmg_match:
             lo, hi = int(dmg_match.group(1)), int(dmg_match.group(2))
             return random.randint(lo, hi)
 
-        dmg_single = re.search(r'damage.*?(\d+)', effect_lower)
-        if dmg_single:
-            return float(dmg_single.group(1))
+        m = _DAMAGE_EN.search(effect) or _DAMAGE_CN.search(effect)
+        if m:
+            return float(m.group(1))
 
-        heal_match = re.search(r'heal|restore.*?(\d+)', effect_lower)
-        if not heal_match:
-            heal_match = re.search(r'恢复.*?(\d+)', effect_lower)
-        if heal_match:
-            return float(heal_match.group(1)) * 0.8
+        m = self._DMG_SIMPLE.search(effect_lower)
+        if m:
+            return float(m.group(1))
 
-        summon_match = re.search(r'summon.*?(\d+)/(\d+)', effect_lower)
-        if summon_match:
-            atk, hp = int(summon_match.group(1)), int(summon_match.group(2))
+        m = _HEAL_EN.search(effect) or _HEAL_CN.search(effect)
+        if m:
+            return float(m.group(1)) * 0.8
+
+        m = _SUMMON_STATS_EN.search(effect) or _SUMMON_STATS_CN.search(effect)
+        if m:
+            atk, hp = int(m.group(1)), int(m.group(2))
             return (atk + hp) * 0.3
 
-        buff_atk = re.search(r'\+(\d+)\s*attack', effect_lower)
-        if not buff_atk:
-            buff_atk = re.search(r'\+(\d+)\s*攻击力', effect_lower)
-        if buff_atk:
-            return float(buff_atk.group(1)) * 0.4
+        m = _BUFF_ATK_EN.search(effect) or _BUFF_ATK_CN.search(effect)
+        if m:
+            return float(m.group(1)) * 0.4
 
-        draw_match = re.search(r'draw.*?(\d+)', effect_lower)
-        if not draw_match:
-            draw_match = re.search(r'抽.*?(\d+)', effect_lower)
-        if draw_match:
-            n = int(draw_match.group(1))
+        m = _DRAW_EN.search(effect) or _DRAW_CN.search(effect)
+        if m:
+            n = int(m.group(1))
             return n * 0.5
 
         random_targets = ["随机", "random"]

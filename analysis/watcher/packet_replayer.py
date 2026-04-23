@@ -35,6 +35,9 @@ from analysis.search.game_state import (
 )
 from analysis.search.rhea_engine import Action, RHEAEngine, enumerate_legal_actions
 from analysis.watcher.global_tracker import CardSource, GlobalTracker
+from analysis.utils.player_name import (
+    normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
+)
 
 
 # ─── 数据类 ───────────────────────────────────────────────────────────
@@ -280,20 +283,20 @@ class PacketReplayer:
         self._game_entity_id = self._resolve_id(packet.entity)
         for player in packet.players:
             pid = player.player_id
-            # hslog stores name in PlayerReference (player.entity.name), not player.name
             if hasattr(player.entity, 'name'):
                 eid = getattr(player.entity, 'entity_id', player.entity)
-                name = getattr(player.entity, 'name', "") or ""
+                raw_name = getattr(player.entity, 'name', "") or ""
             else:
                 eid = player.entity
-                name = player.name or ""
+                raw_name = player.name or ""
+
+            name = normalize_player_name(raw_name)
 
             self._player_entity_to_pid[eid] = pid
-            self._player_name_map[name] = pid
+            self._player_name_map[name or raw_name] = pid
 
-            self.players[pid] = PlayerState(name=name)
+            self.players[pid] = PlayerState(name=name or ANON_DISPLAY)
 
-            # Apply initial player tags
             for tag, value in player.tags:
                 if tag == GameTag.RESOURCES:
                     self.players[pid].resources = value
@@ -306,25 +309,20 @@ class PacketReplayer:
                 elif tag == GameTag.TEMP_RESOURCES:
                     self.players[pid].temp_resources = value
 
-            # Identify our player vs opponent
-            if self.player_name and name == self.player_name:
+            if self.player_name and name_matches(name, self.player_name):
                 self._our_player_id = pid
-            elif name and not name.startswith("UNKNOWN"):
-                # Auto-detect: named player is our player (opponent shows as UNKNOWN)
+            elif name and not is_anonymous_name(name):
                 if not self.player_name:
                     self.player_name = name
-                if name == self.player_name:
+                if name_matches(name, self.player_name):
                     self._our_player_id = pid
                 else:
                     self._opp_player_id = pid
                     self._opp_name = name
-            elif name:
+            elif name or raw_name:
                 self._opp_player_id = pid
-                self._opp_name = name
+                self._opp_name = name or ANON_DISPLAY
 
-        # Set controllers on global tracker immediately so subsequent
-        # on_full_entity / on_show_entity / on_zone_change calls can
-        # correctly classify cards as ours vs opponent's.
         if self._our_player_id and self._opp_player_id:
             self.global_tracker.set_controllers(
                 self._our_player_id, self._opp_player_id

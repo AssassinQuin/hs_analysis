@@ -29,6 +29,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
+from analysis.constants.hs_enums import (
+    ZONE_PLAY, ZONE_DECK, ZONE_HAND, ZONE_GRAVEYARD,
+    ZONE_SETASIDE, ZONE_SECRET,
+    CT_HERO, CT_MINION, CT_SPELL, CT_ENCHANTMENT,
+    CT_WEAPON, CT_HERO_POWER, CT_LOCATION,
+)
 from analysis.search.secret_probability import SecretProbabilityModel
 
 logger = logging.getLogger(__name__)
@@ -60,6 +66,22 @@ class KnownCard:
     cost: int = 0
     spell_school: str = ""      # 法术学派 (FIRE, FROST, HOLY, etc.)
     race: str = ""              # 种族 (BEAST, DEMON, DRAGON, etc.)
+
+
+@dataclass
+class OppHandIntel:
+    """Structured opponent hand intelligence for display."""
+    confirmed_hand: List[str] = field(default_factory=list)
+    returned_to_hand: List[str] = field(default_factory=list)
+    graveyard_cards: List[str] = field(default_factory=list)
+    probable_hand_over_50: List[str] = field(default_factory=list)
+    secrets_active: List[str] = field(default_factory=list)
+    secrets_triggered: List[str] = field(default_factory=list)
+    deck_cards_played: List[str] = field(default_factory=list)
+    generated_cards: List[str] = field(default_factory=list)
+    hand_count: int = 0
+    deck_count: int = 0
+    confirmed_pct: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -126,9 +148,21 @@ class GlobalGameState:
     opp_generated_seen: Set[str] = field(default_factory=set)
     """对手已打出的衍生牌 card_id 集合"""
 
+    opp_graveyard_seen: List[str] = field(default_factory=list)
+    """对手已进入墓地的已知 card_id 历史（按时间顺序）"""
+
+    opp_returned_to_hand_seen: List[str] = field(default_factory=list)
+    """对手已打出后回到手牌的 card_id 历史（100%确认）"""
+
     # ---- 我方追踪 ----
     player_generated_seen: Set[str] = field(default_factory=set)
     """我方已打出的衍生牌 card_id 集合"""
+
+    player_cards_played_history: List[str] = field(default_factory=list)
+    """我方打出卡牌的 card_id 历史列表（按打出顺序）"""
+
+    player_minions_died: List[str] = field(default_factory=list)
+    """我方死亡随从的 card_id 列表"""
 
     # ---- 先后手 (§1.7) ----
     is_first_player: bool = True
@@ -211,22 +245,21 @@ class GlobalTracker:
         state = gt.state
     """
 
-    # Zone constants
-    ZONE_PLAY = 1
-    ZONE_DECK = 2
-    ZONE_HAND = 3
-    ZONE_GRAVEYARD = 5
-    ZONE_SETASIDE = 6
-    ZONE_SECRET = 7
+    # Re-export constants as class attrs for backward compatibility
+    ZONE_PLAY = ZONE_PLAY
+    ZONE_DECK = ZONE_DECK
+    ZONE_HAND = ZONE_HAND
+    ZONE_GRAVEYARD = ZONE_GRAVEYARD
+    ZONE_SETASIDE = ZONE_SETASIDE
+    ZONE_SECRET = ZONE_SECRET
 
-    # CardType constants (matching hearthstone.enums.CardType)
-    CT_HERO = 3
-    CT_MINION = 4
-    CT_SPELL = 5
-    CT_ENCHANTMENT = 6
-    CT_WEAPON = 7
-    CT_HERO_POWER = 10
-    CT_LOCATION = 39
+    CT_HERO = CT_HERO
+    CT_MINION = CT_MINION
+    CT_SPELL = CT_SPELL
+    CT_ENCHANTMENT = CT_ENCHANTMENT
+    CT_WEAPON = CT_WEAPON
+    CT_HERO_POWER = CT_HERO_POWER
+    CT_LOCATION = CT_LOCATION
 
     # Known coin card IDs
     COIN_CARD_IDS = {"GAME_005", "TB_BlingBrawl_Coin", "NEW1_008t"}
@@ -410,6 +443,18 @@ class GlobalTracker:
         elif old_zone == self.ZONE_SETASIDE and new_zone == self.ZONE_PLAY:
             pass  # Summoned tokens don't count as "played"
 
+        # Minion died / weapon destroyed: PLAY -> GRAVEYARD
+        elif old_zone == self.ZONE_PLAY and new_zone == self.ZONE_GRAVEYARD:
+            if is_opp and card_id:
+                self.state.opp_graveyard_seen.append(card_id)
+            if not is_opp and card_id:
+                self.state.player_minions_died.append(card_id)
+
+        # Played card returns to hand (bounce / recall): PLAY/SECRET -> HAND
+        elif old_zone in (self.ZONE_PLAY, self.ZONE_SECRET) and new_zone == self.ZONE_HAND:
+            if is_opp and card_id:
+                self.state.opp_returned_to_hand_seen.append(card_id)
+
         # Secret played: HAND -> SECRET (§7)
         elif old_zone == self.ZONE_HAND and new_zone == self.ZONE_SECRET:
             if is_opp and card_id:
@@ -474,6 +519,7 @@ class GlobalTracker:
                 self.state.opp_generated_seen.add(card_id)
         else:
             self.state.cards_played_this_turn_player.append(card_id)
+            self.state.player_cards_played_history.append(card_id)
             if source == CardSource.GENERATED:
                 self.state.player_generated_seen.add(card_id)
 
@@ -630,6 +676,63 @@ class GlobalTracker:
             for eid, (card_id, zone) in self.state.opp_hand_card_ids.items()
             if zone == self.ZONE_HAND
         ]
+
+    def get_opp_hand_intelligence(self, name_fn=None, hand_count: int = 0) -> OppHandIntel:
+        """Return structured opponent hand intelligence.
+
+        Three tiers:
+        1. confirmed_hand (100%): cards revealed in HAND zone (SHOW_ENTITY→HAND)
+        2. deck_cards_played: original deck cards already played (now in graveyard)
+        3. generated_cards: generated/discovered cards played
+        """
+        name_fn = name_fn or (lambda cid: cid)
+        state = self.state
+
+        confirmed_raw = self.get_opp_known_hand()
+        confirmed_hand = [name_fn(cid) for _, cid in confirmed_raw]
+
+        played_deck = []
+        played_gen = []
+        for kc in state.opp_known_cards:
+            name = name_fn(kc.card_id) if kc.card_id else "未知"
+            if kc.source == CardSource.DECK:
+                played_deck.append(name)
+            elif kc.source == CardSource.GENERATED:
+                played_gen.append(name)
+
+        secrets_active = [name_fn(cid) for cid in state.opp_secrets]
+        secrets_triggered = [name_fn(kc.card_id) for kc in state.opp_secrets_triggered]
+        returned_to_hand = [name_fn(cid) for cid in state.opp_returned_to_hand_seen]
+        graveyard_cards = [name_fn(cid) for cid in state.opp_graveyard_seen]
+        probable = self.get_opp_probable_hand(name_fn=name_fn, prob_threshold=0.5)
+
+        return OppHandIntel(
+            confirmed_hand=confirmed_hand,
+            returned_to_hand=returned_to_hand,
+            graveyard_cards=graveyard_cards,
+            probable_hand_over_50=probable,
+            secrets_active=secrets_active,
+            secrets_triggered=secrets_triggered,
+            deck_cards_played=played_deck,
+            generated_cards=played_gen,
+            hand_count=hand_count,
+            deck_count=state.opp_deck_remaining,
+            confirmed_pct=0,
+        )
+
+    def get_opp_probable_hand(self, name_fn=None, prob_threshold: float = 0.5) -> List[str]:
+        """Return probable opponent hand cards whose probability >= threshold."""
+        name_fn = name_fn or (lambda cid: cid)
+        bs = self.get_bayesian_state()
+        preds = bs.get("predicted_next", []) or []
+        result: List[str] = []
+        for p in preds:
+            prob = float(p.get("probability", 0.0) or 0.0)
+            if prob >= prob_threshold:
+                name = p.get("name") or ""
+                # Bayesian model may return name directly; keep graceful fallback.
+                result.append(name if name else name_fn(str(p.get("dbfId", ""))))
+        return result
 
     def get_opp_card_breakdown(self, card_name_fn=None) -> Dict:
         """Generate categorized breakdown of all revealed opponent cards.
@@ -885,6 +988,13 @@ class GlobalTracker:
         stats = self.state.player_stats
         if stats.generated_cards_played > 0:
             parts.append(f"衍生牌={stats.generated_cards_played}张")
+        if self.state.player_generated_seen:
+            names = []
+            for cid in self.state.player_generated_seen:
+                n = card_name_fn(cid) if card_name_fn else cid
+                names.append(n)
+            if names:
+                parts.append(f"衍生牌列表={','.join(names)}")
         if self.state.player_corpses > 0:
             parts.append(f"残骸={self.state.player_corpses}")
         if self.state.player_herald_count > 0:

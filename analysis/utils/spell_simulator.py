@@ -11,50 +11,14 @@ Usage:
 from __future__ import annotations
 
 import copy
-import re
 import sys
 import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-# ---------------------------------------------------------------------------
-# Import from package modules
-# ---------------------------------------------------------------------------
 from analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
 from analysis.models.card import Card
-
-
-# ===================================================================
-# Spell Effect Patterns (reused / extended from v2_scoring_engine L3)
-# ===================================================================
-
-SPELL_EFFECT_PATTERNS = {
-    'aoe_damage_en': (r'Deal\s*(\d+)\s*damage\s*to\s*all\s*enemies', lambda m: int(m.group(1))),
-    'direct_damage_en': (r'Deal\s*(\d+)\s*damage', lambda m: int(m.group(1))),
-    'random_damage_en': (r'Deal\s*(\d+)\s*damage\s*randomly', lambda m: int(m.group(1))),
-    'draw_en': (r'Draw\s*(\d+)\s*(?:cards?)', lambda m: int(m.group(1))),
-    'summon_stats_en': (r'Summon\s*(?:a\s+)?(\d+)/(\d+)', lambda m: (int(m.group(1)), int(m.group(2)))),
-    'summon_en': (r'Summon', lambda m: True),
-    'destroy_en': (r'Destroy', lambda m: True),
-    'heal_en': (r'Restore\s*(\d+)\s*(?:Health|health)', lambda m: int(m.group(1))),
-    'armor_en': (r'Gain\s*(\d+)\s*(?:Armor|armor)', lambda m: int(m.group(1))),
-    'buff_atk_en': (r'\+\s*(\d+)\s*Attack', lambda m: int(m.group(1))),
-    'discard_en': (r'Discard\s*(\d+)', lambda m: int(m.group(1))),
-    'cost_reduce_en': (r'Costs?\s*(\d+)\s*less', lambda m: int(m.group(1))),
-    'direct_damage': (r'造成\s*\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
-    'random_damage': (r'随机.*?\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
-    'draw': (r'抽\s*(\d+)\s*张牌', lambda m: int(m.group(1))),
-    'summon_stats': (r'召唤.*?(\d+)/(\d+)', lambda m: (int(m.group(1)), int(m.group(2)))),
-    'summon': (r'召唤', lambda m: True),
-    'destroy': (r'消灭', lambda m: True),
-    'aoe_damage': (r'所有.*?\$?\s*(\d+)\s*点伤害', lambda m: int(m.group(1))),
-    'heal': (r'恢复\s*(\d+)\s*点', lambda m: int(m.group(1))),
-    'armor': (r'获得\s*(\d+)\s*点护甲', lambda m: int(m.group(1))),
-    'buff_atk': (r'\+\s*(\d+)\s*.*?攻击力', lambda m: int(m.group(1))),
-    'discard': (r'弃掉?\s*(\d+)\s*张', lambda m: int(m.group(1))),
-    'hand_buff': (r'手牌.*?\+(\d+)/\+(\d+)', lambda m: (int(m.group(1)), int(m.group(2)))),
-    'cost_reduce': (r'法力值消耗.*?减少\s*(\d+)', lambda m: int(m.group(1))),
-}
+from analysis.data.card_effects import get_effects, CardEffects
 
 
 # ===================================================================
@@ -62,78 +26,117 @@ SPELL_EFFECT_PATTERNS = {
 # ===================================================================
 
 class EffectParser:
-    """Parse card text to extract effect types and parameters.
+    """Parse card effects using structured CardEffects data.
 
     Returns a list of (effect_type, params) tuples.
     """
 
     @staticmethod
-    def parse(card_text: str) -> List[Tuple[str, object]]:
-        """Parse card text and return list of (effect_type, params) tuples.
+    def parse(card_text: str, card: Card = None) -> List[Tuple[str, object]]:
+        """Parse card effects from a Card object or text fallback.
 
-        The order of patterns matters: more specific patterns should be
-        checked before generic ones (e.g., 'summon_stats' before 'summon').
+        If a Card object is provided, uses structured fields via get_effects().
+        Falls back to text-only parsing if no Card is given.
         """
+        if card is not None:
+            return EffectParser._from_card(card)
         if not card_text:
             return []
+        return EffectParser._from_text_fallback(card_text)
 
+    @staticmethod
+    def _from_card(card: Card) -> List[Tuple[str, object]]:
+        eff = get_effects(card)
         effects: List[Tuple[str, object]] = []
-        matched_spans: List[Tuple[int, int]] = []
 
-        # Order matters: check specific patterns before generic ones
-        pattern_order = [
-            'aoe_damage_en',
-            'aoe_damage',
-            'random_damage_en',
-            'direct_damage_en',
-            'random_damage',
-            'direct_damage',
-            'summon_stats_en',
-            'summon_stats',
-            'summon_en',
-            'summon',
-            'draw_en',
-            'draw',
-            'destroy_en',
-            'destroy',
-            'heal_en',
-            'heal',
-            'armor_en',
-            'armor',
-            'buff_atk_en',
-            'buff_atk',
-            'hand_buff',
-            'discard_en',
-            'discard',
-            'cost_reduce_en',
-            'cost_reduce',
-        ]
+        if eff.aoe_damage > 0:
+            effects.append(('aoe_damage', eff.aoe_damage))
+        if eff.random_damage > 0:
+            effects.append(('random_damage', eff.random_damage))
+        elif eff.damage > 0:
+            effects.append(('direct_damage', eff.damage))
 
-        for effect_name in pattern_order:
-            if effect_name not in SPELL_EFFECT_PATTERNS:
-                continue
-            pattern, extractor = SPELL_EFFECT_PATTERNS[effect_name]
-            match = re.search(pattern, card_text, re.IGNORECASE)
-            if match:
-                # Check if this match overlaps with an already-matched span
-                span = match.span()
-                if not _spans_overlap(span, matched_spans):
-                    params = extractor(match)
-                    effects.append((effect_name, params))
-                    matched_spans.append(span)
+        if eff.summon_attack > 0 and eff.summon_health > 0:
+            effects.append(('summon_stats', (eff.summon_attack, eff.summon_health)))
+        elif eff.has_summon:
+            effects.append(('summon', True))
+
+        if eff.draw > 0:
+            effects.append(('draw', eff.draw))
+        if eff.has_destroy:
+            effects.append(('destroy', True))
+        if eff.heal > 0:
+            effects.append(('heal', eff.heal))
+        if eff.armor > 0:
+            effects.append(('armor', eff.armor))
+        if eff.buff_attack > 0:
+            if eff.buff_health > 0:
+                effects.append(('hand_buff', (eff.buff_attack, eff.buff_health)))
+            else:
+                effects.append(('buff_atk', eff.buff_attack))
+        if eff.discard > 0:
+            effects.append(('discard', eff.discard))
+        if eff.cost_reduce > 0:
+            effects.append(('cost_reduce', eff.cost_reduce))
 
         return effects
 
+    @staticmethod
+    def _from_text_fallback(card_text: str) -> List[Tuple[str, object]]:
+        """Minimal text fallback when no Card object is available."""
+        from analysis.data.card_effects import (
+            _AOE_CN, _AOE_EN, _RANDOM_DMG_CN, _RANDOM_DMG_EN,
+            _DAMAGE_CN, _DAMAGE_EN, _DRAW_CN, _DRAW_EN,
+            _SUMMON_STATS_CN, _SUMMON_STATS_EN, _HEAL_CN, _HEAL_EN,
+            _ARMOR_CN, _ARMOR_EN, _BUFF_ATK_CN, _BUFF_ATK_EN,
+            _HAND_BUFF_CN, _DISCARD_CN, _DISCARD_EN,
+            _COST_REDUCE_CN, _COST_REDUCE_EN,
+        )
 
-def _spans_overlap(
-    span: Tuple[int, int],
-    existing: List[Tuple[int, int]],
-) -> bool:
-    """Return True if *span* overlaps with any span in *existing*."""
-    for s in existing:
-        if span[0] < s[1] and span[1] > s[0]:
-            return True
-    return False
+        effects: List[Tuple[str, object]] = []
+        matched_ranges: List[Tuple[int, int]] = []
+
+        def _check(pattern, effect_name, extractor):
+            m = pattern.search(card_text)
+            if m:
+                s = m.span()
+                for rs in matched_ranges:
+                    if s[0] < rs[1] and s[1] > rs[0]:
+                        return
+                effects.append((effect_name, extractor(m)))
+                matched_ranges.append(s)
+
+        _check(_AOE_CN, 'aoe_damage', lambda m: int(m.group(1)))
+        _check(_AOE_EN, 'aoe_damage', lambda m: int(m.group(1)))
+        _check(_RANDOM_DMG_CN, 'random_damage', lambda m: int(m.group(1)))
+        _check(_RANDOM_DMG_EN, 'random_damage', lambda m: int(m.group(1)))
+        _check(_DAMAGE_CN, 'direct_damage', lambda m: int(m.group(1)))
+        _check(_DAMAGE_EN, 'direct_damage', lambda m: int(m.group(1)))
+        _check(_SUMMON_STATS_CN, 'summon_stats', lambda m: (int(m.group(1)), int(m.group(2))))
+        _check(_SUMMON_STATS_EN, 'summon_stats', lambda m: (int(m.group(1)), int(m.group(2))))
+        has_summon_stats = any(t == 'summon_stats' for t, _ in effects)
+        if not has_summon_stats:
+            if "召唤" in card_text:
+                effects.append(('summon', True))
+            elif "Summon" in card_text:
+                effects.append(('summon', True))
+        _check(_DRAW_CN, 'draw', lambda m: int(m.group(1)))
+        _check(_DRAW_EN, 'draw', lambda m: int(m.group(1)))
+        if "消灭" in card_text or "Destroy" in card_text:
+            effects.append(('destroy', True))
+        _check(_HEAL_CN, 'heal', lambda m: int(m.group(1)))
+        _check(_HEAL_EN, 'heal', lambda m: int(m.group(1)))
+        _check(_ARMOR_CN, 'armor', lambda m: int(m.group(1)))
+        _check(_ARMOR_EN, 'armor', lambda m: int(m.group(1)))
+        _check(_BUFF_ATK_CN, 'buff_atk', lambda m: int(m.group(1)))
+        _check(_BUFF_ATK_EN, 'buff_atk', lambda m: int(m.group(1)))
+        _check(_HAND_BUFF_CN, 'hand_buff', lambda m: (int(m.group(1)), int(m.group(2))))
+        _check(_DISCARD_CN, 'discard', lambda m: int(m.group(1)))
+        _check(_DISCARD_EN, 'discard', lambda m: int(m.group(1)))
+        _check(_COST_REDUCE_CN, 'cost_reduce', lambda m: int(m.group(1)))
+        _check(_COST_REDUCE_EN, 'cost_reduce', lambda m: int(m.group(1)))
+
+        return effects
 
 
 # ===================================================================
@@ -208,9 +211,11 @@ class EffectApplier:
         """Heal *target* by *amount*, capped at max_health."""
         s = state
         if target == 'enemy_hero':
-            s.opponent.hero.hp += amount
+            s.opponent.hero.hp = min(
+                s.opponent.hero.hp + amount, s.opponent.hero.max_hp
+            )
         elif target == 'friendly_hero':
-            s.hero.hp += amount
+            s.hero.hp = min(s.hero.hp + amount, s.hero.max_hp)
         elif target.startswith('enemy_minion:'):
             idx = int(target.split(':')[1])
             if 0 <= idx < len(s.opponent.board):
@@ -481,7 +486,7 @@ def _resolve_target_from_index(state: GameState, target_index: int) -> str:
 
 
 def resolve_effects(state: GameState, card: Card, target_index: int = -1) -> GameState:
-    """Parse card text, extract effects, apply them to a state copy.
+    """Parse card effects and apply them to a state copy.
 
     Args:
         state: current game state
@@ -493,7 +498,7 @@ def resolve_effects(state: GameState, card: Card, target_index: int = -1) -> Gam
     """
     s = state.copy()
 
-    effects = EffectParser.parse(card.text or "")
+    effects = EffectParser.parse(card.text or "", card=card)
 
     if not effects:
         return s

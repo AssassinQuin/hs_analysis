@@ -236,32 +236,22 @@ def eval_survival_v10(state: GameState) -> float:
 def bsv_fusion(state: GameState) -> float:
     """Combine three axes with phase-weighted softmax fusion.
 
-    Lethal override: returns ABSOLUTE_LETHAL_VALUE (999.0) if lethal detected.
+    Lethal check is intentionally NOT done here — it is handled at the
+    RHEA engine level (Layer 0 + chromosome evaluation) to avoid the
+    expensive DFS inside the inner evaluation loop.
     """
-    # Lethal check
-    try:
-        lethal_result = check_lethal(state)
-        if lethal_result is not None:
-            return ABSOLUTE_LETHAL_VALUE
-    except Exception:
-        pass
-
-    # Compute raw axes
     tempo = eval_tempo_v10(state)
     value = eval_value_v10(state)
     survival = eval_survival_v10(state)
 
-    # Phase weights
     w_tempo, w_value, w_survival = _get_phase_weights(state.turn_number)
 
-    # Weighted axes
     weighted = [
         tempo * w_tempo,
         value * w_value,
         survival * w_survival,
     ]
 
-    # Softmax fusion
     weights = softmax(weighted, TEMPERATURE)
     bsv = sum(w * a for w, a in zip(weights, weighted))
 

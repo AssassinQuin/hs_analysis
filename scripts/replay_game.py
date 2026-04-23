@@ -26,7 +26,7 @@ def main():
         """
     )
     parser.add_argument("log_path", help="Power.log 文件路径")
-    parser.add_argument("--player", default="湫然#51704", help="我方玩家名")
+    parser.add_argument("--player", default="", help="我方玩家名（留空则自动检测）")
     parser.add_argument("--log-dir", default="logs", help="日志输出目录")
     parser.add_argument("--pop-size", type=int, default=20,
                        help="RHEA 种群大小 (默认: 20)")

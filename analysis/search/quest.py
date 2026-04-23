@@ -10,6 +10,14 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+_QUEST_THRESHOLD_EN = re.compile(r'(\d+)\s*(?:cards?|spells?|minions?)')
+_QUEST_TOTAL_CN = re.compile(r'总计(\d+)张')
+_QUEST_CAST_CN = re.compile(r'施放(\d+)个')
+_QUEST_CARDS_CN = re.compile(r'(\d+)张')
+_QUEST_REWARD_EN = re.compile(r'Reward[：:]\s*</?b?>\s*(.+?)(?:<|$)', re.IGNORECASE)
+_QUEST_REWARD_CN_BOLD = re.compile(r'奖励[：:]</b>([^<]+)')
+_QUEST_REWARD_CN = re.compile(r'奖励[：:](.+?)(?:<|$)')
+
 
 # ===================================================================
 # QuestState dataclass
@@ -78,16 +86,16 @@ def _parse_constraint(text: str) -> str:
 def _parse_threshold(text: str, structured_value: Optional[int] = None) -> int:
     if structured_value is not None:
         return structured_value
-    m = re.search(r'(\d+)\s*(?:cards?|spells?|minions?)', text)
+    m = _QUEST_THRESHOLD_EN.search(text)
     if m:
         return int(m.group(1))
-    m = re.search(r'总计(\d+)张', text)
+    m = _QUEST_TOTAL_CN.search(text)
     if m:
         return int(m.group(1))
-    m = re.search(r'施放(\d+)个', text)
+    m = _QUEST_CAST_CN.search(text)
     if m:
         return int(m.group(1))
-    m = re.search(r'(\d+)张', text)
+    m = _QUEST_CARDS_CN.search(text)
     if m:
         return int(m.group(1))
     return 3
@@ -109,17 +117,17 @@ def _determine_quest_type(text: str) -> str:
 def _parse_reward_name(text: str, structured_reward: Optional[str] = None) -> str:
     if structured_reward:
         return structured_reward
-    m = re.search(r'Reward[：:]\s*</?b?>\s*(.+?)(?:<|$)', text, re.IGNORECASE)
+    m = _QUEST_REWARD_EN.search(text)
     if m:
         name = m.group(1).strip().rstrip('.')
         if name:
             return name
-    m = re.search(r'奖励[：:]</b>([^<]+)', text)
+    m = _QUEST_REWARD_CN_BOLD.search(text)
     if m:
         name = m.group(1).strip().rstrip('。')
         if name:
             return name
-    m = re.search(r'奖励[：:](.+?)(?:<|$)', text)
+    m = _QUEST_REWARD_CN.search(text)
     if m:
         name = m.group(1).strip().rstrip('。')
         if name:

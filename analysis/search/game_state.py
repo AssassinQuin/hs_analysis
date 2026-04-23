@@ -6,8 +6,12 @@ Represents the full game state and supports copy() for search tree branching.
 from __future__ import annotations
 
 import copy
+import dataclasses
+import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,8 +57,38 @@ class Minion:
     spell_power: int = 0  # spell damage +N
     has_attacked_once: bool = False  # windfury first-attack tracking
     frozen_until_next_turn: bool = False  # freeze effect
+    has_ward: bool = False
+    has_mega_windfury: bool = False
+    card_id: str = ""
+    turn_played: int = 0
     enchantments: list = field(default_factory=list)
     owner: str = "friendly"  # or "enemy"
+
+    @property
+    def is_friendly(self) -> bool:
+        return self.owner == "friendly"
+
+    @property
+    def is_enemy(self) -> bool:
+        return self.owner == "enemy"
+
+    @property
+    def can_attack_now(self) -> bool:
+        if not self.can_attack or self.cant_attack or self.is_dormant:
+            return False
+        if self.frozen_until_next_turn:
+            return False
+        if self.has_windfury:
+            return not self.has_attacked_once or self.attack > 0
+        return not self.has_attacked_once
+
+    @property
+    def is_taunted(self) -> bool:
+        return self.has_taunt
+
+    @property
+    def total_stats(self) -> int:
+        return self.attack + self.health
 
 
 @dataclass
@@ -202,8 +236,55 @@ class GameState:
     # ------------------------------------------------------------------
 
     def copy(self) -> "GameState":
-        """Deep copy for search-tree branching."""
-        return copy.deepcopy(self)
+        """Fast copy — shallow-copy immutable fields, copy mutable containers."""
+        opp_hero = dataclasses.replace(self.opponent.hero)
+        if self.opponent.hero.weapon is not None:
+            opp_hero.weapon = dataclasses.replace(self.opponent.hero.weapon)
+
+        opp = dataclasses.replace(
+            self.opponent,
+            hero=opp_hero,
+            board=[dataclasses.replace(m) for m in self.opponent.board],
+            secrets=list(self.opponent.secrets),
+            opp_known_cards=list(self.opponent.opp_known_cards),
+            opp_secrets_triggered=list(self.opponent.opp_secrets_triggered),
+        )
+
+        hero = dataclasses.replace(self.hero)
+        if self.hero.weapon is not None:
+            hero.weapon = dataclasses.replace(self.hero.weapon)
+
+        mana = dataclasses.replace(
+            self.mana,
+            modifiers=[
+                dataclasses.replace(mod) for mod in self.mana.modifiers
+            ],
+        )
+
+        gs = GameState(
+            hero=hero,
+            mana=mana,
+            board=[dataclasses.replace(m) for m in self.board],
+            locations=[dataclasses.replace(loc) for loc in self.locations],
+            hand=list(self.hand),
+            deck_list=list(self.deck_list) if self.deck_list is not None else None,
+            deck_remaining=self.deck_remaining,
+            opponent=opp,
+            turn_number=self.turn_number,
+            cards_played_this_turn=list(self.cards_played_this_turn),
+            fatigue_damage=self.fatigue_damage,
+            herald_count=self.herald_count,
+            last_turn_races=set(self.last_turn_races),
+            last_turn_schools=set(self.last_turn_schools),
+            active_quests=list(self.active_quests),
+            corpses=self.corpses,
+            kindred_double_next=self.kindred_double_next,
+            last_played_card=self.last_played_card,
+            _defer_deaths=self._defer_deaths,
+            _pending_dead_friendly=list(self._pending_dead_friendly),
+            _pending_dead_enemy=list(self._pending_dead_enemy),
+        )
+        return gs
 
     def is_lethal(self) -> bool:
         """True if opponent hero HP + armor <= 0."""
@@ -236,7 +317,7 @@ class GameState:
 
             self = resolve_deaths(self)
         except Exception:
-            pass
+            log.warning("flush_deaths: resolve_deaths failed", exc_info=True)
 
         # Reborn for friendly minions
         for m in list(self.board):
@@ -267,7 +348,7 @@ class GameState:
             amount = 2 if has_double_corpse_gen(self) else 1
             self = gain_corpses(self, amount)
         except Exception:
-            pass
+            log.warning("flush_deaths: corpse gain failed", exc_info=True)
 
         # Aura recompute
         try:
@@ -275,7 +356,7 @@ class GameState:
 
             self = recompute_auras(self)
         except Exception:
-            pass
+            log.warning("flush_deaths: aura recompute failed", exc_info=True)
 
         self._defer_deaths = False
         return self

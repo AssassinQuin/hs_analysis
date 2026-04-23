@@ -3,19 +3,16 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN
 from analysis.search.game_state import GameState, HeroState
 from analysis.models.card import Card
 
 
 class HeroCardHandler:
-    _ARMOR_PATTERN_CN = re.compile(r"获得\s*(\d+)\s*点护甲")
-    _ARMOR_PATTERN_EN = re.compile(r"Gain\s*(\d+)\s*Armor", re.IGNORECASE)
     _HERO_POWER_PATTERN_CN = re.compile(r"英雄技能[：:]\s*(.+?)(?:，|$)")
     _HERO_POWER_PATTERN_EN = re.compile(
         r"Hero\s+Power[：:]\s*(.+?)(?:[,.]|$)", re.IGNORECASE
     )
-    _DAMAGE_PATTERN_CN = re.compile(r"造成\s*\$?\s*(\d+)\s*点伤害")
-    _DAMAGE_PATTERN_EN = re.compile(r"Deal\s*(\d+)\s*damage", re.IGNORECASE)
 
     def apply_hero_card(self, state: GameState, card: Card) -> GameState:
         s = state
@@ -38,25 +35,13 @@ class HeroCardHandler:
         return s
 
     def _parse_armor(self, card: Card) -> int:
-        armor = getattr(card, "armor", 0) or 0
-        if armor > 0:
-            return armor
-
-        text = getattr(card, "text", "") or ""
-        m = self._ARMOR_PATTERN_CN.search(text)
-        if m:
-            return int(m.group(1))
-        m = self._ARMOR_PATTERN_EN.search(text)
-        if m:
-            return int(m.group(1))
-        return 5
+        armor = get_card_armor(card)
+        return armor if armor > 0 else 5
 
     def _update_hero_power(self, state: GameState, card: Card) -> None:
         text = getattr(card, "text", "") or ""
 
-        m = self._DAMAGE_PATTERN_CN.search(text)
-        if not m:
-            m = self._DAMAGE_PATTERN_EN.search(text)
+        m = _DAMAGE_CN.search(text) or _DAMAGE_EN.search(text)
         if m:
             state.hero.hero_power_damage = int(m.group(1))
 

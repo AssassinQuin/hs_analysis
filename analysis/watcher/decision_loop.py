@@ -79,8 +79,8 @@ class DecisionLoop:
         self.engine_params = engine_params or {
             "pop_size": 30,
             "max_gens": 80,
-            "time_limit": 300.0,
             "max_chromosome_length": 8,
+            "cross_turn": True,
         }
         self.poll_interval = poll_interval
         self.on_decision = on_decision
@@ -155,8 +155,8 @@ class DecisionLoop:
         engine = RHEAEngine(
             pop_size=self.engine_params.get("pop_size", 30),
             max_gens=self.engine_params.get("max_gens", 80),
-            time_limit=self.engine_params.get("time_limit", 300.0),
             max_chromosome_length=self.engine_params.get("max_chromosome_length", 8),
+            cross_turn=self.engine_params.get("cross_turn", True),
         )
 
         start_time = time.perf_counter()
@@ -211,8 +211,8 @@ class DecisionLoop:
                     engine = RHEAEngine(
                         pop_size=engine_kwargs.get("pop_size", 30),
                         max_gens=engine_kwargs.get("max_gens", 80),
-                        time_limit=engine_kwargs.get("time_limit", 300.0),
                         max_chromosome_length=engine_kwargs.get("max_chromosome_length", 8),
+                        cross_turn=engine_kwargs.get("cross_turn", True),
                     )
 
                     start_time = time.perf_counter()
