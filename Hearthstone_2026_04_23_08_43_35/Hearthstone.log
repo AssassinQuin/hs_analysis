@@ -1,0 +1,666 @@
+I 08:43:35.7806280 Application paused: False
+I 08:43:37.8937670 Current working dir=E:\battle\Hearthstone
+I 08:43:37.8937670 SetLocale: zhCN
+I 08:43:37.8937670 [Jobs Fallback logger]: [JobQueue.QueueJob] Job (DeeplinkService.PostFullLoginJobs(ID:1)) QUEUED
+I 08:43:37.8937670 [Jobs Fallback logger]: [JobQueue.QueueJob] Dependency (WaitForFullLoginFlowComplete) added for queued job (DeeplinkService.PostFullLoginJobs(ID:1))
+I 08:43:37.8937670 Command Line: -launch -uid hs_beta
+I 08:43:39.4114969 Main thread: True
+I 08:43:39.4114969 System Info:
+I 08:43:39.4114969 SystemInfo - Device Name: QUIN-PC
+I 08:43:39.4114969 SystemInfo - Device Model: Default string (Default string)
+I 08:43:39.4114969 SystemInfo - OS: Windows 11  (10.0.26200) 64bit
+I 08:43:39.4114969 SystemInfo - CPU Type: 12th Gen Intel(R) Core(TM) i5-12400F
+I 08:43:39.4114969 SystemInfo - CPU Cores: 12
+I 08:43:39.4114969 SystemInfo - System Memory: 16197
+I 08:43:39.4114969 SystemInfo - Screen Resolution: 2560x1440
+I 08:43:39.4114969 SystemInfo - Screen DPI: 120
+I 08:43:39.4114969 SystemInfo - GPU ID: 10370
+I 08:43:39.4114969 SystemInfo - GPU Name: NVIDIA GeForce RTX 4060
+I 08:43:39.4114969 SystemInfo - GPU Vendor: NVIDIA
+I 08:43:39.4114969 SystemInfo - GPU Memory: 3072
+I 08:43:39.4114969 SystemInfo - GPU Shader Level: 50
+I 08:43:39.4114969 SystemInfo - GPU NPOT Support: Full
+I 08:43:39.4114969 SystemInfo - Graphics API (version): Direct3D 11.0 [level 11.1]
+I 08:43:39.4114969 SystemInfo - Graphics API (type): Direct3D11
+I 08:43:39.4114969 SystemInfo - Graphics Supported Render Target Count: 8
+I 08:43:39.4114969 SystemInfo - Graphics Supports 3D Textures: True
+I 08:43:39.4114969 SystemInfo - Graphics Supports Compute Shaders: True
+I 08:43:39.4114969 SystemInfo - Graphics Supports Shadows: True
+I 08:43:39.4114969 SystemInfo - Graphics Supports Sparse Textures: True
+I 08:43:39.4114969 SystemInfo - Graphics RenderTextureFormat.ARGBHalf: True
+I 08:43:39.4114969 SystemInfo - Graphics Metal Support: False
+I 08:43:53.5867184 [Startup] Startup stage Start
+I 08:43:53.5867184 [Downloader] *** Loading DBF
+E 08:43:55.4862870 GAME_SAVE_SUBKEY DBF Asset has 0 records! Something went wrong generating it. Try checking the generated XMLs in the DBF folder.
+E 08:43:55.4862870 GLOBAL DBF Asset has 0 records! Something went wrong generating it. Try checking the generated XMLs in the DBF folder.
+I 08:43:55.9116768 *** BattleNet version: Product = 35.2.0.0, Data = 35200
+I 08:43:56.0763946 [Login] Beginning processing login challenges
+I 08:43:56.0763946 [Startup] Startup stage ConnectingToBattlenet
+I 08:43:56.0763946 CPU Benchmark Result (Average Frame Time): 41ms
+I 08:43:56.2273776 GPU Benchmark Result (Average Frame Time): 17ms
+I 08:43:57.6620648 [Login] We are now logged in, stopping processing challenges
+I 08:43:57.6620648 Region: CN
+I 08:43:57.6620648 Braze is supported  for this build: False
+I 08:43:57.6620648 [Startup] Startup stage ConnectingToHearthstone
+W 08:44:00.4288215 Attempting to get decks from CollectionManager, even though NetCacheDecks is not ready (meaning it's waiting for the decks to be updated)!
+W 08:44:00.4288215 Attempting to get decks from CollectionManager, even though NetCacheDecks is not ready (meaning it's waiting for the decks to be updated)!
+W 08:44:01.4265753 Attempting to get decks from CollectionManager, even though NetCacheDecks is not ready (meaning it's waiting for the decks to be updated)!
+W 08:44:01.4265753 Attempting to get decks from CollectionManager, even though NetCacheDecks is not ready (meaning it's waiting for the decks to be updated)!
+I 08:44:01.4265753 [Startup] Startup stage LaunchGame
+I 08:44:01.4265753 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 08:44:01.4265753 Redpoint body: {"game_account_id":"234700162","event_id_list":[],"timestamp":"1776905041658"}
+I 08:44:01.4265753 Redpoint: timestamp= 1776905041658 , Nonce=5c5419b5, appSecret=6c3a9d8b1f2e4d7c0a9b8d5e2f1c3a8d, generatedSign=2307b99cf46327d0770ffef8eaab4add
+I 08:44:01.4265753 Redpoint ccc_sign:hs.1776905041658.5c5419b5.2307b99cf46327d0770ffef8eaab4add
+I 08:44:01.8747006 [HealthyGaming] CAIS ServerEnabledForPlatform=False AccountCAISForChina=False Country=CHN TimeSec=26.22398 PlayedTimeMin=0 RestedTimeMin=0 SessionStartTime=1776905037000
+I 08:44:01.8747006 [HealthyGaming] Healthy Gaming Deactivated: account not set for CAIS.
+I 08:44:02.4593886 Redpoint ResponseAsString: {"code":0,"message":"success","data":{"status_list":null}}
+I 08:44:02.4593886 Redpoint Response: Date   Thu, 23 Apr 2026 00:44:01 GMT
+Content-Type   application/json; charset=utf-8
+Content-Length   58
+Connection   keep-alive
+X-Request-Id   c51f4ff8-a10a-4046-bafd-728d93acf0bb
+
+E 08:44:02.4593886 Redpoint: Invalid event status data
+I 08:44:13.2565058 [Login] Initial download done, Waiting Intro popup...
+I 08:44:13.3044062 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 08:44:24.0025963 [LuckyDraw] LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 08:44:24.0025963 [LuckyDraw] LuckyDrawManager status: Waiting for store to initialize...
+I 08:44:24.0025963 [LuckyDraw] LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 08:44:24.3830685 [LuckyDraw] LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 08:44:24.3830685 [LuckyDraw] Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 08:44:24.3830685 [LuckyDraw] Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 08:44:24.3830685 [LuckyDraw] LuckyDrawManager status: DFT system is fully initialized and ready!
+I 08:44:45.8486643 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+W 08:44:47.2550762 Navigation.PushUnique called for non-static method! - OnBackOutOfContainerContents
+W 08:44:47.2550762 TransitionPageWhenReady() called when m_pagesCurrentlyTurning is already true! You probably don't want to allow this [see usages of CanUserTurnPages()].
+I 08:45:10.2253780 [LuckyDraw] LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 08:45:10.2253780 [LuckyDraw] LuckyDrawManager status: Waiting for store to initialize...
+I 08:45:10.2253780 [LuckyDraw] LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 08:45:10.4346145 [LuckyDraw] LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 08:45:10.4346145 [LuckyDraw] Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 08:45:10.4346145 [LuckyDraw] Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 08:45:10.4346145 [LuckyDraw] LuckyDrawManager status: DFT system is fully initialized and ready!
+I 08:45:19.2938010 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 08:45:19.4508874 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 08:45:31.5958062 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_DELAYED
+I 08:45:31.5958062 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 08:45:31.5958062 [GameNetLogger] Network.GotoGameServe() - address= 47.98.148.92:1119, game=6562, client=23168179, spectateKey=oFJhpm reconnecting=False
+I 08:45:31.5958062 TcpConnection - possible ip address: 47.98.148.92
+I 08:45:36.3386172 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 08:45:36.3386172 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 08:45:36.3386172 [GameNetLogger] Network.SendGameServerHandshake()
+I 08:45:36.8772355 [GameNetLogger] GameMgr.OnGameSetup()
+I 08:45:36.8772355 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 08:45:36.8772355 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 08:45:36.8772355 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 08:45:37.0412762 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+W 08:45:37.9167157 CardBackManager SetDeckCardBack(): cardBack is null!
+W 08:45:37.9885689 Animator.GotoState: State could not be found
+W 08:45:37.9885689 Invalid Layer Index '-1'
+W 08:47:13.6750189 Hero_01bn_LegendaryHero_DamageSplat(Clone) (DamageSplatSpell).BuildFsmStateMap() - Found 2 states for SpellStateType NONE. There should be 1.
+W 08:47:13.6750189 Hero_01bn_LegendaryHero_DamageSplat(Clone) (DamageSplatSpell).BuildFsmStateMap() - Found 2 transitions for SpellStateType NONE. There should be 1.
+I 08:48:05.7629536 [GameNetLogger] Player conceded the game
+W 08:48:06.3356005 Could Not Create Action: [missing Owner]: FSM: Reset: TimelineSetTimeAction (Maybe the script was removed?)
+W 08:48:06.3356005 Could Not Create Action: [missing Owner]: FSM: Reset: TimelineSetTimeAction (Maybe the script was removed?)
+I 08:48:14.5168513 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 08:48:14.5168513 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 08:48:14.5168513 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 08:48:29.5470925 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 08:49:41.5530709 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+W 08:49:42.5727127 Navigation.PushUnique called for non-static method! - OnBackOutOfContainerContents
+I 08:49:59.0975157 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 08:49:59.2736805 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 08:50:07.1537122 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_DELAYED
+I 08:50:07.1537122 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 08:50:07.1537122 [GameNetLogger] Network.GotoGameServe() - address= 47.98.151.135:1119, game=6740, client=23168179, spectateKey=LGNGid reconnecting=False
+I 08:50:07.1537122 TcpConnection - possible ip address: 47.98.151.135
+I 08:50:12.9467745 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 08:50:12.9467745 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 08:50:12.9467745 [GameNetLogger] Network.SendGameServerHandshake()
+I 08:50:13.0740610 [GameNetLogger] GameMgr.OnGameSetup()
+I 08:50:13.0740610 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 08:50:13.0740610 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 08:50:13.0740610 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 08:50:13.1268944 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+W 08:50:55.0946225 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 08:50:58.2811174 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 08:52:31.6981102 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 08:52:47.1624203 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 08:52:49.4763807 SigilSpellController [taskListId=315] (SigilSpellController).DetermineBannerSpellPrefab() - entity [entityName=燃薪咒符 id=27 zone=SECRET zonePos=0 cardId=FIR_902 player=1] has unknown class tag DEMONHUNTER. Using default banner.
+W 08:54:07.9025426 Animator.GotoState: State could not be found
+W 08:54:07.9025426 Invalid Layer Index '-1'
+W 08:54:50.5085280 ParticlePlayAction.OnEnter() - ReuseFX_ShadowSpirit_Rise_Impact(Clone) (UnityEngine.GameObject) has no ParticleSystem component. Owner=ReuseFX_ShadowSpirit_Rise_Impact(Clone) (UnityEngine.GameObject)
+W 08:55:55.3202773 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 states for SpellStateType DEATH. There should be 1.
+W 08:55:55.3202773 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 transitions for SpellStateType DEATH. There should be 1.
+W 08:56:02.7438556 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 states for SpellStateType DEATH. There should be 1.
+W 08:56:02.7438556 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 transitions for SpellStateType DEATH. There should be 1.
+W 08:57:24.7469179 SigilSpellController [taskListId=717] (SigilSpellController).DetermineBannerSpellPrefab() - entity [entityName=海洋咒符 id=4 zone=SECRET zonePos=0 cardId=CATA_528 player=1] has unknown class tag DEMONHUNTER. Using default banner.
+E 08:58:01.4351487 [Power] PowerProcessor.BuildTaskList(): Hit a SUB_SPELL_END task without a corresponding open SubSpellOrigin!
+E 08:58:10.0026469 [Power] PowerProcessor.BuildTaskList(): Hit a SUB_SPELL_END task without a corresponding open SubSpellOrigin!
+W 08:58:28.4227515 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 states for SpellStateType DEATH. There should be 1.
+W 08:58:28.4227515 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 transitions for SpellStateType DEATH. There should be 1.
+W 08:58:35.0395399 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 states for SpellStateType DEATH. There should be 1.
+W 08:58:35.0395399 CATA_527_Nespirah_Enthralled_Ancient_Fab_Missile_Idle_Location(Clone) (Spell).BuildFsmStateMap() - Found 2 transitions for SpellStateType DEATH. There should be 1.
+W 08:59:29.3928571 SigilSpellController [taskListId=874] (SigilSpellController).DetermineBannerSpellPrefab() - entity [entityName=海洋咒符 id=222 zone=SECRET zonePos=0 cardId=CATA_528 player=1] has unknown class tag DEMONHUNTER. Using default banner.
+E 09:00:44.8796182 [All] actualChoiceCards is NULL. Attempting workaround.
+W 09:03:17.9457195 SigilSpellController [taskListId=1181] (SigilSpellController).DetermineBannerSpellPrefab() - entity [entityName=海洋咒符 id=29 zone=SECRET zonePos=0 cardId=CATA_528 player=1] has unknown class tag DEMONHUNTER. Using default banner.
+I 09:09:33.3947818 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 09:09:33.3947818 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 09:09:33.3947818 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 09:09:41.0076787 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 09:09:43.7854311 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 09:09:43.9452799 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 09:09:44.4689509 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 09:09:49.3005707 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_UPDATED, previous state: BNET_QUEUE_DELAYED
+I 09:09:51.6130876 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_UPDATED
+I 09:09:51.6130876 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 09:09:51.6130876 [GameNetLogger] Network.GotoGameServe() - address= 118.31.59.149:1119, game=7387, client=23168179, spectateKey=ckFEME reconnecting=False
+I 09:09:51.6130876 TcpConnection - possible ip address: 118.31.59.149
+I 09:09:56.3398523 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 09:09:56.3398523 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 09:09:56.3398523 [GameNetLogger] Network.SendGameServerHandshake()
+I 09:09:56.8357093 [GameNetLogger] GameMgr.OnGameSetup()
+I 09:09:56.8357093 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 09:09:56.8357093 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 09:09:56.8357093 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 09:09:57.0509157 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+W 09:11:26.5682787 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:11:26.5682787 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:11:26.5682787 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:11:26.5682787 Could not find object of name NonQuestObjects in actor
+W 09:11:26.5682787 Could not find object of name NonQuestObjects in actor
+W 09:11:26.5682787 Could not find object of name NonQuestObjects in actor
+W 09:11:26.5682787 Could not find object of name BGRewardVFX in actor
+W 09:11:26.5682787 Could not find object of name BGRewardVFX in actor
+W 09:11:26.5682787 Could not find object of name BGRewardVFX in actor
+W 09:11:36.1450438 Card_Hand_Ability_CardsCostCorpses(Clone) (Spell).BuildFsmStateMap() - SpellStateType IDLE is missing a SpellStateAction.
+W 09:11:57.0601412 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:11:57.0601412 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:11:57.0601412 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:11:57.0601412 Could not find object of name NonQuestObjects in actor
+W 09:11:57.0601412 Could not find object of name NonQuestObjects in actor
+W 09:11:57.0601412 Could not find object of name NonQuestObjects in actor
+W 09:11:57.0601412 Could not find object of name BGRewardVFX in actor
+W 09:11:57.0601412 Could not find object of name BGRewardVFX in actor
+E 09:12:19.0905381 [All] actualChoiceCards is NULL. Attempting workaround.
+W 09:13:16.5591728 Animator.GotoState: State could not be found
+W 09:13:16.5591728 Invalid Layer Index '-1'
+E 09:13:19.5044320 DefLoader.GetCardDef() - dbId 0 does not map to a cardId
+E 09:14:39.1649232 [All] actualChoiceCards is NULL. Attempting workaround.
+W 09:14:45.2527355 HeroSkin_11aw_UndeadKatrana_HP_Idle_FX(Clone) (Spell).BuildFsmStateMap() - Found 3 states for SpellStateType BIRTH. There should be 1.
+W 09:14:45.2527355 HeroSkin_11aw_UndeadKatrana_HP_Idle_FX(Clone) (Spell).BuildFsmStateMap() - Found 3 transitions for SpellStateType BIRTH. There should be 1.
+W 09:15:15.0464308 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:15:15.0464308 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:15:15.0464308 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:15:15.0464308 Could not find object of name NonQuestObjects in actor
+W 09:15:15.0464308 Could not find object of name NonQuestObjects in actor
+W 09:15:15.0464308 Could not find object of name NonQuestObjects in actor
+W 09:15:15.0464308 Could not find object of name BGRewardVFX in actor
+W 09:15:15.0464308 Could not find object of name BGRewardVFX in actor
+W 09:15:15.0464308 Could not find object of name BGRewardVFX in actor
+W 09:15:42.8341831 HeroSkin_11aw_UndeadKatrana_HP_Idle_FX(Clone) (Spell).BuildFsmStateMap() - Found 3 states for SpellStateType BIRTH. There should be 1.
+W 09:15:42.8341831 HeroSkin_11aw_UndeadKatrana_HP_Idle_FX(Clone) (Spell).BuildFsmStateMap() - Found 3 transitions for SpellStateType BIRTH. There should be 1.
+E 09:16:06.6425489 DefLoader.GetCardDef() - dbId 0 does not map to a cardId
+W 09:16:31.6080166 HeroSkin_11aw_UndeadKatrana_HP_Idle_FX(Clone) (Spell).BuildFsmStateMap() - Found 3 states for SpellStateType BIRTH. There should be 1.
+W 09:16:31.6080166 HeroSkin_11aw_UndeadKatrana_HP_Idle_FX(Clone) (Spell).BuildFsmStateMap() - Found 3 transitions for SpellStateType BIRTH. There should be 1.
+W 09:16:59.7521658 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:16:59.7521658 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:16:59.7521658 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:16:59.7521658 Could not find object of name NonQuestObjects in actor
+W 09:16:59.7521658 Could not find object of name NonQuestObjects in actor
+W 09:16:59.7521658 Could not find object of name BGRewardVFX in actor
+W 09:16:59.7521658 Could not find object of name BGRewardVFX in actor
+W 09:16:59.7521658 Could not find object of name BGRewardVFX in actor
+E 09:17:35.6796863 DefLoader.GetCardDef() - dbId 0 does not map to a cardId
+I 09:20:01.1722342 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 09:20:01.1722342 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 09:20:01.1722342 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 09:20:01.1722342 Hiding notification SpeechBubble(Clone) because something else is being shown.
+I 09:20:01.1890866 [GameNetLogger] Trying to send a packet while disconnected. ID 15 , PegasusGame.UserUI
+E 09:20:01.1890866 [GameNetLogger] RpcController.SendData() - Not connected
+I 09:20:22.3838664 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 09:20:24.4943404 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 09:20:24.6482725 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 09:20:32.3793972 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_UPDATED, previous state: BNET_QUEUE_DELAYED
+I 09:20:33.7709769 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_UPDATED
+I 09:20:33.7709769 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 09:20:33.7709769 [GameNetLogger] Network.GotoGameServe() - address= 47.98.138.173:1119, game=7769, client=23168179, spectateKey=pGPKDj reconnecting=False
+I 09:20:33.7709769 TcpConnection - possible ip address: 47.98.138.173
+I 09:20:38.4747670 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 09:20:38.4747670 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 09:20:38.4747670 [GameNetLogger] Network.SendGameServerHandshake()
+I 09:20:43.0652143 [GameNetLogger] GameMgr.OnGameSetup()
+I 09:20:43.0652143 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 09:20:43.0652143 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 09:20:43.0652143 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 09:20:43.1983996 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+E 09:22:55.8871276 DefLoader.GetCardDef() - dbId 0 does not map to a cardId
+E 09:23:36.9724763 DefLoader.GetCardDef() - dbId 0 does not map to a cardId
+E 09:25:57.5920047 DefLoader.GetCardDef() - dbId 0 does not map to a cardId
+W 09:26:46.8613187 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.8678626 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.8753921 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.8824245 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.8884946 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.8963406 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9058587 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9134480 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9235295 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9294182 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9361925 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9431568 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9507685 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9567911 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9638525 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9708071 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9778938 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9860982 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9912660 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:46.9987482 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0057920 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0134547 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0199828 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0271953 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0337627 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0405268 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0478286 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0549493 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0610307 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0681063 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0764070 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0840798 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0898401 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.0972179 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1049435 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1109669 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1174107 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1250371 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1312243 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1389243 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1454601 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1531173 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1597695 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1677950 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1738362 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1836320 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.1905048 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2007378 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2082610 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2152837 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2213639 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2285712 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2369685 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2437874 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2493203 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2564014 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2637501 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2713349 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2778934 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2844341 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2911707 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.2982302 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3049156 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3116490 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3193918 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3259527 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3326479 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3405238 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3460803 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3537477 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3608019 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3679679 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3740208 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3824475 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3892394 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.3952865 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4028120 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4092876 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4178227 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4233756 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4315367 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4365928 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4461483 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4507350 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4586279 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4651954 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4717487 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4786915 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4859021 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.4936771 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5008104 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5078700 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5143992 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5212958 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5293075 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5363524 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5435390 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5506654 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5581592 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5653227 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5728705 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5785745 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5861135 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.5936347 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6003953 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6066025 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6142736 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6225594 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6301728 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6367022 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6437981 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6505010 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6565640 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6637581 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6709168 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6794415 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6855461 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.6924630 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7005264 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7071228 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7137351 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7219582 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7279967 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7342285 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7427829 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7492615 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7578088 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7663814 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7751654 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7864655 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.7929910 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8015897 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8081060 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8166436 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8231675 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8309003 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8379237 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8439411 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8532685 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8598253 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8673620 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8736480 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8809589 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8878100 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.8959662 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9035094 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9104854 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9165042 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9250998 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9315502 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9393131 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9458376 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9544166 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9604323 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9680643 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9741849 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:47.9805839 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:48.0195715 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:48.0251631 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:48.0350305 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:48.0405484 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:48.0490828 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:48.0551031 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+W 09:26:48.0637818 The AnimationClip 'Taunt_Signature_Evergreen_Destroyed_Anim 1' used by the Animation component 'Taunt_Signature_Evergreen_Shield_Destroyed_Model' must be marked as Legacy.
+I 09:26:59.4483742 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 09:26:59.4483742 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 09:26:59.4483742 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 09:26:59.4605571 [GameNetLogger] Trying to send a packet while disconnected. ID 15 , PegasusGame.UserUI
+E 09:26:59.4605571 [GameNetLogger] RpcController.SendData() - Not connected
+I 09:27:08.2673259 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 09:27:10.5990373 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 09:27:10.7244888 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 09:27:17.4847814 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_DELAYED
+I 09:27:17.4847814 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 09:27:17.4847814 [GameNetLogger] Network.GotoGameServe() - address= 121.199.55.190:1119, game=7995, client=23168179, spectateKey=GLjGJp reconnecting=False
+I 09:27:17.4847814 TcpConnection - possible ip address: 121.199.55.190
+I 09:27:22.1949940 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 09:27:22.1949940 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 09:27:22.1949940 [GameNetLogger] Network.SendGameServerHandshake()
+I 09:27:22.3992682 [GameNetLogger] GameMgr.OnGameSetup()
+I 09:27:22.3992682 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 09:27:22.3992682 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 09:27:22.3992682 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 09:27:22.5469484 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+W 09:28:07.4401975 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 09:28:07.9483799 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 09:30:13.4962223 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:30:13.4962223 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:30:13.4962223 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:30:13.4962223 Could not find object of name NonQuestObjects in actor
+W 09:30:13.4962223 Could not find object of name NonQuestObjects in actor
+W 09:30:13.4962223 Could not find object of name BGRewardVFX in actor
+W 09:30:13.4962223 Could not find object of name BGRewardVFX in actor
+W 09:36:37.8072061 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:36:37.8072061 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:36:37.8072061 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:36:37.8072061 Could not find object of name NonQuestObjects in actor
+W 09:36:37.8072061 Could not find object of name NonQuestObjects in actor
+W 09:36:37.8072061 Could not find object of name NonQuestObjects in actor
+W 09:36:37.8072061 Could not find object of name BGRewardVFX in actor
+W 09:36:37.8072061 Could not find object of name BGRewardVFX in actor
+W 09:36:37.8072061 Could not find object of name BGRewardVFX in actor
+E 09:39:48.4111890 [Power] PowerProcessor.BuildTaskList(): Hit a SUB_SPELL_END task without a corresponding open SubSpellOrigin!
+I 09:44:01.4644085 [GameNetLogger] Player conceded the game
+I 09:44:07.5753275 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 09:44:07.5753275 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 09:44:07.5753275 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 09:44:07.5753275 Hiding notification SpeechBubble(Clone) because something else is being shown.
+I 09:44:10.7398760 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 09:44:14.2121431 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 09:44:14.3565380 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 09:44:25.6638688 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_DELAYED
+I 09:44:25.6638688 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 09:44:25.6638688 [GameNetLogger] Network.GotoGameServe() - address= 47.97.167.0:1119, game=8454, client=23168179, spectateKey=mPALhK reconnecting=False
+I 09:44:25.6638688 TcpConnection - possible ip address: 47.97.167.0
+I 09:44:31.3192494 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 09:44:31.3192494 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 09:44:31.3192494 [GameNetLogger] Network.SendGameServerHandshake()
+I 09:44:31.5317335 [GameNetLogger] GameMgr.OnGameSetup()
+I 09:44:31.5317335 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 09:44:31.5317335 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 09:44:31.5317335 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 09:44:31.6960027 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+W 09:49:12.1568361 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:49:12.1568361 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:49:12.1568361 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:49:12.1568361 Could not find object of name NonQuestObjects in actor
+W 09:49:12.1568361 Could not find object of name NonQuestObjects in actor
+W 09:49:12.1568361 Could not find object of name BGRewardVFX in actor
+W 09:49:12.1568361 Could not find object of name BGRewardVFX in actor
+W 09:49:12.1568361 Could not find object of name BGRewardVFX in actor
+W 09:51:31.5629498 Animator.GotoState: State could not be found
+W 09:51:31.5629498 Invalid Layer Index '-1'
+W 09:52:25.7683572 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:52:25.7683572 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:52:25.7683572 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:52:25.7683572 Could not find object of name NonQuestObjects in actor
+W 09:52:25.7683572 Could not find object of name NonQuestObjects in actor
+W 09:52:25.7683572 Could not find object of name NonQuestObjects in actor
+W 09:52:25.7683572 Could not find object of name BGRewardVFX in actor
+W 09:52:25.7683572 Could not find object of name BGRewardVFX in actor
+W 09:55:42.8217543 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:55:42.8217543 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:55:42.8217543 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 09:55:42.8217543 Could not find object of name NonQuestObjects in actor
+W 09:55:42.8217543 Could not find object of name NonQuestObjects in actor
+W 09:55:42.8217543 Could not find object of name NonQuestObjects in actor
+W 09:55:42.8217543 Could not find object of name BGRewardVFX in actor
+W 09:55:42.8217543 Could not find object of name BGRewardVFX in actor
+W 09:55:42.8217543 Could not find object of name BGRewardVFX in actor
+E 09:56:52.5481103 [Asset] Asset 'WONFX_AvatarofHearthstone_Play_Super:e5aa056ea9499c74a9798c184909d49c' is missing from asset bundles
+E 09:56:52.5481103 [Power] SubSpellController (SubSpellController).OnSubSpellLoaded(): Failed to load spell prefab! Prefab GUID: WONFX_AvatarofHearthstone_Play_Super:e5aa056ea9499c74a9798c184909d49c
+I 09:57:42.9502410 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 09:57:42.9502410 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 09:57:42.9502410 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 09:57:42.9502410 Hiding notification SpeechBubble(Clone) because something else is being shown.
+I 09:58:00.8301444 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 10:05:12.3401118 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 10:05:12.4913428 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 10:05:22.6721396 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_DELAYED
+I 10:05:22.6721396 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 10:05:22.6721396 [GameNetLogger] Network.GotoGameServe() - address= 118.31.59.149:1119, game=9300, client=23168179, spectateKey=mNGADB reconnecting=False
+I 10:05:22.6721396 TcpConnection - possible ip address: 118.31.59.149
+I 10:05:27.3759880 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 10:05:27.3759880 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 10:05:27.3759880 [GameNetLogger] Network.SendGameServerHandshake()
+I 10:05:27.5677308 [GameNetLogger] GameMgr.OnGameSetup()
+I 10:05:27.5677308 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 10:05:27.5677308 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 10:05:27.5677308 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 10:05:27.7208381 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+E 10:09:45.3758091 [All] actualChoiceCards is NULL. Attempting workaround.
+W 10:10:40.9222081 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:10:40.9222081 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:10:40.9222081 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:10:40.9222081 Could not find object of name NonQuestObjects in actor
+W 10:10:40.9222081 Could not find object of name NonQuestObjects in actor
+W 10:10:40.9222081 Could not find object of name BGRewardVFX in actor
+W 10:10:40.9222081 Could not find object of name BGRewardVFX in actor
+W 10:10:40.9222081 Could not find object of name BGRewardVFX in actor
+W 10:12:05.9938758 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:12:05.9938758 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:12:05.9938758 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:12:05.9938758 Could not find object of name NonQuestObjects in actor
+W 10:12:05.9938758 Could not find object of name NonQuestObjects in actor
+W 10:12:05.9938758 Could not find object of name BGRewardVFX in actor
+W 10:12:05.9938758 Could not find object of name BGRewardVFX in actor
+W 10:12:05.9938758 Could not find object of name BGRewardVFX in actor
+W 10:13:23.3259298 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:13:23.3259298 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:13:23.3259298 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:13:23.3259298 Could not find object of name NonQuestObjects in actor
+W 10:13:23.3259298 Could not find object of name NonQuestObjects in actor
+W 10:13:23.3259298 Could not find object of name NonQuestObjects in actor
+W 10:13:23.3259298 Could not find object of name BGRewardVFX in actor
+W 10:13:23.3259298 Could not find object of name BGRewardVFX in actor
+W 10:13:23.3259298 Could not find object of name BGRewardVFX in actor
+W 10:15:29.0789204 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:15:29.0789204 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:15:29.0789204 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:15:29.0789204 Could not find object of name NonQuestObjects in actor
+W 10:15:29.0789204 Could not find object of name NonQuestObjects in actor
+W 10:15:29.0789204 Could not find object of name NonQuestObjects in actor
+W 10:15:29.0789204 Could not find object of name BGRewardVFX in actor
+W 10:16:15.2872161 ParticlePlayAction.OnEnter() - ReuseFX_ShadowSpirit_Rise_Impact(Clone) (UnityEngine.GameObject) has no ParticleSystem component. Owner=ReuseFX_ShadowSpirit_Rise_Impact(Clone) (UnityEngine.GameObject)
+W 10:16:48.0842116 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:16:48.0842116 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:16:48.0842116 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:16:48.0842116 Could not find object of name NonQuestObjects in actor
+W 10:16:48.0842116 Could not find object of name NonQuestObjects in actor
+W 10:16:48.0842116 Could not find object of name NonQuestObjects in actor
+W 10:16:52.6948907 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:16:52.6948907 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:16:52.6948907 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:16:52.6948907 Could not find object of name NonQuestObjects in actor
+W 10:16:52.6948907 Could not find object of name NonQuestObjects in actor
+W 10:16:52.6948907 Could not find object of name NonQuestObjects in actor
+W 10:19:54.6136562 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:19:54.6136562 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:19:54.6136562 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:19:54.6136562 Could not find object of name NonQuestObjects in actor
+W 10:19:54.6136562 Could not find object of name NonQuestObjects in actor
+W 10:19:54.6136562 Could not find object of name NonQuestObjects in actor
+I 10:22:09.1249496 [GameNetLogger] Player conceded the game
+I 10:22:15.1032148 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 10:22:15.1032148 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 10:22:15.1032148 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:22:15.1032148 Hiding notification SpeechBubble(Clone) because something else is being shown.
+I 10:22:35.6750419 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 10:22:38.6449626 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+E 10:22:41.8298006 GameObject is already being activated or deactivated.
+E 10:22:41.8298006 GameObject is already being activated or deactivated.
+E 10:22:41.8298006 Cannot set the parent of the GameObject 'JournalPopup.prefab:b61d6e9bd58789647a62494cf92fb93e' while it is being destroyed.
+E 10:22:41.8298006 Destroying object multiple times. Don't use DestroyImmediate on the same object in OnDisable or OnDestroy.
+I 10:22:42.1799849 [LuckyDraw] LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 10:22:42.1799849 [LuckyDraw] LuckyDrawManager status: Waiting for store to initialize...
+I 10:22:42.1799849 [LuckyDraw] LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 10:22:42.5468971 [LuckyDraw] LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 10:22:42.5468971 [LuckyDraw] Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 10:22:42.5468971 [LuckyDraw] Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 10:22:42.5468971 [LuckyDraw] LuckyDrawManager status: DFT system is fully initialized and ready!
+I 10:22:46.8999637 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:22:58.3478449 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:22:59.1677151 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:23:01.7485446 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:23:04.1259719 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:23:08.4509042 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:24:13.6018905 [LuckyDraw] LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 10:24:13.6018905 [LuckyDraw] LuckyDrawManager status: Waiting for store to initialize...
+I 10:24:13.6018905 [LuckyDraw] LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 10:24:13.8172188 [LuckyDraw] LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 10:24:13.8172188 [LuckyDraw] Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 10:24:13.8172188 [LuckyDraw] Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 10:24:13.8172188 [LuckyDraw] LuckyDrawManager status: DFT system is fully initialized and ready!
+I 10:24:24.3333454 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 10:24:24.4842825 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 10:24:35.5621859 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_DELAYED
+I 10:24:35.5621859 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 10:24:35.5621859 [GameNetLogger] Network.GotoGameServe() - address= 118.31.58.43:1119, game=10164, client=23168179, spectateKey=GCAfJn reconnecting=False
+I 10:24:35.5621859 TcpConnection - possible ip address: 118.31.58.43
+I 10:24:40.2078185 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 10:24:40.2078185 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 10:24:40.2078185 [GameNetLogger] Network.SendGameServerHandshake()
+I 10:24:40.4422588 [GameNetLogger] GameMgr.OnGameSetup()
+I 10:24:40.4422588 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 10:24:40.4422588 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 10:24:40.4422588 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 10:24:40.5869941 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+W 10:25:20.9008492 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 10:25:21.3571276 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 10:25:21.6209803 You clicked on something that is not being handled by InputManager.  Alert The Brode!
+W 10:30:13.1339520 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:30:13.1339520 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:30:13.1339520 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:30:13.1339520 Could not find object of name NonQuestObjects in actor
+W 10:30:13.1339520 Could not find object of name NonQuestObjects in actor
+W 10:30:13.1339520 Could not find object of name BGRewardVFX in actor
+W 10:30:13.1339520 Could not find object of name BGRewardVFX in actor
+W 10:30:13.1339520 Could not find object of name BGRewardVFX in actor
+W 10:34:36.3727047 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:34:36.3727047 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:34:36.3727047 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:34:36.3727047 Could not find object of name NonQuestObjects in actor
+W 10:34:36.3727047 Could not find object of name NonQuestObjects in actor
+W 10:34:36.3727047 Could not find object of name BGRewardVFX in actor
+W 10:34:36.3727047 Could not find object of name BGRewardVFX in actor
+W 10:34:36.3727047 Could not find object of name BGRewardVFX in actor
+I 10:35:29.6066625 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 10:35:29.6066625 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 10:35:29.6066625 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:35:32.5645808 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures
+I 10:35:34.7030985 [GameNetLogger] GameMgr.ChangeFindGameState() - state: CLIENT_STARTED, previous state: INVALID
+I 10:35:34.8487758 [GameNetLogger] GameMgr.ChangeFindGameState() - state: BNET_QUEUE_DELAYED, previous state: CLIENT_STARTED
+I 10:35:37.5466460 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_CONNECTING, previous state: BNET_QUEUE_DELAYED
+I 10:35:37.5466460 [GameNetLogger] Network.GotoGameServe() - gameConnectionDisconnected True, IsRestoringGameState: False
+I 10:35:37.5466460 [GameNetLogger] Network.GotoGameServe() - address= 47.97.189.169:1119, game=10531, client=23168179, spectateKey=HPjihG reconnecting=False
+I 10:35:37.5466460 TcpConnection - possible ip address: 47.97.189.169
+I 10:35:42.2143819 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with error code ERROR_OK
+I 10:35:42.2143819 [GameNetLogger] Network.OnGameServerConnectEvent() - Connected to game server with socket error: Success, Message: Client: Connected
+I 10:35:42.2143819 [GameNetLogger] Network.SendGameServerHandshake()
+I 10:35:42.4156439 [GameNetLogger] GameMgr.OnGameSetup()
+I 10:35:42.4156439 [GameNetLogger] GameMgr.ChangeFindGameState() - state: SERVER_GAME_STARTED, previous state: SERVER_GAME_CONNECTING
+I 10:35:42.4156439 SERVER_GAME_STARTED event - Loading Gameplay Scene
+I 10:35:42.4156439 [GameNetLogger] GameMgr.ChangeFindGameState() - state: INVALID, previous state: SERVER_GAME_STARTED
+I 10:35:42.5743092 Gameplay.Awake() - CurrentMode=GAMEPLAY, PrevMode=TOURNAMENT
+W 10:37:45.7234506 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:37:45.7234506 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:37:45.7234506 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:37:45.7234506 Could not find object of name NonQuestObjects in actor
+W 10:37:45.7234506 Could not find object of name NonQuestObjects in actor
+W 10:37:45.7234506 Could not find object of name NonQuestObjects in actor
+W 10:37:45.7234506 Could not find object of name BGRewardVFX in actor
+W 10:37:45.7234506 Could not find object of name BGRewardVFX in actor
+W 10:37:45.7234506 Could not find object of name BGRewardVFX in actor
+W 10:39:08.4855787 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:39:08.4855787 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:39:08.4855787 Could not find object of name Card_Hand_BG_Quest_Text_Tray_Mesh in actor
+W 10:39:08.4855787 Could not find object of name NonQuestObjects in actor
+W 10:39:08.4855787 Could not find object of name NonQuestObjects in actor
+W 10:39:08.4855787 Could not find object of name BGRewardVFX in actor
+W 10:39:08.4855787 Could not find object of name BGRewardVFX in actor
+W 10:39:08.4855787 Could not find object of name BGRewardVFX in actor
+I 10:41:00.9570279 [GameNetLogger] Player conceded the game
+I 10:41:07.7767788 [GameNetLogger] Network.DisconnectFromGameServer() - Reason: EndGameScreen 
+I 10:41:07.7767788 [GameNetLogger] Network.OnGameServerDisconnectEvent() - Disconnected from game server with BNet error: ERROR_OK socket error: Success, Message: 
+I 10:41:07.7767788 Hiding notification HelpTooltip_Tutorial because something else is being shown.
+I 10:41:32.0834719 RegisterScreenBox tempGuardianVars=NetCache+NetCacheFeatures

@@ -1,0 +1,28 @@
+I 08:44:24.0025963 LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 08:44:24.0025963 LuckyDrawManager status: Waiting for store to initialize...
+I 08:44:24.0025963 LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 08:44:24.3830685 LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 08:44:24.3830685 Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 08:44:24.3830685 Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 08:44:24.3830685 LuckyDrawManager status: DFT system is fully initialized and ready!
+I 08:45:10.2253780 LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 08:45:10.2253780 LuckyDrawManager status: Waiting for store to initialize...
+I 08:45:10.2253780 LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 08:45:10.4346145 LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 08:45:10.4346145 Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 08:45:10.4346145 Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 08:45:10.4346145 LuckyDrawManager status: DFT system is fully initialized and ready!
+I 10:22:42.1799849 LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 10:22:42.1799849 LuckyDrawManager status: Waiting for store to initialize...
+I 10:22:42.1799849 LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 10:22:42.5468971 LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 10:22:42.5468971 Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 10:22:42.5468971 Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 10:22:42.5468971 LuckyDrawManager status: DFT system is fully initialized and ready!
+I 10:24:13.6018905 LuckyDrawManager status: Received instruction to initialize or update. Starting now.
+I 10:24:13.6018905 LuckyDrawManager status: Waiting for store to initialize...
+I 10:24:13.6018905 LuckyDrawManager status: Requested lucky draw data from Hearthstone server. Waiting for a response...
+I 10:24:13.8172188 LuckyDrawManager status: Processing lucky draws received from the server. Creating data models etc.
+I 10:24:13.8172188 Lucky Draw Box 74 status: Initializing. Creating lucky draw box state from Hearthstone server response.
+I 10:24:13.8172188 Lucky Draw Box 74 status: 死亡之裔 is fully initialised.
+I 10:24:13.8172188 LuckyDrawManager status: DFT system is fully initialized and ready!

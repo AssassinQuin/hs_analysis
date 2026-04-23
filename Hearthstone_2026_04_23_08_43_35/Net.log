@@ -1,0 +1,229 @@
+D 08:43:55.9116768 Hearthstone/35.2.240818 (PC;Default_string_Default_string_;Desktop;d9f25ebdb1abeb5c3b51809ba97b2cf41773dca7;10370;NVIDIA_GeForce_RTX_4060;NVIDIA;4318;Direct3D_11.0_level_11.1_;3072;50;Full;Windows_11_10.0.26200_64bit;12;12th_Gen_Intel_R_Core_TM_i5_12400F;8;True;False;True;False;True;True;True;True;True;True;1;False;16197;True;True;True;False;2560;1440;120;Desktop;True) Battle.net/CSharp
+D 08:43:55.9116768 Job_StartInitialBattleNetConnection done wait for LoginService
+D 08:43:56.0763946 Job_StartInitialBattleNetConnection  done wait for LoginManager
+D 08:43:56.0763946 Job_StartInitialBattleNetConnection done wait for ShouldBeConnectedToAurora
+D 08:43:56.0763946 StartInitalBattleNetConnection
+D 08:43:56.0763946 StartInitalBattleNetConnection: BattleNet.Connect with: cn.actual.battlenet.com.cn:1119 , Auth: CN-89a1ac3549bc197bc61f23c7c9ee790e-234700162 
+D 08:43:59.8985955 OnNetCacheObjReceived SAVE --> NetCacheFeatures
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheFeatures
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheProfileProgress
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheClientOptions
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheCollection
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheProfileNotices
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheProfileNotices
+D 08:44:01.4265753 Caching currency state: {
+  ArcaneDustBalance: 12100
+  BgTokenBalance: 85
+  BonusGoldBalance: 0
+  CappedGoldBalance: 17215
+  CurrencyVersion: 5944
+  RenownBalance: 0
+}
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheArcaneDustBalance
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheGoldBalance
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheRenownBalance
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsTokenBalance
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheBoosters
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetPlayerArenaTickets
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheDisplayBanner
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheDecks
+D 08:44:01.4265753 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 08:44:02.6348527 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 08:44:02.7042414 OnNetCacheObjReceived SAVE --> NetCacheProfileProgress
+D 08:44:02.7175239 OnNetCacheObjReceived SAVE --> NetCacheMercenariesPlayerInfo
+D 08:44:02.7851056 Updated OAuth token with expiration 2026/4/24 8:44:01
+I 08:44:02.7851056 PerformAuthenticationAsync True
+D 08:44:02.8386667 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 08:44:02.8476910 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 08:44:02.8511954 OnNetCacheObjReceived SAVE --> NetCacheRewardProgress
+D 08:44:02.8588169 OnNetCacheObjReceived SAVE --> NetCacheCardBacks
+D 08:44:02.8725716 OnNetCacheObjReceived SAVE --> NetCacheAccountLicenses
+D 08:44:02.8832703 OnNetCacheObjReceived SAVE --> NetCacheFavoriteHeroes
+D 08:44:02.8898731 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsGuideSkins
+D 08:44:02.8971737 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsFinishers
+D 08:44:02.9063191 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsHeroSkins
+D 08:44:02.9117399 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsBoardSkins
+D 08:44:02.9249086 OnNetCacheObjReceived SAVE --> NetCacheCoins
+D 08:44:02.9362434 OnNetCacheObjReceived SAVE --> ClientStaticAssetsResponse
+D 08:44:03.5950385 OnNetCacheObjReceived SAVE --> NetCachePets
+D 08:44:03.6108756 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsEmotes
+D 08:44:04.1045842 Updated OAuth token with expiration 2026/4/24 8:44:03
+I 08:44:04.1045842 PerformAuthenticationAsync True
+W 08:44:04.1754085 APIGateway Request error: HTTP/1.1 500 Internal Server Error
+W 08:44:04.1754085 Failed to get post response to grab string
+D 08:44:47.0976231 Network.CreateDeck hero=2828
+D 08:48:06.8397233 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 08:48:06.8660975 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 08:48:29.7106985 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 08:48:29.8486990 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 08:49:42.4377291 Network.CreateDeck hero=119030
+D 08:49:53.2651777 Network.RenameDeck 9380526524
+D 09:09:28.5622517 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 09:09:28.5844294 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 09:09:41.1376037 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 09:09:41.3166894 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 09:19:56.4999345 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 09:19:56.5064577 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 09:20:22.5165155 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 09:20:22.5231987 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 09:26:54.5831091 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 09:26:54.6105846 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 09:27:08.3659065 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 09:27:08.5351959 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 09:44:02.6825679 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 09:44:02.6897080 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 09:44:11.3427714 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 09:44:11.3652936 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 09:57:38.2562256 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 09:57:38.2643021 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 09:58:00.9276364 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 09:58:01.0921801 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 10:22:10.2194796 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 10:22:10.2258223 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 10:22:35.7779119 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 10:22:36.0157153 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 10:22:46.8517680 Handling card collection modification (collection version 8952): {
+  AmountSeen: 0
+  AssetCardId: 126698
+  Premium: 0
+  Quantity: 1
+}
+D 10:22:46.8517680 Handling card collection modification (collection version 8952): {
+  AmountSeen: 0
+  AssetCardId: 126698
+  Premium: 0
+  Quantity: 1
+}
+D 10:22:46.8517680 OnNetCacheObjReceived SAVE --> NetCacheBoosters
+D 10:22:58.3179290 Caching currency state: {
+  ArcaneDustBalance: 12100
+  BgTokenBalance: 85
+  BonusGoldBalance: 0
+  CappedGoldBalance: 17290
+  CurrencyVersion: 5945
+  RenownBalance: 0
+}
+D 10:22:58.3179290 OnNetCacheObjReceived SAVE --> NetCacheArcaneDustBalance
+D 10:22:58.3179290 OnNetCacheObjReceived SAVE --> NetCacheGoldBalance
+D 10:22:58.3179290 OnNetCacheObjReceived SAVE --> NetCacheRenownBalance
+D 10:22:58.3179290 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsTokenBalance
+D 10:22:59.1677151 OnNetCacheObjReceived SAVE --> NetCacheBoosters
+D 10:23:01.7485446 Caching currency state: {
+  ArcaneDustBalance: 12100
+  BgTokenBalance: 85
+  BonusGoldBalance: 0
+  CappedGoldBalance: 17365
+  CurrencyVersion: 5946
+  RenownBalance: 0
+}
+D 10:23:01.7485446 OnNetCacheObjReceived SAVE --> NetCacheArcaneDustBalance
+D 10:23:01.7485446 OnNetCacheObjReceived SAVE --> NetCacheGoldBalance
+D 10:23:01.7485446 OnNetCacheObjReceived SAVE --> NetCacheRenownBalance
+D 10:23:01.7485446 OnNetCacheObjReceived SAVE --> NetCacheBattlegroundsTokenBalance
+D 10:23:02.8212129 OnNetCacheObjReceived SAVE --> NetCacheMercenariesPlayerInfo
+D 10:23:02.9551002 OnNetCacheObjReceived SAVE --> LettuceTeamList
+D 10:23:02.9786221 OnNetCacheObjReceived SAVE --> NetCacheMercenariesMythicTreasureInfo
+D 10:23:52.0374505 Network.OpenBooster
+D 10:23:52.6816785 Handling card collection modification (collection version 8953): {
+  AmountSeen: 0
+  AssetCardId: 122779
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:52.6816785 Handling card collection modification (collection version 8953): {
+  AmountSeen: 0
+  AssetCardId: 122760
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:52.6816785 Handling card collection modification (collection version 8953): {
+  AmountSeen: 0
+  AssetCardId: 122966
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:52.6816785 Handling card collection modification (collection version 8953): {
+  AmountSeen: 0
+  AssetCardId: 122643
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:52.6816785 Handling card collection modification (collection version 8953): {
+  AmountSeen: 0
+  AssetCardId: 123847
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:52.6816785 OnNetCacheObjReceived SAVE --> NetCacheBoosters
+D 10:23:58.8268557 Network.OpenBooster
+D 10:23:59.0774704 Handling card collection modification (collection version 8954): {
+  AmountSeen: 0
+  AssetCardId: 123546
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:59.0774704 Handling card collection modification (collection version 8954): {
+  AmountSeen: 0
+  AssetCardId: 128058
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:59.0774704 Handling card collection modification (collection version 8954): {
+  AmountSeen: 0
+  AssetCardId: 123114
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:59.0774704 Handling card collection modification (collection version 8954): {
+  AmountSeen: 0
+  AssetCardId: 123157
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:59.0774704 Handling card collection modification (collection version 8954): {
+  AmountSeen: 0
+  AssetCardId: 122988
+  Premium: 0
+  Quantity: 1
+}
+D 10:23:59.0774704 OnNetCacheObjReceived SAVE --> NetCacheBoosters
+D 10:24:04.8798743 Network.OpenBooster
+D 10:24:05.1344919 Handling card collection modification (collection version 8955): {
+  AmountSeen: 0
+  AssetCardId: 123117
+  Premium: 0
+  Quantity: 1
+}
+D 10:24:05.1344919 Handling card collection modification (collection version 8955): {
+  AmountSeen: 0
+  AssetCardId: 122712
+  Premium: 0
+  Quantity: 1
+}
+D 10:24:05.1344919 Handling card collection modification (collection version 8955): {
+  AmountSeen: 0
+  AssetCardId: 123691
+  Premium: 0
+  Quantity: 1
+}
+D 10:24:05.1344919 Handling card collection modification (collection version 8955): {
+  AmountSeen: 0
+  AssetCardId: 123539
+  Premium: 0
+  Quantity: 1
+}
+D 10:24:05.1344919 Handling card collection modification (collection version 8955): {
+  AmountSeen: 0
+  AssetCardId: 123383
+  Premium: 0
+  Quantity: 1
+}
+D 10:24:05.1344919 OnNetCacheObjReceived SAVE --> NetCacheBoosters
+D 10:35:24.7460584 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 10:35:24.7534534 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 10:35:32.6788973 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 10:35:32.7629972 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
+D 10:41:02.8855429 OnNetCacheObjReceived SAVE --> NetCacheHeroLevels
+D 10:41:02.8922423 OnNetCacheObjReceived SAVE --> NetCacheMedalInfo
+D 10:41:32.1783261 OnNetCacheObjReceived SAVE --> NetCacheBaconRatingInfo
+D 10:41:32.3002884 OnNetCacheObjReceived SAVE --> NetCachePlayerRecords
