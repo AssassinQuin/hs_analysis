@@ -1,11 +1,13 @@
 """V11 Engine tests — comprehensive coverage of all components."""
 
+import math
 import pytest
 from dataclasses import dataclass
 
 from analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
 from analysis.models.card import Card
-from analysis.search.rhea_engine import Action
+from analysis.search.rhea_engine import Action, ActionType
+from analysis.data.card_roles import RoleTag
 
 
 # ===================================================================
@@ -137,7 +139,7 @@ class TestActionPruner:
                               has_divine_shield=True)],
         )
         actions = [
-            Action(action_type="ATTACK", source_index=0, target_index=1),
+            Action(action_type=ActionType.ATTACK, source_index=0, target_index=1),
         ]
         pruned = pruner.prune(actions, state)
         assert len(pruned) == 0
@@ -151,7 +153,7 @@ class TestActionPruner:
             opp_board=[Minion(name="Wisp", attack=1, health=1, max_health=1, cost=1)],
         )
         actions = [
-            Action(action_type="ATTACK", source_index=0, target_index=1),
+            Action(action_type=ActionType.ATTACK, source_index=0, target_index=1),
         ]
         pruned = pruner.prune(actions, state)
         assert len(pruned) == 1
@@ -161,9 +163,9 @@ class TestActionPruner:
 
         pruner = ActionPruner()
         state = _simple_state()
-        actions = [Action(action_type="END_TURN")]
+        actions = [Action(action_type=ActionType.END_TURN)]
         pruned = pruner.prune(actions, state)
-        assert any(a.action_type == "END_TURN" for a in pruned)
+        assert any(a.action_type == ActionType.END_TURN for a in pruned)
 
     def test_prune_full_board_minion(self):
         from analysis.search.engine.action_pruner import ActionPruner
@@ -174,7 +176,7 @@ class TestActionPruner:
             board=board,
             hand=[_make_card("Extra", cost=1, card_type="MINION")],
         )
-        actions = [Action(action_type="PLAY", card_index=0, position=0)]
+        actions = [Action(action_type=ActionType.PLAY, card_index=0, position=0)]
         pruned = pruner.prune(actions, state)
         assert len(pruned) == 0
 
@@ -281,6 +283,19 @@ class TestDrawModel:
         ev = model.expected_draw_value(state, n_cards=1)
         assert ev > 0
 
+    def test_draw_role_probability_bounds(self):
+        from analysis.search.engine.models.draw_model import DrawModel
+        model = DrawModel()
+        state = _simple_state()
+        state.deck_list = [
+            _make_card("Heal", cost=2, card_type="SPELL", text="恢复 4 点生命"),
+            _make_card("Bolt", cost=2, card_type="SPELL", text="造成 3 点伤害"),
+            _make_card("Draw", cost=2, card_type="SPELL", text="抽 1 张牌"),
+            _make_card("Minion", cost=3, card_type="MINION", attack=3, health=3),
+        ]
+        p = model.draw_role_probability(state, RoleTag.HEAL, n_draws=2)
+        assert 0.0 <= p <= 1.0
+
 
 class TestDiscoverModel:
     def test_empty_pool(self):
@@ -303,6 +318,67 @@ class TestDiscoverModel:
         ]
         card, ev = model.best_discover(pool, state, n_samples=30)
         assert ev > 0
+
+    def test_discover_role_hit_prob_bounds(self):
+        from analysis.search.engine.models.discover_model import DiscoverModel
+        model = DiscoverModel()
+        state = _simple_state()
+        pool = [
+            _make_card("Heal", cost=2, card_type="SPELL", text="恢复 4 点生命"),
+            _make_card("Fire", cost=4, card_type="SPELL", text="造成 6 点伤害"),
+            _make_card("Taunt", cost=3, card_type="MINION", attack=2, health=4, mechanics=["TAUNT"]),
+        ]
+        p = model.discover_role_hit_prob(pool, RoleTag.HEAL)
+        assert 0.0 <= p <= 1.0
+
+    def test_discover_role_offer_prob_3_pick_rule(self):
+        from analysis.search.engine.models.discover_model import DiscoverModel
+        model = DiscoverModel()
+        pool = []
+        for i in range(2):
+            pool.append(_make_card(f"Heal{i}", text="恢复 4 点生命"))
+        for i in range(8):
+            pool.append(_make_card(f"Other{i}", text=""))
+        p = model.discover_role_offer_prob(pool, RoleTag.HEAL, offer_size=3)
+        expected = 1.0 - (math.comb(8, 3) / math.comb(10, 3))
+        assert abs(p - expected) < 1e-9
+
+
+class TestProbabilityPanel:
+    def test_format_category_lines_filters_under_5_percent(self):
+        from analysis.search.engine.models.probability_panel import ProbabilityPanel
+        panel = ProbabilityPanel(
+            draw_clear_1=0.04,
+            draw_heal_1=0.25,
+            draw_board_1=0.00,
+            draw_burst_1=0.06,
+            draw_clear_2=0.03,
+            discover_clear=0.11,
+            discover_heal=0.02,
+            discover_board=0.07,
+        )
+        lines = panel.format_category_lines(min_prob=0.05)
+        text = "\n".join(lines)
+        assert "解场=4%" not in text
+        assert "回血=25%" in text
+        assert "直伤=6%" in text
+        assert "解场=11%" in text
+        assert "回血=2%" not in text
+
+    def test_compute_panel_with_discover_pool_sets_discover_probs(self):
+        from analysis.search.engine.models.probability_panel import compute_panel
+        state = _simple_state()
+        state.deck_list = [_make_card("DeckHeal", text="恢复 4 点生命")]
+        pool = [
+            _make_card("PoolHeal", text="恢复 4 点生命"),
+            _make_card("PoolBurn", text="造成 6 点伤害"),
+            _make_card("PoolBody", card_type="MINION", attack=3, health=4),
+            _make_card("PoolAoe", text="对所有随从造成 2 点伤害"),
+        ]
+        panel = compute_panel(state, discover_pool=pool)
+        assert panel.discover_clear is not None
+        assert panel.discover_heal is not None
+        assert panel.discover_board is not None
 
 
 class TestRNGModel:
@@ -339,9 +415,16 @@ class TestDecisionPipeline:
         decision = pipeline.decide(state)
         assert decision.best_plan is not None
         assert len(decision.best_plan) >= 1
-        assert decision.best_plan[-1].action_type == "END_TURN"
+        assert decision.best_plan[-1].action_type == ActionType.END_TURN
         assert decision.time_elapsed_ms >= 0
-        assert decision.strategic_mode.mode in ("LETHAL", "DEFENSIVE", "DEVELOPMENT")
+        assert decision.turn_plan is not None
+        assert decision.probability_panel is not None
+        assert decision.strategic_mode.mode in (
+            "LETHAL",
+            "DEFENSIVE",
+            "DEVELOPMENT",
+            "CONTROL",
+        )
 
     def test_empty_board_hand(self):
         from analysis.search.engine.pipeline import DecisionPipeline
@@ -350,7 +433,8 @@ class TestDecisionPipeline:
         pipeline = DecisionPipeline()
         decision = pipeline.decide(state)
         assert len(decision.best_plan) >= 1
-        assert decision.best_plan[-1].action_type == "END_TURN"
+        assert decision.best_plan[-1].action_type == ActionType.END_TURN
+        assert decision.turn_plan is not None
 
     def test_lethal_detection(self):
         from analysis.search.engine.pipeline import DecisionPipeline

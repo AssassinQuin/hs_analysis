@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from analysis.search.rhea_engine import Action
+from analysis.search.rhea_engine import Action, ActionType
 from analysis.search.game_state import GameState
 
 
@@ -21,16 +21,9 @@ from analysis.search.game_state import GameState
 # ===================================================================
 
 def action_hash(action: Action) -> tuple:
-    """Return a hashable tuple for canonical ordering of actions.
-
-    Returns (action_type, source_key, target_key) where:
-      - PLAY:   source_key = card_index,  target_key = -1
-      - ATTACK: source_key = source_index, target_key = target_index
-      - others: source_key = action_type,  target_key = -1
-    """
-    if action.action_type == "PLAY":
+    if action.action_type == ActionType.PLAY:
         return (action.action_type, action.card_index, -1)
-    elif action.action_type == "ATTACK":
+    elif action.action_type == ActionType.ATTACK:
         return (action.action_type, action.source_index, action.target_index)
     else:
         return (action.action_type, action.action_type, -1)
@@ -41,14 +34,7 @@ def action_hash(action: Action) -> tuple:
 # ===================================================================
 
 def are_commutative(a1: Action, a2: Action, state: GameState) -> bool:
-    """Return True if two actions are commutative (order-independent).
-
-    Two actions are commutative if:
-      - Both are ATTACK actions
-      - They have different source minions
-      - They don't share a non-face target
-    """
-    if a1.action_type != "ATTACK" or a2.action_type != "ATTACK":
+    if a1.action_type != ActionType.ATTACK or a2.action_type != ActionType.ATTACK:
         return False
     if a1.source_index == a2.source_index:
         return False  # same source = not commutative

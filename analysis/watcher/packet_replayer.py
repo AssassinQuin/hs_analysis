@@ -29,17 +29,30 @@ from hslog import LogParser
 from hslog import packets
 
 from analysis.models.card import Card
+from analysis.data.card_roles import RoleTag, classify_card_roles
+from analysis.data.card_effects import get_effects
+from analysis.data.card_index import get_index
 from analysis.search.game_state import (
     GameState, HeroState, ManaState,
     Minion, OpponentState, Weapon,
 )
 from analysis.search.keywords import KeywordSet
 from analysis.search.mechanics_state import MechanicsState
+from analysis.search.discover import generate_discover_pool
+from analysis.search.discover import _parse_discover_constraint
+from analysis.search.engine.models.probability_panel import compute_panel
+from analysis.search.engine.models.discover_model import DiscoverModel
+from analysis.search.engine.models.draw_model import DrawModel
 from analysis.search.rhea_engine import Action, RHEAEngine, enumerate_legal_actions
 from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (
     normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
 )
+
+_PLAYABLE_CLASSES = {
+    "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "HUNTER", "MAGE",
+    "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
+}
 
 
 # ─── 数据类 ───────────────────────────────────────────────────────────
@@ -145,6 +158,7 @@ class TurnDecision:
     lethal_executed: bool = False
     # --- 日志 ---
     summary_lines: List[str] = field(default_factory=list)
+    effect_pool_reports: List[Dict[str, Any]] = field(default_factory=list)
 
 
 # ─── 主类 ─────────────────────────────────────────────────────────────
@@ -190,6 +204,7 @@ class PacketReplayer:
 
         # 日志 & 缓存
         self._card_name_cache: Dict[str, str] = {}
+        self._discover_pool_cache: Dict[str, List[Card]] = {}
         self._setup_loggers()
 
     # ─── 公共接口 ──────────────────────────────────────────────────
@@ -817,6 +832,27 @@ class PacketReplayer:
                     best_score=search_result.best_fitness,
                     legal_actions=legal_actions,
                 )
+                effect_pool_reports = self._analyze_effect_pools(game_state)
+                discover_pool = self._get_standard_discover_pool(self._player_hero_class)
+                opp_hand_prior = self._estimate_opponent_hand_role_priors(opp_hand_count)
+                prob_panel = compute_panel(
+                    game_state,
+                    discover_pool=discover_pool,
+                    opp_hand_roles=opp_hand_prior,
+                )
+                probability_lines = self._build_effect_probability_lines(
+                    game_state, effect_pool_reports, min_prob=0.05
+                )
+                if prob_panel.opp_threat_ev is not None:
+                    probability_lines.extend(prob_panel.opp_threat_ev.format_lines())
+                deck_model_line = (
+                    f"牌库建模: 已知{getattr(game_state, 'deck_model_known', 0)} / "
+                    f"补全{getattr(game_state, 'deck_model_inferred', 0)} / "
+                    f"剩余{game_state.deck_remaining}"
+                )
+                opp_prior_line = self._format_opp_hand_prior_line(opp_hand_prior)
+                if not probability_lines:
+                    probability_lines = ["当前手牌无 发现/随机/抉择/抽牌 可计算效果"]
 
                 # Log results
                 self._decision_logger.info("=" * 70)
@@ -839,6 +875,23 @@ class PacketReplayer:
                 self._decision_logger.info("最佳序列:")
                 for i, action in enumerate(search_result.best_chromosome):
                     self._decision_logger.info(f"  {i+1}. {action.describe(game_state)}")
+
+                self._decision_logger.info("")
+                self._decision_logger.info("抉择期望(命中率>=5%):")
+                self._decision_logger.info(f"  {deck_model_line}")
+                for line in probability_lines:
+                    self._decision_logger.info(f"  {line}")
+                self._decision_logger.info(f"  {opp_prior_line}")
+                if effect_pool_reports:
+                    self._decision_logger.info("")
+                    self._decision_logger.info("效果池分析(发现/随机获得):")
+                    for report in effect_pool_reports:
+                        self._decision_logger.info(
+                            f"  [{report['effect_kind']}] {report['card_name']} "
+                            f"| 池大小={report['pool_size']} | 约束={report['constraint']}"
+                        )
+                        for line in report.get("probability_lines", []):
+                            self._decision_logger.info(f"    {line}")
 
                 self._decision_logger.info("")
                 self._decision_logger.info(f"抉择分析: {decision_quality}")
@@ -890,6 +943,8 @@ class PacketReplayer:
                     rhea_elapsed_ms=rhea_time_ms,
                     decision_quality=decision_quality,
                     decision_score=decision_score,
+                    summary_lines=[deck_model_line] + probability_lines + [opp_prior_line],
+                    effect_pool_reports=effect_pool_reports,
                 )
                 self.decisions.append(decision)
 
@@ -1015,15 +1070,27 @@ class PacketReplayer:
             }
 
             hand: List[Card] = []
+            try:
+                from analysis.data.hsdb import get_db
+                card_db = get_db()
+            except Exception:
+                card_db = None
             for entity in our_entities:
                 if entity.zone == Zone.HAND:
                     ct = _CT_MAP.get(entity.card_type, "MINION")
-                    hand.append(Card(
-                        dbf_id=0,
-                        name=self._card_name(entity.card_id) or "",
-                        cost=entity.cost,
-                        card_type=ct,
-                    ))
+                    card_obj = None
+                    if card_db and entity.card_id:
+                        raw = card_db.get_card(entity.card_id)
+                        if raw:
+                            card_obj = Card.from_hsdb_dict(raw)
+                    if card_obj is None:
+                        card_obj = Card(
+                            dbf_id=0,
+                            name=self._card_name(entity.card_id) or "",
+                            cost=entity.cost,
+                            card_type=ct,
+                        )
+                    hand.append(card_obj)
 
             # ── Our hero state ──
             hero = HeroState(
@@ -1096,6 +1163,46 @@ class PacketReplayer:
             # ── Deck remaining ──
             deck_remaining = sum(1 for e in our_entities if e.zone == Zone.DECK)
             opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
+            deck_list: List[Card] = []
+            known_deck_cards = 0
+            for entity in our_entities:
+                if entity.zone != Zone.DECK:
+                    continue
+                ct = _CT_MAP.get(entity.card_type, "MINION")
+                card_obj = None
+                if card_db and entity.card_id:
+                    raw = card_db.get_card(entity.card_id)
+                    if raw:
+                        card_obj = Card.from_hsdb_dict(raw)
+                        known_deck_cards += 1
+                if card_obj is None and entity.card_id:
+                    card_obj = Card(
+                        dbf_id=0,
+                        name=self._card_name(entity.card_id) or "",
+                        cost=entity.cost,
+                        card_type=ct,
+                    )
+                if card_obj is not None:
+                    deck_list.append(card_obj)
+
+            inferred_deck_cards = 0
+            if deck_remaining > len(deck_list):
+                need = deck_remaining - len(deck_list)
+                exclude_ids = set()
+                for entity in our_entities:
+                    if entity.card_id and entity.zone != Zone.DECK:
+                        exclude_ids.add(entity.card_id)
+                for c in deck_list:
+                    cid = getattr(c, "card_id", None)
+                    if cid:
+                        exclude_ids.add(cid)
+                inferred = self._infer_unknown_deck_cards(
+                    hero_class=self._player_hero_class,
+                    need_count=need,
+                    exclude_card_ids=exclude_ids,
+                )
+                inferred_deck_cards = len(inferred)
+                deck_list.extend(inferred)
 
             # ── Build GameState ──
             game_state = GameState(
@@ -1104,6 +1211,7 @@ class PacketReplayer:
                 mana=mana,
                 board=board,
                 hand=hand,
+                deck_list=deck_list,
                 deck_remaining=deck_remaining,
                 opponent=OpponentState(
                     hero=HeroState(
@@ -1129,6 +1237,8 @@ class PacketReplayer:
                     secrets=list(self.global_tracker.state.opp_secrets),
                 ),
             )
+            game_state.deck_model_known = known_deck_cards
+            game_state.deck_model_inferred = inferred_deck_cards
 
             # Populate Bayesian inference state
             bayesian = self.global_tracker.get_bayesian_state()
@@ -1144,6 +1254,533 @@ class PacketReplayer:
             if self._error_logger:
                 self._error_logger.error(f"构建 GameState 失败: {e}", exc_info=True)
             return None
+
+    def _get_standard_discover_pool(self, hero_class: str) -> List[Card]:
+        hc = (hero_class or "").upper()
+        if not hc or hc == "UNKNOWN":
+            return []
+
+        cached = self._discover_pool_cache.get(hc)
+        if cached is not None:
+            return cached
+
+        cards: List[Card] = []
+        try:
+            raw_pool = generate_discover_pool(hc, use_wild_pool=False)
+            for raw in raw_pool:
+                try:
+                    cards.append(Card.from_hsdb_dict(raw))
+                except Exception:
+                    continue
+        except Exception:
+            cards = []
+
+        self._discover_pool_cache[hc] = cards
+        return cards
+
+    def _analyze_effect_pools(self, state: GameState) -> List[Dict[str, Any]]:
+        reports: List[Dict[str, Any]] = []
+        hand = state.hand or []
+        discover_model = DiscoverModel()
+        for idx, card in enumerate(hand):
+            text = getattr(card, "text", "") or ""
+            if not text:
+                continue
+            specs = self._extract_effect_specs(text)
+            if not specs:
+                continue
+            for spec in specs:
+                if spec["pool_mode"] == "choose":
+                    choose_probs = {
+                        self._role_label(role): 1.0
+                        for role in classify_card_roles(card)
+                    }
+                    report = {
+                        "hand_index": idx,
+                        "card_name": card.name,
+                        "card_text": text,
+                        "effect_kind": spec["effect_kind"],
+                        "constraint": spec["constraint_text"],
+                        "pool_mode": spec["pool_mode"],
+                        "pool_size": 0,
+                        "pool_cards": [],
+                        "pool_role_probabilities": choose_probs,
+                        "offer_role_probabilities": {},
+                        "probability_lines": self._format_role_probability_lines(choose_probs, {}),
+                    }
+                    reports.append(report)
+                    continue
+
+                pool = self._build_effect_pool(state.hero.hero_class, spec)
+                if not pool:
+                    continue
+
+                pool_probs = self._calc_role_probabilities(pool)
+                offer_probs = {}
+                if spec["pool_mode"] == "discover":
+                    offer_probs = self._calc_role_offer_probabilities(discover_model, pool)
+
+                report = {
+                    "hand_index": idx,
+                    "card_name": card.name,
+                    "card_text": text,
+                    "effect_kind": spec["effect_kind"],
+                    "constraint": spec["constraint_text"],
+                    "pool_mode": spec["pool_mode"],
+                    "pool_size": len(pool),
+                    "pool_cards": [c.name for c in pool],
+                    "pool_role_probabilities": pool_probs,
+                    "offer_role_probabilities": offer_probs,
+                    "probability_lines": self._format_role_probability_lines(pool_probs, offer_probs),
+                }
+                reports.append(report)
+        return reports
+
+    def _extract_effect_specs(self, text: str) -> List[Dict[str, Any]]:
+        specs: List[Dict[str, Any]] = []
+        tl = text.lower()
+        from_past_only = ("来自过去" in text or "from the past" in tl)
+
+        class_mode = "own_or_neutral"
+        if (
+            "其他职业" in text
+            or "另一职业" in text
+            or "other class" in tl
+            or "another class" in tl
+        ):
+            class_mode = "other"
+        elif (
+            "本职业" in text
+            or "你的职业" in text
+            or "your class" in tl
+        ):
+            class_mode = "own_only"
+        elif "不限" in text or "any class" in tl:
+            class_mode = "unrestricted"
+
+        if "发现" in text or "discover" in tl:
+            c = _parse_discover_constraint(text)
+            specs.append(
+                {
+                    "effect_kind": "发现",
+                    "pool_mode": "discover",
+                    "card_type": c.get("card_type"),
+                    "race": c.get("race"),
+                    "use_wild_pool": from_past_only,
+                    "from_past_only": from_past_only,
+                    "class_mode": class_mode,
+                    "constraint_text": (
+                        f"type={c.get('card_type') or 'ANY'}, race={c.get('race') or 'ANY'}, "
+                        f"class_mode={class_mode}, from_past_only={from_past_only}"
+                    ),
+                }
+            )
+
+        is_random_gain = ("随机" in text or "random" in tl) and (
+            "获得" in text
+            or "加入" in text
+            or "置入" in text
+            or "add a random" in tl
+        )
+        if is_random_gain:
+            c = _parse_discover_constraint(text)
+            random_class_mode = "unrestricted"
+            if (
+                "其他职业" in text
+                or "另一职业" in text
+                or "other class" in tl
+                or "another class" in tl
+            ):
+                random_class_mode = "other"
+            elif (
+                "本职业" in text
+                or "你的职业" in text
+                or "your class" in tl
+            ):
+                random_class_mode = "own_only"
+            specs.append(
+                {
+                    "effect_kind": "随机获得",
+                    "pool_mode": "random",
+                    "card_type": c.get("card_type"),
+                    "race": c.get("race"),
+                    "use_wild_pool": from_past_only,
+                    "from_past_only": from_past_only,
+                    "class_mode": random_class_mode,
+                    "constraint_text": (
+                        f"type={c.get('card_type') or 'ANY'}, race={c.get('race') or 'ANY'}, "
+                        f"class_mode={random_class_mode}, from_past_only={from_past_only}"
+                    ),
+                }
+            )
+
+        if "抉择" in text or "choose one" in tl:
+            specs.append(
+                {
+                    "effect_kind": "抉择",
+                    "pool_mode": "choose",
+                    "card_type": None,
+                    "race": None,
+                    "use_wild_pool": False,
+                    "from_past_only": False,
+                    "class_mode": "unrestricted",
+                    "constraint_text": "choose_one",
+                }
+            )
+
+        dedup: Dict[Tuple, Dict[str, Any]] = {}
+        for spec in specs:
+            key = (
+                spec["effect_kind"],
+                spec.get("pool_mode"),
+                spec.get("card_type"),
+                spec.get("race"),
+                spec.get("use_wild_pool"),
+                spec.get("from_past_only"),
+                spec.get("class_mode"),
+            )
+            dedup[key] = spec
+        return list(dedup.values())
+
+    def _build_effect_probability_lines(
+        self,
+        state: GameState,
+        reports: List[Dict[str, Any]],
+        min_prob: float = 0.05,
+    ) -> List[str]:
+        lines: List[str] = []
+        draw_model = DrawModel()
+
+        # 抽牌效果：仅按当前手牌中真正有抽牌效果的卡计算
+        for card in state.hand or []:
+            effects = get_effects(card)
+            n_draw = int(getattr(effects, "draw", 0) or 0)
+            if n_draw <= 0:
+                continue
+            clear = min(
+                1.0,
+                draw_model.draw_role_probability(state, RoleTag.REMOVAL_SINGLE, n_draws=n_draw)
+                + draw_model.draw_role_probability(state, RoleTag.REMOVAL_AOE, n_draws=n_draw),
+            )
+            heal = draw_model.draw_role_probability(state, RoleTag.HEAL, n_draws=n_draw)
+            board = draw_model.draw_role_probability(state, RoleTag.TEMPO_BOARD, n_draws=n_draw)
+            burst = draw_model.draw_role_probability(state, RoleTag.BURST_DAMAGE, n_draws=n_draw)
+            parts = []
+            if clear >= min_prob:
+                parts.append(f"解场={clear:.0%}")
+            if heal >= min_prob:
+                parts.append(f"回血={heal:.0%}")
+            if board >= min_prob:
+                parts.append(f"战场={board:.0%}")
+            if burst >= min_prob:
+                parts.append(f"直伤={burst:.0%}")
+            if parts:
+                lines.append(f"抽牌[{card.name}]({n_draw}抽): " + ", ".join(parts))
+
+        # 发现/随机/抉择：按当前手牌效果池报告输出
+        for report in reports:
+            effect_kind = report.get("effect_kind", "")
+            grouped = self._compress_role_probs(
+                report.get("offer_role_probabilities") or report.get("pool_role_probabilities") or {}
+            )
+            parts = [f"{k}={v:.0%}" for k, v in grouped.items() if v >= min_prob]
+            if not parts:
+                continue
+            label = f"{effect_kind}[{report.get('card_name', '未知')}]"
+            if effect_kind == "发现":
+                lines.append(f"{label}(3选1): " + ", ".join(parts))
+            elif effect_kind == "随机获得":
+                lines.append(f"{label}(池内): " + ", ".join(parts))
+            elif effect_kind == "抉择":
+                lines.append(f"{label}(可控): " + ", ".join(parts))
+            else:
+                lines.append(f"{label}: " + ", ".join(parts))
+
+        if not lines:
+            unknown_text = sum(1 for c in (state.hand or []) if not (getattr(c, "text", "") or ""))
+            if unknown_text > 0:
+                lines.append(f"效果概率: 手牌文本未知 {unknown_text} 张，无法解析 发现/随机/抉择/抽牌")
+
+        return lines
+
+    def _compress_role_probs(self, probs: Dict[str, float]) -> Dict[str, float]:
+        grouped = {"解场": 0.0, "回血": 0.0, "战场": 0.0, "直伤": 0.0}
+        for name, p in probs.items():
+            if "解场" in name:
+                grouped["解场"] += p
+            elif "回血" in name:
+                grouped["回血"] += p
+            elif "直伤" in name:
+                grouped["直伤"] += p
+            elif name in ("战场", "防御嘲讽", "增益"):
+                grouped["战场"] += p
+        return {k: min(1.0, v) for k, v in grouped.items() if v > 0}
+
+    def _build_effect_pool(self, hero_class: str, spec: Dict[str, Any]) -> List[Card]:
+        hc = (hero_class or "").upper()
+        if not hc or hc == "UNKNOWN":
+            return []
+
+        card_type = spec.get("card_type")
+        race = spec.get("race")
+        use_wild_pool = bool(spec.get("use_wild_pool"))
+        from_past_only = bool(spec.get("from_past_only"))
+        class_mode = spec.get("class_mode", "unrestricted")
+        mode = spec.get("pool_mode")
+        pool_cards: List[Card] = []
+
+        try:
+            if mode == "discover":
+                if class_mode == "own_or_neutral":
+                    raw_pool = generate_discover_pool(
+                        hc,
+                        card_type=card_type,
+                        race=race,
+                        use_wild_pool=use_wild_pool,
+                        from_past_only=from_past_only,
+                    )
+                else:
+                    idx = get_index()
+                    raw_pool = self._query_pool_with_past_filter(
+                        idx,
+                        card_type=card_type,
+                        race=race,
+                        use_wild_pool=use_wild_pool,
+                        from_past_only=from_past_only,
+                    )
+                    raw_pool = self._apply_class_mode(raw_pool, hc, class_mode)
+                    # 发现池不包含英雄和地点
+                    raw_pool = [
+                        c for c in raw_pool
+                        if c.get("type", "") not in ("HERO", "LOCATION")
+                    ]
+            else:
+                idx = get_index()
+                raw_pool = self._query_pool_with_past_filter(
+                    idx,
+                    card_type=card_type,
+                    race=race,
+                    use_wild_pool=use_wild_pool,
+                    from_past_only=from_past_only,
+                )
+                raw_pool = self._apply_class_mode(raw_pool, hc, class_mode)
+
+            for raw in raw_pool:
+                try:
+                    pool_cards.append(Card.from_hsdb_dict(raw))
+                except Exception:
+                    continue
+        except Exception:
+            return []
+
+        return pool_cards
+
+    def _query_pool_with_past_filter(
+        self,
+        idx,
+        *,
+        card_type: Optional[str] = None,
+        race: Optional[str] = None,
+        use_wild_pool: bool = False,
+        from_past_only: bool = False,
+    ) -> List[Dict[str, Any]]:
+        if from_past_only:
+            wild_pool = idx.get_pool(card_type=card_type, format="wild")
+            std_pool = idx.get_pool(card_type=card_type, format="standard")
+            std_dbf = {c.get("dbfId") for c in std_pool if c.get("dbfId") is not None}
+            raw_pool = [c for c in wild_pool if c.get("dbfId") not in std_dbf]
+        else:
+            fmt = "wild" if use_wild_pool else "standard"
+            raw_pool = idx.get_pool(card_type=card_type, format=fmt)
+        if race:
+            raw_pool = [c for c in raw_pool if race in (c.get("race", "") or "")]
+        return raw_pool
+
+    def _apply_class_mode(
+        self,
+        raw_pool: List[Dict[str, Any]],
+        hero_class: str,
+        class_mode: str,
+    ) -> List[Dict[str, Any]]:
+        if class_mode == "own_or_neutral":
+            return [c for c in raw_pool if c.get("cardClass") in (hero_class, "NEUTRAL")]
+        if class_mode == "own_only":
+            return [c for c in raw_pool if c.get("cardClass") == hero_class]
+        if class_mode == "other":
+            return [
+                c for c in raw_pool
+                if c.get("cardClass") in _PLAYABLE_CLASSES and c.get("cardClass") != hero_class
+            ]
+        return raw_pool
+
+    def _infer_unknown_deck_cards(
+        self,
+        hero_class: str,
+        need_count: int,
+        exclude_card_ids: set | None = None,
+    ) -> List[Card]:
+        if need_count <= 0:
+            return []
+        hc = (hero_class or "").upper()
+        if not hc or hc == "UNKNOWN":
+            return []
+
+        try:
+            idx = get_index()
+            candidates = idx.get_pool(format="standard")
+            candidates = [
+                c for c in candidates
+                if c.get("cardClass") in (hc, "NEUTRAL")
+                and c.get("type", "") != "HERO"
+            ]
+            if exclude_card_ids:
+                candidates = [
+                    c for c in candidates
+                    if c.get("id", "") not in exclude_card_ids
+                ]
+            if not candidates:
+                return []
+
+            candidates = sorted(candidates, key=lambda c: c.get("dbfId", 0))
+            out: List[Card] = []
+            i = 0
+            n = len(candidates)
+            while len(out) < need_count and n > 0:
+                raw = candidates[i % n]
+                try:
+                    out.append(Card.from_hsdb_dict(raw))
+                except Exception:
+                    pass
+                i += 1
+                if i > need_count * 3:
+                    break
+            return out[:need_count]
+        except Exception:
+            return []
+
+    def _calc_role_probabilities(self, pool: List[Card]) -> Dict[str, float]:
+        total = len(pool)
+        if total <= 0:
+            return {}
+        counts: Dict[RoleTag, int] = {r: 0 for r in RoleTag}
+        for card in pool:
+            roles = classify_card_roles(card)
+            for role in roles:
+                counts[role] += 1
+        probs: Dict[str, float] = {}
+        for role, count in counts.items():
+            if count > 0:
+                probs[self._role_label(role)] = count / total
+        return probs
+
+    def _calc_role_offer_probabilities(
+        self, model: DiscoverModel, pool: List[Card],
+    ) -> Dict[str, float]:
+        probs: Dict[str, float] = {}
+        for role in RoleTag:
+            p = model.discover_role_offer_prob(pool, role, offer_size=3)
+            if p > 0:
+                probs[self._role_label(role)] = p
+        return probs
+
+    def _format_role_probability_lines(
+        self,
+        pool_probs: Dict[str, float],
+        offer_probs: Dict[str, float],
+    ) -> List[str]:
+        def _fmt(d: Dict[str, float]) -> str:
+            items = sorted(d.items(), key=lambda kv: kv[1], reverse=True)
+            return ", ".join([f"{name}={p:.1%}" for name, p in items])
+
+        lines: List[str] = []
+        if pool_probs:
+            lines.append(f"池内分类占比: {_fmt(pool_probs)}")
+        if offer_probs:
+            lines.append(f"三选一命中率: {_fmt(offer_probs)}")
+        return lines
+
+    def _role_label(self, role: RoleTag) -> str:
+        labels = {
+            RoleTag.REMOVAL_SINGLE: "解场单体",
+            RoleTag.REMOVAL_AOE: "解场群体",
+            RoleTag.HEAL: "回血",
+            RoleTag.TEMPO_BOARD: "战场",
+            RoleTag.CARD_DRAW: "抽牌",
+            RoleTag.BURST_DAMAGE: "直伤",
+            RoleTag.TAUNT_DEFENSE: "防御嘲讽",
+            RoleTag.BUFF: "增益",
+            RoleTag.UTILITY: "功能",
+        }
+        return labels.get(role, role.name)
+
+    def _estimate_opponent_hand_role_priors(self, opp_hand_count: int) -> Dict[str, float]:
+        """Estimate opponent hand role distribution from known hand + Bayesian predictions."""
+        weights: Dict[str, float] = {}
+        total_weight = 0.0
+        try:
+            from analysis.data.hsdb import get_db
+            db = get_db()
+        except Exception:
+            db = None
+
+        # 1) Known hand cards observed in HAND zone
+        if db is not None:
+            for _, card_id in self.global_tracker.get_opp_known_hand():
+                raw = db.get_card(card_id)
+                if not raw:
+                    continue
+                try:
+                    card = Card.from_hsdb_dict(raw)
+                except Exception:
+                    continue
+                roles = classify_card_roles(card)
+                if not roles:
+                    continue
+                w = 1.0 / len(roles)
+                for role in roles:
+                    name = self._role_label(role)
+                    weights[name] = weights.get(name, 0.0) + w
+                    total_weight += w
+
+        # 2) Bayesian predicted-next cards (weighted by posterior probability)
+        bayesian = self.global_tracker.get_bayesian_state()
+        preds = bayesian.get("predicted_next", []) or []
+        if db is not None:
+            for pred in preds:
+                dbf = pred.get("dbfId")
+                if dbf is None:
+                    continue
+                raw = db.get_by_dbf(int(dbf))
+                if not raw:
+                    continue
+                p = float(pred.get("probability", 0.0) or 0.0)
+                if p <= 0:
+                    continue
+                try:
+                    card = Card.from_hsdb_dict(raw)
+                except Exception:
+                    continue
+                roles = classify_card_roles(card)
+                if not roles:
+                    continue
+                w = p / len(roles)
+                for role in roles:
+                    name = self._role_label(role)
+                    weights[name] = weights.get(name, 0.0) + w
+                    total_weight += w
+
+        if total_weight <= 0.0:
+            return {}
+        priors = {k: v / total_weight for k, v in weights.items()}
+        # Keep top 5 role priors for readability
+        ranked = sorted(priors.items(), key=lambda kv: kv[1], reverse=True)[:5]
+        return dict(ranked)
+
+    def _format_opp_hand_prior_line(self, priors: Dict[str, float]) -> str:
+        if not priors:
+            return "对手手牌类型先验: 数据不足"
+        parts = [f"{k}={v:.1%}" for k, v in priors.items()]
+        return "对手手牌类型先验: " + ", ".join(parts)
 
     def _evaluate_decision(
         self, game_state: GameState, best_actions: List[Action],
@@ -1291,6 +1928,8 @@ class PacketReplayer:
             # Collect opponent entities
             opp_entities = [e for e in self.entities.values()
                            if e.controller == self._opp_player_id]
+            our_entities = [e for e in self.entities.values()
+                           if e.controller == self._our_player_id]
 
             # Opponent hero
             opp_hero_hp = 30
@@ -1370,6 +2009,43 @@ class PacketReplayer:
                 self._main_logger.info(
                     f"    对手地标: {self._card_name(loc_cid)}"
                 )
+
+            # Build structured opponent turn decision (for first-turn visibility & downstream analysis)
+            our_hero_hp = 30
+            our_hero_armor = 0
+            for entity in our_entities:
+                if entity.card_type == CardType.HERO:
+                    our_hero_hp = entity.health
+                    our_hero_armor = entity.armor
+                    break
+
+            opp_hand_prior = self._estimate_opponent_hand_role_priors(opp_hand_count)
+            opp_prior_line = self._format_opp_hand_prior_line(opp_hand_prior)
+            self.decisions.append(TurnDecision(
+                turn_number=self.game_turn,
+                player_name=self.player_name,
+                is_our_turn=False,
+                hero_hp=our_hero_hp,
+                hero_armor=our_hero_armor,
+                hero_class=self._player_hero_class,
+                mana_available=0,
+                mana_max=0,
+                board_count=0,
+                hand_count=0,
+                opp_hero_hp=opp_hero_hp,
+                opp_hero_armor=opp_hero_armor,
+                opp_hero_class=self._opp_hero_class,
+                opp_board_count=len(opp_board),
+                opp_board_minions=[f"{m['name']} {m['atk']}/{m['health']}" for m in opp_board[:7]],
+                opp_hand_count=opp_hand_count,
+                opp_deck_remaining=opp_deck_remaining,
+                opp_known_hand_cards=opp_breakdown["known_hand"],
+                opp_deck_cards_played=opp_breakdown["deck_cards_played"],
+                opp_generated_cards_played=opp_breakdown["generated_cards_played"],
+                opp_card_type_counts=opp_breakdown["type_counts"],
+                opp_generated_played=opp_breakdown["total_generated"],
+                summary_lines=[opp_prior_line],
+            ))
 
         except Exception as e:
             self._error_logger.error(
@@ -1480,6 +2156,7 @@ class PacketReplayer:
                 'lethal_available': d.lethal_available,
                 'lethal_executed': d.lethal_executed,
                 'summary_lines': d.summary_lines,
+                'effect_pool_reports': d.effect_pool_reports,
             } for d in self.decisions],
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from typing import Optional, List
+import re
 from hslog.parser import LogParser
 from hslog.export import EntityTreeExporter
 from hearthstone.enums import GameTag, Zone, CardType, Step, State
@@ -38,6 +39,10 @@ class GameTracker:
         self._in_game = False
         self._current_game_entities = None  # 已导出的实体树
         self._last_event_type = None
+        self._last_turn = 0
+        self._last_step = "UNKNOWN"
+        self._re_game_turn = re.compile(r"tag=TURN value=(\d+)")
+        self._re_game_step = re.compile(r"tag=STEP value=([A-Z_0-9]+)")
 
     def feed_line(self, line: str) -> Optional[str]:
         """喂入一行Power.log内容，返回事件类型或None。
@@ -55,6 +60,16 @@ class GameTracker:
 
         try:
             self._parser.read_line(line)
+            step_match = self._re_game_step.search(line)
+            if step_match is not None:
+                raw_step = step_match.group(1)
+                if raw_step.isdigit():
+                    try:
+                        self._last_step = Step(int(raw_step)).name
+                    except Exception:
+                        self._last_step = "UNKNOWN"
+                else:
+                    self._last_step = raw_step
 
             current_game_count = len(self._parser.games)
 
@@ -62,22 +77,28 @@ class GameTracker:
                 # 新游戏开始
                 self._in_game = True
                 self._game_count = current_game_count
+                self._last_turn = 0
+                self._last_step = "UNKNOWN"
                 self._last_event_type = "game_start"
                 return "game_start"
 
             # 检测游戏结束
             if self._in_game:
-                if self._parser.games and self._parser.games[-1].tags.get(GameTag.STATE) == State.COMPLETE:
+                if "Entity=GameEntity" in line and "tag=STATE value=COMPLETE" in line:
                     self._in_game = False
+                    self._last_step = "UNKNOWN"
                     self._last_event_type = "game_end"
                     return "game_end"
 
-                # 检测新回合
-                if self._parser.games and self._parser.games[-1].tags.get(GameTag.STEP) != self._current_step():
-                    new_step = self._current_step()
-                    if new_step != self._current_step():
-                        self._last_event_type = "turn_start"
-                        return "turn_start"
+                # 检测新回合（基于日志中的 GameEntity TURN 递增）
+                if "Entity=GameEntity" in line and "tag=TURN value=" in line:
+                    m = self._re_game_turn.search(line)
+                    if m is not None:
+                        turn = int(m.group(1))
+                        if turn > self._last_turn:
+                            self._last_turn = turn
+                            self._last_event_type = "turn_start"
+                            return "turn_start"
 
             self._last_event_type = "action"
             return "action"
@@ -139,13 +160,10 @@ class GameTracker:
 
     def export_entities(self):
         """导出当前游戏的实体树，返回包含完整实体访问的游戏对象"""
-        game = self.current_game
-        if game is None:
+        if not self._parser.games:
             return None
 
-        packet_tree = self._parser.games[0] if self._parser.games else None
-        if packet_tree is None:
-            return None
+        packet_tree = self._parser.games[-1]
         exporter = _SafeEntityTreeExporter(packet_tree)
         exporter.export()
         self._current_game_entities = exporter.game
@@ -154,18 +172,13 @@ class GameTracker:
 
     def get_current_turn(self) -> int:
         """获取当前回合数"""
-        game = self.current_game
-        if game is None:
-            return 0
-        return game.tags.get(GameTag.TURN, 0)
+        return self._last_turn
 
     def get_step(self) -> str:
         """获取当前游戏阶段（BEGIN_MULLIGAN, MAIN_READY, MAIN_ACTION等）"""
-        game = self.current_game
-        if game is None:
+        if not self._in_game:
             return "NOT_STARTED"
-        step = game.tags.get(GameTag.STEP)
-        return Step(step).name if step is not None else "UNKNOWN"
+        return self._last_step or "UNKNOWN"
 
     def _current_step(self) -> Optional[int]:
         """获取当前STEP标签的原始数值"""

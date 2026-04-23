@@ -2,7 +2,7 @@
 """Hearthstone Power.log 枚举常量与映射表
 
 统一管理所有 GameTag / Zone / CardType / Step 数值常量，
-以及 tag 名→Entity属性 的映射关系，供 game_replayer / global_tracker 共用。
+以及 tag 名→Entity属性 的映射关系，供 packet_replayer / global_tracker 共用。
 
 数据来源: hearthstone.enums (官方 Python 包)
 """

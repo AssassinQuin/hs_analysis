@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 import random
 from typing import List, Optional, Tuple
 
+from analysis.data.card_roles import RoleTag, classify_card_roles
 from analysis.search.game_state import GameState
 
 
@@ -37,6 +39,34 @@ class DiscoverModel:
     def discover_ev(self, pool: list, state: GameState) -> float:
         _, ev = self.best_discover(pool, state)
         return ev
+
+    def discover_role_hit_prob(self, pool: list, role: RoleTag) -> float:
+        """Raw pool ratio: P(card in pool has role)."""
+        if not pool:
+            return 0.0
+        hits = sum(1 for card in pool if role in classify_card_roles(card))
+        return hits / len(pool)
+
+    def discover_role_offer_prob(
+        self,
+        pool: list,
+        role: RoleTag,
+        offer_size: int = 3,
+    ) -> float:
+        """3选1(不放回)出现至少一张该角色牌的概率。"""
+        if not pool or offer_size <= 0:
+            return 0.0
+
+        n_total = len(pool)
+        n_offer = min(offer_size, n_total)
+        role_hits = sum(1 for card in pool if role in classify_card_roles(card))
+        if role_hits <= 0:
+            return 0.0
+        if role_hits >= n_total:
+            return 1.0
+
+        miss = math.comb(n_total - role_hits, n_offer) / math.comb(n_total, n_offer)
+        return max(0.0, min(1.0, 1.0 - miss))
 
     def _score_card(self, card, state: GameState) -> float:
         try:

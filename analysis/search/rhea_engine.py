@@ -12,6 +12,7 @@ continue to work without any changes.
 # Re-export all public API from the rhea package
 from analysis.search.rhea import (  # noqa: F401
     Action,
+    ActionType,
     action_key as _action_key,
     action_in_list as _action_in_list,
     enumerate_legal_actions,

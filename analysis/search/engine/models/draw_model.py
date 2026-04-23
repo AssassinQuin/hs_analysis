@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from typing import List, Optional
 
+from analysis.data.card_roles import RoleTag, classify_card_roles
 from analysis.search.game_state import GameState
 
 
@@ -41,6 +43,31 @@ class DrawModel:
             return 0.0
         above = sum(1 for c in deck if self._card_value(c, state) >= threshold)
         return above / len(deck)
+
+    def draw_role_probability(
+        self,
+        state: GameState,
+        role: RoleTag,
+        n_draws: int = 1,
+    ) -> float:
+        deck = state.deck_list
+        if not deck or n_draws <= 0:
+            return 0.0
+
+        deck_size = len(deck)
+        draws = min(n_draws, deck_size)
+        if draws <= 0:
+            return 0.0
+
+        role_hits = sum(1 for c in deck if role in classify_card_roles(c))
+        if role_hits <= 0:
+            return 0.0
+        if role_hits >= deck_size:
+            return 1.0
+
+        # Hypergeometric: P(at least one hit) = 1 - C(N-K, n)/C(N, n)
+        miss = math.comb(deck_size - role_hits, draws) / math.comb(deck_size, draws)
+        return max(0.0, min(1.0, 1.0 - miss))
 
     def _avg_card_value(self, state: GameState, deck: list) -> float:
         if not deck:

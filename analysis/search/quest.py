@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+from analysis.search.rhea.actions import ActionType
+
 _QUEST_THRESHOLD_EN = re.compile(r'(\d+)\s*(?:cards?|spells?|minions?)')
 _QUEST_TOTAL_CN = re.compile(r'总计(\d+)张')
 _QUEST_CAST_CN = re.compile(r'施放(\d+)个')
@@ -173,20 +175,25 @@ def parse_quest(card) -> Optional[QuestState]:
 # track_quest_progress
 # ===================================================================
 
-def track_quest_progress(state, action_type: str, card=None):
+def track_quest_progress(state, action_type, card=None):
     """Update quest progress for all active (non-completed) quests.
 
     Called after a PLAY action in apply_action. Returns modified state.
     When a quest reaches its threshold, it is marked completed and
     a reward card is added to hand (if hand is not full, max 10 cards).
     """
+    if isinstance(action_type, ActionType):
+        action_type = action_type.name
+
+    play_action = ActionType.PLAY.name
+
     for quest in state.active_quests:
         if quest.completed:
             continue
 
         should_increment = False
 
-        if quest.quest_type == "play_cards" and action_type == "PLAY":
+        if quest.quest_type == "play_cards" and action_type == play_action:
             if not quest.quest_constraint:
                 should_increment = True
             elif card is not None:
@@ -197,7 +204,7 @@ def track_quest_progress(state, action_type: str, card=None):
                 if card_race in constraints or card_type in constraints:
                     should_increment = True
 
-        elif quest.quest_type == "cast_spells" and action_type == "PLAY" and card is not None:
+        elif quest.quest_type == "cast_spells" and action_type == play_action and card is not None:
             card_type = (getattr(card, 'card_type', '') or '').upper()
             if card_type == "SPELL":
                 if not quest.quest_constraint:
@@ -222,15 +229,15 @@ def track_quest_progress(state, action_type: str, card=None):
                                 should_increment = True
                                 break
 
-        elif quest.quest_type == "summon_minions" and action_type == "PLAY" and card is not None:
+        elif quest.quest_type == "summon_minions" and action_type == play_action and card is not None:
             card_type = (getattr(card, 'card_type', '') or '').upper()
             if card_type == "MINION":
                 should_increment = True
 
-        elif quest.quest_type == "generic" and action_type == "PLAY":
+        elif quest.quest_type == "generic" and action_type == play_action:
             should_increment = True
 
-        elif quest.quest_type == "draw_discard" and action_type == "PLAY":
+        elif quest.quest_type == "draw_discard" and action_type == play_action:
             # Simplified: any PLAY action counts toward draw/discard quests
             should_increment = True
 

@@ -11,6 +11,7 @@ from analysis.search.game_state import (
 from analysis.models.card import Card
 from analysis.search.rhea_engine import (
     Action,
+    ActionType,
     apply_action,
     enumerate_legal_actions,
 )
@@ -111,7 +112,7 @@ class TestManaModifier:
         coin = _make_card(name="幸运币", cost=0, card_type="SPELL", ename="The Coin")
         state.hand.append(coin)
 
-        result = apply_action(state, Action(action_type="PLAY", card_index=0))
+        result = apply_action(state, Action(action_type=ActionType.PLAY, card_index=0))
         assert result.mana.available == 6
         assert len(result.mana.modifiers) == 1
         assert result.mana.modifiers[0].scope == "this_turn"
@@ -124,7 +125,7 @@ class TestManaModifier:
         spell = _make_card(name="抹除存在", cost=3, card_type="SPELL")
         state.hand.extend([prep, spell])
 
-        result = apply_action(state, Action(action_type="PLAY", card_index=0))
+        result = apply_action(state, Action(action_type=ActionType.PLAY, card_index=0))
         assert len(result.mana.modifiers) == 1
         eff = result.mana.effective_cost(result.hand[0])
         assert eff == 0
@@ -149,7 +150,7 @@ class TestSpellTargetResolver:
         targeted = [
             a
             for a in legal
-            if a.action_type == "PLAY_WITH_TARGET" and a.card_index == 0
+            if a.action_type == ActionType.PLAY_WITH_TARGET and a.card_index == 0
         ]
         assert len(targeted) > 0
 
@@ -162,7 +163,7 @@ class TestSpellTargetResolver:
         targeted = [
             a
             for a in legal
-            if a.action_type == "PLAY_WITH_TARGET" and a.card_index == 0
+            if a.action_type == ActionType.PLAY_WITH_TARGET and a.card_index == 0
         ]
         assert len(targeted) == 0
 
@@ -175,7 +176,7 @@ class TestSpellTargetResolver:
         targeted = [
             a
             for a in legal
-            if a.action_type == "PLAY_WITH_TARGET" and a.card_index == 0
+            if a.action_type == ActionType.PLAY_WITH_TARGET and a.card_index == 0
         ]
         assert len(targeted) == 0
 
@@ -194,7 +195,7 @@ class TestHeroCardHandler:
         state.hand.append(hero_card)
 
         legal = enumerate_legal_actions(state)
-        hero_actions = [a for a in legal if a.action_type == "HERO_REPLACE"]
+        hero_actions = [a for a in legal if a.action_type == ActionType.HERO_REPLACE]
         assert len(hero_actions) == 1
 
     def test_hero_replace_grants_armor(self):
@@ -208,7 +209,10 @@ class TestHeroCardHandler:
         )
         state.hand.append(hero_card)
 
-        result = apply_action(state, Action(action_type="HERO_REPLACE", card_index=0))
+        result = apply_action(
+            state,
+            Action(action_type=ActionType.HERO_REPLACE, card_index=0),
+        )
         assert result.hero.armor == 5
         assert result.hero.hero_class == "WARRIOR"
         assert result.hero.is_hero_card is True
@@ -221,7 +225,10 @@ class TestHeroCardHandler:
         )
         state.hand.append(hero_card)
 
-        result = apply_action(state, Action(action_type="HERO_REPLACE", card_index=0))
+        result = apply_action(
+            state,
+            Action(action_type=ActionType.HERO_REPLACE, card_index=0),
+        )
         assert result.hero.hero_power_used is False
 
 
@@ -245,7 +252,10 @@ class TestNewActionTypes:
                 ),
             ]
         )
-        result = apply_action(state, Action(action_type="TRANSFORM", target_index=1))
+        result = apply_action(
+            state,
+            Action(action_type=ActionType.TRANSFORM, target_index=1),
+        )
         assert result.opponent.board[0].attack == 1
         assert result.opponent.board[0].health == 1
         assert result.opponent.board[0].has_taunt is False
@@ -261,7 +271,7 @@ class TestNewActionTypes:
         result = apply_action(
             state,
             Action(
-                action_type="PLAY_WITH_TARGET",
+                action_type=ActionType.PLAY_WITH_TARGET,
                 card_index=0,
                 target_index=0,
             ),
@@ -274,7 +284,7 @@ class TestNewActionTypes:
         state.mana.add_modifier("temp", 1, "this_turn")
         assert len(state.mana.modifiers) == 1
 
-        result = apply_action(state, Action(action_type="END_TURN"))
+        result = apply_action(state, Action(action_type=ActionType.END_TURN))
         assert len(result.mana.modifiers) == 0
 
     def test_hero_power_uses_dynamic_cost(self):
@@ -284,16 +294,20 @@ class TestNewActionTypes:
         state.hero.hero_power_damage = 0
         state.hero.hp = 25
 
-        result = apply_action(state, Action(action_type="HERO_POWER"))
+        result = apply_action(state, Action(action_type=ActionType.HERO_POWER))
         assert result.mana.available == 2
         assert result.hero.hero_power_used is True
 
     def test_action_describe_new_types(self):
-        a1 = Action(action_type="HERO_REPLACE", card_index=0)
+        a1 = Action(action_type=ActionType.HERO_REPLACE, card_index=0)
         assert "替换英雄" in a1.describe()
 
-        a2 = Action(action_type="TRANSFORM", target_index=1)
+        a2 = Action(action_type=ActionType.TRANSFORM, target_index=1)
         assert "变形" in a2.describe()
 
-        a3 = Action(action_type="PLAY_WITH_TARGET", card_index=0, target_index=1)
+        a3 = Action(
+            action_type=ActionType.PLAY_WITH_TARGET,
+            card_index=0,
+            target_index=1,
+        )
         assert "定向打出" in a3.describe()

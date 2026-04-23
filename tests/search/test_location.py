@@ -4,7 +4,12 @@ import pytest
 
 from analysis.search.game_state import GameState, HeroState, ManaState, Minion, OpponentState
 from analysis.search.location import Location, activate_location, tick_location_cooldowns
-from analysis.search.rhea_engine import Action, enumerate_legal_actions, apply_action
+from analysis.search.rhea_engine import (
+    Action,
+    ActionType,
+    enumerate_legal_actions,
+    apply_action,
+)
 
 
 # ------------------------------------------------------------------
@@ -143,7 +148,7 @@ def test_enumerate_includes_location():
     """GameState with ready location yields ACTIVATE_LOCATION action."""
     state = _make_state_with_location(durability=3, cooldown_current=0)
     actions = enumerate_legal_actions(state)
-    loc_actions = [a for a in actions if a.action_type == "ACTIVATE_LOCATION"]
+    loc_actions = [a for a in actions if a.action_type == ActionType.ACTIVATE_LOCATION]
     assert len(loc_actions) == 1
     assert loc_actions[0].source_index == 0
 
@@ -156,7 +161,7 @@ def test_enumerate_excludes_cooldown_location():
     """Location on cooldown does NOT appear in legal actions."""
     state = _make_state_with_location(durability=3, cooldown_current=1)
     actions = enumerate_legal_actions(state)
-    loc_actions = [a for a in actions if a.action_type == "ACTIVATE_LOCATION"]
+    loc_actions = [a for a in actions if a.action_type == ActionType.ACTIVATE_LOCATION]
     assert len(loc_actions) == 0
 
 
@@ -207,5 +212,5 @@ def test_activate_location_heal_effect():
 def test_end_turn_ticks_location_cooldowns():
     """END_TURN via apply_action ticks location cooldowns."""
     state = _make_state_with_location(durability=2, cooldown_current=2)
-    result = apply_action(state, Action(action_type="END_TURN"))
+    result = apply_action(state, Action(action_type=ActionType.END_TURN))
     assert result.locations[0].cooldown_current == 1

@@ -12,9 +12,12 @@
 """
 
 import os
+import logging
 from hslog.parser import LogParser
 from hslog.export import EntityTreeExporter
 from hearthstone.enums import GameTag, Zone, CardType
+
+log = logging.getLogger(__name__)
 
 
 class _SafeEntityTreeExporter(EntityTreeExporter):
@@ -45,7 +48,7 @@ def parse_power_log(file_path):
             try:
                 parser.read_line(line)
             except Exception:
-                pass
+                log.debug("parse_power_log: failed to parse one line", exc_info=True)
 
     if not parser.games:
         return None

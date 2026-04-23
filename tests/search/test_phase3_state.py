@@ -3,7 +3,7 @@
 import pytest
 from analysis.search.game_state import GameState, HeroState, Minion
 from analysis.models.card import Card
-from analysis.search.rhea_engine import apply_action, Action
+from analysis.search.rhea_engine import apply_action, Action, ActionType
 
 
 def _make_card(**kw):
@@ -85,10 +85,10 @@ class TestEndTurnKindredSnapshot:
         gs.hand = [card1, card2]
 
         # Play two minions
-        gs2 = apply_action(gs, Action(action_type='PLAY', card_index=0, position=0))
-        gs3 = apply_action(gs2, Action(action_type='PLAY', card_index=0, position=1))
+        gs2 = apply_action(gs, Action(action_type=ActionType.PLAY, card_index=0, position=0))
+        gs3 = apply_action(gs2, Action(action_type=ActionType.PLAY, card_index=0, position=1))
         # End turn
-        gs4 = apply_action(gs3, Action(action_type='END_TURN'))
+        gs4 = apply_action(gs3, Action(action_type=ActionType.END_TURN))
 
         assert 'DRAGON' in gs4.last_turn_races
         assert 'BEAST' in gs4.last_turn_races
@@ -97,7 +97,7 @@ class TestEndTurnKindredSnapshot:
         gs = _make_state()
         gs.last_turn_races = {'DRAGON'}
         gs.last_turn_schools = {'FIRE'}
-        gs2 = apply_action(gs, Action(action_type='END_TURN'))
+        gs2 = apply_action(gs, Action(action_type=ActionType.END_TURN))
 
         # No cards played this turn, so races/schools should be empty
         assert gs2.last_turn_races == set()
@@ -111,7 +111,7 @@ class TestEndTurnKindredSnapshot:
         gs.mana.max_mana = 10
         gs.hand = [card]
 
-        gs2 = apply_action(gs, Action(action_type='PLAY', card_index=0))
-        gs3 = apply_action(gs2, Action(action_type='END_TURN'))
+        gs2 = apply_action(gs, Action(action_type=ActionType.PLAY, card_index=0))
+        gs3 = apply_action(gs2, Action(action_type=ActionType.END_TURN))
 
         assert 'FIRE' in gs3.last_turn_schools

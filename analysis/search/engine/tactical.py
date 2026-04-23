@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from analysis.search.game_state import GameState
-from analysis.search.rhea_engine import Action, apply_action
+from analysis.search.rhea_engine import Action, ActionType, apply_action
 from analysis.search.engine.factors.factor_graph import (
     FactorGraphEvaluator, FactorScores,
 )
@@ -52,13 +52,13 @@ class TacticalPlanner:
 
                 if (card.card_type or "").upper() == "SPELL" and pos >= 0:
                     action = Action(
-                        action_type="PLAY_WITH_TARGET",
+                        action_type=ActionType.PLAY_WITH_TARGET,
                         card_index=card_idx,
                         target_index=pos,
                     )
                 else:
                     action = Action(
-                        action_type="PLAY",
+                        action_type=ActionType.PLAY,
                         card_index=card_idx,
                         position=pos,
                     )
@@ -77,14 +77,15 @@ class TacticalPlanner:
             for atk in attack_plan.attacks:
                 current = apply_action(current, atk)
 
-            end_action = Action(action_type="END_TURN")
+            end_action = Action(action_type=ActionType.END_TURN)
             current = apply_action(current, end_action)
 
             ctx = EvalContext.from_state(state)
             scores = self._evaluator.evaluate(state, current, context=ctx)
 
             lethal_bonus = 1000.0 if current.is_lethal() else 0.0
-            combined = scores.total + lethal_bonus
+            control_bonus = self._control_bonus(state, current, mode)
+            combined = scores.total + lethal_bonus + control_bonus
 
             candidates.append(TacticalCandidate(
                 play_actions=play_actions,
@@ -100,22 +101,33 @@ class TacticalPlanner:
             current = state.copy()
             for atk in attack_plan.attacks:
                 current = apply_action(current, atk)
-            current = apply_action(current, Action(action_type="END_TURN"))
+            current = apply_action(current, Action(action_type=ActionType.END_TURN))
 
             ctx = EvalContext.from_state(state)
             scores = self._evaluator.evaluate(state, current, context=ctx)
             lethal_bonus = 1000.0 if current.is_lethal() else 0.0
+            control_bonus = self._control_bonus(state, current, mode)
 
             candidates.append(TacticalCandidate(
                 play_actions=[],
                 attack_plan=attack_plan,
                 factor_scores=scores,
                 state_after=current,
-                combined_score=scores.total + lethal_bonus,
+                combined_score=scores.total + lethal_bonus + control_bonus,
             ))
 
         candidates.sort(key=lambda c: -c.combined_score)
         return candidates
+
+    @staticmethod
+    def _control_bonus(before: GameState, after: GameState, mode: str) -> float:
+        if mode != "CONTROL":
+            return 0.0
+        cleared = len(before.opponent.board) - len(after.opponent.board)
+        enemy_attack_delta = sum(m.attack for m in before.opponent.board) - sum(
+            m.attack for m in after.opponent.board
+        )
+        return max(0.0, cleared * 0.8 + enemy_attack_delta * 0.2)
 
     def _enumerate_card_combos(self, state: GameState) -> List[List[Tuple[int, int]]]:
         combos: List[List[Tuple[int, int]]] = []

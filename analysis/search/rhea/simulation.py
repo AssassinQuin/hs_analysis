@@ -11,7 +11,7 @@ import dataclasses
 import logging
 from typing import TYPE_CHECKING
 
-from analysis.search.rhea.actions import Action
+from analysis.search.rhea.actions import Action, ActionType
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState
@@ -48,19 +48,19 @@ def apply_action(state, action: Action):
     """Apply *action* to a **copy** of *state* and return the modified copy."""
     s = state.copy()
 
-    if action.action_type in ("PLAY", "PLAY_WITH_TARGET"):
+    if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
         s = _apply_play_card(s, action)
-    elif action.action_type == "ATTACK":
+    elif action.action_type == ActionType.ATTACK:
         s = _apply_attack(s, action)
-    elif action.action_type == "HERO_POWER":
+    elif action.action_type == ActionType.HERO_POWER:
         s = _apply_hero_power(s, action)
-    elif action.action_type == "ACTIVATE_LOCATION":
+    elif action.action_type == ActionType.ACTIVATE_LOCATION:
         s = _try_mechanic(s, "analysis.search.location", "activate_location", action.source_index)
-    elif action.action_type == "HERO_REPLACE":
+    elif action.action_type == ActionType.HERO_REPLACE:
         s = _apply_hero_replace(s, action)
-    elif action.action_type == "TRANSFORM":
+    elif action.action_type == ActionType.TRANSFORM:
         s = _apply_transform(s, action)
-    elif action.action_type == "END_TURN":
+    elif action.action_type == ActionType.END_TURN:
         s = _apply_end_turn(s)
 
     return s
@@ -149,7 +149,13 @@ def _apply_play_card(s, action: Action):
 
     # Post-play mechanics
     s = _try_mechanic(s, "analysis.search.imbue", "apply_imbue", card)
-    s = _try_mechanic(s, "analysis.search.quest", "track_quest_progress", "PLAY", card)
+    s = _try_mechanic(
+        s,
+        "analysis.search.quest",
+        "track_quest_progress",
+        ActionType.PLAY,
+        card,
+    )
     if outcast_active:
         s = _try_mechanic(s, "analysis.search.outcast", "apply_outcast_bonus", card_idx, card)
     try:

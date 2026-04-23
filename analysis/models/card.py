@@ -56,6 +56,7 @@ class Card:
     spell_school: str = ""
     minion_data: Optional[MinionData] = None
     spell_data: Optional[SpellData] = None
+    roles: frozenset = field(default_factory=frozenset)
 
     def __post_init__(self):
         if self.mechanics is None:
@@ -73,6 +74,13 @@ class Card:
             # 从显式提供的 spell_data 同步回直接字段
             self.spell_damage = self.spell_data.spell_damage
             self.spell_school = self.spell_data.spell_school
+        if not self.roles:
+            try:
+                from analysis.data.card_roles import classify_card_roles
+                self.roles = frozenset(classify_card_roles(self))
+            except Exception:
+                # RoleTag 是高层增强信息，分类失败不应影响核心逻辑
+                self.roles = frozenset()
 
     # ── 机制辅助方法 ──────────────────────────────────────────
 

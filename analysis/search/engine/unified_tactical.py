@@ -5,7 +5,12 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from analysis.search.game_state import GameState
-from analysis.search.rhea_engine import Action, apply_action, enumerate_legal_actions
+from analysis.search.rhea_engine import (
+    Action,
+    ActionType,
+    apply_action,
+    enumerate_legal_actions,
+)
 from analysis.search.engine.factors.factor_graph import (
     FactorGraphEvaluator, FactorScores,
 )
@@ -56,7 +61,7 @@ class UnifiedTacticalPlanner:
                     continue
 
                 legal = enumerate_legal_actions(plan.state_after)
-                non_end = [a for a in legal if a.action_type != "END_TURN"]
+                non_end = [a for a in legal if a.action_type != ActionType.END_TURN]
 
                 if not non_end:
                     best_plans.append(plan)
@@ -101,14 +106,17 @@ class UnifiedTacticalPlanner:
 
         all_plans = best_plans + beam
         for p in all_plans:
-            if p.actions and p.actions[-1].action_type != "END_TURN":
-                end_state = apply_action(p.state_after.copy(), Action(action_type="END_TURN"))
+            if p.actions and p.actions[-1].action_type != ActionType.END_TURN:
+                end_state = apply_action(
+                    p.state_after.copy(),
+                    Action(action_type=ActionType.END_TURN),
+                )
                 end_score = self._evaluator.evaluate(
                     state, end_state, context=ctx,
                 ).total - initial_score
                 if end_state.is_lethal():
                     end_score += 1000.0
-                p.actions.append(Action(action_type="END_TURN"))
+                p.actions.append(Action(action_type=ActionType.END_TURN))
                 p.state_after = end_state
                 p.score = end_score
 

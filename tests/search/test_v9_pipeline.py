@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
-from analysis.search.rhea_engine import RHEAEngine, SearchResult, Action
+from analysis.search.rhea_engine import RHEAEngine, SearchResult, Action, ActionType
 from analysis.models.card import Card
 
 
@@ -26,7 +26,7 @@ def test_pipeline_returns_result():
     assert isinstance(result, SearchResult)
     assert result.best_chromosome
     assert len(result.best_chromosome) > 0
-    assert result.best_chromosome[-1].action_type == 'END_TURN'
+    assert result.best_chromosome[-1].action_type == ActionType.END_TURN
 
 
 def test_lethal_found_via_search():
@@ -49,7 +49,7 @@ def test_lethal_found_via_search():
     assert isinstance(result, SearchResult)
     assert result.best_fitness == 10000.0  # lethal bonus
     # Best chromosome should contain an ATTACK action targeting face
-    attack_actions = [a for a in result.best_chromosome if a.action_type == 'ATTACK']
+    attack_actions = [a for a in result.best_chromosome if a.action_type == ActionType.ATTACK]
     assert len(attack_actions) >= 1, "Expected at least one ATTACK action for lethal"
 
 

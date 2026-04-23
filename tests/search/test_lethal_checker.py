@@ -13,7 +13,7 @@ from analysis.search.game_state import (
     Weapon,
 )
 from analysis.models.card import Card
-from analysis.search.rhea_engine import Action
+from analysis.search.rhea_engine import ActionType
 from analysis.search.lethal_checker import check_lethal, max_damage_bound
 
 
@@ -37,7 +37,7 @@ def test_simple_lethal():
     result = check_lethal(state)
     assert result is not None
     assert len(result) >= 1
-    assert result[0].action_type == "ATTACK"
+    assert result[0].action_type == ActionType.ATTACK
     assert result[0].target_index == 0  # target enemy hero
 
 
@@ -53,7 +53,7 @@ def test_multi_minion_lethal():
     result = check_lethal(state)
     assert result is not None
     # Should find two ATTACK actions targeting enemy hero
-    attacks = [a for a in result if a.action_type == "ATTACK"]
+    attacks = [a for a in result if a.action_type == ActionType.ATTACK]
     assert len(attacks) >= 1  # at least one attack on hero
 
 
@@ -74,7 +74,10 @@ def test_spell_lethal():
     )
     result = check_lethal(state)
     assert result is not None
-    assert any(a.action_type in ("PLAY", "PLAY_WITH_TARGET") for a in result)
+    assert any(
+        a.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET)
+        for a in result
+    )
 
 
 def test_lethal_with_taunt():

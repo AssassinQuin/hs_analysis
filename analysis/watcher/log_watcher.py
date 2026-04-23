@@ -168,7 +168,9 @@ class LogWatcher:
             return
 
         try:
-            self._fd = os.open(self._path, os.O_RDONLY | os.O_NONBLOCK)
+            # Windows does not expose O_NONBLOCK for regular file handles.
+            nonblock_flag = getattr(os, "O_NONBLOCK", 0)
+            self._fd = os.open(self._path, os.O_RDONLY | nonblock_flag)
             os.lseek(self._fd, self._pos, os.SEEK_SET)
         except OSError as e:
             # File doesn't exist yet or other error
@@ -242,8 +244,10 @@ class LogWatcher:
         # Decode and split into lines
         try:
             text = buffer.decode(self._encoding)
-        except UnicodeDecodeError as e:
-            raise ValueError(f"Failed to decode log file with encoding {self._encoding}: {e}")
+        except UnicodeDecodeError:
+            # Some environments may mix non-UTF8 bytes into Power.log.
+            # Keep watcher alive by replacing invalid bytes.
+            text = buffer.decode(self._encoding, errors="replace")
 
         # Split into lines, keeping empty lines
         lines = text.splitlines(keepends=False)

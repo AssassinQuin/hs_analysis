@@ -132,16 +132,31 @@ def generate_discover_pool(
     card_type: Optional[str] = None,
     race: Optional[str] = None,
     use_wild_pool: bool = False,
+    from_past_only: bool = False,
 ) -> List[dict]:
     """Generate discover pool via CardIndex.discover_pool()."""
     try:
         idx = get_index()
-        fmt = "wild" if use_wild_pool else "standard"
-        pool = idx.discover_pool(
-            hero_class,
-            card_type=card_type,
-            format=fmt,
-        )
+        if from_past_only:
+            wild_pool = idx.discover_pool(
+                hero_class,
+                card_type=card_type,
+                format="wild",
+            )
+            std_pool = idx.discover_pool(
+                hero_class,
+                card_type=card_type,
+                format="standard",
+            )
+            std_dbf = {c.get("dbfId") for c in std_pool if c.get("dbfId") is not None}
+            pool = [c for c in wild_pool if c.get("dbfId") not in std_dbf]
+        else:
+            fmt = "wild" if use_wild_pool else "standard"
+            pool = idx.discover_pool(
+                hero_class,
+                card_type=card_type,
+                format=fmt,
+            )
         if race:
             pool = [c for c in pool if race in (c.get('race', '') or '')]
         return pool
@@ -172,11 +187,13 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         except Exception:
             pass
 
-        use_wild_pool = '来自过去' in card_text or 'from the past' in card_text.lower()
+        from_past_only = '来自过去' in card_text or 'from the past' in card_text.lower()
+        use_wild_pool = from_past_only
 
         pool = generate_discover_pool(
             hero_class, card_type=ct, race=race,
             use_wild_pool=use_wild_pool,
+            from_past_only=from_past_only,
         )
 
         if rune_name and pool:
@@ -255,11 +272,13 @@ def resolve_discover_top_k(
     ct = constraints.get('card_type')
     race = constraints.get('race')
 
-    use_wild_pool = '来自过去' in card_text or 'from the past' in card_text.lower()
+    from_past_only = '来自过去' in card_text or 'from the past' in card_text.lower()
+    use_wild_pool = from_past_only
 
     pool = generate_discover_pool(
         hero_class, card_type=ct, race=race,
         use_wild_pool=use_wild_pool,
+        from_past_only=from_past_only,
     )
 
     if not pool:

@@ -26,6 +26,10 @@ class SimulatedOpponentTurn:
     friendly_deaths: int = 0             # how many of our minions die
     lethal_exposure: bool = False        # can opponent kill us
     worst_case_damage: int = 0           # max damage to our hero
+    spell_threat: float = 0.0
+
+    def estimated_opp_damage(self) -> float:
+        return float(self.worst_case_damage) + float(self.spell_threat)
 
 
 # ===================================================================
@@ -62,6 +66,7 @@ class OpponentSimulator:
                     friendly_deaths=0,
                     lethal_exposure=False,
                     worst_case_damage=0,
+                    spell_threat=self._estimate_spell_threat(state),
                 )
 
             our_health = state.hero.hp + state.hero.armor
@@ -133,7 +138,14 @@ class OpponentSimulator:
                 # 4) No favorable trade and no taunt → go face
                 remaining_opp_attack += opp_atk
 
-            worst_case_damage = remaining_opp_attack
+            weapon_attack = (
+                state.opponent.hero.weapon.attack
+                if state.opponent.hero.weapon is not None
+                else 0
+            )
+            hero_power_damage = self._estimate_hero_power_damage(state)
+            spell_threat = self._estimate_spell_threat(state)
+            worst_case_damage = remaining_opp_attack + weapon_attack + hero_power_damage
             lethal_exposure = (our_health - worst_case_damage) <= 0
 
             # Board resilience delta
@@ -146,6 +158,23 @@ class OpponentSimulator:
                 friendly_deaths=friendly_deaths,
                 lethal_exposure=lethal_exposure,
                 worst_case_damage=worst_case_damage,
+                spell_threat=spell_threat,
             )
         except Exception:
             return SimulatedOpponentTurn()  # safe default
+
+    def _estimate_hero_power_damage(self, state: GameState) -> int:
+        cls = (state.opponent.hero.hero_class or "").upper()
+        if cls == "HUNTER":
+            return 2
+        if cls == "MAGE":
+            return 1
+        return 0
+
+    def _estimate_spell_threat(self, state: GameState) -> float:
+        cls = (state.opponent.hero.hero_class or "").upper()
+        if cls in {"MAGE", "WARLOCK", "SHAMAN"}:
+            return 2.0
+        if cls in {"ROGUE", "HUNTER"}:
+            return 1.0
+        return 0.5

@@ -79,6 +79,15 @@ _DEATHRATTLE_ENABLERS = frozenset({"BARON_RIVENDARE", "瑞文戴尔"})
 _EOT_ENABLERS = frozenset({"DRAKKARI", "德拉卡里"})
 
 
+def _as_upper_token(value: Any) -> str:
+    """Normalize enum/string-like values to uppercase token."""
+    if value is None:
+        return ""
+    if hasattr(value, "name"):
+        return str(getattr(value, "name")).upper()
+    return str(value).upper()
+
+
 # ===================================================================
 # Modifier 1: lethal_awareness
 # ===================================================================
@@ -89,7 +98,7 @@ def lethal_modifier(card: Card, state: GameState) -> float:
     Returns 1.0 for non-damage cards.
     """
     text = getattr(card, "text", "") or ""
-    card_type = getattr(card, "card_type", "").upper()
+    card_type = _as_upper_token(getattr(card, "card_type", ""))
     mechanics = set(getattr(card, "mechanics", []) or [])
 
     # Is this a damage-dealing card?
@@ -343,10 +352,10 @@ def counter_modifier(card: Card, state: GameState) -> float:
     AoE potential:   +0.2 for stealth cards if enemy has AoE indicators
     Default:         1.0
     """
-    opp_class = getattr(state.opponent.hero, "hero_class", "").upper()
+    opp_class = _as_upper_token(getattr(state.opponent.hero, "hero_class", ""))
     mechanics = set(getattr(card, "mechanics", []) or [])
     text = getattr(card, "text", "") or ""
-    card_type = getattr(card, "card_type", "").upper()
+    card_type = _as_upper_token(getattr(card, "card_type", ""))
     result = 1.0
 
     # Freeze threat: key minion vs freeze class

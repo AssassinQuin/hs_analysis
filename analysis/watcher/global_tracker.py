@@ -288,6 +288,9 @@ class GlobalTracker:
         self.state = GlobalGameState()
         self._entity_birth.clear()
         self._card_db = None
+        self._bayesian_model = None
+        self._bayesian_initialized = False
+        self._secret_model = None
 
     # ---------------------------------------------------------------
     # 延迟加载卡牌数据库

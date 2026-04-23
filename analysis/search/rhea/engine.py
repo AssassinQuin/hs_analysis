@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from analysis.search.rhea.actions import Action, action_key, action_in_list
+from analysis.search.rhea.actions import Action, ActionType, action_key, action_in_list
 from analysis.search.rhea.enumeration import enumerate_legal_actions
 from analysis.search.rhea.simulation import (
     apply_action,
@@ -129,7 +129,7 @@ class RHEAEngine:
             try:
                 lethal_result = check_lethal(initial_state, time_budget_ms=5.0)
                 if lethal_result is not None:
-                    lethal_actions = lethal_result + [Action(action_type="END_TURN")]
+                    lethal_actions = lethal_result + [Action(action_type=ActionType.END_TURN)]
                     timings['lethal'] = (time.perf_counter() - t_lethal_start) * 1000.0
                     timings['total'] = (time.perf_counter() - t_start) * 1000.0
                     log.info(
@@ -755,22 +755,22 @@ class RHEAEngine:
 
         for _ in range(self.max_chromosome_length):
             legal = enumerate_legal_actions(current)
-            non_end = [a for a in legal if a.action_type != "END_TURN"]
+            non_end = [a for a in legal if a.action_type != ActionType.END_TURN]
 
             if not non_end:
-                chromo.append(Action(action_type="END_TURN"))
+                chromo.append(Action(action_type=ActionType.END_TURN))
                 return chromo
 
             if random.random() < 0.15:
-                chromo.append(Action(action_type="END_TURN"))
+                chromo.append(Action(action_type=ActionType.END_TURN))
                 return chromo
 
             action = random.choice(non_end)
             chromo.append(action)
             current = apply_action(current, action)
 
-        if not chromo or chromo[-1].action_type != "END_TURN":
-            chromo.append(Action(action_type="END_TURN"))
+        if not chromo or chromo[-1].action_type != ActionType.END_TURN:
+            chromo.append(Action(action_type=ActionType.END_TURN))
 
         return chromo
 
@@ -851,8 +851,8 @@ class RHEAEngine:
         child = [copy.deepcopy(a) for a in parent1[:cp]]
         child += [copy.deepcopy(a) for a in parent2[cp:]]
 
-        if child and child[-1].action_type != "END_TURN":
-            child.append(Action(action_type="END_TURN"))
+        if child and child[-1].action_type != ActionType.END_TURN:
+            child.append(Action(action_type=ActionType.END_TURN))
 
         if normalize_chromosome is not None:
             try:

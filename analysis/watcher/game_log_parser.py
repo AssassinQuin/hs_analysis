@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -14,6 +15,8 @@ from analysis.models.game_record import (
     PlayerInfo, DeckInfo, CardSighting, GameRecord,
 )
 from analysis.utils.hero_class import hero_card_to_class, class_to_cn
+
+log = logging.getLogger(__name__)
 
 
 class _SafeEntityTreeExporter(EntityTreeExporter):
@@ -149,7 +152,7 @@ def parse_games(log_path: str) -> List[GameRecord]:
             try:
                 parser.read_line(line)
             except Exception:
-                pass
+                log.debug("parse_games: failed to parse one line", exc_info=True)
 
     if not parser.games:
         return []
@@ -159,7 +162,7 @@ def parse_games(log_path: str) -> List[GameRecord]:
         from analysis.data.hsdb import get_db as _get_db
         db = _get_db(load_xml=False, build_indexes=False)
     except Exception:
-        pass
+        log.debug("parse_games: failed to load hsdb", exc_info=True)
 
     games = []
     for gi, packet_tree in enumerate(parser.games):

@@ -1,20 +1,34 @@
 #!/usr/bin/env python3
-"""actions.py — Action dataclass for the RHEA search engine."""
+"""actions.py — Action dataclass and ActionType enum for the RHEA search engine."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState
 
 
+class ActionType(Enum):
+    PLAY = auto()
+    PLAY_WITH_TARGET = auto()
+    ATTACK = auto()
+    HERO_POWER = auto()
+    ACTIVATE_LOCATION = auto()
+    HERO_REPLACE = auto()
+    DISCOVER_PICK = auto()
+    CHOOSE_ONE = auto()
+    TRANSFORM = auto()
+    END_TURN = auto()
+
+
 @dataclass
 class Action:
     """A single action in a Hearthstone turn."""
 
-    action_type: str
+    action_type: ActionType
     card_index: int = -1
     position: int = -1
     source_index: int = -1
@@ -22,9 +36,10 @@ class Action:
     data: int = 0
     discover_choice_index: int = -1
     step_order: int = 0
+    meta_tags: frozenset[str] = frozenset()
 
     def describe(self, state: Optional[GameState] = None) -> str:
-        if self.action_type == "PLAY":
+        if self.action_type == ActionType.PLAY:
             card_name = "未知卡牌"
             if state is not None and 0 <= self.card_index < len(state.hand):
                 card_name = (
@@ -34,37 +49,42 @@ class Action:
             if self.target_index > 0:
                 tgt = f" → 目标#{self.target_index}"
             return f"手牌[{self.card_index}] 打出 [{card_name}]{tgt}"
-        elif self.action_type == "PLAY_WITH_TARGET":
+        elif self.action_type == ActionType.PLAY_WITH_TARGET:
             card_name = "未知卡牌"
             if state is not None and 0 <= self.card_index < len(state.hand):
                 card_name = (
                     state.hand[self.card_index].name or f"卡牌#{self.card_index}"
                 )
             return f"手牌[{self.card_index}] 定向打出 [{card_name}] → 目标#{self.target_index}"
-        elif self.action_type == "ATTACK":
+        elif self.action_type == ActionType.ATTACK:
             if self.source_index == -1:
                 return f"英雄武器 攻击 目标#{self.target_index}"
             return f"随从#{self.source_index} 攻击 目标#{self.target_index}"
-        elif self.action_type == "HERO_POWER":
+        elif self.action_type == ActionType.HERO_POWER:
             return "使用英雄技能"
-        elif self.action_type == "END_TURN":
+        elif self.action_type == ActionType.END_TURN:
             return "结束回合"
-        elif self.action_type == "ACTIVATE_LOCATION":
+        elif self.action_type == ActionType.ACTIVATE_LOCATION:
             return f"激活地标#{self.source_index}"
-        elif self.action_type == "HERO_REPLACE":
+        elif self.action_type == ActionType.HERO_REPLACE:
             card_name = "未知英雄牌"
             if state is not None and 0 <= self.card_index < len(state.hand):
                 card_name = state.hand[self.card_index].name or "英雄牌"
             return f"手牌[{self.card_index}] 替换英雄 [{card_name}]"
-        elif self.action_type == "DISCOVER_PICK":
+        elif self.action_type == ActionType.DISCOVER_PICK:
             return f"发现选择#{self.discover_choice_index}"
-        elif self.action_type == "TRANSFORM":
+        elif self.action_type == ActionType.TRANSFORM:
             return f"变形 目标#{self.target_index}"
+        elif self.action_type == ActionType.CHOOSE_ONE:
+            return f"抉择#{self.data} 选择#{self.discover_choice_index}"
         return f"未知动作({self.action_type})"
 
 
 def action_key(action: Action) -> tuple:
-    """Return a hashable key for action comparison."""
+    """Return a hashable key for action comparison.
+
+    meta_tags are intentionally excluded to keep legality checks compatible.
+    """
     return (
         action.action_type,
         action.card_index,

@@ -116,7 +116,11 @@ def apply_hero_power(state: GameState) -> GameState:
 
     Returns modified state.
     """
-    hero_class = (getattr(state.hero, "hero_class", "") or "").upper()
+    raw_class = getattr(state.hero, "hero_class", "")
+    if hasattr(raw_class, "name"):
+        hero_class = str(getattr(raw_class, "name")).upper()
+    else:
+        hero_class = (str(raw_class) if raw_class is not None else "").upper()
     imbue_level = getattr(state.hero, "imbue_level", 0)
 
     power_info = IMBUE_HERO_POWERS.get(hero_class)

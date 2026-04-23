@@ -40,6 +40,28 @@ class DecisionPresenter:
         for i, action in enumerate(result.best_chromosome):
             self.output.write(f"  {i + 1}. {action.describe(state)}\n")
         self.output.write(f"Score: {result.best_fitness:+.2f} | Time: {elapsed_ms:.2f} ms\n")
+        self.output.write(
+            f"Decision: conf={result.confidence:.2f} | "
+            f"div={result.population_diversity:.2f} | "
+            f"gens={result.generations_run}\n"
+        )
+
+        if result.timings:
+            self.output.write(
+                "Timing: "
+                f"utp={result.timings.get('utp', 0):.1f}ms, "
+                f"rhea={result.timings.get('rhea', 0):.1f}ms, "
+                f"phaseB={result.timings.get('phase_b', 0):.1f}ms, "
+                f"oppSim={result.timings.get('opp_sim', 0):.1f}ms, "
+                f"crossTurn={result.timings.get('cross_turn', 0):.1f}ms\n"
+            )
+
+        if result.alternatives:
+            self.output.write("Alternatives:\n")
+            for rank, (chromo, fitness) in enumerate(result.alternatives, 1):
+                line = " -> ".join(action.describe(state) for action in chromo)
+                self.output.write(f"  {rank}. {line} | score={fitness:+.2f}\n")
+
         self.output.write("\n")
 
 
@@ -90,6 +112,27 @@ class DecisionLoop:
         self._bridge = StateBridge()
         self._running = False
         self._last_turn = 0
+        self._last_decision_signature: tuple | None = None
+        self._last_replan_at = 0.0
+        self._replan_cooldown_s = float(self.engine_params.get("replan_cooldown_s", 0.8))
+
+    @staticmethod
+    def _latest_unfinished_game_lines(lines: list[str]) -> list[str]:
+        """Return only lines belonging to the latest unfinished game."""
+        if not lines:
+            return []
+
+        probe = GameTracker()
+        current_game_start = 0
+
+        for idx, line in enumerate(lines):
+            event = probe.feed_line(line)
+            if event == "game_start":
+                current_game_start = idx
+
+        if not probe.in_game:
+            return []
+        return lines[current_game_start:]
 
     def run(self) -> None:
         """Start the blocking decision loop. Runs until interrupted."""
@@ -103,6 +146,15 @@ class DecisionLoop:
 
         try:
             log.info(f"Starting decision loop for {self.log_path}")
+
+            # On startup, skip completed historical games and replay only the latest unfinished one.
+            existing_lines = watcher.read_existing_content()
+            bootstrap_lines = self._latest_unfinished_game_lines(existing_lines)
+            for line in bootstrap_lines:
+                if not self._running:
+                    break
+                self._on_line(line)
+
             for line in watcher:
                 if not self._running:
                     break
@@ -128,33 +180,119 @@ class DecisionLoop:
         if event == "game_start":
             log.info("New game detected")
             self._last_turn = 0
+            self._last_decision_signature = None
         elif event == "game_end":
             log.info("Game ended")
-            self.stop()
+            # Keep watcher alive so we can detect subsequent games in the same log stream.
+            self._last_turn = 0
+            self._last_decision_signature = None
         elif event == "turn_start":
             current_turn = self._tracker.get_current_turn()
             if current_turn != self._last_turn and current_turn > 0:
                 log.debug(f"Turn {current_turn} started")
                 self._make_decision()
                 self._last_turn = current_turn
+        elif event == "action":
+            self._maybe_replan_on_action()
+
+    @staticmethod
+    def _state_signature(state) -> tuple:
+        """Build a compact signature used to skip duplicate replans."""
+        our_board = tuple(
+            (
+                m.card_id,
+                m.attack,
+                m.health,
+                bool(m.can_attack),
+                bool(m.has_taunt),
+                bool(m.has_divine_shield),
+            )
+            for m in state.board
+        )
+        opp_board = tuple(
+            (
+                m.card_id,
+                m.attack,
+                m.health,
+                bool(m.can_attack),
+                bool(m.has_taunt),
+                bool(m.has_divine_shield),
+            )
+            for m in state.opponent.board
+        )
+        hand_cards = tuple((c.name, c.cost) for c in state.hand)
+        return (
+            state.turn_number,
+            state.mana.available,
+            state.mana.max_mana,
+            state.hero.hp,
+            state.hero.armor,
+            state.opponent.hero.hp,
+            state.opponent.hero.armor,
+            state.opponent.hand_count,
+            hand_cards,
+            our_board,
+            opp_board,
+        )
+
+    def _build_state(self):
+        game = self._tracker.export_entities()
+        if game is None:
+            return None
+        state = self._bridge.convert(game, player_index=0)
+        if state.turn_number == 0:
+            return None
+        return state
+
+    def _maybe_replan_on_action(self) -> None:
+        """Replan during our action phase when board/hand state changes."""
+        current_turn = self._tracker.get_current_turn()
+        if current_turn <= 0:
+            return
+        if current_turn != self._last_turn:
+            # New turn decisions are handled by the turn_start event.
+            return
+
+        step = self._tracker.get_step()
+        if step not in ("MAIN_ACTION", "MAIN_READY"):
+            return
+
+        now = time.perf_counter()
+        if (now - self._last_replan_at) < self._replan_cooldown_s:
+            return
+
+        state = self._build_state()
+        if state is None:
+            return
+
+        sig = self._state_signature(state)
+        if sig == self._last_decision_signature:
+            return
+
+        log.debug("State changed in-turn, replanning decision")
+        self._run_search_and_present(state, sig)
+        self._last_replan_at = time.perf_counter()
 
     def _make_decision(self) -> None:
         """Convert current state → run RHEA → output decision."""
-        game = self._tracker.export_entities()
-        if game is None:
+        state = self._build_state()
+        if state is None:
             log.warning("Cannot export game state, skipping decision")
             return
 
-        state = self._bridge.convert(game, player_index=0)
-        if state.turn_number == 0:
-            log.warning("Invalid game state, skipping decision")
-            return
+        sig = self._state_signature(state)
+        self._run_search_and_present(state, sig)
+        self._last_replan_at = time.perf_counter()
+
+    def _run_search_and_present(self, state, signature: tuple | None = None) -> None:
+        """Run RHEA search on a prepared state and print result."""
 
         load_scores_into_hand(state)
 
         engine = RHEAEngine(
             pop_size=self.engine_params.get("pop_size", 30),
             max_gens=self.engine_params.get("max_gens", 80),
+            time_limit=self.engine_params.get("time_limit", 75.0),
             max_chromosome_length=self.engine_params.get("max_chromosome_length", 8),
             cross_turn=self.engine_params.get("cross_turn", True),
         )
@@ -164,6 +302,8 @@ class DecisionLoop:
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
         self.presenter.present(result, state, elapsed_ms)
+        if signature is not None:
+            self._last_decision_signature = signature
 
         if self.on_decision:
             try:
@@ -172,7 +312,7 @@ class DecisionLoop:
                 log.error(f"Error in decision callback: {e}", exc_info=True)
 
     @staticmethod
-    def analyze_file(path: str | Path, **engine_kwargs) -> None:
+    def analyze_file(path: str | Path, output: TextIO = sys.stdout, **engine_kwargs) -> None:
         """One-shot: analyze an entire Power.log file and output decisions for each turn."""
         log_path = Path(path)
         if not log_path.exists():
@@ -211,6 +351,7 @@ class DecisionLoop:
                     engine = RHEAEngine(
                         pop_size=engine_kwargs.get("pop_size", 30),
                         max_gens=engine_kwargs.get("max_gens", 80),
+                        time_limit=engine_kwargs.get("time_limit", 75.0),
                         max_chromosome_length=engine_kwargs.get("max_chromosome_length", 8),
                         cross_turn=engine_kwargs.get("cross_turn", True),
                     )
@@ -218,7 +359,7 @@ class DecisionLoop:
                     start_time = time.perf_counter()
                     result = engine.search(state)
                     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-                    presenter = DecisionPresenter(output=sys.stdout)
+                    presenter = DecisionPresenter(output=output)
                     presenter.present(result, state, elapsed_ms)
 
                     last_turn = current_turn

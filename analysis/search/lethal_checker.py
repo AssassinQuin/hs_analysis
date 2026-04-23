@@ -17,7 +17,12 @@ from typing import List, Optional
 
 from analysis.data.card_effects import get_card_damage, _DAMAGE_CN, _DAMAGE_EN
 from analysis.search.game_state import GameState, Minion
-from analysis.search.rhea_engine import Action, apply_action, enumerate_legal_actions
+from analysis.search.rhea_engine import (
+    Action,
+    ActionType,
+    apply_action,
+    enumerate_legal_actions,
+)
 
 
 # ===================================================================
@@ -91,7 +96,7 @@ def _enumerate_damage_actions(state: GameState) -> list:
                 real_idx = state.opponent.board.index(t)
                 actions.append(
                     Action(
-                        action_type="ATTACK",
+                        action_type=ActionType.ATTACK,
                         source_index=src_idx,
                         target_index=real_idx + 1,
                     )
@@ -100,13 +105,17 @@ def _enumerate_damage_actions(state: GameState) -> list:
             # No taunts: rush minions can't go face
             if not m.has_rush:
                 actions.append(
-                    Action(action_type="ATTACK", source_index=src_idx, target_index=0)
+                    Action(
+                        action_type=ActionType.ATTACK,
+                        source_index=src_idx,
+                        target_index=0,
+                    )
                 )
             # All attackers can target enemy minions
             for tgt_idx in range(len(state.opponent.board)):
                 actions.append(
                     Action(
-                        action_type="ATTACK",
+                        action_type=ActionType.ATTACK,
                         source_index=src_idx,
                         target_index=tgt_idx + 1,
                     )
@@ -120,7 +129,7 @@ def _enumerate_damage_actions(state: GameState) -> list:
                 real_idx = state.opponent.board.index(t)
                 actions.append(
                     Action(
-                        action_type="ATTACK",
+                        action_type=ActionType.ATTACK,
                         source_index=-1,  # hero
                         target_index=real_idx + 1,
                     )
@@ -128,13 +137,17 @@ def _enumerate_damage_actions(state: GameState) -> list:
         else:
             # Can go face
             actions.append(
-                Action(action_type="ATTACK", source_index=-1, target_index=0)
+                Action(
+                    action_type=ActionType.ATTACK,
+                    source_index=-1,
+                    target_index=0,
+                )
             )
             # Can attack enemy minions
             for tgt_idx in range(len(state.opponent.board)):
                 actions.append(
                     Action(
-                        action_type="ATTACK",
+                        action_type=ActionType.ATTACK,
                         source_index=-1,
                         target_index=tgt_idx + 1,
                     )
@@ -153,16 +166,18 @@ def _enumerate_damage_actions(state: GameState) -> list:
             if mechanics and not _is_dmg:
                 _is_dmg = any(k in mechanics for k in ("AFFECTED_BY_SPELL_POWER",))
             if _is_dmg:
-                actions.append(Action(action_type="PLAY", card_index=idx))
+                actions.append(Action(action_type=ActionType.PLAY, card_index=idx))
                 actions.append(
                     Action(
-                        action_type="PLAY_WITH_TARGET", card_index=idx, target_index=0
+                        action_type=ActionType.PLAY_WITH_TARGET,
+                        card_index=idx,
+                        target_index=0,
                     )
                 )
                 for tgt_idx in range(len(state.opponent.board)):
                     actions.append(
                         Action(
-                            action_type="PLAY_WITH_TARGET",
+                            action_type=ActionType.PLAY_WITH_TARGET,
                             card_index=idx,
                             target_index=tgt_idx + 1,
                         )
@@ -173,7 +188,7 @@ def _enumerate_damage_actions(state: GameState) -> list:
     hp_cost = state.hero.hero_power_cost
     if not state.hero.hero_power_used and state.mana.available >= hp_cost:
         if hero_class in ("MAGE", "HUNTER") or state.hero.hero_power_damage > 0:
-            actions.append(Action(action_type="HERO_POWER", target_index=0))
+            actions.append(Action(action_type=ActionType.HERO_POWER, target_index=0))
 
     return actions
 

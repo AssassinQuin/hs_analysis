@@ -1,18 +1,19 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List, Set, Tuple
 
 from analysis.search.game_state import GameState, Minion
-from analysis.search.rhea_engine import Action
+from analysis.search.rhea_engine import Action, ActionType
 
 
 class ActionPruner:
 
     def prune(self, actions: List[Action], state: GameState) -> List[Action]:
         pruned = [a for a in actions if not self._is_dominated(a, state)]
-        if not any(a.action_type == "END_TURN" for a in pruned):
-            end_turns = [a for a in actions if a.action_type == "END_TURN"]
+        if not any(a.action_type == ActionType.END_TURN for a in pruned):
+            end_turns = [a for a in actions if a.action_type == ActionType.END_TURN]
             pruned.extend(end_turns)
+        pruned.sort(key=lambda a: self._priority_score(a, state), reverse=True)
         return pruned
 
     def prune_sequence(self, actions: List[Action], state: GameState) -> List[Action]:
@@ -26,24 +27,24 @@ class ActionPruner:
             if self._is_redundant_in_sequence(action, used_cards, used_attackers):
                 continue
             pruned.append(action)
-            if action.action_type in ("PLAY", "PLAY_WITH_TARGET", "HERO_REPLACE"):
+            if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET, ActionType.HERO_REPLACE):
                 used_cards.add(action.card_index)
-            if action.action_type == "ATTACK":
+            if action.action_type == ActionType.ATTACK:
                 key = (action.source_index, action.target_index)
                 used_attackers.add(key)
 
-        if not pruned or pruned[-1].action_type != "END_TURN":
-            pruned.append(Action(action_type="END_TURN"))
+        if not pruned or pruned[-1].action_type != ActionType.END_TURN:
+            pruned.append(Action(action_type=ActionType.END_TURN))
         return pruned
 
     def _is_dominated(self, action: Action, state: GameState) -> bool:
-        if action.action_type == "ATTACK":
+        if action.action_type == ActionType.ATTACK:
             return self._attack_dominated(action, state)
-        if action.action_type in ("PLAY", "PLAY_WITH_TARGET"):
+        if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
             return self._play_dominated(action, state)
-        if action.action_type == "HERO_REPLACE":
+        if action.action_type == ActionType.HERO_REPLACE:
             return self._hero_replace_dominated(action, state)
-        if action.action_type == "TRANSFORM":
+        if action.action_type == ActionType.TRANSFORM:
             return self._transform_dominated(action, state)
         return False
 
@@ -53,9 +54,9 @@ class ActionPruner:
         used_cards: Set[int],
         used_attackers: Set[Tuple[int, int]],
     ) -> bool:
-        if action.action_type in ("PLAY", "PLAY_WITH_TARGET", "HERO_REPLACE"):
+        if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET, ActionType.HERO_REPLACE):
             return action.card_index in used_cards
-        if action.action_type == "ATTACK":
+        if action.action_type == ActionType.ATTACK:
             return (action.source_index, action.target_index) in used_attackers
         return False
 
@@ -110,7 +111,7 @@ class ActionPruner:
             if len(state.board) <= 1 and action.position > 0:
                 pass
 
-        if action.action_type == "PLAY_WITH_TARGET":
+        if action.action_type == ActionType.PLAY_WITH_TARGET:
             if action.target_index > 0:
                 enemy_idx = action.target_index - 1
                 if enemy_idx >= len(state.opponent.board):
@@ -141,3 +142,16 @@ class ActionPruner:
         if target.attack <= 1 and target.health <= 1:
             return True
         return False
+
+    def _priority_score(self, action: Action, state: GameState) -> float:
+        score = 0.0
+        tags = set(getattr(action, "meta_tags", frozenset()))
+        if "PROBE_SECRET" in tags:
+            score += 2.0
+        if "RESOURCE_HOLD" in tags:
+            hero_hp = state.hero.hp + state.hero.armor
+            if hero_hp <= 15:
+                score += 1.0
+        if action.action_type == ActionType.END_TURN:
+            score -= 10.0
+        return score

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from analysis.search.game_state import GameState, Minion
-from analysis.search.rhea_engine import Action, apply_action
+from analysis.search.rhea_engine import Action, ActionType, apply_action
 
 
 @dataclass
@@ -31,7 +31,7 @@ class AttackPlanner:
                 break
 
             action = Action(
-                action_type="ATTACK",
+                action_type=ActionType.ATTACK,
                 source_index=attacker,
                 target_index=target,
             )
@@ -55,7 +55,7 @@ class AttackPlanner:
 
         for tgt in targets:
             action = Action(
-                action_type="ATTACK",
+                action_type=ActionType.ATTACK,
                 source_index=first_attacker_idx,
                 target_index=tgt,
             )
@@ -101,7 +101,7 @@ class AttackPlanner:
 
             for tgt in self._valid_targets(state, minion):
                 action = Action(
-                    action_type="ATTACK",
+                    action_type=ActionType.ATTACK,
                     source_index=src_idx,
                     target_index=tgt,
                 )
@@ -123,7 +123,7 @@ class AttackPlanner:
             weapon_targets = self._valid_targets(state, None, weapon=True)
             for tgt in weapon_targets:
                 action = Action(
-                    action_type="ATTACK",
+                    action_type=ActionType.ATTACK,
                     source_index=-1,
                     target_index=tgt,
                 )

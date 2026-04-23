@@ -1,98 +1,93 @@
-#!/usr/bin/env python3
-"""replay_game.py — Replay Power.log and analyze decisions.
+# -*- coding: utf-8 -*-
+"""replay_game.py — 离线回放入口脚本
 
-Usage:
-    python scripts/replay_game.py Power.log
-    python scripts/replay_game.py Power.log --player "湫然#51704"
-    python scripts/replay_game.py Power.log --pop-size 30 --gens 50
+使用 hslog 库解析 Power.log，逐包回放并分析每回合决策。
 """
-import argparse
-import sys
-from pathlib import Path
+from __future__ import annotations
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import sys
+import argparse
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+from analysis.watcher.packet_replayer import PacketReplayer
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Power.log 回放分析",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  %(prog)s Power.log
-  %(prog)s Power.log --player "湫然#51704"
-  %(prog)s Power.log --pop-size 30 --gens 50 --time-limit 300
-        """
-    )
-    parser.add_argument("log_path", help="Power.log 文件路径")
-    parser.add_argument("--player", default="", help="我方玩家名（留空则自动检测）")
-    parser.add_argument("--log-dir", default="logs", help="日志输出目录")
-    parser.add_argument("--pop-size", type=int, default=20,
-                       help="RHEA 种群大小 (默认: 20)")
-    parser.add_argument("--gens", type=int, default=40,
-                       help="RHEA 最大代数 (默认: 40)")
-    parser.add_argument("--time-limit", type=float, default=200.0,
-                       help="RHEA 时间限制 (ms) (默认: 200)")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description="炉石对局离线回放分析 (hslog)")
+    ap.add_argument("path", nargs="?", help="Power.log 文件路径")
+    ap.add_argument("--analyze", metavar="PATH", help="分析指定 Power.log 文件")
+    ap.add_argument("--rhea-time", type=int, default=300,
+                    help="RHEA 搜索时间预算 (ms), 默认 300")
+    ap.add_argument("--rhea-pop", type=int, default=30,
+                    help="RHEA 种群大小, 默认 30")
+    ap.add_argument("--dir", default="logs", help="日志输出目录, 默认 logs/")
+    ap.add_argument("--verbose", "-v", action="store_true",
+                    help="在终端显示详细输出")
+    args = ap.parse_args()
 
-    if not Path(args.log_path).exists():
-        print(f"❌ 文件不存在: {args.log_path}")
-        sys.exit(1)
+    path = args.analyze or args.path
+    if not path:
+        ap.error("请指定 Power.log 路径 (位置参数或 --analyze)")
 
-    from analysis.watcher.game_replayer import GameReplayer
-
-    print()
-    print("=" * 70)
-    print("🎮 Power.log 回放分析")
-    print("=" * 70)
-    print(f"📂 文件: {args.log_path}")
-    print(f"🎮 我方: {args.player}")
-    print(f"⚙️ RHEA 参数:")
-    print(f"   种群大小: {args.pop_size}")
-    print(f"   最大代数: {args.gens}")
-    print(f"   时间预算: {args.time_limit}ms")
-    print(f"📝 日志目录: {args.log_dir}/")
-    print("=" * 70)
-    print()
-
-    replayer = GameReplayer(
-        log_dir=args.log_dir,
-        player_name=args.player,
+    replayer = PacketReplayer(
+        log_dir=args.dir,
         engine_params={
-            "pop_size": args.pop_size,
-            "max_gens": args.gens,
-            "time_limit": args.time_limit,
-            "max_chromosome_length": 6,
+            "time_limit": args.rhea_time / 1000.0,
+            "pop_size": args.rhea_pop,
         },
     )
 
-    decisions = replayer.replay_file(args.log_path)
+    print(f"正在回放: {path}")
+    print(f"RHEA参数: 时间={args.rhea_time}ms 种群={args.rhea_pop}")
+    print("=" * 60)
 
-    print()
-    print("=" * 70)
-    print("📊 回放结果汇总")
-    print("=" * 70)
-    print(f"✅ 总计决策点: {len(decisions)}")
+    decisions = replayer.replay_file(path)
 
-    for d in decisions:
-        status = "✓" if not d.error else f"✗ {d.error}"
-        p = d.player_name[:10] if d.player_name else "?"
-        print(f"  回合{d.turn_number:2d} ({p:>10}): "
-              f"HP={d.hero_hp} mana={d.mana_available}/{d.mana_max} "
-              f"board={d.board_count} hand={d.hand_count} | "
-              f"actions={d.legal_actions_count} "
-              f"RHEA={d.rhea_time_ms:5.0f}ms → {status}")
+    if not decisions:
+        print("未找到决策点。")
+        return
 
-    # Save summary
-    summary_path = replayer._save_summary()
-    print()
-    print(f"💾 完整结果已保存到: {summary_path}")
+    our_decisions = [d for d in decisions if d.is_our_turn]
+    print(f"\n共 {len(decisions)} 个决策点 (我方 {len(our_decisions)} 回合)")
+    print("=" * 60)
 
-    print()
-    print("=" * 70)
-    print("🎉 回放完成!")
-    print("=" * 70)
+    if args.verbose:
+        for d in decisions:
+            side = "我方" if d.is_our_turn else "对手"
+            print(f"\n--- 回合 {d.turn_number} [{side}] ({d.hero_class}) ---")
+            print(f"  英雄: {d.hero_hp}HP + {d.hero_armor}甲")
+            if d.is_our_turn:
+                print(f"  法力: {d.mana_available}/{d.mana_max}")
+                print(f"  手牌({d.hand_count}): {', '.join(d.hand_cards[:5])}{'...' if len(d.hand_cards) > 5 else ''}")
+                if d.rhea_best_actions:
+                    print(f"  RHEA建议: {' → '.join(d.rhea_best_actions[:5])}")
+            else:
+                print(f"  对手: 手牌{d.opp_hand_count} 场面{d.opp_board_count} 牌库{d.opp_deck_remaining}")
+            if d.summary_lines:
+                for line in d.summary_lines:
+                    print(f"  {line}")
+            if d.effect_pool_reports:
+                print("  效果池分析:")
+                for rep in d.effect_pool_reports:
+                    print(f"    [{rep.get('effect_kind', '未知')}] {rep.get('card_name', '未知')} | "
+                          f"池大小={rep.get('pool_size', 0)} | 约束={rep.get('constraint', '')}")
+                    for line in rep.get("probability_lines", []):
+                        print(f"      {line}")
+                    pool_cards = rep.get("pool_cards", [])
+                    if pool_cards:
+                        print(f"      完整池: {', '.join(pool_cards)}")
+
+    total = len(our_decisions)
+    lethal = sum(1 for d in our_decisions if d.lethal_available)
+    avg_score = sum(d.rhea_best_score for d in our_decisions) / max(total, 1)
+
+    print(f"\n{'=' * 60}")
+    print(f"回放统计:")
+    print(f"  总决策: {total}")
+    print(f"  致命可用: {lethal}")
+    print(f"  RHEA 平均分: {avg_score:.2f}")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
