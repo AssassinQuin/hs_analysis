@@ -653,10 +653,15 @@ class PacketReplayer:
                     })
 
             # Extract mana state
+            # NOTE: STEP=MAIN_ACTION may fire BEFORE RESOURCES_USED is reset to 0
+            # for the new turn.  At a decision point (MAIN_ACTION) no mana has been
+            # spent yet this turn, so any resources_used > 0 is stale from last turn.
             mana_max = our_player.resources
             mana_used = our_player.resources_used
             mana_temp = our_player.temp_resources
             mana_overload = our_player.overload_locked
+            if mana_used > 0:
+                mana_used = 0  # reset stale value from previous turn
             mana_available = max(0, mana_max - mana_used - mana_overload + mana_temp)
 
             # Count opponent board
@@ -698,12 +703,23 @@ class PacketReplayer:
                 'opp_generated_count': len(self.global_tracker.state.opp_generated_seen),
             }
 
+            # Build mana detail parts for display
+            mana_parts = [f"法力 {mana_available}/{mana_max}"]
+            if mana_overload > 0:
+                mana_parts.append(f"锁定{mana_overload}")
+            if mana_temp > 0:
+                mana_parts.append(f"临时{mana_temp}")
+            # Show overload owed (next turn lock)
+            overload_next = self.global_tracker.state.player_stats.overload_next
+            if overload_next > 0:
+                mana_parts.append(f"下回合锁{overload_next}")
+            mana_detail = " | ".join(mana_parts)
+
             self._main_logger.info("=" * 70)
             self._main_logger.info(f"🎯 回合 {self.game_turn} ({self.player_name})")
             self._main_logger.info("=" * 70)
             self._main_logger.info(f"状态: 英雄 HP={our_hero_hp}/{30} 护甲={our_hero_armor} | "
-                             f"法力 {mana_available}/{mana_max} (已用{mana_used}, "
-                             f"临时{mana_temp}, 超载{mana_overload}) | "
+                             f"{mana_detail} | "
                              f"场面 {len(our_board)}随从 | 手牌 {len(our_hand)}张")
             self._main_logger.info(f"  场面:")
             for i, m in enumerate(our_board[:6], 1):
@@ -807,7 +823,7 @@ class PacketReplayer:
                 self._decision_logger.info(f"回合 {self.game_turn} ({self.player_name})")
                 self._decision_logger.info("=" * 70)
                 self._decision_logger.info(f"状态: 英雄 HP={our_hero_hp}/{30} 护甲={our_hero_armor} | "
-                                      f"法力 {mana_available}/{mana_max} | "
+                                      f"{mana_detail} | "
                                       f"场面 {len(our_board)}随从 | 手牌 {len(our_hand)}张")
                 self._decision_logger.info(f"对手: HP={opp_hero_hp} | 场面 {opp_board_count}随从")
                 self._decision_logger.info(f"合法动作: {len(legal_actions)} 个 {action_breakdown}")
@@ -949,6 +965,9 @@ class PacketReplayer:
                 return None
             max_mana = our_player.resources
             resources_used = our_player.resources_used
+            # Same staleness fix: at decision point no mana spent yet
+            if resources_used > 0:
+                resources_used = 0
             temp = our_player.temp_resources
             overloaded = our_player.overload_locked
             available = max(0, max_mana - resources_used - overloaded + temp)
