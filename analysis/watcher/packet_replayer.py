@@ -33,6 +33,8 @@ from analysis.search.game_state import (
     GameState, HeroState, ManaState,
     Minion, OpponentState, Weapon,
 )
+from analysis.search.keywords import KeywordSet
+from analysis.search.mechanics_state import MechanicsState
 from analysis.search.rhea_engine import Action, RHEAEngine, enumerate_legal_actions
 from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (
@@ -961,7 +963,7 @@ class PacketReplayer:
 
             board: List[Minion] = []
             for entity in board_minions:
-                board.append(Minion(
+                minion = Minion(
                     attack=entity.atk,
                     health=entity.health,
                     max_health=entity.health,
@@ -980,7 +982,9 @@ class PacketReplayer:
                     cant_attack=entity.cant_attack or entity.exhausted,
                     name=self._card_name(entity.card_id) or "",
                     can_attack=not entity.exhausted and not entity.cant_attack,
-                ))
+                )
+                minion.keywords = KeywordSet.from_minion(minion)
+                board.append(minion)
 
             # ── Our hand ──
             _CT_MAP = {
@@ -1013,11 +1017,12 @@ class PacketReplayer:
             )
 
             # ── Mana state ──
+            overload_next = self.global_tracker.state.player_stats.overload_next
             mana = ManaState(
                 max_mana=max_mana,
                 available=available,
                 overloaded=overloaded,
-                overload_next=0,
+                overload_next=overload_next,
             )
 
             # ── Opponent hero ──
@@ -1047,7 +1052,7 @@ class PacketReplayer:
 
             opp_board: List[Minion] = []
             for entity in opp_board_minions:
-                opp_board.append(Minion(
+                minion = Minion(
                     attack=entity.atk,
                     health=entity.health,
                     max_health=entity.health,
@@ -1066,7 +1071,9 @@ class PacketReplayer:
                     cant_attack=entity.cant_attack or entity.exhausted,
                     name=self._card_name(entity.card_id) or "",
                     can_attack=not entity.exhausted and not entity.cant_attack,
-                ))
+                )
+                minion.keywords = KeywordSet.from_minion(minion)
+                opp_board.append(minion)
 
             # ── Deck remaining ──
             deck_remaining = sum(1 for e in our_entities if e.zone == Zone.DECK)
@@ -1109,6 +1116,9 @@ class PacketReplayer:
             bayesian = self.global_tracker.get_bayesian_state()
             game_state.opponent.locked_deck_id = bayesian["locked_deck_id"]
             game_state.opponent.deck_confidence = bayesian["deck_confidence"]
+
+            # Populate mechanics from global tracker
+            game_state._mechanics = MechanicsState.from_global_state(self.global_tracker.state)
 
             return game_state
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN
+from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, get_card_armor
 from analysis.search.game_state import GameState, HeroState
 from analysis.models.card import Card
 

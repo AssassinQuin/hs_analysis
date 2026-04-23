@@ -82,18 +82,20 @@ def tick_location_cooldowns(state: "GameState") -> "GameState":
 # ------------------------------------------------------------------
 
 def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
-    """Parse location text and apply effect.
+    """Parse location text and apply effect via unified dispatcher.
 
-    Supported patterns (Chinese card text):
-      - 造成N点伤害 → damage to enemy hero (simplest default)
+    Supported patterns (Chinese/English card text):
+      - 造成N点伤害 → damage to enemy hero
       - 恢复N点生命 → heal friendly hero
       - 使一个随从获得+N/+N → buff first friendly minion
       - 召唤一个N/N → summon a token
-      - 发现 → discover (no-op for now, delegates to discover framework)
+      - 发现 → discover (no-op for now)
     """
-    text = loc.text or ""
-    s = state
+    from analysis.search.effects import EffectKind, EffectSpec, dispatch
 
+    text = loc.text or ""
+
+    # --- Try card_effects regex patterns first (structured lookup) ---
     from analysis.data.card_effects import (
         _DAMAGE_CN, _DAMAGE_EN, _HEAL_CN, _HEAL_EN,
         _BUFF_ATK_CN, _BUFF_ATK_EN, _SUMMON_STATS_CN, _SUMMON_STATS_EN,
@@ -102,14 +104,12 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
     dmg_match = _DAMAGE_EN.search(text) or _DAMAGE_CN.search(text)
     if dmg_match:
         damage = int(dmg_match.group(1))
-        s.opponent.hero.hp -= damage
-        return s
+        return dispatch(state, EffectSpec(kind=EffectKind.DAMAGE, value=damage, target_filter="enemy_hero"))
 
     heal_match = _HEAL_EN.search(text) or _HEAL_CN.search(text)
     if heal_match:
         heal_amount = int(heal_match.group(1))
-        s.hero.hp = min(s.hero.hp + heal_amount, 30)
-        return s
+        return dispatch(state, EffectSpec(kind=EffectKind.HEAL, value=heal_amount, target_filter="hero"))
 
     buff_match = re.search(r"Give\s*\+(\d+)/\+(\d+)", text, re.IGNORECASE)
     if not buff_match:
@@ -119,36 +119,16 @@ def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
     if buff_match:
         atk_bonus = int(buff_match.group(1))
         hp_bonus = int(buff_match.group(2))
-        if s.board:
-            target = s.board[0]
-            target.attack += atk_bonus
-            target.health += hp_bonus
-            target.max_health += hp_bonus
-        return s
+        return dispatch(state, EffectSpec(kind=EffectKind.BUFF, value=atk_bonus, value2=hp_bonus, target_filter="friendly"))
 
     summon_match = _SUMMON_STATS_EN.search(text) or _SUMMON_STATS_CN.search(text)
     if summon_match:
-        from analysis.search.game_state import Minion
         atk = int(summon_match.group(1))
         hp = int(summon_match.group(2))
-        if not s.board_full():
-            token = Minion(
-                name=f"Token({atk}/{hp})",
-                attack=atk,
-                health=hp,
-                max_health=hp,
-                can_attack=False,
-                owner="friendly",
-            )
-            s.board.append(token)
-        return s
+        return dispatch(state, EffectSpec(kind=EffectKind.SUMMON, value=atk, value2=hp))
 
     if '发现' in text or re.search(r'Discover', text, re.IGNORECASE):
-        try:
-            from analysis.search.discover import generate_discover_options
-            pass
-        except Exception:
-            pass
-        return s
+        # Discover is handled separately by the discover framework
+        return state
 
-    return s
+    return state

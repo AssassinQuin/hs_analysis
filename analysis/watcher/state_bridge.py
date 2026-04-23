@@ -10,6 +10,7 @@ from hearthstone.enums import GameTag, Zone, CardType
 from analysis.search.game_state import (
     GameState, HeroState, ManaState, Minion, OpponentState, Weapon,
 )
+from analysis.search.keywords import KeywordSet
 from analysis.models.card import Card
 
 log = logging.getLogger(__name__)
@@ -226,6 +227,9 @@ class StateBridge:
 
         minion_data.owner = owner
         minion_data.card_id = card_id
+
+        # Build KeywordSet from the boolean fields we just set
+        minion_data.keywords = KeywordSet.from_minion(minion_data)
 
         return minion_data
 

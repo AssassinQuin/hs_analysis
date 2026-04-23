@@ -21,6 +21,8 @@ from analysis.constants.hs_enums import (
     KEYWORD_BOOL_FIELDS, KEYWORD_CN_MAP,
 )
 from analysis.search.game_state import GameState, HeroState, ManaState, Minion, Weapon, OpponentState
+from analysis.search.keywords import KeywordSet
+from analysis.search.mechanics_state import MechanicsState
 from analysis.search.rhea_engine import RHEAEngine, enumerate_legal_actions, Action
 from analysis.models.card import Card
 from analysis.watcher.global_tracker import GlobalTracker, CardSource
@@ -1124,11 +1126,12 @@ class GameReplayer:
             )
 
             # Extract mana state
+            overload_next = self.global_tracker.state.player_stats.overload_next
             mana = ManaState(
                 max_mana=max_mana,
                 available=available,
                 overloaded=overloaded,
-                overload_next=0,
+                overload_next=overload_next,
             )
 
             # Extract opponent state
@@ -1184,6 +1187,9 @@ class GameReplayer:
                     secrets=list(self.global_tracker.state.opp_secrets),
                 ),
             )
+
+            # Populate mechanics from global tracker
+            game_state._mechanics = MechanicsState.from_global_state(self.global_tracker.state)
 
             return game_state
 
@@ -1313,7 +1319,7 @@ class GameReplayer:
 
     def _entity_to_minion(self, entity: Entity) -> Minion:
         """Convert a tracked Entity to a search-layer Minion."""
-        return Minion(
+        minion = Minion(
             attack=entity.atk,
             health=entity.health,
             max_health=entity.health,
@@ -1333,6 +1339,8 @@ class GameReplayer:
             name=self._card_name(entity.card_id) or "",
             can_attack=not entity.exhausted,
         )
+        minion.keywords = KeywordSet.from_minion(minion)
+        return minion
 
     def _card_name(self, card_id: str) -> str:
         """Get Chinese name for a card_id."""

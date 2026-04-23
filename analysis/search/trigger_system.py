@@ -170,107 +170,17 @@ class TriggerDispatcher:
                         source: Minion) -> GameState:
         """Execute a trigger effect string on the game state.
 
-        Effect strings are parsed to determine the action:
-        - "damage:random_enemy:N" → deal N damage to random enemy
-        - "damage:enemy_hero:N" → deal N damage to enemy hero
-        - "summon:N:N" → summon N/N token
-        - "draw:N" → draw N cards
-        - "buff:friendly:N:N" → give all friendly minions +N/+N
-        - "heal:hero:N" → heal hero N HP
-        - "armor:N" → gain N armor
-        - Unknown effects are logged and ignored (graceful degradation).
+        Delegates to the unified effects dispatcher.  Falls back to
+        logging unknown effects for graceful degradation.
         """
-        import re
+        from analysis.search.effects import dispatch, parse_effect
 
-        s = state
-        parts = effect.split(":")
+        spec = parse_effect(effect)
+        if spec is not None:
+            return dispatch(state, spec, source)
 
-        if not parts:
-            return s
-
-        action = parts[0]
-
-        if action == "damage" and len(parts) >= 3:
-            target_type = parts[1]
-            try:
-                amount = int(parts[2])
-            except ValueError:
-                return s
-
-            if target_type == "random_enemy" and s.opponent.board:
-                import random
-                target = random.choice(s.opponent.board)
-                if target.has_divine_shield:
-                    target.has_divine_shield = False
-                else:
-                    target.health -= amount
-            elif target_type == "enemy_hero":
-                s.opponent.hero.hp -= amount
-            elif target_type == "all_enemy" and s.opponent.board:
-                for m in s.opponent.board:
-                    if m.has_divine_shield:
-                        m.has_divine_shield = False
-                    else:
-                        m.health -= amount
-
-        elif action == "summon" and len(parts) >= 3:
-            try:
-                atk = int(parts[1])
-                hp = int(parts[2])
-            except ValueError:
-                return s
-            if len(s.board) < 7:
-                token = Minion(
-                    name=f"Token({atk}/{hp})",
-                    attack=atk,
-                    health=hp,
-                    max_health=hp,
-                    can_attack=False,
-                    owner="friendly",
-                )
-                s.board.append(token)
-
-        elif action == "draw" and len(parts) >= 2:
-            try:
-                count = int(parts[1])
-            except ValueError:
-                return s
-            from analysis.search.rhea_engine import apply_draw
-            s = apply_draw(s, count)
-
-        elif action == "buff" and len(parts) >= 4:
-            try:
-                atk_delta = int(parts[2])
-                hp_delta = int(parts[3])
-            except ValueError:
-                return s
-            target_type = parts[1]
-            if target_type == "friendly":
-                for m in s.board:
-                    m.attack = max(0, m.attack + atk_delta)
-                    m.health = max(0, m.health + hp_delta)
-                    m.max_health = max(1, m.max_health + hp_delta)
-
-        elif action == "heal" and len(parts) >= 3:
-            target_type = parts[1]
-            try:
-                amount = int(parts[2])
-            except ValueError:
-                return s
-            if target_type == "hero":
-                s.hero.hp = min(30, s.hero.hp + amount)
-
-        elif action == "armor" and len(parts) >= 2:
-            try:
-                amount = int(parts[1])
-            except ValueError:
-                return s
-            s.hero.armor += amount
-
-        else:
-            logger.debug("Unknown trigger effect: %s", effect)
-
-        return s
+        logger.debug("Unknown trigger effect: %s", effect)
+        return state
 
 
 # ===================================================================

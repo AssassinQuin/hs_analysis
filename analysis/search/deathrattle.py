@@ -150,103 +150,18 @@ def _apply_deathrattle_effect(
 ) -> GameState:
     """Apply a single deathrattle effect string.
 
-    Effect string format (same as trigger_system):
-    - "damage:random_enemy:N"
-    - "damage:all_enemy:N"
-    - "summon:N:N"
-    - "draw:N"
-    - "buff:friendly:N:N"
-    - "armor:N"
-    - "heal:hero:N"
+    Delegates to the unified effects dispatcher.  Falls back to the
+    old inline logic for effects that could not be parsed.
     """
-    s = state
-    parts = effect.split(":")
+    from analysis.search.effects import dispatch, parse_effect
 
-    if not parts:
-        return s
+    spec = parse_effect(effect)
+    if spec is not None:
+        return dispatch(state, spec, board_type=board_type, position=position)
 
-    action = parts[0]
-
-    if action == "damage" and len(parts) >= 3:
-        target_type = parts[1]
-        try:
-            amount = int(parts[2])
-        except ValueError:
-            return s
-
-        if target_type == "random_enemy" and s.opponent.board:
-            import random
-            target = random.choice(s.opponent.board)
-            if target.has_divine_shield:
-                target.has_divine_shield = False
-            else:
-                target.health -= amount
-        elif target_type == "enemy_hero":
-            s.opponent.hero.hp -= amount
-        elif target_type == "all_enemy":
-            for m in s.opponent.board:
-                if m.has_divine_shield:
-                    m.has_divine_shield = False
-                else:
-                    m.health -= amount
-
-    elif action == "summon" and len(parts) >= 3:
-        try:
-            atk = int(parts[1])
-            hp = int(parts[2])
-        except ValueError:
-            return s
-        # Summon on the same side as the dying minion
-        # Count alive minions (dead ones will be removed after)
-        if board_type == 'friendly':
-            alive_count = sum(1 for m in s.board if m.health > 0)
-            if alive_count < 7:
-                token = Minion(
-                    name=f"Token({atk}/{hp})",
-                    attack=atk,
-                    health=hp,
-                    max_health=hp,
-                    owner="friendly",
-                )
-                # Insert at the death position (replacing the dead minion)
-                insert_pos = min(position, len(s.board))
-                s.board.insert(insert_pos, token)
-
-    elif action == "draw" and len(parts) >= 2:
-        try:
-            count = int(parts[1])
-        except ValueError:
-            return s
-        from analysis.search.rhea_engine import apply_draw
-        s = apply_draw(s, count)
-
-    elif action == "buff" and len(parts) >= 4:
-        try:
-            atk_delta = int(parts[2])
-            hp_delta = int(parts[3])
-        except ValueError:
-            return s
-        for m in s.board:
-            m.attack = max(0, m.attack + atk_delta)
-            m.health = max(0, m.health + hp_delta)
-            m.max_health = max(1, m.max_health + hp_delta)
-
-    elif action == "armor" and len(parts) >= 2:
-        try:
-            amount = int(parts[1])
-        except ValueError:
-            return s
-        s.hero.armor += amount
-
-    elif action == "heal" and len(parts) >= 3:
-        try:
-            amount = int(parts[2])
-        except ValueError:
-            return s
-        if parts[1] == "hero":
-            s.hero.hp = min(30, s.hero.hp + amount)
-
-    return s
+    # Fallback: unparseable effect — log and skip
+    logger.debug("Unparseable deathrattle effect: %s", effect)
+    return state
 
 
 def parse_deathrattle_text(text: str) -> Optional[str]:

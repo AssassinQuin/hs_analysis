@@ -217,11 +217,31 @@ class HSCardDB:
                 self._collectible[cid] = d
 
     def _load_xml_fallback(self) -> None:
+        # Skip XML loading entirely if hearthstone_data is not installed,
+        # as hearthstone.cardxml.load() will attempt to download CardDefs.xml
+        # (~200MB) and hang indefinitely without the data package.
         try:
+            import importlib.util
+            if importlib.util.find_spec("hearthstone_data") is None:
+                logger.info("hearthstone_data not installed, skipping XML fallback")
+                return
+        except Exception:
+            pass
+
+        try:
+            import signal
             from hearthstone.cardxml import load as _load_xml
             from hearthstone.enums import CardSet, CardType, Locale
 
-            self._xml_db, _ = _load_xml(locale=Locale.enUS)
+            # Set a 10-second timeout to prevent indefinite hangs
+            old_handler = signal.signal(signal.SIGALRM, lambda *_: None)
+            signal.alarm(10)
+            try:
+                self._xml_db, _ = _load_xml(locale=Locale.enUS)
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+
             count = 0
             for cid, card_xml in self._xml_db.items():
                 if cid in self._cards:

@@ -2,6 +2,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
+
+
+@dataclass(frozen=True)
+class MinionData:
+    """Minion-specific static data."""
+    attack: int = 0
+    health: int = 0
+
+
+@dataclass(frozen=True)
+class SpellData:
+    """Spell-specific static data."""
+    spell_damage: int = 0
+    spell_school: str = ""
 
 
 @dataclass
@@ -26,10 +41,25 @@ class Card:
     armor: int = 0
     durability: int = 0
     spell_school: str = ""
+    minion_data: Optional[MinionData] = None
+    spell_data: Optional[SpellData] = None
 
     def __post_init__(self):
         if self.mechanics is None:
             self.mechanics = []
+        # Populate component data objects from direct fields when not explicitly provided
+        if self.minion_data is None and (self.attack > 0 or self.health > 0):
+            self.minion_data = MinionData(attack=self.attack, health=self.health)
+        elif self.minion_data is not None:
+            # Sync direct fields from explicitly-provided minion_data
+            self.attack = self.minion_data.attack
+            self.health = self.minion_data.health
+        if self.spell_data is None and (self.spell_damage > 0 or self.spell_school):
+            self.spell_data = SpellData(spell_damage=self.spell_damage, spell_school=self.spell_school)
+        elif self.spell_data is not None:
+            # Sync direct fields from explicitly-provided spell_data
+            self.spell_damage = self.spell_data.spell_damage
+            self.spell_school = self.spell_data.spell_school
 
     # ── Mechanics helpers ──────────────────────────────────────────
 
@@ -153,14 +183,20 @@ class Card:
         overload_val = card_xml.tags.get(GameTag.OVERLOAD, 0) if hasattr(card_xml, "tags") else 0
         spellpower_val = card_xml.tags.get(GameTag.SPELLPOWER, 0) if hasattr(card_xml, "tags") else 0
 
+        atk_val = card_xml.atk or 0
+        health_val = card_xml.health or 0
+
+        minion_data = MinionData(attack=atk_val, health=health_val) if atk_val > 0 or health_val > 0 or card_type in ("MINION", "WEAPON") else None
+        spell_data = SpellData(spell_damage=spellpower_val) if spellpower_val > 0 or card_type == "SPELL" else None
+
         return cls(
             dbf_id=card_xml.dbf_id,
             name=card_xml.name or "",
             cost=card_xml.cost or 0,
             original_cost=card_xml.cost or 0,
             card_type=card_type,
-            attack=card_xml.atk or 0,
-            health=card_xml.health or 0,
+            attack=atk_val,
+            health=health_val,
             text=card_xml.description or "",
             rarity=rarity,
             card_class=card_class,
@@ -172,18 +208,29 @@ class Card:
             spell_damage=spellpower_val,
             armor=card_xml.armor or 0,
             durability=card_xml.durability or 0,
+            minion_data=minion_data,
+            spell_data=spell_data,
         )
 
     @classmethod
     def from_hsdb_dict(cls, data: dict) -> "Card":
+        atk_val = data.get("attack", 0)
+        health_val = data.get("health", 0)
+        card_type = data.get("type", "")
+        spell_damage_val = data.get("spellDamage", 0)
+        spell_school_val = data.get("spellSchool", "")
+
+        minion_data = MinionData(attack=atk_val, health=health_val) if atk_val > 0 or health_val > 0 or card_type in ("MINION", "WEAPON") else None
+        spell_data = SpellData(spell_damage=spell_damage_val, spell_school=spell_school_val) if spell_damage_val > 0 or card_type == "SPELL" else None
+
         return cls(
             dbf_id=data.get("dbfId", 0),
             name=data.get("name", ""),
             cost=data.get("cost", 0),
             original_cost=data.get("cost", 0),
-            card_type=data.get("type", ""),
-            attack=data.get("attack", 0),
-            health=data.get("health", 0),
+            card_type=card_type,
+            attack=atk_val,
+            health=health_val,
             text=data.get("text", ""),
             rarity=data.get("rarity", ""),
             card_class=data.get("cardClass", ""),
@@ -192,22 +239,33 @@ class Card:
             set_name=data.get("set", ""),
             ename=data.get("englishName", ""),
             overload=data.get("overload", 0),
-            spell_damage=data.get("spellDamage", 0),
+            spell_damage=spell_damage_val,
             armor=data.get("armor", 0),
             durability=data.get("durability", 0),
-            spell_school=data.get("spellSchool", ""),
+            spell_school=spell_school_val,
+            minion_data=minion_data,
+            spell_data=spell_data,
         )
 
     @classmethod
     def from_hsjson(cls, data: dict) -> "Card":
+        atk_val = data.get("attack", 0)
+        health_val = data.get("health", 0)
+        card_type = data.get("type", "")
+        spell_damage_val = data.get("spellDamage", 0)
+        spell_school_val = data.get("spellSchool", "")
+
+        minion_data = MinionData(attack=atk_val, health=health_val) if atk_val > 0 or health_val > 0 or card_type in ("MINION", "WEAPON") else None
+        spell_data = SpellData(spell_damage=spell_damage_val, spell_school=spell_school_val) if spell_damage_val > 0 or card_type == "SPELL" else None
+
         return cls(
             dbf_id=data.get("dbfId", 0),
             name=data.get("name", ""),
             cost=data.get("cost", 0),
             original_cost=data.get("cost", 0),
-            card_type=data.get("type", ""),
-            attack=data.get("attack", 0),
-            health=data.get("health", 0),
+            card_type=card_type,
+            attack=atk_val,
+            health=health_val,
             text=data.get("text", ""),
             rarity=data.get("rarity", ""),
             card_class=data.get("cardClass", ""),
@@ -216,10 +274,12 @@ class Card:
             set_name=data.get("set", ""),
             ename=data.get("ename", ""),
             overload=data.get("overload", 0),
-            spell_damage=data.get("spellDamage", 0),
+            spell_damage=spell_damage_val,
             armor=data.get("armor", 0),
             durability=data.get("durability", 0),
-            spell_school=data.get("spellSchool", ""),
+            spell_school=spell_school_val,
+            minion_data=minion_data,
+            spell_data=spell_data,
         )
 
     def to_dict(self) -> dict:
