@@ -375,6 +375,10 @@ class GameState:
         """True if the friendly board already has 7 minions."""
         return len(self.board) >= 7
 
+    def location_full(self) -> bool:
+        """True if friendly locations already at max (2)."""
+        return len(self.locations) >= 2
+
     # -- MechanicsState access (Phase 2 integration) -----------------------
 
     @property

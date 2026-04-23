@@ -240,6 +240,7 @@ class GameReplayer:
         self.opp_controller = 0
         self._first_player_seen = False
         self._mulligan_seen = False
+        self._we_are_first = None
 
         self.global_tracker.on_game_start()
 
@@ -270,7 +271,7 @@ class GameReplayer:
             self._handle_game_debug_line(line)
             return
 
-        if 'GameState.DebugPrintPower()' not in line and 'PowerTaskList.DebugPrintPower()' not in line:
+        if 'GameState.DebugPrintPower()' not in line:
             return
 
         if self._RE_CREATE_GAME.search(line):
@@ -494,18 +495,21 @@ class GameReplayer:
                     )
 
     def _handle_first_player(self, entity, value):
-        """Detect first player assignment from TAG_CHANGE FIRST_PLAYER."""
+        """Detect first player from TAG_CHANGE FIRST_PLAYER."""
         if not value:
             return
 
         if isinstance(entity, tuple) and entity[0] == 'entity':
             entity_id = entity[1]
             self._first_player_entity = entity_id
-            pid = self._player_entity_to_pid.get(entity_id, 0)
-            if pid > 0:
-                self.our_controller = pid
-                self.opp_controller = 3 - pid
-                self._init_players()
+            first_pid = self._player_entity_to_pid.get(entity_id, 0)
+            if first_pid > 0 and self.our_controller > 0:
+                self._we_are_first = (first_pid == self.our_controller)
+                self.global_tracker.set_controllers(self.our_controller, self.opp_controller)
+                self.global_tracker.on_first_player(bool(self._we_are_first))
+                if self._main_logger:
+                    who = "我方先手" if self._we_are_first else "对手先手"
+                    self._main_logger.info(f"🪙 {who}")
         elif isinstance(entity, tuple) and entity[0] == 'player':
             pass
 
@@ -518,7 +522,8 @@ class GameReplayer:
         self._player_name_map[self.player_name] = self.our_controller
         self._player_name_map[ANON_DISPLAY] = self.opp_controller
         self.global_tracker.set_controllers(self.our_controller, self.opp_controller)
-        self.log_main.info(f"🎮 我方: {self.player_name} (PlayerID={self.our_controller}, 先手)")
+        first_str = "先手" if getattr(self, '_we_are_first', False) else "后手" if getattr(self, '_we_are_first', None) is False else "未知"
+        self.log_main.info(f"🎮 我方: {self.player_name} (PlayerID={self.our_controller}, {first_str})")
 
     def _handle_overload_owed(self, entity, value):
         """Handle OVERLOAD_OWED tag — track overload for global state."""
@@ -539,13 +544,11 @@ class GameReplayer:
         self.current_step = value
 
         if value == 'MAIN_ACTION':
-            # Only process from GameState to avoid duplicates (PowerTaskList repeats)
-            if source and 'PowerTaskList' in source:
-                return
-
-            # First player (PlayerID=our_controller if we're first) plays on odd game turns
-            # Since FIRST_PLAYER entity has our controller id, we ARE the first player
-            is_our_turn = (self.game_turn % 2 == 1)
+            # First player acts on odd turns, second player on even turns
+            if getattr(self, '_we_are_first', None) is False:
+                is_our_turn = (self.game_turn % 2 == 0)
+            else:
+                is_our_turn = (self.game_turn % 2 == 1)
 
             if is_our_turn:
                 self._analyze_decision_point()

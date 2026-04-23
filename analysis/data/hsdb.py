@@ -190,23 +190,25 @@ class HSCardDB:
 
     def _load_hsjson(self) -> None:
         build = self._build
-        zh_cache = _cache_path(build, "zhCN", "cards.collectible.json")
-        en_cache = _cache_path(build, "enUS", "cards.collectible.json")
 
-        zh_data = _load_cached(zh_cache)
+        # 1) Collectible cards (primary)
+        zh_coll = _cache_path(build, "zhCN", "cards.collectible.json")
+        en_coll = _cache_path(build, "enUS", "cards.collectible.json")
+
+        zh_data = _load_cached(zh_coll)
         if zh_data is None:
             url = f"{_API_BASE}/{build}/zhCN/cards.collectible.json"
             logger.info("Fetching zhCN cards from %s", url)
             zh_data = _fetch_json(url)
-            _save_cache(zh_cache, zh_data)
+            _save_cache(zh_coll, zh_data)
         logger.info("zhCN: %d collectible cards", len(zh_data))
 
-        en_data = _load_cached(en_cache)
+        en_data = _load_cached(en_coll)
         if en_data is None:
             url = f"{_API_BASE}/{build}/enUS/cards.collectible.json"
             logger.info("Fetching enUS cards from %s", url)
             en_data = _fetch_json(url)
-            _save_cache(en_cache, en_data)
+            _save_cache(en_coll, en_data)
         logger.info("enUS: %d collectible cards", len(en_data))
 
         merged = _merge_locale(zh_data, en_data)
@@ -215,6 +217,58 @@ class HSCardDB:
             self._dbf_index[d["dbfId"]] = cid
             if d["collectible"]:
                 self._collectible[cid] = d
+
+        # 2) Full card database (includes tokens, enchantments, hero powers)
+        zh_full = _cache_path(build, "zhCN", "cards.json")
+        en_full = _cache_path(build, "enUS", "cards.json")
+
+        zh_full_data = _load_cached(zh_full)
+        if zh_full_data is None:
+            url = f"{_API_BASE}/{build}/zhCN/cards.json"
+            logger.info("Fetching zhCN full cards from %s", url)
+            zh_full_data = _fetch_json(url)
+            _save_cache(zh_full, zh_full_data)
+
+        en_full_data = _load_cached(en_full)
+        if en_full_data is None:
+            url = f"{_API_BASE}/{build}/enUS/cards.json"
+            logger.info("Fetching enUS full cards from %s", url)
+            en_full_data = _fetch_json(url)
+            _save_cache(en_full, en_full_data)
+
+        if zh_full_data:
+            en_full_map = {c["id"]: c for c in (en_full_data or [])}
+            # Only add non-collectible cards (tokens, enchantments, etc.)
+            added = 0
+            for card in zh_full_data:
+                cid = card["id"]
+                if cid not in self._cards:
+                    en = en_full_map.get(cid, {})
+                    d = {
+                        "dbfId": card.get("dbfId", 0),
+                        "cardId": cid,
+                        "name": card.get("name", ""),
+                        "englishName": en.get("name", ""),
+                        "cost": card.get("cost", 0),
+                        "attack": card.get("attack", 0),
+                        "health": card.get("health", 0),
+                        "durability": card.get("durability", 0),
+                        "armor": card.get("armor", 0),
+                        "type": card.get("type", ""),
+                        "cardClass": card.get("cardClass", "NEUTRAL"),
+                        "race": card.get("race", ""),
+                        "rarity": card.get("rarity", ""),
+                        "mechanics": card.get("mechanics", []),
+                        "text": card.get("text", ""),
+                        "set": card.get("set", ""),
+                        "collectible": False,
+                    }
+                    self._cards[cid] = d
+                    if d["dbfId"]:
+                        self._dbf_index[d["dbfId"]] = cid
+                    added += 1
+            logger.info("Full DB: added %d non-collectible cards (total %d)",
+                        added, len(self._cards))
 
     def _load_xml_fallback(self) -> None:
         # Skip XML loading entirely if hearthstone_data is not installed,

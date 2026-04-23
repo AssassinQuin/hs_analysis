@@ -222,7 +222,6 @@ class PacketReplayer:
         self.entities.clear()
         self.players.clear()
         self.controller_map.clear()
-        self.decisions.clear()
         self.game_turn = 0
         self._we_are_first = None
         self._last_processed_turn = 0
@@ -1371,6 +1370,7 @@ class PacketReplayer:
         name_map: Dict[str, str] = {}
 
         for path in [
+            Path("card_data/240397/zhCN/cards.json"),
             Path("card_data/240397/zhCN/cards.collectible.json"),
             Path("card_data/240397/unified_standard.json"),
             Path("card_data/240397/unified_wild.json"),
