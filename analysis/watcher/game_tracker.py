@@ -1,4 +1,12 @@
-"""game_tracker.py — Incremental Power.log parser using hslog."""
+"""game_tracker.py — 基于hslog的增量式Power.log解析器
+
+逐行读取Power.log，实时追踪游戏状态变化。
+检测游戏开始/结束/回合切换等事件。
+
+与 power_parser.py 的区别：
+- 本模块：逐行增量解析，用于实时追踪（DecisionLoop）
+- power_parser.py：一次性加载完整日志，用于离线分析（搜索树初始状态）
+"""
 
 from __future__ import annotations
 
@@ -9,7 +17,8 @@ from hearthstone.enums import GameTag, Zone, CardType, Step, State
 
 
 class _SafeEntityTreeExporter(EntityTreeExporter):
-    """EntityTreeExporter that handles None entities gracefully."""
+    """安全的实体树导出器，跳过entity为None的包"""
+
     def handle_full_entity(self, packet):
         if packet.entity is None:
             return None
@@ -17,28 +26,28 @@ class _SafeEntityTreeExporter(EntityTreeExporter):
 
 
 class GameTracker:
-    """Tracks Hearthstone game state by incrementally parsing Power.log lines.
+    """通过增量解析Power.log追踪炉石游戏状态。
 
-    Feed lines via feed_line(). Query current state via properties.
-    Detects game start/end transitions.
+    使用方式：通过 feed_line() 逐行喂入日志，通过属性查询当前状态。
+    自动检测游戏开始/结束转换。
     """
 
     def __init__(self):
         self._parser = LogParser()
         self._game_count = 0
         self._in_game = False
-        self._current_game_entities = None  # exported entity tree
+        self._current_game_entities = None  # 已导出的实体树
         self._last_event_type = None
 
     def feed_line(self, line: str) -> Optional[str]:
-        """Feed a single Power.log line. Returns event type or None.
+        """喂入一行Power.log内容，返回事件类型或None。
 
         Returns:
-            "game_start" — a new game began
-            "game_end" — current game ended
-            "turn_start" — new turn started
-            "action" — game action processed
-            None — line ignored/empty
+            "game_start" — 新游戏开始
+            "game_end" — 当前游戏结束
+            "turn_start" — 新回合开始
+            "action" — 游戏动作已处理
+            None — 行被忽略/空行
         """
         if not line or not line.strip():
             self._last_event_type = None
@@ -47,24 +56,23 @@ class GameTracker:
         try:
             self._parser.read_line(line)
 
-            # Check for game transitions
             current_game_count = len(self._parser.games)
 
             if not self._in_game and current_game_count > self._game_count:
-                # New game started
+                # 新游戏开始
                 self._in_game = True
                 self._game_count = current_game_count
                 self._last_event_type = "game_start"
                 return "game_start"
 
-            # Check for game end
+            # 检测游戏结束
             if self._in_game:
                 if self._parser.games and self._parser.games[-1].tags.get(GameTag.STATE) == State.COMPLETE:
                     self._in_game = False
                     self._last_event_type = "game_end"
                     return "game_end"
 
-                # Check for new turn
+                # 检测新回合
                 if self._parser.games and self._parser.games[-1].tags.get(GameTag.STEP) != self._current_step():
                     new_step = self._current_step()
                     if new_step != self._current_step():
@@ -75,12 +83,11 @@ class GameTracker:
             return "action"
 
         except Exception:
-            # Silently ignore malformed lines or exceptions from hslog
             self._last_event_type = None
             return None
 
     def feed_lines(self, lines: List[str]) -> List[str]:
-        """Feed multiple lines. Returns list of event types."""
+        """批量喂入多行，返回事件类型列表"""
         events = []
         for line in lines:
             event = self.feed_line(line)
@@ -89,35 +96,34 @@ class GameTracker:
         return events
 
     def load_file(self, path: str) -> List[str]:
-        """Load and parse an entire Power.log file. Returns event types."""
+        """加载并解析完整的Power.log文件，返回事件类型列表"""
         try:
             with open(path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
             return self.feed_lines([line.rstrip("\n") for line in lines])
         except Exception as e:
-            # Silently ignore file read errors
             return []
 
     @property
     def in_game(self) -> bool:
-        """True if currently tracking an active game."""
+        """当前是否在追踪一场活跃的游戏"""
         return self._in_game
 
     @property
     def game_count(self) -> int:
-        """Number of games parsed so far."""
+        """已解析的游戏总数"""
         return self._game_count
 
     @property
     def current_game(self):
-        """The hslog Game object for the current game, or None."""
+        """当前游戏的hslog Game对象，未在游戏中返回None"""
         if not self._in_game or not self._parser.games:
             return None
         return self._parser.games[-1]
 
     @property
     def current_player(self):
-        """The hslog Player object for the first (friendly) player."""
+        """第一个（友方）玩家的hslog Player对象"""
         game = self.current_game
         if game is None or not game.players:
             return None
@@ -125,19 +131,18 @@ class GameTracker:
 
     @property
     def current_opponent(self):
-        """The hslog Player object for the opponent."""
+        """对手的hslog Player对象"""
         game = self.current_game
         if game is None or len(game.players) < 2:
             return None
         return game.players[1]
 
     def export_entities(self):
-        """Export current game's entity tree. Returns game object with full entity access."""
+        """导出当前游戏的实体树，返回包含完整实体访问的游戏对象"""
         game = self.current_game
         if game is None:
             return None
 
-        # Create a safe exporter with the game's packet tree
         packet_tree = self._parser.games[0] if self._parser.games else None
         if packet_tree is None:
             return None
@@ -147,17 +152,15 @@ class GameTracker:
 
         return self._current_game_entities
 
-        return self._current_game_entities
-
     def get_current_turn(self) -> int:
-        """Get current turn number from game state."""
+        """获取当前回合数"""
         game = self.current_game
         if game is None:
             return 0
         return game.tags.get(GameTag.TURN, 0)
 
     def get_step(self) -> str:
-        """Get current game step (BEGIN_MULLIGAN, MAIN_READY, MAIN_ACTION, etc)."""
+        """获取当前游戏阶段（BEGIN_MULLIGAN, MAIN_READY, MAIN_ACTION等）"""
         game = self.current_game
         if game is None:
             return "NOT_STARTED"
@@ -165,7 +168,7 @@ class GameTracker:
         return Step(step).name if step is not None else "UNKNOWN"
 
     def _current_step(self) -> Optional[int]:
-        """Get current step tag value."""
+        """获取当前STEP标签的原始数值"""
         game = self.current_game
         if game is None:
             return None

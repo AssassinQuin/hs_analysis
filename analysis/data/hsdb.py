@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Hearthstone card database backed by HearthstoneJSON API + python-hearthstone.
+"""HSCardDB — 基于 HearthstoneJSON API + python-hearthstone 的炉石卡牌数据库
 
-Primary source: HearthstoneJSON API (api.hearthstonejson.com)
-  - ``zhCN/cards.collectible.json`` for Chinese card names/text
-  - ``enUS/cards.collectible.json`` for English names/text
-  - Provides authoritative collectible card data with proper locales
+主数据源: HearthstoneJSON API (api.hearthstonejson.com)
+  - ``zhCN/cards.collectible.json`` 中文卡牌名称/描述
+  - ``enUS/cards.collectible.json`` 英文卡牌名称/描述
+  - 提供权威的可收集卡牌数据
 
-Secondary source: python-hearthstone CardDefs.xml (hearthstone_data package)
-  - Full card database including non-collectible (tokens, enchantments, heroes, etc.)
-  - Enum definitions (GameTag, CardType, CardClass, etc.)
-  - Used for dbf_id lookups of non-collectible cards
+辅助数据源: python-hearthstone CardDefs.xml (hearthstone_data 包)
+  - 完整卡牌数据库，包括不可收集卡牌（衍生物、附魔、英雄等）
+  - 枚举定义 (GameTag, CardType, CardClass 等)
+  - 用于通过 dbfId 查询不可收集卡牌
 
-Usage::
+用法::
 
     from analysis.data.hsdb import get_db
     db = get_db()
-    card = db.get_card("EX1_001")          # by card_id
-    card = db.get_by_dbf(1655)             # by dbf_id
-    pool = db.discover_pool("MAGE")        # discover-eligible cards
+    card = db.get_card("EX1_001")          # 按 card_id 查询
+    card = db.get_by_dbf(1655)             # 按 dbf_id 查询
+    pool = db.discover_pool("MAGE")        # 发现池
     minions = db.get_pool(card_class="ROGUE", card_type="MINION")
 """
 
@@ -146,10 +146,10 @@ def _merge_locale(zh_data: List[dict], en_data: List[dict]) -> Dict[str, dict]:
 
 
 class HSCardDB:
-    """Card database with dual-locale data from HearthstoneJSON API.
+    """双语言卡牌数据库，数据来自 HearthstoneJSON API。
 
-    Indexes all collectible cards for fast pool queries.
-    Non-collectible cards (tokens, enchantments) available via python-hearthstone fallback.
+    索引所有可收集卡牌以支持快速池查询。
+    不可收集卡牌（衍生物、附魔）通过 python-hearthstone 回退查询。
     """
 
     def __init__(
@@ -191,7 +191,7 @@ class HSCardDB:
     def _load_hsjson(self) -> None:
         build = self._build
 
-        # 1) Collectible cards (primary)
+        # 1) 可收集卡牌（主数据源）
         zh_coll = _cache_path(build, "zhCN", "cards.collectible.json")
         en_coll = _cache_path(build, "enUS", "cards.collectible.json")
 
@@ -218,7 +218,7 @@ class HSCardDB:
             if d["collectible"]:
                 self._collectible[cid] = d
 
-        # 2) Full card database (includes tokens, enchantments, hero powers)
+        # 2) 完整卡牌数据库（包含衍生物、附魔、英雄技能）
         zh_full = _cache_path(build, "zhCN", "cards.json")
         en_full = _cache_path(build, "enUS", "cards.json")
 
@@ -238,7 +238,7 @@ class HSCardDB:
 
         if zh_full_data:
             en_full_map = {c["id"]: c for c in (en_full_data or [])}
-            # Only add non-collectible cards (tokens, enchantments, etc.)
+            # 仅添加不可收集卡牌（衍生物、附魔等）
             added = 0
             for card in zh_full_data:
                 cid = card["id"]
@@ -271,9 +271,9 @@ class HSCardDB:
                         added, len(self._cards))
 
     def _load_xml_fallback(self) -> None:
-        # Skip XML loading entirely if hearthstone_data is not installed,
-        # as hearthstone.cardxml.load() will attempt to download CardDefs.xml
-        # (~200MB) and hang indefinitely without the data package.
+        # 跳过XML加载，如果 hearthstone_data 未安装
+        # 因为 hearthstone.cardxml.load() 会尝试下载 CardDefs.xml
+        # (~200MB) 并在没有数据包时无限期挂起
         try:
             import importlib.util
             if importlib.util.find_spec("hearthstone_data") is None:
@@ -287,7 +287,7 @@ class HSCardDB:
             from hearthstone.cardxml import load as _load_xml
             from hearthstone.enums import CardSet, CardType, Locale
 
-            # Set a 10-second timeout to prevent indefinite hangs
+            # 设置10秒超时以防止无限挂起
             old_handler = signal.signal(signal.SIGALRM, lambda *_: None)
             signal.alarm(10)
             try:
@@ -349,7 +349,7 @@ class HSCardDB:
                 mechanics.append(name)
         mechanics.sort()
 
-        # Extract Chinese name from strings dict (card.name is always English)
+        # 从 strings 字典提取中文名称（card.name 始终为英文）
         zh_name = ""
         cardname_strings = (
             card.strings.get(GameTag.CARDNAME) if hasattr(card, "strings") else None
@@ -357,7 +357,7 @@ class HSCardDB:
         if isinstance(cardname_strings, dict):
             zh_name = cardname_strings.get("zhCN", "")
 
-        # Extract Chinese description similarly
+        # 同样提取中文描述
         zh_text = ""
         cardtext_strings = (
             card.strings.get(GameTag.CARDTEXT) if hasattr(card, "strings") else None
@@ -452,10 +452,10 @@ class HSCardDB:
         return self._cards.get(card_id)
 
     def card_id_to_dbf(self, card_id: str) -> Optional[int]:
-        """Look up dbfId by card_id string.
+        """通过 card_id 字符串查询 dbfId。
 
-        Reverse of get_by_dbf() — used by Bayesian opponent model
-        which operates on dbfId integers while the tracker uses card_id strings.
+        get_by_dbf() 的反向操作——贝叶斯对手模型使用 dbfId 整数，
+        而追踪器使用 card_id 字符串。
         """
         card = self._cards.get(card_id)
         if card is not None:
@@ -605,9 +605,9 @@ def get_db(
 
 
 def get_hero_class_map(build: str = "240397") -> Dict[int, str]:
-    """Get a lightweight hero dbfId -> class map.
+    """获取轻量级英雄 dbfId -> 职业映射。
 
-    Prefers a tiny local JSON cache and ships sane defaults for common heroes.
+    优先使用小型本地JSON缓存，并内置常见英雄的默认值。
     """
     if build in _hero_class_map_cache:
         return _hero_class_map_cache[build]
@@ -626,7 +626,7 @@ def get_hero_class_map(build: str = "240397") -> Dict[int, str]:
             except Exception:
                 continue
     else:
-        # Seed cache with defaults so hot paths avoid heavyweight card DB init.
+        # 用默认值填充缓存，避免热路径触发重量级卡牌数据库初始化
         serializable = [
             {"dbfId": dbf, "cardClass": cls} for dbf, cls in sorted(mapping.items())
         ]

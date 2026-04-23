@@ -41,23 +41,23 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Card source classification
+# 卡牌来源分类
 # ---------------------------------------------------------------------------
 
 class CardSource(str, Enum):
-    """How a card entered the game."""
+    """卡牌进入游戏的方式"""
     DECK = "deck"           # 从牌库抽到的
     GENERATED = "generated"  # 衍生/发现的牌（不在原始牌库中）
     UNKNOWN = "unknown"      # 无法判断来源
 
 
 # ---------------------------------------------------------------------------
-# Known card record (for opponent hand tracking)
+# 已知卡牌记录（用于对手手牌追踪）
 # ---------------------------------------------------------------------------
 
 @dataclass
 class KnownCard:
-    """A card we've seen the opponent play or reveal."""
+    """对手打出或揭示过的卡牌"""
     card_id: str = ""
     turn_seen: int = 0          # 回合数
     source: CardSource = CardSource.UNKNOWN
@@ -70,7 +70,7 @@ class KnownCard:
 
 @dataclass
 class OppHandIntel:
-    """Structured opponent hand intelligence for display."""
+    """结构化的对手手牌情报（用于展示）"""
     confirmed_hand: List[str] = field(default_factory=list)
     returned_to_hand: List[str] = field(default_factory=list)
     graveyard_cards: List[str] = field(default_factory=list)
@@ -85,12 +85,12 @@ class OppHandIntel:
 
 
 # ---------------------------------------------------------------------------
-# Per-side stats
+# 单方统计
 # ---------------------------------------------------------------------------
 
 @dataclass
 class SideStats:
-    """Running statistics for one side (player or opponent)."""
+    """单方（玩家或对手）的运行时统计"""
     # 卡牌类型统计
     minions_played: int = 0
     spells_played: int = 0
@@ -121,15 +121,15 @@ class SideStats:
 
 
 # ---------------------------------------------------------------------------
-# Global Game State
+# 全局游戏状态
 # ---------------------------------------------------------------------------
 
 @dataclass
 class GlobalGameState:
-    """Cross-turn global game state tracker.
+    """跨回合的全局游戏状态追踪器
 
-    Maintained across the entire game replay. Updated by GlobalTracker
-    as Power.log lines are processed.
+    在整场游戏回放过程中维护，由 GlobalTracker 随 Power.log
+    行的处理而更新。
     """
     # ---- 对手手牌追踪 ----
     opp_known_cards: List[KnownCard] = field(default_factory=list)
@@ -227,25 +227,25 @@ class GlobalGameState:
 
 
 # ---------------------------------------------------------------------------
-# Global Tracker
+# 全局追踪器
 # ---------------------------------------------------------------------------
 
 class GlobalTracker:
-    """Processes Power.log events to maintain GlobalGameState.
+    """处理Power.log事件以维护GlobalGameState。
 
-    Usage::
+    用法::
 
         gt = GlobalTracker()
-        # In your line processor:
+        # 在行处理器中调用:
         gt.on_full_entity(entity_id, card_id, controller, zone, ...)
         gt.on_show_entity(entity_id, card_id, controller, zone, ...)
         gt.on_zone_change(entity_id, controller, old_zone, new_zone, ...)
         gt.on_turn_change(turn)
-        # At decision point:
+        # 在决策点:
         state = gt.state
     """
 
-    # Re-export constants as class attrs for backward compatibility
+    # 向后兼容：重新导出常量为类属性
     ZONE_PLAY = ZONE_PLAY
     ZONE_DECK = ZONE_DECK
     ZONE_HAND = ZONE_HAND
@@ -261,7 +261,7 @@ class GlobalTracker:
     CT_HERO_POWER = CT_HERO_POWER
     CT_LOCATION = CT_LOCATION
 
-    # Known coin card IDs
+    # 已知的硬币卡牌ID
     COIN_CARD_IDS = {"GAME_005", "TB_BlingBrawl_Coin", "NEW1_008t"}
 
     def __init__(self, our_controller: int = 0, opp_controller: int = 0):
@@ -269,12 +269,12 @@ class GlobalTracker:
         self.our_controller = our_controller
         self.opp_controller = opp_controller
 
-        # Entity birth tracking — record when/where an entity first appeared
+        # 实体出生追踪 — 记录实体首次出现的时机和位置
         self._entity_birth: Dict[int, _EntityBirth] = {}
-        # Card DB reference for race/school lookup (lazy)
+        # 卡牌数据库引用，用于种族/学派查询（延迟加载）
         self._card_db = None
 
-        # Bayesian opponent model (lazy init)
+        # 贝叶斯对手模型（延迟初始化）
         self._bayesian_model = None
         self._bayesian_initialized = False
         self._secret_model: Optional['SecretProbabilityModel'] = None
@@ -284,17 +284,17 @@ class GlobalTracker:
         self.opp_controller = opp
 
     def on_game_start(self):
-        """Reset state for a new game."""
+        """为新游戏重置状态"""
         self.state = GlobalGameState()
         self._entity_birth.clear()
         self._card_db = None
 
     # ---------------------------------------------------------------
-    # Lazy card DB access
+    # 延迟加载卡牌数据库
     # ---------------------------------------------------------------
 
     def _get_card_db(self):
-        """Lazy-load HSCardDB for card metadata (race, school, etc.)."""
+        """延迟加载HSCardDB，用于卡牌元数据（种族、学派等）"""
         if self._card_db is None:
             try:
                 from analysis.data.hsdb import get_db
@@ -304,7 +304,7 @@ class GlobalTracker:
         return self._card_db
 
     def _card_metadata(self, card_id: str) -> Dict:
-        """Get card metadata from DB. Returns dict with race, school, class, etc."""
+        """从数据库获取卡牌元数据，返回包含race/school/class等的字典"""
         db = self._get_card_db()
         if db is None:
             return {}
@@ -314,12 +314,12 @@ class GlobalTracker:
         return card
 
     # ---------------------------------------------------------------
-    # Entity lifecycle
+    # 实体生命周期
     # ---------------------------------------------------------------
 
     def on_full_entity(self, entity_id: int, card_id: str, controller: int,
                        zone: int, card_type: int = 0, cost: int = 0):
-        """Called when FULL_ENTITY - Creating is parsed."""
+        """解析到 FULL_ENTITY - Creating 时调用"""
         birth = _EntityBirth(
             entity_id=entity_id,
             card_id=card_id,
@@ -330,12 +330,12 @@ class GlobalTracker:
         )
         self._entity_birth[entity_id] = birth
 
-        # Track initial deck size for opponent
+        # 追踪对手初始牌库大小
         if controller == self.opp_controller and zone == self.ZONE_DECK:
-            if card_type not in (2,):  # Not PLAYER type
+            if card_type not in (2,):  # 排除PLAYER类型
                 self.state.opp_initial_deck_size += 1
 
-        # Detect hero class from hero entities
+        # 从英雄实体检测英雄职业
         if card_type == self.CT_HERO and card_id:
             meta = self._card_metadata(card_id)
             hero_class = meta.get("cardClass", "")
@@ -344,36 +344,35 @@ class GlobalTracker:
             elif controller == self.opp_controller:
                 self.state.opp_hero_class = hero_class
 
-        # Detect coin entity
+        # 检测硬币实体
         if card_id in self.COIN_CARD_IDS:
             self.state.coin_entity_id = entity_id
 
     def on_show_entity(self, entity_id: int, card_id: str, controller: int,
                        zone: int, card_type: int = 0, cost: int = 0):
-        """Called when SHOW_ENTITY reveals a hidden entity.
-        
-        For opponent cards revealed directly into PLAY/SECRET zone (the typical
-        case — opponent plays a card and we see it appear), we track it as a
-        "played" card since we never see the HAND→PLAY zone change for opponent.
+        """解析到 SHOW_ENTITY 揭示隐藏实体时调用。
+
+        对于对手直接揭示到PLAY/SECRET区域的卡牌（典型情况——对手打出
+        一张牌，我们看到它出现），我们将其追踪为"已打出"的卡牌，
+        因为对手的 HAND→PLAY 区域变化对我们不可见。
         """
         if controller == self.opp_controller:
             self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
 
-            # Track opponent cards revealed into PLAY/SECRET as "played".
-            # Opponent cards are never visible during HAND→PLAY; they appear
-            # directly via SHOW_ENTITY in their final zone.
+            # 将对手揭示到PLAY/SECRET的卡牌追踪为"已打出"
+            # 对手的HAND→PLAY不可见，直接通过SHOW_ENTITY出现在最终区域
             if zone == self.ZONE_PLAY and card_type not in (self.CT_ENCHANTMENT,):
-                # Skip enchantments (type 6) — they're buffs, not played cards
+                # 跳过附魔（type 6）— 它们是增益效果，不是打出的卡牌
                 self._on_card_played(entity_id, controller, card_id, card_type)
             elif zone == self.ZONE_SECRET:
                 self.state.opp_secrets.append(card_id)
                 self._on_card_played(entity_id, controller, card_id, card_type)
-                # Update secret probability model
+                # 更新奥秘概率模型
                 self._ensure_secret_model()
                 if self._secret_model and card_id:
                     self._secret_model.exclude(card_id)
 
-            # Feed Bayesian model for opponent cards revealed into play/secret
+            # 为对手揭示到PLAY/SECRET的卡牌喂入贝叶斯模型
             if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id:
                 if not self._bayesian_initialized:
                     self._init_bayesian_model(self.state.opp_hero_class)
@@ -382,7 +381,7 @@ class GlobalTracker:
         if entity_id in self._entity_birth:
             self._entity_birth[entity_id].card_id = card_id
 
-        # Detect hero class from revealed hero cards
+        # 从揭示的英雄卡牌检测职业
         if card_type == self.CT_HERO and card_id:
             meta = self._card_metadata(card_id)
             hero_class = meta.get("cardClass", "")
@@ -394,74 +393,73 @@ class GlobalTracker:
     def on_zone_change(self, entity_id: int, controller: int,
                        old_zone: int, new_zone: int,
                        card_id: str = "", card_type: int = 0):
-        """Called when an entity's ZONE tag changes.
+        """实体ZONE标签变化时调用。
 
-        Key transitions:
-        - HAND -> PLAY: card played
-        - DECK -> HAND: card drawn
-        - DECK -> GRAVEYARD: card milled (§8.2)
-        - HAND -> SECRET: secret played
-        - SECRET -> GRAVEYARD: secret triggered
-        - PLAY -> GRAVEYARD: minion died, weapon destroyed
-        - SETASIDE -> HAND: generated card enters hand
-        - SETASIDE -> PLAY: token summoned
+        关键转换：
+        - HAND -> PLAY: 打出卡牌
+        - DECK -> HAND: 抽牌
+        - DECK -> GRAVEYARD: 爆牌 (§8.2)
+        - HAND -> SECRET: 打出奥秘
+        - SECRET -> GRAVEYARD: 奥秘触发
+        - PLAY -> GRAVEYARD: 随从死亡、武器摧毁
+        - SETASIDE -> HAND: 衍生牌进入手牌
+        - SETASIDE -> PLAY: 衍生随从登场
         """
         is_opp = (controller == self.opp_controller)
 
-        # Update zone in opp_hand_card_ids when zone changes.
-        # Keeps card_id but updates zone so get_opp_known_hand() can filter.
-        # NOTE: Don't check is_opp here — controller may have already changed
-        # (e.g., opponent card transferred to player deck at turn start)
+        # 区域变化时更新opp_hand_card_ids中的zone
+        # 保留card_id但更新zone，以便get_opp_known_hand()能正确过滤
+        # 注意：不在此处检查is_opp——controller可能已变化
+        # （例如对手卡牌在回合开始时转移到玩家牌库）
         if entity_id in self.state.opp_hand_card_ids:
             card_id = self.state.opp_hand_card_ids[entity_id][0]
             self.state.opp_hand_card_ids[entity_id] = (card_id, new_zone)
 
-        # Card played: HAND -> PLAY
+        # 打出卡牌: HAND -> PLAY
         if old_zone == self.ZONE_HAND and new_zone == self.ZONE_PLAY:
             self._on_card_played(entity_id, controller, card_id, card_type)
 
-        # Card drawn: DECK -> HAND (§8.2)
+        # 抽牌: DECK -> HAND (§8.2)
         elif old_zone == self.ZONE_DECK and new_zone == self.ZONE_HAND:
             stats = self.state.opp_stats if is_opp else self.state.player_stats
             stats.cards_drawn += 1
 
-        # Card milled: DECK -> GRAVEYARD when hand full (§8.2)
+        # 爆牌: DECK -> GRAVEYARD（手牌满时） (§8.2)
         elif old_zone == self.ZONE_DECK and new_zone == self.ZONE_GRAVEYARD:
             stats = self.state.opp_stats if is_opp else self.state.player_stats
             stats.cards_milled += 1
-            stats.cards_drawn += 1  # counts as a draw
+            stats.cards_drawn += 1  # 算作一次抽牌
 
-        # Fatigue draw: no entity in DECK, game creates one in HAND
-        # Detected via DECK count hitting 0 + draw event
-        # Tracked implicitly through deck count
+        # 疲劳抽牌：牌库无实体，游戏在HAND区创建新实体
+        # 通过牌库计数归零+抽牌事件隐式追踪
 
-        # Generated card enters hand: SETASIDE -> HAND
+        # 衍生牌进入手牌: SETASIDE -> HAND
         elif old_zone == self.ZONE_SETASIDE and new_zone == self.ZONE_HAND:
-            pass  # Entity birth already marks it as generated
+            pass  # 实体出生记录已标记为衍生
 
-        # Token summoned: SETASIDE -> PLAY
+        # 衍生随从登场: SETASIDE -> PLAY
         elif old_zone == self.ZONE_SETASIDE and new_zone == self.ZONE_PLAY:
-            pass  # Summoned tokens don't count as "played"
+            pass  # 召唤的衍生随从不算"打出"
 
-        # Minion died / weapon destroyed: PLAY -> GRAVEYARD
+        # 随从死亡/武器摧毁: PLAY -> GRAVEYARD
         elif old_zone == self.ZONE_PLAY and new_zone == self.ZONE_GRAVEYARD:
             if is_opp and card_id:
                 self.state.opp_graveyard_seen.append(card_id)
             if not is_opp and card_id:
                 self.state.player_minions_died.append(card_id)
 
-        # Played card returns to hand (bounce / recall): PLAY/SECRET -> HAND
+        # 打出的卡牌回手（弹回/召回）: PLAY/SECRET -> HAND
         elif old_zone in (self.ZONE_PLAY, self.ZONE_SECRET) and new_zone == self.ZONE_HAND:
             if is_opp and card_id:
                 self.state.opp_returned_to_hand_seen.append(card_id)
 
-        # Secret played: HAND -> SECRET (§7)
+        # 打出奥秘: HAND -> SECRET (§7)
         elif old_zone == self.ZONE_HAND and new_zone == self.ZONE_SECRET:
             if is_opp and card_id:
                 self.state.opp_secrets.append(card_id)
             self._on_card_played(entity_id, controller, card_id, card_type)
 
-        # Secret triggered/expired: SECRET -> GRAVEYARD/SETASIDE
+        # 奥秘触发/过期: SECRET -> GRAVEYARD/SETASIDE
         elif old_zone == self.ZONE_SECRET and new_zone in (self.ZONE_GRAVEYARD, self.ZONE_SETASIDE):
             if is_opp and card_id:
                 if card_id in self.state.opp_secrets:
@@ -472,30 +470,30 @@ class GlobalTracker:
                     source=self._classify_source(entity_id, card_id),
                     card_type="SPELL",
                 ))
-                # Update secret probability model
+                # 更新奥秘概率模型
                 if self._secret_model and card_id:
                     self._secret_model.exclude(card_id)
 
-        # Weapon equipped: implicit — tracked via weapon entities in PLAY
-        # Location played: tracked via location entities in PLAY
+        # 装备武器：隐式——通过PLAY区的武器实体追踪
+        # 打出地点：通过PLAY区的地点实体追踪
 
-        # Coin used: detect coin spell going from HAND to PLAY/GRAVEYARD
+        # 硬币使用：检测硬币法术从HAND到PLAY/GRAVEYARD
         if (old_zone == self.ZONE_HAND and
             card_id in self.COIN_CARD_IDS):
             self.state.coin_used = True
 
     def _on_card_played(self, entity_id: int, controller: int,
                         card_id: str, card_type: int):
-        """Record a card being played (HAND -> PLAY or HAND -> SECRET)."""
+        """记录一张卡牌被打出（HAND -> PLAY 或 HAND -> SECRET）"""
         is_opp = (controller == self.opp_controller)
         source = self._classify_source(entity_id, card_id)
 
-        # Look up card metadata for race/school
+        # 查询卡牌元数据获取种族/学派
         meta = self._card_metadata(card_id) if card_id else {}
         spell_school = meta.get("spellSchool", "")
         race = meta.get("race", "")
 
-        # Build known card record
+        # 构建已知卡牌记录
         known = KnownCard(
             card_id=card_id,
             turn_seen=self.state.current_turn,
@@ -507,11 +505,11 @@ class GlobalTracker:
             race=race,
         )
 
-        # Update stats
+        # 更新统计
         stats = self.state.opp_stats if is_opp else self.state.player_stats
         self._update_play_stats(stats, card_id, card_type, source, meta)
 
-        # Track cards played this turn
+        # 追踪本回合打出的卡牌
         if is_opp:
             self.state.cards_played_this_turn_opp.append(card_id)
             self.state.opp_known_cards.append(known)
@@ -523,16 +521,16 @@ class GlobalTracker:
             if source == CardSource.GENERATED:
                 self.state.player_generated_seen.add(card_id)
 
-        # Note: opp_hand_card_ids cleanup is handled in on_zone_change()
-        # when any card leaves HAND zone, so no removal needed here.
+        # 注意：opp_hand_card_ids的清理在on_zone_change()中
+        # 当任何卡牌离开HAND区域时处理，此处无需移除。
 
     def _classify_source(self, entity_id: int, card_id: str) -> CardSource:
-        """Determine if a card is from deck or generated.
+        """判断卡牌来源是牌库还是衍生。
 
-        Heuristics:
-        1. If entity was born in DECK zone → deck card
-        2. If entity was born in SETASIDE or HAND (non-initial) → generated
-        3. Check card DB if available: non-collectible = generated
+        启发式规则：
+        1. 实体出生在DECK区域 → 牌库牌
+        2. 实体出生在SETASIDE或HAND（非初始） → 衍生牌
+        3. 查卡牌数据库：非可收集 = 衍生
         """
         birth = self._entity_birth.get(entity_id)
         if birth:
@@ -540,11 +538,11 @@ class GlobalTracker:
                 return CardSource.DECK
             if birth.initial_zone == self.ZONE_SETASIDE:
                 return CardSource.GENERATED
-            # HAND zone for non-deck cards (e.g., generated into hand)
+            # HAND区域的非牌库卡牌（如衍生到手牌）
             if birth.initial_zone == self.ZONE_HAND:
                 return CardSource.GENERATED
 
-        # Fallback: check card DB collectibility
+        # 兜底：查卡牌数据库的可收集性
         if card_id:
             meta = self._card_metadata(card_id)
             if meta:
@@ -555,14 +553,14 @@ class GlobalTracker:
         return CardSource.UNKNOWN
 
     def _card_type_name(self, card_type: int) -> str:
-        """Convert numeric card type to string."""
+        """将数字卡牌类型转换为字符串"""
         _map = {4: "MINION", 5: "SPELL", 7: "WEAPON", 3: "HERO",
                 6: "LOCATION", 10: "HERO_POWER"}
         return _map.get(card_type, "UNKNOWN")
 
     def _update_play_stats(self, stats: SideStats, card_id: str,
                            card_type: int, source: CardSource, meta: Dict):
-        """Update per-side statistics for a played card."""
+        """更新打出卡牌后的单方统计"""
         if card_type == self.CT_MINION:
             stats.minions_played += 1
         elif card_type == self.CT_SPELL:
@@ -579,35 +577,35 @@ class GlobalTracker:
         elif source == CardSource.DECK:
             stats.deck_cards_played += 1
 
-        # Race tracking (§9.3 延系需要)
+        # 种族追踪 (§9.3 延系需要)
         if meta:
             race = meta.get("race", "")
             if race:
                 for r in race.split():
                     stats.races_played[r] = stats.races_played.get(r, 0) + 1
 
-            # Spell school tracking
+            # 法术学派追踪
             school = meta.get("spellSchool", "")
             if school:
                 stats.spell_schools[school] = stats.spell_schools.get(school, 0) + 1
 
     # ---------------------------------------------------------------
-    # Turn / game events
+    # 回合/游戏事件
     # ---------------------------------------------------------------
 
     def on_turn_change(self, turn: int):
-        """Called when game TURN tag changes."""
-        # Before switching turn, save current turn's races/schools for kindred
+        """游戏TURN标签变化时调用"""
+        # 切换回合前，保存当前回合的种族/学派（延系需要）
         if turn != self.state.current_turn:
-            # Rotate: current becomes last turn for player (we are the player)
+            # 轮转：当前回合的数据变为"上回合"（我们是玩家）
             player_stats = self.state.player_stats
             if player_stats.races_played:
                 self.state.last_turn_races_player = set(player_stats.races_played.keys())
             if player_stats.spell_schools:
                 self.state.last_turn_schools_player = set(player_stats.spell_schools.keys())
 
-            # Clear per-turn cards played tracking
-            if turn % 2 == 1:  # Our turn starts
+            # 清除本回合打出卡牌的追踪
+            if turn % 2 == 1:  # 我方回合开始
                 self.state.cards_played_this_turn_player.clear()
             else:
                 self.state.cards_played_this_turn_opp.clear()
@@ -615,61 +613,61 @@ class GlobalTracker:
         self.state.current_turn = turn
 
     def on_corpse_change(self, controller: int, total_corpses: int):
-        """Called when Corpse total changes."""
+        """残骸(Corpse)总量变化时调用"""
         if controller == self.opp_controller:
             self.state.opp_corpses = total_corpses
         else:
             self.state.player_corpses = total_corpses
 
     def on_overload_change(self, controller: int, overload_next: int):
-        """Called when OVERLOAD_OWED tag changes (§2.2)."""
+        """OVERLOAD_OWED标签变化时调用 (§2.2)"""
         stats = self.state.opp_stats if controller == self.opp_controller else self.state.player_stats
         stats.overload_next = overload_next
 
     def on_herald_change(self, controller: int, count: int):
-        """Called when Herald counter changes."""
+        """兆示计数器变化时调用"""
         if controller == self.opp_controller:
             self.state.opp_herald_count = count
         else:
             self.state.player_herald_count = count
 
     def on_fatigue_change(self, controller: int, fatigue_damage: int):
-        """Called when FATIGUE tag changes (§8.3)."""
+        """FATIGUE标签变化时调用 (§8.3)"""
         stats = self.state.opp_stats if controller == self.opp_controller else self.state.player_stats
         stats.fatigue_damage = fatigue_damage
         stats.times_fatigued += 1
 
     def on_first_player(self, is_our_player: bool):
-        """Called when FIRST_PLAYER is detected (§1.7)."""
+        """检测到FIRST_PLAYER时调用 (§1.7)"""
         self.state.is_first_player = is_our_player
 
     # ---------------------------------------------------------------
-    # Deck count tracking
+    # 牌库计数追踪
     # ---------------------------------------------------------------
 
     def count_opp_deck(self, opp_entities: list) -> int:
-        """Count opponent entities currently in DECK zone."""
+        """统计对手在DECK区域的实体数"""
         count = sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_DECK)
         self.state.opp_deck_remaining = count
         return count
 
     def count_player_deck(self, our_entities: list) -> int:
-        """Count player entities currently in DECK zone."""
+        """统计我方在DECK区域的实体数"""
         return sum(1 for e in our_entities if getattr(e, 'zone', 0) == self.ZONE_DECK)
 
     # ---------------------------------------------------------------
-    # Opponent hand / weapon / location tracking
+    # 对手手牌/武器/地点追踪
     # ---------------------------------------------------------------
 
     def get_opp_hand_count(self, opp_entities: list) -> int:
-        """Count opponent entities currently in HAND zone."""
+        """统计对手在HAND区域的实体数"""
         return sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_HAND)
 
     def get_opp_known_hand(self) -> List[Tuple[int, str]]:
-        """Return list of (entity_id, card_id) for known opponent hand cards.
+        """返回对手已知手牌的 (entity_id, card_id) 列表。
 
-        Only returns cards currently in HAND zone — filters out cards that
-        have been played, discarded, or moved to other zones.
+        仅返回当前在HAND区域的卡牌——过滤已打出、弃牌或
+        移到其他区域的卡牌。
         """
         return [
             (eid, card_id)
@@ -678,12 +676,12 @@ class GlobalTracker:
         ]
 
     def get_opp_hand_intelligence(self, name_fn=None, hand_count: int = 0) -> OppHandIntel:
-        """Return structured opponent hand intelligence.
+        """返回结构化的对手手牌情报。
 
-        Three tiers:
-        1. confirmed_hand (100%): cards revealed in HAND zone (SHOW_ENTITY→HAND)
-        2. deck_cards_played: original deck cards already played (now in graveyard)
-        3. generated_cards: generated/discovered cards played
+        三个层级：
+        1. confirmed_hand (100%): 在HAND区域揭示的卡牌（SHOW_ENTITY→HAND）
+        2. deck_cards_played: 已打出的原始牌库卡牌（现已在墓地）
+        3. generated_cards: 已打出/发现的衍生牌
         """
         name_fn = name_fn or (lambda cid: cid)
         state = self.state
@@ -721,7 +719,7 @@ class GlobalTracker:
         )
 
     def get_opp_probable_hand(self, name_fn=None, prob_threshold: float = 0.5) -> List[str]:
-        """Return probable opponent hand cards whose probability >= threshold."""
+        """返回概率 >= 阈值的对手可能手牌"""
         name_fn = name_fn or (lambda cid: cid)
         bs = self.get_bayesian_state()
         preds = bs.get("predicted_next", []) or []
@@ -730,28 +728,28 @@ class GlobalTracker:
             prob = float(p.get("probability", 0.0) or 0.0)
             if prob >= prob_threshold:
                 name = p.get("name") or ""
-                # Bayesian model may return name directly; keep graceful fallback.
+                # 贝叶斯模型可能直接返回名称；保留优雅的回退
                 result.append(name if name else name_fn(str(p.get("dbfId", ""))))
         return result
 
     def get_opp_card_breakdown(self, card_name_fn=None) -> Dict:
-        """Generate categorized breakdown of all revealed opponent cards.
+        """生成所有已揭示对手卡牌的分类统计。
 
-        Returns dict with:
-            - deck_cards_played: list of card names from original deck
-            - generated_cards_played: list of card names from generated sources
-            - known_hand: list of card names currently in opponent's HAND zone
-            - total_played: int — total cards played
-            - total_generated: int — total generated cards
-            - type_counts: dict — {MINION: n, SPELL: n, WEAPON: n, HERO: n, LOCATION: n}
-            - school_counts: dict — spell school distribution
-            - race_counts: dict — race distribution
+        返回字典包含：
+            - deck_cards_played: 原始牌库中打出的卡牌名称列表
+            - generated_cards_played: 衍生卡牌名称列表
+            - known_hand: 对手当前HAND区域的卡牌名称列表
+            - total_played: 总打出卡牌数
+            - total_generated: 总衍生卡牌数
+            - type_counts: 类型统计 {MINION: n, SPELL: n, WEAPON: n, HERO: n, LOCATION: n}
+            - school_counts: 法术学派分布
+            - race_counts: 种族分布
         """
         name_fn = card_name_fn or (lambda cid: cid)
         state = self.state
         stats = state.opp_stats
 
-        # Categorize played cards by source
+        # 按来源分类已打出的卡牌
         deck_cards = []
         generated_cards = []
         for kc in state.opp_known_cards:
@@ -761,10 +759,10 @@ class GlobalTracker:
             elif kc.source == CardSource.GENERATED:
                 generated_cards.append(name)
             else:
-                # UNKNOWN — treat as deck card (conservative)
+                # UNKNOWN — 视为牌库牌（保守估计）
                 deck_cards.append(name)
 
-        # Known hand (zone-filtered)
+        # 已知手牌（已按区域过滤）
         known_hand = [name_fn(cid) for _, cid in self.get_opp_known_hand()]
 
         return {
@@ -785,18 +783,18 @@ class GlobalTracker:
         }
 
     # ---------------------------------------------------------------
-    # Bayesian opponent model integration
+    # 贝叶斯对手模型集成
     # ---------------------------------------------------------------
 
     def _ensure_card_db(self):
-        """Lazy-load card database for dbfId lookups."""
+        """延迟加载卡牌数据库，用于dbfId查询"""
         if self._card_db is None:
             from analysis.data.hsdb import get_db
             self._card_db = get_db()
         return self._card_db
 
     def _ensure_secret_model(self):
-        """Initialize secret probability model based on opponent hero class."""
+        """基于对手英雄职业初始化奥秘概率模型"""
         if self._secret_model is not None:
             return
         opp_cls = self.state.opp_hero_class
@@ -819,19 +817,19 @@ class GlobalTracker:
             from analysis.config import HSREPLAY_CACHE_DB
             import os
 
-            # Try loading from existing cache
+            # 尝试从已有缓存加载
             if os.path.exists(str(HSREPLAY_CACHE_DB)):
                 conn = init_db(str(HSREPLAY_CACHE_DB))
                 try:
                     from analysis.data.fetch_hsreplay import get_meta_decks
                     decks = get_meta_decks(conn)
                     if not decks:
-                        # Cache exists but empty — build from deck codes
+                        # 缓存存在但为空——从卡组代码构建
                         build_archetype_db_from_deck_codes(conn)
                 finally:
                     conn.close()
             else:
-                # No cache — build from deck codes
+                # 无缓存——从卡组代码构建
                 conn = init_db(str(HSREPLAY_CACHE_DB))
                 try:
                     build_archetype_db_from_deck_codes(conn)
@@ -894,7 +892,7 @@ class GlobalTracker:
         }
 
     def get_secret_report(self) -> Dict:
-        """Get secret probability report for logging/decision-making."""
+        """获取奥秘概率报告，用于日志和决策"""
         if not self._secret_model:
             return {"active_secrets": len(self.state.opp_secrets),
                     "model": "uninitialized"}
@@ -916,7 +914,7 @@ class GlobalTracker:
         }
 
     def update_opp_weapon(self, opp_entities: list):
-        """Update opponent weapon from entities in PLAY zone."""
+        """从PLAY区域更新对手武器状态"""
         for e in opp_entities:
             if (getattr(e, 'zone', 0) == self.ZONE_PLAY and
                 getattr(e, 'card_type', 0) == self.CT_WEAPON):
@@ -924,13 +922,13 @@ class GlobalTracker:
                 self.state.opp_weapon_atk = getattr(e, 'atk', 0)
                 self.state.opp_weapon_durability = getattr(e, 'health', 0)
                 return
-        # No weapon found — clear
+        # 未找到武器——清除
         self.state.opp_weapon = ""
         self.state.opp_weapon_atk = 0
         self.state.opp_weapon_durability = 0
 
     def update_opp_locations(self, opp_entities: list):
-        """Update opponent locations from entities in PLAY zone."""
+        """从PLAY区域更新对手地点状态"""
         self.state.opp_locations = [
             getattr(e, 'card_id', '')
             for e in opp_entities
@@ -939,11 +937,11 @@ class GlobalTracker:
         ]
 
     # ---------------------------------------------------------------
-    # Summary for logging
+    # 摘要输出（用于日志）
     # ---------------------------------------------------------------
 
     def opp_summary_str(self, opp_entities: list, card_name_fn=None) -> str:
-        """Generate a human-readable opponent state summary string."""
+        """生成人类可读的对手状态摘要字符串"""
         deck = self.count_opp_deck(opp_entities)
         hand = self.get_opp_hand_count(opp_entities)
         known_hand = self.get_opp_known_hand()
@@ -983,7 +981,7 @@ class GlobalTracker:
         return " | ".join(parts)
 
     def player_summary_str(self, card_name_fn=None) -> str:
-        """Generate a human-readable player global stats string."""
+        """生成人类可读的玩家全局统计字符串"""
         parts = []
         stats = self.state.player_stats
         if stats.generated_cards_played > 0:
@@ -1013,12 +1011,12 @@ class GlobalTracker:
 
 
 # ---------------------------------------------------------------------------
-# Internal helper
+# 内部辅助类
 # ---------------------------------------------------------------------------
 
 @dataclass
 class _EntityBirth:
-    """Record of when an entity first appeared in the game."""
+    """实体首次出现在游戏中的记录"""
     entity_id: int = 0
     card_id: str = ""
     controller: int = 0

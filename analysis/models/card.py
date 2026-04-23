@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+"""Card — 炉石卡牌统一数据模型
+
+项目中有两种卡牌表示：
+1. hsdb.py 的 Dict（轻量级，纯数据索引） — 用于快速池查询、DB操作
+2. 本文件 Card dataclass（面向对象，带行为方法） — 用于评分引擎、搜索树
+
+通过 from_hsdb_dict() / from_cardxml() 工厂方法从不同数据源构建。
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -7,20 +15,25 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class MinionData:
-    """Minion-specific static data."""
+    """随从/武器的静态属性"""
     attack: int = 0
     health: int = 0
 
 
 @dataclass(frozen=True)
 class SpellData:
-    """Spell-specific static data."""
+    """法术的静态属性"""
     spell_damage: int = 0
     spell_school: str = ""
 
 
 @dataclass
 class Card:
+    """炉石卡牌统一数据模型
+
+    字段覆盖所有卡牌类型（随从、法术、武器、英雄、地点）。
+    部分字段仅对特定类型有意义（如 health 仅对随从有效）。
+    """
     dbf_id: int = 0
     name: str = ""
     cost: int = 0
@@ -47,21 +60,21 @@ class Card:
     def __post_init__(self):
         if self.mechanics is None:
             self.mechanics = []
-        # Populate component data objects from direct fields when not explicitly provided
+        # 从直接字段自动填充组件数据对象（未显式提供时）
         if self.minion_data is None and (self.attack > 0 or self.health > 0):
             self.minion_data = MinionData(attack=self.attack, health=self.health)
         elif self.minion_data is not None:
-            # Sync direct fields from explicitly-provided minion_data
+            # 从显式提供的 minion_data 同步回直接字段
             self.attack = self.minion_data.attack
             self.health = self.minion_data.health
         if self.spell_data is None and (self.spell_damage > 0 or self.spell_school):
             self.spell_data = SpellData(spell_damage=self.spell_damage, spell_school=self.spell_school)
         elif self.spell_data is not None:
-            # Sync direct fields from explicitly-provided spell_data
+            # 从显式提供的 spell_data 同步回直接字段
             self.spell_damage = self.spell_data.spell_damage
             self.spell_school = self.spell_data.spell_school
 
-    # ── Mechanics helpers ──────────────────────────────────────────
+    # ── 机制辅助方法 ──────────────────────────────────────────
 
     @property
     def mechanics_set(self) -> set:
@@ -70,25 +83,25 @@ class Card:
     def has_mechanic(self, keyword: str) -> bool:
         return keyword in (self.mechanics or [])
 
-    # ── Effect parsing ─────────────────────────────────────────────
+    # ── 效果解析 ─────────────────────────────────────────────
 
     def get_effects(self):
-        """Return structured CardEffects for this card."""
+        """返回本卡牌的结构化 CardEffects"""
         from analysis.data.card_effects import get_effects
         return get_effects(self)
 
     def compute_mechanics(self) -> list:
-        """Re-extract mechanics from text + existing tags via card_cleaner."""
+        """通过 card_cleaner 从文本 + 现有标签重新提取机制"""
         from analysis.data.card_cleaner import extract_mechanics
         self.mechanics = extract_mechanics(
             self.text, self.mechanics, self.card_type,
         )
         return self.mechanics
 
-    # ── Structured field accessors (with text fallback) ────────────
+    # ── 结构化字段访问器（带文本正则回退） ────────────────────
 
     def effective_overload(self) -> int:
-        """Overload value: structured field first, text regex fallback."""
+        """过载值：优先结构化字段，其次文本正则回退"""
         if self.overload > 0:
             return self.overload
         import re
@@ -96,7 +109,7 @@ class Card:
         return int(m.group(1)) if m else 0
 
     def effective_armor(self) -> int:
-        """Armor value: structured field first, text regex fallback."""
+        """护甲值：优先结构化字段，其次文本正则回退"""
         if self.armor > 0:
             return self.armor
         import re
@@ -107,11 +120,11 @@ class Card:
         return self.spell_damage
 
     def total_damage(self) -> int:
-        """Quick accessor: direct + random damage."""
+        """快速访问器：直接伤害 + 随机伤害"""
         eff = self.get_effects()
         return eff.damage + eff.random_damage
 
-    # ── Type predicates ────────────────────────────────────────────
+    # ── 类型判断属性 ─────────────────────────────────────────
 
     @property
     def is_minion(self) -> bool:
@@ -133,10 +146,11 @@ class Card:
     def is_location(self) -> bool:
         return (self.card_type or "").upper() == "LOCATION"
 
-    # ── Construction from external formats ─────────────────────────
+    # ── 从外部数据格式构建 ───────────────────────────────────
 
     @classmethod
     def from_cardxml(cls, card_xml) -> "Card":
+        """从 python-hearthstone CardDefs XML 对象构建"""
         from hearthstone.enums import CardType, CardClass, Race, Rarity
 
         card_type = card_xml.type.name if card_xml.type else ""
@@ -214,6 +228,7 @@ class Card:
 
     @classmethod
     def from_hsdb_dict(cls, data: dict) -> "Card":
+        """从 HSCardDB 的字典格式构建（主数据源转换入口）"""
         atk_val = data.get("attack", 0)
         health_val = data.get("health", 0)
         card_type = data.get("type", "")
@@ -249,6 +264,7 @@ class Card:
 
     @classmethod
     def from_hsjson(cls, data: dict) -> "Card":
+        """从 HearthstoneJSON API 原始字典构建"""
         atk_val = data.get("attack", 0)
         health_val = data.get("health", 0)
         card_type = data.get("type", "")
@@ -283,6 +299,7 @@ class Card:
         )
 
     def to_dict(self) -> dict:
+        """导出为纯字典格式（用于序列化/日志）"""
         return {
             "dbf_id": self.dbf_id,
             "name": self.name,
