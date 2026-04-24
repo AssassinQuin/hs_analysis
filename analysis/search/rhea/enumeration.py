@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import List, TYPE_CHECKING
 
 from analysis.search.rhea.actions import Action, ActionType
@@ -64,19 +65,39 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                             )
                         )
                 else:
-                    # No targets returned — check if this is a no-target spell
-                    # (AOE, draw, armor) or a targeted spell with no valid targets
+                    # targets=[] — three cases:
+                    # 1. AOE (auto-targets all): can play without selecting target
+                    # 2. No-target spell (draw, armor, buff-self): can play
+                    # 3. Targeted spell with no valid targets: CANNOT play
                     text = getattr(card, "text", "") or ""
+
+                    # Case 1: AOE — detect "所有/全部/all" + damage patterns
+                    is_aoe = bool(re.search(
+                        r"所有(?:敌方)?(?:随从|角色|敌人)|all\s+(?:enemies|minion)",
+                        text, re.IGNORECASE
+                    ))
+                    if is_aoe:
+                        actions.append(
+                            Action(
+                                action_type=ActionType.PLAY,
+                                card_index=idx,
+                                meta_tags=frozenset(tags),
+                            )
+                        )
+                        continue
+
+                    # Case 2 vs 3: check for target conditions in text
                     from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN
                     has_damage = bool(_DAMAGE_EN.search(text) or _DAMAGE_CN.search(text))
+
+                    # Use resolver's internal targeting keyword check
+                    from analysis.search.engine.mechanics.spell_target_resolver import _TARGETING_KEYWORDS
+                    import re as _re
                     has_target_keyword = any(
-                        kw in text for kw in
-                        ("受伤", "damaged", "敌方随从", "enemy minion",
-                         "友方随从", "friendly minion", "一个?随从")
+                        _re.search(kw, text, _re.IGNORECASE) for kw in _TARGETING_KEYWORDS
                     )
-                    # If spell has damage text and mentions target conditions,
-                    # empty targets means no valid target → cannot play.
-                    # Otherwise it's a no-target spell (draw, armor, AOE etc.)
+                    # If spell has damage AND targeting keywords but no valid targets → cannot play
+                    # Otherwise (no targeting keyword): no-target spell, can play
                     if not (has_damage and has_target_keyword):
                         actions.append(
                             Action(
