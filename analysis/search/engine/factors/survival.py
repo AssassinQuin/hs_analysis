@@ -52,7 +52,7 @@ class SurvivalFactor(EvaluationFactor):
                 effective_health = m.health
                 if m.has_divine_shield:
                     effective_health += m.attack
-                if getattr(m, 'has_reborn', False):
+                if m.has_reborn:
                     effective_health += m.health * 0.5
                 total += effective_health
         return total
@@ -60,7 +60,7 @@ class SurvivalFactor(EvaluationFactor):
     @staticmethod
     def _opponent_spell_damage_threat(state: GameState) -> int:
         threat = 0
-        opp_hand_count = len(state.opponent.hand) if hasattr(state.opponent, 'hand') else 0
+        opp_hand_count = len(state.opponent.hand) if state.opponent.hand else state.opponent.hand_count
         if opp_hand_count == 0:
             return 0
         estimated_spell_count = max(1, opp_hand_count // 3)

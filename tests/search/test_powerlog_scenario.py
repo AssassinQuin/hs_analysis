@@ -1,5 +1,12 @@
+"""Tests for Power.log parsing → GameState extraction.
+
+Power.log is parsed **once** at module level; all test classes share the
+result via ``_PARSED_GAME``, eliminating ~3 redundant parses (~0.6s saved).
+"""
+
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -13,16 +20,21 @@ POWER_LOG_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', '..', 'Power.log')
 )
 
+# ---------------------------------------------------------------------------
+#  Parse Power.log once — shared by all test classes below
+# ---------------------------------------------------------------------------
+_PARSED_GAME = None
+if os.path.exists(POWER_LOG_PATH):
+    _PARSED_GAME = parse_power_log(POWER_LOG_PATH)
+
 
 class TestPowerLogBasicParse(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not os.path.exists(POWER_LOG_PATH):
-            raise unittest.SkipTest("Power.log not found")
-        cls.game = parse_power_log(POWER_LOG_PATH)
-        if not cls.game:
-            raise unittest.SkipTest("Power.log parse returned None")
+        if _PARSED_GAME is None:
+            raise unittest.SkipTest("Power.log not found or parse returned None")
+        cls.game = _PARSED_GAME
 
     def test_game_has_two_players(self):
         self.assertEqual(len(self.game.players), 2)
@@ -51,15 +63,12 @@ class TestPowerLogFriendlyState(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not os.path.exists(POWER_LOG_PATH):
-            raise unittest.SkipTest("Power.log not found")
-        hslog_game = parse_power_log(POWER_LOG_PATH)
-        if not hslog_game:
-            raise unittest.SkipTest("Power.log parse returned None")
+        if _PARSED_GAME is None:
+            raise unittest.SkipTest("Power.log not found or parse returned None")
 
         from hearthstone.enums import GameTag
-        p1 = hslog_game.players[0]
-        hero_state, mana_state, board, hand = extract_game_state(hslog_game, 0)
+        p1 = _PARSED_GAME.players[0]
+        hero_state, mana_state, board, hand = extract_game_state(_PARSED_GAME, 0)
 
         cls.game_state = GameState(
             hero=hero_state,
@@ -115,18 +124,15 @@ class TestPowerLogBothPlayersState(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not os.path.exists(POWER_LOG_PATH):
-            raise unittest.SkipTest("Power.log not found")
-        hslog_game = parse_power_log(POWER_LOG_PATH)
-        if not hslog_game:
-            raise unittest.SkipTest("Power.log parse returned None")
+        if _PARSED_GAME is None:
+            raise unittest.SkipTest("Power.log not found or parse returned None")
 
         from hearthstone.enums import GameTag
-        p1 = hslog_game.players[0]
-        p2 = hslog_game.players[1]
+        p1 = _PARSED_GAME.players[0]
+        p2 = _PARSED_GAME.players[1]
 
-        hero1, mana1, board1, hand1 = extract_game_state(hslog_game, 0)
-        hero2, mana2, board2, _ = extract_game_state(hslog_game, 1)
+        hero1, mana1, board1, hand1 = extract_game_state(_PARSED_GAME, 0)
+        hero2, mana2, board2, _ = extract_game_state(_PARSED_GAME, 1)
 
         cls.game_state = GameState(
             hero=hero1,
@@ -163,13 +169,10 @@ class TestPowerLogTauntMechanic(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not os.path.exists(POWER_LOG_PATH):
-            raise unittest.SkipTest("Power.log not found")
-        hslog_game = parse_power_log(POWER_LOG_PATH)
-        if not hslog_game:
-            raise unittest.SkipTest("Power.log parse returned None")
+        if _PARSED_GAME is None:
+            raise unittest.SkipTest("Power.log not found or parse returned None")
 
-        _, _, cls.board, _ = extract_game_state(hslog_game, 0)
+        _, _, cls.board, _ = extract_game_state(_PARSED_GAME, 0)
 
     def test_taunt_detection(self):
         taunt_minions = [m for m in self.board if m.has_taunt]
@@ -191,7 +194,6 @@ class TestPowerLogParserRobustness(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_empty_file(self):
-        import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False, encoding='utf-8') as f:
             f.write("")
             tmp_path = f.name
@@ -202,7 +204,6 @@ class TestPowerLogParserRobustness(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_garbage_data(self):
-        import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False, encoding='utf-8') as f:
             f.write("garbage line 1\ngarbage line 2\nrandom text\n")
             tmp_path = f.name

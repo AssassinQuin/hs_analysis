@@ -9,6 +9,14 @@ from analysis.search.game_state import GameState, Minion, HeroState, ManaState, 
 from analysis.search.rhea_engine import RHEAEngine, SearchResult, Action, ActionType
 from analysis.models.card import Card
 
+# Compact engine params for fast test execution.
+# The RHEA engine's multi-phase pipeline (lethal, UTP, opp-sim, cross-turn)
+# scales per-phase time with time_limit, so reducing it is the main lever.
+_PIPE_POP = 6
+_PIPE_GENS = 3
+_PIPE_BUDGET = 150.0   # ms — generous enough for a valid result, fast for CI
+_PIPE_CHROM = 3
+
 
 def test_pipeline_returns_result():
     """Any valid GameState → SearchResult with valid actions."""
@@ -20,9 +28,12 @@ def test_pipeline_returns_result():
         opponent=OpponentState(hero=HeroState(hp=20)),
         turn_number=5,
     )
-    engine = RHEAEngine(pop_size=10, max_gens=5, time_limit=500.0, max_chromosome_length=3)
+    engine = RHEAEngine(
+        pop_size=_PIPE_POP, max_gens=_PIPE_GENS,
+        time_limit=_PIPE_BUDGET, max_chromosome_length=_PIPE_CHROM,
+    )
     result = engine.search(state)
-    
+
     assert isinstance(result, SearchResult)
     assert result.best_chromosome
     assert len(result.best_chromosome) > 0
@@ -31,7 +42,7 @@ def test_pipeline_returns_result():
 
 def test_lethal_found_via_search():
     """Lethal state → engine finds lethal action sequence with max fitness.
-    
+
     Note: Due to circular imports (rhea_engine ↔ lethal_checker), the Layer 0
     lethal short-circuit may not fire at module level. The engine still finds
     lethal through the RHEA evolutionary loop's fitness evaluation, which
@@ -42,9 +53,10 @@ def test_lethal_found_via_search():
         opponent=OpponentState(hero=HeroState(hp=5)),
         turn_number=5,
     )
-    engine = RHEAEngine(pop_size=10, max_gens=5, time_limit=500.0)
+    # Slightly more gens for reliable lethal detection
+    engine = RHEAEngine(pop_size=8, max_gens=5, time_limit=300.0)
     result = engine.search(state)
-    
+
     # Should find lethal and return max fitness
     assert isinstance(result, SearchResult)
     assert result.best_fitness == 10000.0  # lethal bonus
@@ -60,9 +72,12 @@ def test_no_lethal_proceeds_to_search():
         opponent=OpponentState(hero=HeroState(hp=30)),
         turn_number=4,
     )
-    engine = RHEAEngine(pop_size=10, max_gens=5, time_limit=500.0, max_chromosome_length=3)
+    engine = RHEAEngine(
+        pop_size=_PIPE_POP, max_gens=_PIPE_GENS,
+        time_limit=_PIPE_BUDGET, max_chromosome_length=_PIPE_CHROM,
+    )
     result = engine.search(state)
-    
+
     assert isinstance(result, SearchResult)
     assert result.generations_run > 0  # search actually ran
 
@@ -76,7 +91,7 @@ def test_risk_adjusts_ranking():
         opponent=OpponentState(hero=HeroState(hp=30)),
         turn_number=5,
     )
-    
+
     # Risky board (low hp, many minions, opponent secrets)
     risky_state = GameState(
         hero=HeroState(hp=5),
@@ -84,12 +99,15 @@ def test_risk_adjusts_ranking():
         opponent=OpponentState(hero=HeroState(hp=30), secrets=['s1', 's2']),
         turn_number=5,
     )
-    
-    engine = RHEAEngine(pop_size=10, max_gens=5, time_limit=500.0, max_chromosome_length=3)
-    
+
+    engine = RHEAEngine(
+        pop_size=_PIPE_POP, max_gens=_PIPE_GENS,
+        time_limit=_PIPE_BUDGET, max_chromosome_length=_PIPE_CHROM,
+    )
+
     safe_result = engine.search(safe_state)
     risky_result = engine.search(risky_state)
-    
+
     assert isinstance(safe_result, SearchResult)
     assert isinstance(risky_result, SearchResult)
     # Both should produce valid results
@@ -109,9 +127,12 @@ def test_opponent_sim_adjusts_scores():
         ),
         turn_number=6,
     )
-    engine = RHEAEngine(pop_size=10, max_gens=5, time_limit=500.0, max_chromosome_length=3)
+    engine = RHEAEngine(
+        pop_size=_PIPE_POP, max_gens=_PIPE_GENS,
+        time_limit=_PIPE_BUDGET, max_chromosome_length=_PIPE_CHROM,
+    )
     result = engine.search(state)
-    
+
     assert isinstance(result, SearchResult)
     assert result.best_chromosome
 
@@ -125,23 +146,26 @@ def test_all_layers_degradation():
         opponent=OpponentState(hero=HeroState(hp=20)),
         turn_number=5,
     )
-    
+
     # Patch imports to None to simulate missing modules
     import analysis.search.rhea_engine as rhea_mod
-    
+
     # Save originals
     orig_lethal = rhea_mod.check_lethal
     orig_risk = rhea_mod.RiskAssessor
     orig_opp = rhea_mod.OpponentSimulator
-    
+
     try:
         rhea_mod.check_lethal = None
         rhea_mod.RiskAssessor = None
         rhea_mod.OpponentSimulator = None
-        
-        engine = RHEAEngine(pop_size=10, max_gens=5, time_limit=500.0, max_chromosome_length=3)
+
+        engine = RHEAEngine(
+            pop_size=_PIPE_POP, max_gens=_PIPE_GENS,
+            time_limit=_PIPE_BUDGET, max_chromosome_length=_PIPE_CHROM,
+        )
         result = engine.search(state)
-        
+
         assert isinstance(result, SearchResult)
         assert result.best_chromosome
     finally:
@@ -160,14 +184,14 @@ def test_time_budget_respected():
         opponent=OpponentState(hero=HeroState(hp=20)),
         turn_number=7,
     )
-    
-    budget_ms = 200.0
-    engine = RHEAEngine(pop_size=20, max_gens=50, time_limit=budget_ms, max_chromosome_length=4)
-    
+
+    budget_ms = 100.0
+    engine = RHEAEngine(pop_size=10, max_gens=30, time_limit=budget_ms, max_chromosome_length=4)
+
     t0 = time.perf_counter()
     result = engine.search(state)
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
-    
+
     assert isinstance(result, SearchResult)
     # Allow some slack for overhead
     assert elapsed_ms < budget_ms * 5, f'Pipeline took {elapsed_ms:.0f}ms, expected < {budget_ms * 5:.0f}ms'

@@ -233,6 +233,7 @@ class OpponentState:
 
     hero: HeroState = field(default_factory=HeroState)
     board: List[Minion] = field(default_factory=list)
+    hand: list = field(default_factory=list)  # 推断的对手手牌（贝叶斯采样填充）
     hand_count: int = 0
     secrets: list = field(default_factory=list)
     deck_remaining: int = 15
@@ -333,6 +334,7 @@ class GameState:
             self.opponent,
             hero=opp_hero,
             board=[dataclasses.replace(m) for m in self.opponent.board],
+            hand=list(self.opponent.hand),
             secrets=list(self.opponent.secrets),
             opp_known_cards=list(self.opponent.opp_known_cards),
             opp_secrets_triggered=list(self.opponent.opp_secrets_triggered),

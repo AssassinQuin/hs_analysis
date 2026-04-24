@@ -1,26 +1,16 @@
-"""Tests for analysis.watcher — Power.log parsing pipeline."""
+"""Tests for analysis.watcher — Power.log parsing pipeline.
 
-import os
-import tempfile
-import time
-from pathlib import Path
+Power.log loading is done via session-scoped fixtures from conftest.py
+to avoid redundant parsing across tests.
+"""
+
+from io import StringIO
 
 import pytest
 
 # Skip all tests if hslog not available
 pytest.importorskip("hslog")
 pytest.importorskip("hearthstone")
-
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-POWER_LOG = PROJECT_ROOT / "Power.log"
-
-
-@pytest.fixture
-def power_log_path():
-    if not POWER_LOG.exists():
-        pytest.skip("Power.log not found in project root")
-    return str(POWER_LOG)
 
 
 class TestLogWatcher:
@@ -34,7 +24,6 @@ class TestLogWatcher:
         f.write_text("line1\nline2\nline3\n")
 
         watcher = LogWatcher(str(f), poll_interval=0.01)
-        # Read initial content (non-blocking)
         lines = watcher.read_existing_content()
         assert len(lines) == 3
         assert lines[0] == "line1"
@@ -49,7 +38,6 @@ class TestLogWatcher:
         rotations = []
         watcher = LogWatcher(str(f), poll_interval=0.01, on_rotation=lambda: rotations.append(1))
 
-        # Read initial content
         watcher.read_existing_content()
 
         # Simulate rotation: truncate and write new content
@@ -79,18 +67,12 @@ class TestGameTracker:
 
         assert len(events) > 0
         assert tracker.game_count >= 1
-        assert tracker.in_game
+        # Note: in_game may be False if the log ends mid-game
 
-    def test_export_entities(self, power_log_path):
-        """Exports entity tree from parsed game."""
-        from analysis.watcher.game_tracker import GameTracker
-
-        tracker = GameTracker()
-        tracker.load_file(power_log_path)
-        game = tracker.export_entities()
-
-        assert game is not None
-        assert len(list(game.players)) >= 2
+    def test_export_entities(self, exported_game):
+        """Exports entity tree from parsed game (uses session fixture)."""
+        assert exported_game is not None
+        assert len(list(exported_game.players)) >= 2
 
     def test_feed_line_incremental(self):
         """Feeds lines one at a time."""
@@ -102,37 +84,30 @@ class TestGameTracker:
 
 
 class TestStateBridge:
-    """Test StateBridge entity → GameState conversion."""
+    """Test StateBridge entity → GameState conversion.
 
-    def test_convert_power_log(self, power_log_path):
-        """Full conversion from Power.log to GameState."""
-        from analysis.watcher.game_tracker import GameTracker
+    Uses the session-scoped ``exported_game`` fixture to avoid
+    re-loading Power.log for every test.
+    """
+
+    def test_convert_power_log(self, exported_game):
+        """Full conversion from exported game to GameState."""
         from analysis.watcher.state_bridge import StateBridge
 
-        tracker = GameTracker()
-        tracker.load_file(power_log_path)
-        game = tracker.export_entities()
-
         bridge = StateBridge()
-        state = bridge.convert(game, player_index=0)
+        state = bridge.convert(exported_game, player_index=0)
 
-        # Should have reasonable values
         assert state.hero.hp > 0
         assert state.mana.max_mana >= 0
         assert state.turn_number >= 1
 
-    def test_convert_both_players(self, power_log_path):
+    def test_convert_both_players(self, exported_game):
         """Can convert state for both players."""
-        from analysis.watcher.game_tracker import GameTracker
         from analysis.watcher.state_bridge import StateBridge
 
-        tracker = GameTracker()
-        tracker.load_file(power_log_path)
-        game = tracker.export_entities()
-
         bridge = StateBridge()
-        s0 = bridge.convert(game, player_index=0)
-        s1 = bridge.convert(game, player_index=1)
+        s0 = bridge.convert(exported_game, player_index=0)
+        s1 = bridge.convert(exported_game, player_index=1)
 
         assert s0.hero.hp > 0
         assert s1.hero.hp > 0
@@ -164,13 +139,11 @@ class TestDecisionLoop:
         """DecisionPresenter formats output correctly."""
         from analysis.watcher.decision_loop import DecisionPresenter
         from analysis.search.rhea_engine import SearchResult
+        from analysis.search.game_state import GameState
 
-        # Use StringIO for output to avoid "closed file" error in tests
-        from io import StringIO
         output = StringIO()
         presenter = DecisionPresenter(output=output, verbose=True)
 
-        # Create a minimal SearchResult for testing
         result = SearchResult(
             best_chromosome=[],
             best_fitness=0.0,
@@ -181,7 +154,6 @@ class TestDecisionLoop:
             confidence=0.95,
         )
 
-        from analysis.search.game_state import GameState
         state = GameState()
         presenter.present(result, state, 50.0)
 

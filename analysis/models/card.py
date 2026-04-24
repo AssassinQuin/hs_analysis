@@ -34,8 +34,9 @@ class Card:
     字段覆盖所有卡牌类型（随从、法术、武器、英雄、地点）。
     部分字段仅对特定类型有意义（如 health 仅对随从有效）。
     """
-    dbf_id: int = 0
-    name: str = ""
+    card_id: str = ""        # Hearthstone card ID (e.g. "TLC_460") — primary identifier
+    dbf_id: int = 0          # Numeric DBF ID — secondary identifier
+    name: str = ""           # Localized display name (zhCN by default)
     cost: int = 0
     original_cost: int = 0
     card_type: str = ""
@@ -154,6 +155,36 @@ class Card:
     def is_location(self) -> bool:
         return (self.card_type or "").upper() == "LOCATION"
 
+    # ── 身份与显示 (i18n 分离) ──────────────────────────────────
+
+    @property
+    def identity_key(self) -> str:
+        """唯一标识键 — 用于内部搜索、哈希、比较。
+
+        优先用 card_id (如 "TLC_460")，其次 dbf_id，最后 name。
+        所有内部逻辑应使用此属性，不直接用 name。
+        """
+        if self.card_id:
+            return self.card_id
+        if self.dbf_id:
+            return str(self.dbf_id)
+        return self.name or ""
+
+    @property
+    def display_name(self) -> str:
+        """显示名称 — 仅用于日志/UI输出。
+
+        遵循 i18n 分层：name (当前语言) → ename (英文) → card_id → dbf_id。
+        内部逻辑不应依赖此属性。
+        """
+        if self.name:
+            return self.name
+        if self.ename:
+            return self.ename
+        if self.card_id:
+            return self.card_id
+        return str(self.dbf_id) if self.dbf_id else "???"
+
     # ── 从外部数据格式构建 ───────────────────────────────────
 
     @classmethod
@@ -247,6 +278,7 @@ class Card:
         spell_data = SpellData(spell_damage=spell_damage_val, spell_school=spell_school_val) if spell_damage_val > 0 or card_type == "SPELL" else None
 
         return cls(
+            card_id=data.get("cardId", ""),
             dbf_id=data.get("dbfId", 0),
             name=data.get("name", ""),
             cost=data.get("cost", 0),
@@ -283,6 +315,7 @@ class Card:
         spell_data = SpellData(spell_damage=spell_damage_val, spell_school=spell_school_val) if spell_damage_val > 0 or card_type == "SPELL" else None
 
         return cls(
+            card_id=data.get("cardId", ""),
             dbf_id=data.get("dbfId", 0),
             name=data.get("name", ""),
             cost=data.get("cost", 0),

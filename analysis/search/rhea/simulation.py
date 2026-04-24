@@ -91,11 +91,12 @@ def _apply_play_card(s, action: Action):
     if overload_val > 0:
         s.mana.overload_next += overload_val
 
-    if "幸运币" in card.name or "The Coin" in (getattr(card, "ename", "") or ""):
+    card_id = getattr(card, "card_id", "") or ""
+    if card_id == "GAME_005" or "幸运币" in card.name or "The Coin" in (getattr(card, "ename", "") or ""):
         s.mana.available += 1
         s.mana.add_modifier("temporary_crystal", 1, "this_turn")
 
-    if "伺机待发" in card.name or "Preparation" in (
+    if card_id == "CS2_033" or "伺机待发" in card.name or "Preparation" in (
         getattr(card, "ename", "") or ""
     ):
         s.mana.add_modifier("reduce_next_spell", 3, "next_spell")

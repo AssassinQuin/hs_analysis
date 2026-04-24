@@ -18,7 +18,7 @@ Data sources:
 import sys
 import os
 import json
-import random
+
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -31,8 +31,6 @@ UNIFIED_PATH = str(UNIFIED_DB_PATH)
 
 # Ensure UTF-8 stdout for Chinese output — save original before import
 # (fetch_hsreplay.py wraps stdout at import time; avoid double-wrap)
-_original_stdout = sys.stdout
-
 try:
     from analysis.data.fetch_hsreplay import init_db, get_meta_decks
 except ImportError:
@@ -85,159 +83,6 @@ def classify_playstyle(archetype_name: str) -> str:
             return 'midrange'
     
     return 'unknown'
-
-
-@dataclass
-class Particle:
-    """A single particle in the particle filter representing a hypothesized opponent deck."""
-    deck_id: str
-    deck_cards: List[int]  # dbfIds of cards in the deck
-    played_cards: set = field(default_factory=set)  # dbfIds observed so far
-    weight: float = 1.0
-
-    @property
-    def remaining_cards(self) -> List[int]:
-        return [c for c in self.deck_cards if c not in self.played_cards]
-
-
-class ParticleFilter:
-    """Particle filter for opponent deck archetype inference.
-    
-    Uses weighted particles to represent distribution over possible opponent decks.
-    Supports Bayesian weight updates, systematic resampling, and confidence gating.
-    """
-
-    def __init__(self, archetypes: list, K: int = 10):
-        """Initialize K particles from HSReplay archetype data.
-        
-        Args:
-            archetypes: list of deck dicts with keys (archetype_id, class, name, cards, winrate, usage_rate)
-            K: number of particles (default 10)
-        """
-        self.K = K
-        self.particles: List[Particle] = []
-        self._init_particles(archetypes)
-
-    def _init_particles(self, archetypes: list):
-        """Create initial particles from archetype data."""
-        if not archetypes:
-            return
-        # Create particles proportional to usage_rate
-        for i in range(self.K):
-            deck = archetypes[i % len(archetypes)]
-            self.particles.append(Particle(
-                deck_id=str(deck.get('archetype_id', i)),
-                deck_cards=list(deck.get('cards', [])),
-                weight=1.0 / self.K,
-            ))
-
-    def update(self, observed_card: int):
-        """Bayesian weight update for all particles.
-        
-        P(deck|card) ∝ P(card|deck) × P(deck)
-        Likelihood: 0.8 if card is in deck, 0.02 otherwise.
-        """
-        for p in self.particles:
-            p.played_cards.add(observed_card)
-            likelihood = 0.8 if observed_card in p.deck_cards else 0.02
-            p.weight *= likelihood
-        self._normalize()
-
-    def _normalize(self):
-        """Normalize weights to sum to 1."""
-        total = sum(p.weight for p in self.particles)
-        if total > 0:
-            for p in self.particles:
-                p.weight /= total
-
-    def resample(self):
-        """Systematic resampling when effective sample size < K/2."""
-        ess = self.get_effective_sample_size()
-        if ess >= self.K / 2:
-            return
-
-        # Systematic resampling
-        weights = [p.weight for p in self.particles]
-        cumsum = []
-        s = 0.0
-        for w in weights:
-            s += w
-            cumsum.append(s)
-
-        step = 1.0 / self.K
-        start = random.random() * step
-        new_particles = []
-        idx = 0
-        for i in range(self.K):
-            target = start + i * step
-            while idx < len(cumsum) - 1 and cumsum[idx] < target:
-                idx += 1
-            old = self.particles[idx]
-            new_particles.append(Particle(
-                deck_id=old.deck_id,
-                deck_cards=list(old.deck_cards),
-                played_cards=set(old.played_cards),
-                weight=1.0 / self.K,
-            ))
-        self.particles = new_particles
-
-    def get_confidence(self) -> float:
-        """Max weight across particles."""
-        if not self.particles:
-            return 0.0
-        return max(p.weight for p in self.particles)
-
-    def get_effective_sample_size(self) -> float:
-        """1 / Σ(w_k²)."""
-        sq_sum = sum(p.weight ** 2 for p in self.particles)
-        if sq_sum <= 0:
-            return 0.0
-        return 1.0 / sq_sum
-
-    def sample_opponent_hand(self, n_cards: int) -> List[int]:
-        """Sample likely opponent hand cards from top particles."""
-        # Get top particle
-        if not self.particles:
-            return []
-        top = max(self.particles, key=lambda p: p.weight)
-        remaining = top.remaining_cards
-        n = min(n_cards, len(remaining))
-        return random.sample(remaining, n) if n > 0 else []
-
-    def predict_opponent_play(self, state) -> Optional[object]:
-        """Predict opponent's best play using weighted particles.
-        
-        Uses confidence gating:
-        - confidence > 0.60: full particle-weighted model
-        - confidence > 0.30: top-3 particles only
-        - confidence <= 0.30: returns None (no prediction)
-        """
-        confidence = self.get_confidence()
-        if confidence <= 0.30:
-            return None
-
-        # Use top particles
-        if confidence > 0.60:
-            top_particles = self.particles
-        else:
-            sorted_p = sorted(self.particles, key=lambda p: p.weight, reverse=True)
-            top_particles = sorted_p[:3]
-
-        # Sample from top particle's remaining cards
-        if not top_particles:
-            return None
-        top = max(top_particles, key=lambda p: p.weight)
-        remaining = top.remaining_cards
-        if remaining:
-            return random.choice(remaining)
-        return None
-
-    def get_top_archetype_id(self) -> Optional[str]:
-        """Return the deck_id of the top-weighted particle."""
-        if not self.particles:
-            return None
-        top = max(self.particles, key=lambda p: p.weight)
-        return top.deck_id
 
 
 class BayesianOpponentModel:
@@ -498,7 +343,120 @@ class BayesianOpponentModel:
         self._seen_cards = []
         self.locked = None
 
+    def predict_hand(self, opp, state) -> list:
+        """预测对手手牌候选池（供 Determinizer 采样）。
+
+        基于锁定/最高后验卡组，返回尚未被观察到的卡牌列表，
+        转换为 Card 对象供 MCTS 搜索使用。
+
+        Args:
+            opp: OpponentState（用于读取已打出卡牌信息）
+            state: GameState（备用上下文）
+
+        Returns:
+            List[Card]: 对手可能持有的卡牌候选池
+        """
+        from analysis.models.card import Card
+
+        # 确定目标卡组
+        if self.locked:
+            target_id = self.locked[0]
+        else:
+            top = self.get_top_decks(1)
+            if not top:
+                return []
+            target_id = top[0][0]
+
+        deck = self._find_deck(target_id)
+        if not deck:
+            return []
+
+        # 排除已看到的卡牌
+        seen = set(self._seen_cards)
+        # 也排除对手已知已打出的牌
+        if hasattr(opp, 'opp_known_cards') and opp.opp_known_cards:
+            for kc in opp.opp_known_cards:
+                dbf = getattr(kc, 'dbf_id', None) or (kc.get('dbf_id') if isinstance(kc, dict) else None)
+                if dbf:
+                    seen.add(dbf)
+
+        remaining_dbfs = [dbf for dbf in deck["cards"] if dbf not in seen]
+        return self._dbfs_to_cards(remaining_dbfs)
+
+    def get_remaining_cards(self, opp) -> list:
+        """获取对手剩余牌库（供 Determinizer 采样牌库顺序）。
+
+        Args:
+            opp: OpponentState
+
+        Returns:
+            List[Card]: 对手剩余卡牌列表
+        """
+        seen = set(self._seen_cards)
+        if hasattr(opp, 'opp_known_cards') and opp.opp_known_cards:
+            for kc in opp.opp_known_cards:
+                dbf = getattr(kc, 'dbf_id', None) or (kc.get('dbf_id') if isinstance(kc, dict) else None)
+                if dbf:
+                    seen.add(dbf)
+
+        # 收集所有候选卡组剩余卡牌（按后验概率加权）
+        if self.locked:
+            deck = self._find_deck(self.locked[0])
+            if deck:
+                remaining = [dbf for dbf in deck["cards"] if dbf not in seen]
+                return self._dbfs_to_cards(remaining)
+            return []
+
+        # 未锁定时，合并 top-3 卡组的剩余卡牌（去重）
+        all_remaining_dbfs = []
+        seen_dbfs = set()
+        for aid, _, prob in self.get_top_decks(3):
+            deck = self._find_deck(aid)
+            if not deck:
+                continue
+            for dbf in deck["cards"]:
+                if dbf not in seen and dbf not in seen_dbfs:
+                    all_remaining_dbfs.append(dbf)
+                    seen_dbfs.add(dbf)
+
+        return self._dbfs_to_cards(all_remaining_dbfs)
+
     # ── Helpers ─────────────────────────────────────
+
+    def _dbfs_to_cards(self, dbf_ids: list) -> list:
+        """将 dbfId 列表转换为 Card 对象列表。
+
+        优先使用 from_hsdb_dict 构建完整 Card，回退到基础字段构造。
+
+        Args:
+            dbf_ids: dbfId 整数列表
+
+        Returns:
+            List[Card]: Card 对象列表
+        """
+        from analysis.models.card import Card
+
+        cards = []
+        for dbf in dbf_ids:
+            info = self.cards_by_dbf.get(dbf)
+            if info:
+                try:
+                    cards.append(Card.from_hsdb_dict(info))
+                except Exception:
+                    cards.append(Card(
+                        dbf_id=dbf,
+                        name=info.get("name", f"Card#{dbf}"),
+                        cost=info.get("cost", 0),
+                        card_type=info.get("type", ""),
+                        card_class=info.get("cardClass", ""),
+                    ))
+            else:
+                cards.append(Card(
+                    dbf_id=dbf,
+                    name=f"Card#{dbf}",
+                    cost=0,
+                ))
+        return cards
 
     def _deck_name(self, archetype_id: int) -> str:
         """Look up archetype name by ID."""
@@ -518,186 +476,3 @@ class BayesianOpponentModel:
         """Look up card name by dbfId."""
         info = self.cards_by_dbf.get(dbfId)
         return info["name"] if info else f"dbfId={dbfId}"
-
-
-# ── Demo / Test ────────────────────────────────────
-
-def demo_convergence():
-    """Demonstrate posterior convergence by simulating cards from a known archetype."""
-    print("=" * 70)
-    print("Bayesian Opponent Model -- Demo: Posterior Convergence")
-    print("=" * 70)
-
-    # Load model without class filter (see all archetypes)
-    model = BayesianOpponentModel()
-    print(f"\nLoaded {len(model.decks)} meta archetypes")
-    print(f"Card lookups: {len(model.cards_by_dbf)} cards")
-
-    if not model.decks:
-        print("No meta decks found. Run fetch_hsreplay.py first.")
-        return
-
-    # Pick a deck to simulate opponent playing
-    # Find one with known cards in unified_standard.json
-    test_deck = None
-    for deck in model.decks:
-        if not deck["cards"]:
-            continue
-        # Check if at least some signature cards are in our card database
-        known_cards = [dbf for dbf in deck["cards"] if dbf in model.cards_by_dbf]
-        if len(known_cards) >= 5:
-            test_deck = deck
-            break
-
-    if not test_deck:
-        print("Could not find a suitable test deck with enough known cards.")
-        return
-
-    print(f"\nSimulating opponent playing: {test_deck['name']} ({test_deck['class']})")
-    print(f"Signature cards: {[model.card_name(c) for c in test_deck['cards']]}")
-
-    # Show initial prior
-    top = model.get_top_decks(5)
-    print(f"\n--- Initial Prior (Top 5) ---")
-    for aid, name, prob in top:
-        bar = "#" * int(prob * 50)
-        print(f"  {name:30s}  {prob:6.2%}  {bar}")
-
-    # Simulate playing signature cards one by one
-    print(f"\n--- Sequential Updates ---")
-    for i, dbf in enumerate(test_deck["cards"]):
-        card_name = model.card_name(dbf)
-        model.update(dbf)
-
-        top = model.get_top_decks(3)
-        best = top[0]
-        lock_str = " [LOCKED]" if model.locked else ""
-
-        print(f"\n  Turn {i+1}: Played {card_name}")
-        for aid, name, prob in top:
-            bar = "#" * int(prob * 50)
-            print(f"    {name:30s}  {prob:6.2%}  {bar}")
-        print(f"    Best: {best[1]} @ {best[2]:.2%}{lock_str}")
-
-        if model.locked:
-            break
-
-    # Final predictions
-    print(f"\n--- Predictions ---")
-    preds = model.predict_next_actions(5)
-    for p in preds:
-        print(f"  {p['name']:30s}  P={p['probability']:.2%}")
-
-
-def demo_class_filter():
-    """Demonstrate class filtering and prior construction."""
-    print(f"\n{'=' * 70}")
-    print("Demo: Class Filtering")
-    print("=" * 70)
-
-    for cls in ["MAGE", "WARRIOR", "ROGUE"]:
-        model = BayesianOpponentModel(player_class=cls)
-        if not model.decks:
-            print(f"\n  {cls}: No archetypes found")
-            continue
-        print(f"\n  {cls}: {len(model.decks)} archetypes")
-        top = model.get_top_decks(3)
-        for aid, name, prob in top:
-            print(f"    {name:30s}  prior={prob:6.2%}")
-
-
-def demo_reset_and_uniform():
-    """Demonstrate reset behavior and uniform prior fallback."""
-    print(f"\n{'=' * 70}")
-    print("Demo: Reset & Uniform Prior Fallback")
-    print("=" * 70)
-
-    model = BayesianOpponentModel(player_class="MAGE")
-    if not model.decks:
-        print("  No MAGE decks found.")
-        return
-
-    # Initial prior
-    print(f"\n  Initial prior for MAGE ({len(model.decks)} decks):")
-    for aid, name, prob in model.get_top_decks(3):
-        print(f"    {name}: {prob:.2%}")
-
-    # Update with a card
-    if model.decks[0]["cards"]:
-        first_card = model.decks[0]["cards"][0]
-        model.update(first_card)
-        print(f"\n  After seeing {model.card_name(first_card)}:")
-        for aid, name, prob in model.get_top_decks(3):
-            print(f"    {name}: {prob:.2%}")
-
-    # Reset
-    model.reset()
-    print(f"\n  After reset:")
-    for aid, name, prob in model.get_top_decks(3):
-        print(f"    {name}: {prob:.2%}")
-    print(f"  Locked: {model.locked}")
-
-
-def demo_lock_behavior():
-    """Demonstrate lock/unlock threshold behavior."""
-    print(f"\n{'=' * 70}")
-    print("Demo: Lock Threshold Behavior (60%)")
-    print("=" * 70)
-
-    model = BayesianOpponentModel(player_class="HUNTER")
-    if not model.decks:
-        print("  No HUNTER decks found.")
-        return
-
-    # Find a hunter deck with cards
-    test_deck = None
-    for d in model.decks:
-        if d["cards"]:
-            test_deck = d
-            break
-
-    if not test_deck:
-        print("  No HUNTER decks with signature cards.")
-        return
-
-    print(f"\n  Simulating: {test_deck['name']}")
-    print(f"  Lock threshold: {LOCK_THRESHOLD:.0%}")
-
-    for i, dbf in enumerate(test_deck["cards"]):
-        model.update(dbf)
-        best_id, best_name, best_prob = model.get_top_decks(1)[0]
-        status = "[LOCKED]" if model.locked else "  open"
-        print(f"  Card {i+1}: best={best_name:25s} P={best_prob:.2%} {status}")
-        if model.locked:
-            break
-
-    # Reset and test with a conflicting card
-    model.reset()
-    # Feed a card from a DIFFERENT deck to see no lock
-    other_decks = [d for d in model.decks
-                   if d["archetype_id"] != test_deck["archetype_id"] and d["cards"]]
-    if other_decks:
-        other_card = other_decks[0]["cards"][0]
-        model.update(other_card)
-        best_id, best_name, best_prob = model.get_top_decks(1)[0]
-        print(f"\n  After 1 card from different deck ({model.card_name(other_card)}):")
-        print(f"  best={best_name:25s} P={best_prob:.2%} (not locked)")
-
-
-def main():
-    """Run all demos."""
-    print("=" * 66)
-    print("  Bayesian Opponent Model -- Test & Demonstration")
-    print("=" * 66)
-
-    demo_convergence()
-    demo_class_filter()
-    demo_reset_and_uniform()
-    demo_lock_behavior()
-
-    print(f"\n{'-' * 70}")
-    print("All demos complete.")
-
-
-if __name__ == "__main__":
-    main()

@@ -41,14 +41,50 @@ class StateBridge:
         game_state = bridge.convert(hslog_game, player_index=0)
     """
 
-    def __init__(self, card_lookup=None):
-        """Initialize with optional card database lookup.
+    def __init__(self, card_lookup=None, entity_cache=None, deck_cards: Optional[List[Card]] = None):
+        """Initialize with optional card database lookup and entity cache.
 
         Args:
             card_lookup: callable(card_id: str) → Card or None
                          Used to populate hand cards with full card data.
+                         Defaults to HSCardDB lookup if not provided.
+            entity_cache: EntityCache instance from GameTracker.
+                          Used to look up card_id and tags by entity_id
+                          when hslog EntityTreeExporter doesn't provide them.
+            deck_cards: Optional list of Card objects from the current deck.
+                        Used to match anonymous hand cards (no card_id) by cost.
         """
+        if card_lookup is None:
+            card_lookup = self._default_card_lookup()
         self.card_lookup = card_lookup
+        self.entity_cache = entity_cache
+        self.deck_cards = deck_cards or []
+
+        # Build cost-based index from deck_cards for anonymous card matching
+        # cost → list of Card objects with that cost
+        self._deck_cost_index: dict[int, List[Card]] = {}
+        for card in self.deck_cards:
+            cost = card.cost
+            self._deck_cost_index.setdefault(cost, []).append(card)
+
+    @staticmethod
+    def _default_card_lookup():
+        """Create a default card_lookup using HSCardDB."""
+        try:
+            from analysis.data.hsdb import get_db
+            from analysis.models.card import Card
+            _db = get_db()
+
+            def _lookup(card_id: str):
+                if not card_id:
+                    return None
+                raw = _db.get_card(card_id)
+                if raw:
+                    return Card.from_hsdb_dict(raw)
+                return None
+            return _lookup
+        except Exception:
+            return None
 
     def convert(self, game, player_index: int = 0) -> GameState:
         """Convert an hslog Game object to a GameState.
@@ -234,7 +270,7 @@ class StateBridge:
         return minion_data
 
     def _extract_hand(self, player) -> List[Card]:
-        """Extract hand cards. Uses card_lookup if available."""
+        """Extract hand cards. Uses entity_cache for card_id when hslog doesn't provide it."""
         try:
             hand_cards = []
             zone_position = {}
@@ -254,21 +290,78 @@ class StateBridge:
                 try:
                     card = None
 
-                    # Try to get full card data from lookup
-                    if self.card_lookup is not None:
-                        card = self.card_lookup(entity.card_id)
+                    # Try to get card_id: first from hslog entity, then from entity_cache
+                    card_id = entity.card_id
+                    if (not card_id) and self.entity_cache is not None:
+                        entity_id = entity.tags.get(GameTag.ENTITY_ID, 0)
+                        if entity_id:
+                            cached_id = self.entity_cache.get_card_id(entity_id)
+                            if cached_id:
+                                card_id = cached_id
 
-                    # If lookup failed or not provided, create minimal card
+                    # Try HSCardDB lookup with resolved card_id
+                    if card_id and self.card_lookup is not None:
+                        card = self.card_lookup(card_id)
+
+                    # If lookup failed or not provided, try deck card matching
+                    if card is None and not card_id and self._deck_cost_index:
+                        # Anonymous card — try to match by cost from deck
+                        tags = entity.tags
+                        cache_tags = {}
+                        if self.entity_cache is not None:
+                            entity_id = tags.get(GameTag.ENTITY_ID, 0)
+                            if entity_id:
+                                cache_tags = self.entity_cache.get_tags(entity_id)
+
+                        cost_val = cache_tags.get(GameTag.COST)
+                        if cost_val is None:
+                            cost_val = tags.get(GameTag.COST, 0)
+
+                        candidates = self._deck_cost_index.get(int(cost_val), [])
+                        if len(candidates) == 1:
+                            # Unique cost match — use it
+                            card = Card(
+                                card_id=candidates[0].card_id,
+                                dbf_id=candidates[0].dbf_id,
+                                name=candidates[0].name,
+                                cost=int(cost_val),
+                                card_type=candidates[0].card_type,
+                                attack=candidates[0].attack,
+                                health=candidates[0].health,
+                                card_class=candidates[0].card_class,
+                            )
+
+                    # If still no match, create card from merged tags
                     if card is None:
                         tags = entity.tags
+                        # Merge tags from entity_cache if available
+                        cache_tags = {}
+                        if self.entity_cache is not None:
+                            entity_id = tags.get(GameTag.ENTITY_ID, 0)
+                            if entity_id:
+                                cache_tags = self.entity_cache.get_tags(entity_id)
+
+                        # Resolve tags: cache tags override entity tags (cache is more complete)
+                        def _tag(key, default=0):
+                            v = cache_tags.get(key)
+                            if v is not None:
+                                return v
+                            return tags.get(key, default)
+
                         # Convert IntEnum to string
-                        raw_ct = tags.get(GameTag.CARDTYPE, CardType.MINION)
-                        ct_str = {CardType.MINION: "MINION", CardType.SPELL: "SPELL", CardType.WEAPON: "WEAPON", CardType.HERO: "HERO", CardType.LOCATION: "LOCATION"}.get(raw_ct, "MINION")
+                        raw_ct = _tag(GameTag.CARDTYPE, CardType.MINION)
+                        ct_str = {CardType.MINION: "MINION", CardType.SPELL: "SPELL",
+                                  CardType.WEAPON: "WEAPON", CardType.HERO: "HERO",
+                                  CardType.LOCATION: "LOCATION"}.get(raw_ct, "MINION")
+
                         card = Card(
-                            dbf_id=getattr(entity, "dbf_id", 0),
-                            name=entity.card_id or "",
-                            cost=tags.get(GameTag.COST, 0),
+                            card_id=card_id or "",
+                            dbf_id=0,
+                            name=card_id or "",
+                            cost=int(_tag(GameTag.COST, 0)),
                             card_type=ct_str,
+                            attack=int(_tag(GameTag.ATK, 0)),
+                            health=int(_tag(GameTag.HEALTH, 0)),
                         )
 
                     hand_cards.append(card)

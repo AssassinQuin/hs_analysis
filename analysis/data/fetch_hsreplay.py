@@ -12,12 +12,12 @@ Strategy:
 Table: card_stats(dbfId, fetch_date, winrate, deck_winrate, play_rate,
                   keep_rate, avg_turns, class_stats)
 """
+
 import json
 import sys
 import io
 import os
 import sqlite3
-import time
 import math
 import random
 import urllib.request
@@ -27,16 +27,20 @@ from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 
 # Guard against double-wrapping stdout (other modules may already wrap it)
-if not isinstance(sys.stdout, io.TextIOWrapper) or getattr(sys.stdout, 'encoding', '') != 'utf-8':
+if (
+    not isinstance(sys.stdout, io.TextIOWrapper)
+    or getattr(sys.stdout, "encoding", "") != "utf-8"
+):
     try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace"
+        )
     except (AttributeError, io.UnsupportedOperation):
         pass
 
 from analysis.config import (
-    HSREPLAY_API_KEY,
+    HSREPLAY_CARDS_URL,
     HSREPLAY_ARCHETYPES_URL,
-    DATA_DIR,
     UNIFIED_DB_PATH,
     SCORING_REPORT_PATH,
     HSREPLAY_CACHE_DB,
@@ -51,10 +55,9 @@ DB_PATH = str(HSREPLAY_CACHE_DB)
 UNIFIED_PATH = str(UNIFIED_DB_PATH)
 V2_REPORT_PATH = str(SCORING_REPORT_PATH)
 
-# ── API Config ─────────────────────────────────────
-API_HEADERS = get_api_headers()
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 log = logging.getLogger(__name__)
 
 
@@ -103,6 +106,7 @@ def init_db(db_path=DB_PATH):
 
 # ── API Fetching ───────────────────────────────────
 
+
 def fetch_json(url, timeout=60):
     """Fetch JSON from URL using urllib. Returns parsed dict or None on error."""
     headers = get_api_headers()
@@ -125,33 +129,33 @@ def fetch_json(url, timeout=60):
 
 def fetch_card_stats_api():
     """Fetch card statistics from HSReplay API.
-    
+
     Returns list of card stat dicts, or None on failure.
     """
     data = fetch_json(HSREPLAY_CARDS_URL, timeout=60)
     if data is None:
         return None
-    
+
     if isinstance(data, dict):
         cards = data.get("cards", data.get("data", []))
     elif isinstance(data, list):
         cards = data
     else:
         return None
-    
+
     log.info(f"Received {len(cards)} card records from HSReplay")
     return cards
 
 
 def fetch_archetypes():
     """Fetch archetype/deck composition data from HSReplay.
-    
+
     Returns list of archetype dicts with signature core cards.
     """
     data = fetch_json(HSREPLAY_ARCHETYPES_URL, timeout=60)
     if data is None:
         return []
-    
+
     archetypes = data if isinstance(data, list) else data.get("data", [])
     log.info(f"Received {len(archetypes)} archetype records")
     return archetypes
@@ -159,16 +163,17 @@ def fetch_archetypes():
 
 # ── Derived Stats Generation ───────────────────────
 
+
 def generate_card_stats_from_v2(archetypes):
     """Derive realistic card statistics from V2 scores + archetype data.
-    
+
     This is used when the HSReplay card stats API is unavailable (Premium).
     Generates winrate, play_rate, keep_rate etc. that are consistent
     with V2 scoring and archetype composition data.
-    
+
     Args:
         archetypes: list of archetype dicts from HSReplay API
-        
+
     Returns:
         list of (dbfId, fetch_date, winrate, deck_winrate, play_rate,
                  keep_rate, avg_turns, class_stats) tuples
@@ -176,14 +181,14 @@ def generate_card_stats_from_v2(archetypes):
     # Load V2 scores and card data
     cards_by_dbf = {}
     v2_scores = {}
-    
+
     if os.path.exists(UNIFIED_PATH):
         with open(UNIFIED_PATH, "r", encoding="utf-8") as f:
             for c in json.load(f):
                 dbf = c.get("dbfId")
                 if dbf:
                     cards_by_dbf[dbf] = c
-    
+
     if os.path.exists(V2_REPORT_PATH):
         with open(V2_REPORT_PATH, "r", encoding="utf-8") as f:
             report = json.load(f)
@@ -191,12 +196,12 @@ def generate_card_stats_from_v2(archetypes):
                 # Match by name since V2 report may not have dbfId
                 name = c.get("name", "")
                 v2_scores[name] = c.get("score", 0)
-    
+
     # Build archetype membership: which cards appear in which archetypes
     card_archetype_count = Counter()
     card_classes = defaultdict(set)
     total_archetypes = 0
-    
+
     for arch in archetypes:
         sig = arch.get("standard_ccp_signature_core")
         if not sig:
@@ -209,55 +214,57 @@ def generate_card_stats_from_v2(archetypes):
         for dbf in components:
             card_archetype_count[dbf] += 1
             card_classes[dbf].add(cls)
-    
-    log.info(f"Archetype membership: {total_archetypes} archetypes, "
-             f"{len(card_archetype_count)} unique cards in signatures")
-    
+
+    log.info(
+        f"Archetype membership: {total_archetypes} archetypes, "
+        f"{len(card_archetype_count)} unique cards in signatures"
+    )
+
     # Generate stats for all cards in unified DB
     today = datetime.now().strftime("%Y-%m-%d")
     records = []
-    
+
     for dbf, card in cards_by_dbf.items():
         cost = card.get("cost", 0)
         card_type = card.get("type", "")
         name = card.get("name", "")
-        
+
         # Base V2 score (normalized)
         v2 = v2_scores.get(name, 0)
-        
+
         # Archetype appearance count
         arch_count = card_archetype_count.get(dbf, 0)
-        
+
         # --- Winrate derivation ---
         # Higher V2 score → higher expected winrate
         # V2 scores range roughly -10 to +40, map to 48%-58% winrate range
         # Use sigmoid-like mapping
         v2_norm = max(0, v2 + 10) / 50.0  # normalize to [0, 1] range
         base_winrate = 0.47 + 0.12 * v2_norm  # 47% - 59%
-        
+
         # Archetype presence bonus: cards in many archetypes tend to be good
         if arch_count > 0:
             arch_bonus = min(0.03, 0.005 * math.log1p(arch_count))
         else:
             arch_bonus = 0.0
-        
+
         winrate = min(0.60, max(0.43, base_winrate + arch_bonus))
-        
+
         # --- Deck winrate (when card is in deck) ---
         # Slightly correlated with base winrate, with more variance
         deck_winrate = winrate + 0.01 * (v2_norm - 0.5)
         deck_winrate = min(0.62, max(0.42, deck_winrate))
-        
+
         # --- Play rate ---
         # Strongly correlated with archetype membership + V2 score
         if arch_count > 0:
             play_rate = 0.01 + 0.15 * (arch_count / max(1, total_archetypes))
-            play_rate *= (0.5 + 0.5 * v2_norm)  # V2 quality multiplier
+            play_rate *= 0.5 + 0.5 * v2_norm  # V2 quality multiplier
         else:
             # Cards not in any archetype signature: lower play rate
             play_rate = 0.002 + 0.01 * v2_norm
         play_rate = min(0.30, max(0.001, play_rate))
-        
+
         # --- Keep rate (mulligan) ---
         # Low-cost cards kept more; high-quality cards kept more
         if cost <= 2:
@@ -272,7 +279,7 @@ def generate_card_stats_from_v2(archetypes):
             keep_base = 0.15
         keep_rate = keep_base + 0.15 * v2_norm
         keep_rate = min(0.95, max(0.05, keep_rate))
-        
+
         # --- Average turns ---
         if card_type == "MINION":
             avg_turns = max(1.0, min(15.0, 1.0 + cost * 0.8 + random.gauss(0, 0.5)))
@@ -282,21 +289,26 @@ def generate_card_stats_from_v2(archetypes):
             avg_turns = max(1.0, min(15.0, 2.0 + cost * 0.6 + random.gauss(0, 0.5)))
         else:
             avg_turns = max(1.0, min(15.0, 3.0 + cost * 0.5 + random.gauss(0, 0.5)))
-        
+
         # --- Class stats ---
         classes = card_classes.get(dbf, {card.get("cardClass", "NEUTRAL")})
-        class_stats = {cls: {"winrate": winrate, "play_rate": play_rate} for cls in classes}
-        
-        records.append((
-            int(dbf), today,
-            round(winrate, 4),
-            round(deck_winrate, 4),
-            round(play_rate, 6),
-            round(keep_rate, 4),
-            round(avg_turns, 2),
-            json.dumps(class_stats, ensure_ascii=False)
-        ))
-    
+        class_stats = {
+            cls: {"winrate": winrate, "play_rate": play_rate} for cls in classes
+        }
+
+        records.append(
+            (
+                int(dbf),
+                today,
+                round(winrate, 4),
+                round(deck_winrate, 4),
+                round(play_rate, 6),
+                round(keep_rate, 4),
+                round(avg_turns, 2),
+                json.dumps(class_stats, ensure_ascii=False),
+            )
+        )
+
     log.info(f"Generated stats for {len(records)} cards")
     return records
 
@@ -305,20 +317,22 @@ def extract_api_card_stats(api_cards):
     """Extract stats from real HSReplay API response."""
     today = datetime.now().strftime("%Y-%m-%d")
     records = []
-    
+
     for card in api_cards:
         dbf_id = card.get("dbf_id", card.get("dbfId", card.get("id")))
         if dbf_id is None:
             continue
-        
+
         winrate = card.get("winrate", card.get("win_rate"))
         if winrate is not None:
             winrate = float(winrate)
         deck_winrate = card.get("deck_winrate", card.get("winrate_when_in_deck"))
         if deck_winrate is not None:
             deck_winrate = float(deck_winrate)
-        play_rate = card.get("playrate", card.get("play_rate",
-                         card.get("popularity", card.get("include_rate"))))
+        play_rate = card.get(
+            "playrate",
+            card.get("play_rate", card.get("popularity", card.get("include_rate"))),
+        )
         if play_rate is not None:
             play_rate = float(play_rate)
         keep_rate = card.get("keep_rate")
@@ -332,16 +346,25 @@ def extract_api_card_stats(api_cards):
             class_stats = json.dumps(class_stats, ensure_ascii=False)
         elif not class_stats:
             class_stats = "{}"
-        
-        records.append((
-            int(dbf_id), today, winrate, deck_winrate,
-            play_rate, keep_rate, avg_turns, class_stats
-        ))
-    
+
+        records.append(
+            (
+                int(dbf_id),
+                today,
+                winrate,
+                deck_winrate,
+                play_rate,
+                keep_rate,
+                avg_turns,
+                class_stats,
+            )
+        )
+
     return records
 
 
 # ── Data Storage ───────────────────────────────────
+
 
 def store_card_stats(conn, records):
     """Insert card stats into SQLite."""
@@ -352,7 +375,7 @@ def store_card_stats(conn, records):
            (dbfId, fetch_date, winrate, deck_winrate, play_rate,
             keep_rate, avg_turns, class_stats)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        records
+        records,
     )
     conn.commit()
     log.info(f"Stored {len(records)} card stat records")
@@ -363,22 +386,22 @@ def store_meta_decks(conn, archetypes):
     """Store archetype data for Bayesian opponent modeling."""
     if not archetypes:
         return 0
-    
+
     today = datetime.now().strftime("%Y-%m-%d")
     stored = 0
-    
+
     for arch in archetypes:
         arch_id = arch.get("id")
         if arch_id is None:
             continue
-        
+
         sig = arch.get("standard_ccp_signature_core")
         cards_list = []
         if sig:
             cards_list = sig.get("components", sig.get("components_8", []))
-        
+
         cards_json = json.dumps(cards_list)
-        
+
         conn.execute(
             """INSERT OR REPLACE INTO meta_decks
                (archetype_id, class, name, cards_json, winrate,
@@ -392,10 +415,10 @@ def store_meta_decks(conn, archetypes):
                 None,  # winrate not available from this endpoint
                 float(len(cards_list)) / 30.0 if cards_list else 0.0,
                 today,
-            )
+            ),
         )
         stored += 1
-    
+
     conn.commit()
     log.info(f"Stored {stored} meta deck records")
     return stored
@@ -411,30 +434,29 @@ def cleanup_old_data(conn, days=CACHE_DAYS):
 
 # ── Cache Retrieval ────────────────────────────────
 
+
 def get_cached_stats(conn, dbf_id=None, date=None):
     """Retrieve cached card stats."""
     if dbf_id:
         row = conn.execute(
             """SELECT * FROM card_stats 
                WHERE dbfId = ? ORDER BY fetch_date DESC LIMIT 1""",
-            (dbf_id,)
+            (dbf_id,),
         ).fetchone()
         return _row_to_dict(row) if row else None
-    
+
     if date:
         rows = conn.execute(
             "SELECT * FROM card_stats WHERE fetch_date = ?", (date,)
         ).fetchall()
     else:
-        recent = conn.execute(
-            "SELECT MAX(fetch_date) FROM card_stats"
-        ).fetchone()[0]
+        recent = conn.execute("SELECT MAX(fetch_date) FROM card_stats").fetchone()[0]
         if not recent:
             return {}
         rows = conn.execute(
             "SELECT * FROM card_stats WHERE fetch_date = ?", (recent,)
         ).fetchall()
-    
+
     return {row[0]: _row_to_dict(row) for row in rows}
 
 
@@ -453,26 +475,26 @@ def get_all_cached_stats(conn):
 
 def get_meta_decks(conn):
     """Get most recent meta deck data."""
-    recent = conn.execute(
-        "SELECT MAX(fetch_date) FROM meta_decks"
-    ).fetchone()[0]
+    recent = conn.execute("SELECT MAX(fetch_date) FROM meta_decks").fetchone()[0]
     if not recent:
         return []
-    
+
     rows = conn.execute(
         "SELECT * FROM meta_decks WHERE fetch_date = ?", (recent,)
     ).fetchall()
-    
+
     decks = []
     for row in rows:
-        decks.append({
-            "archetype_id": row[0],
-            "class": row[1],
-            "name": row[2],
-            "cards": json.loads(row[3]) if row[3] else [],
-            "winrate": row[4],
-            "usage_rate": row[5],
-        })
+        decks.append(
+            {
+                "archetype_id": row[0],
+                "class": row[1],
+                "name": row[2],
+                "cards": json.loads(row[3]) if row[3] else [],
+                "winrate": row[4],
+                "usage_rate": row[5],
+            }
+        )
     return decks
 
 
@@ -502,17 +524,25 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
         log.info(f"No deck codes file at {deck_codes_path}")
         return 0
 
-    # Use lightweight hero dbfId -> class map first; only fallback to card DB when unknown.
+    # Use lightweight hero dbfId -> class map first; fallback to card DB for unknown hero ids.
     from analysis.data.hsdb import get_db, get_hero_class_map
+
     hero_class_map = get_hero_class_map()
     db = None
 
     # Class mapping from cardClass string to enum-like
     CLASS_MAP = {
-        "WARRIOR": "WARRIOR", "HUNTER": "HUNTER", "DRUID": "DRUID",
-        "MAGE": "MAGE", "PALADIN": "PALADIN", "PRIEST": "PRIEST",
-        "ROGUE": "ROGUE", "SHAMAN": "SHAMAN", "WARLOCK": "WARLOCK",
-        "DEMONHUNTER": "DEMONHUNTER", "DEATHKNIGHT": "DEATHKNIGHT",
+        "WARRIOR": "WARRIOR",
+        "HUNTER": "HUNTER",
+        "DRUID": "DRUID",
+        "MAGE": "MAGE",
+        "PALADIN": "PALADIN",
+        "PRIEST": "PRIEST",
+        "ROGUE": "ROGUE",
+        "SHAMAN": "SHAMAN",
+        "WARLOCK": "WARLOCK",
+        "DEMONHUNTER": "DEMONHUNTER",
+        "DEATHKNIGHT": "DEATHKNIGHT",
     }
 
     # Read deck codes
@@ -540,7 +570,7 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
                 if cls:
                     hero_class = CLASS_MAP.get(cls.upper(), cls.upper())
                 else:
-                    # Rare fallback for unknown hero dbfId (e.g., unusual hero IDs).
+                    # Rare fallback for non-standard hero DBF ids.
                     if db is None:
                         db = get_db(load_xml=True, build_indexes=False)
                     card = db.get_by_dbf(hero_dbf)
@@ -549,10 +579,10 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
                         hero_class = CLASS_MAP.get(cls.upper(), cls.upper())
 
             # Convert cards to dbfId list
-            cards_list = [dbf for dbf, count in deck.cards]
+            cards_list = [dbf for dbf, _ in deck.cards]
 
             archetype_id = 9000 + i
-            name = f"Custom_{hero_class}_{i+1}"
+            name = f"Custom_{hero_class}_{i + 1}"
 
             conn.execute(
                 """INSERT OR REPLACE INTO meta_decks
@@ -567,11 +597,11 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
                     None,
                     1.0 / len(codes),  # uniform usage rate
                     today,
-                )
+                ),
             )
             stored += 1
         except Exception as e:
-            log.debug(f"Failed to decode deck code #{i+1}: {e}")
+            log.debug(f"Failed to decode deck code #{i + 1}: {e}")
             continue
 
     conn.commit()
@@ -595,20 +625,21 @@ def _row_to_dict(row):
 
 # ── Main Pipeline ──────────────────────────────────
 
+
 def main():
     print("=" * 60)
     print("HSReplay Data Fetcher")
     print("=" * 60)
-    
+
     conn = init_db()
     archetypes = []
-    
+
     # 1. Fetch archetype data (this endpoint works)
     archetypes = fetch_archetypes()
     if archetypes:
         stored = store_meta_decks(conn, archetypes)
         print(f"\n  Meta archetypes: {stored} stored")
-    
+
     # 2. Try API for card stats
     api_cards = fetch_card_stats_api()
     if api_cards:
@@ -621,18 +652,18 @@ def main():
         records = generate_card_stats_from_v2(archetypes)
         stored = store_card_stats(conn, records)
         print(f"  Card stats (derived): {stored} records")
-    
+
     # 4. Cleanup
     cleanup_old_data(conn)
-    
+
     # 5. Verification
     print(f"\n{'─' * 60}")
     print("CACHE STATUS")
     print(f"{'─' * 60}")
-    
+
     all_stats = get_all_cached_stats(conn)
     print(f"  Total cards with stats: {len(all_stats)}")
-    
+
     if all_stats:
         winrates = [s["winrate"] for s in all_stats.values() if s["winrate"]]
         play_rates = [s["play_rate"] for s in all_stats.values() if s["play_rate"]]
@@ -640,30 +671,31 @@ def main():
             print(f"  Winrate range: {min(winrates):.1%} - {max(winrates):.1%}")
         if play_rates:
             print(f"  Play rate range: {min(play_rates):.6f} - {max(play_rates):.6f}")
-        
+
         # Top 10 by play rate
-        by_play = sorted(all_stats.values(),
-                        key=lambda x: x.get("play_rate") or 0, reverse=True)[:10]
-        print(f"\n  Top 10 by play rate:")
+        by_play = sorted(
+            all_stats.values(), key=lambda x: x.get("play_rate") or 0, reverse=True
+        )[:10]
+        print("\n  Top 10 by play rate:")
         names = {}
         if os.path.exists(UNIFIED_PATH):
             with open(UNIFIED_PATH, "r", encoding="utf-8") as f:
                 for c in json.load(f):
                     names[c.get("dbfId")] = c.get("name", "?")
-        
+
         for s in by_play:
             name = names.get(s["dbfId"], f"dbfId={s['dbfId']}")
             wr = f"{s['winrate']:.1%}" if s["winrate"] else "N/A"
             pr = f"{s['play_rate']:.4f}" if s["play_rate"] else "N/A"
             print(f"    {name}: WR={wr}, PlayRate={pr}")
-    
+
     meta = get_meta_decks(conn)
     if meta:
         active = [d for d in meta if d["cards"]]
         print(f"\n  Meta decks: {len(active)} with signature cards")
         for d in active[:5]:
             print(f"    {d['name']} ({d['class']}): {len(d['cards'])} core cards")
-    
+
     conn.close()
     print(f"\n{'─' * 60}")
     print("Done.")
