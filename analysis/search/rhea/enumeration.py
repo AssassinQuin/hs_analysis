@@ -34,15 +34,33 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
             continue
         if card.card_type.upper() == "MINION":
             if not state.board_full():
-                for pos in range(len(state.board) + 1):
-                    actions.append(
-                        Action(
-                            action_type=ActionType.PLAY,
-                            card_index=idx,
-                            position=pos,
-                            meta_tags=frozenset(tags),
+                # Check if battlecry needs a target
+                try:
+                    targets = _get_spell_target_resolver().resolve_targets(state, card)
+                except Exception:
+                    targets = []
+                if targets:
+                    for tgt in targets:
+                        for pos in range(len(state.board) + 1):
+                            actions.append(
+                                Action(
+                                    action_type=ActionType.PLAY_WITH_TARGET,
+                                    card_index=idx,
+                                    target_index=tgt,
+                                    position=pos,
+                                    meta_tags=frozenset(tags),
+                                )
+                            )
+                else:
+                    for pos in range(len(state.board) + 1):
+                        actions.append(
+                            Action(
+                                action_type=ActionType.PLAY,
+                                card_index=idx,
+                                position=pos,
+                                meta_tags=frozenset(tags),
+                            )
                         )
-                    )
         elif card.card_type.upper() == "HERO":
             actions.append(
                 Action(
@@ -124,14 +142,31 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
             )
         elif card.card_type.upper() == "LOCATION":
             if not state.location_full():
-                actions.append(
-                    Action(
-                        action_type=ActionType.PLAY,
-                        card_index=idx,
-                        position=0,
-                        meta_tags=frozenset(tags),
+                # Check if location effect needs a target when activated
+                try:
+                    targets = _get_spell_target_resolver().resolve_targets(state, card)
+                except Exception:
+                    targets = []
+                if targets:
+                    for tgt in targets:
+                        actions.append(
+                            Action(
+                                action_type=ActionType.ACTIVATE_LOCATION,
+                                card_index=idx,
+                                target_index=tgt,
+                                position=0,
+                                meta_tags=frozenset(tags),
+                            )
+                        )
+                else:
+                    actions.append(
+                        Action(
+                            action_type=ActionType.PLAY,
+                            card_index=idx,
+                            position=0,
+                            meta_tags=frozenset(tags),
+                        )
                     )
-                )
 
     enemy_taunts = [m for m in state.opponent.board if m.has_taunt]
 
@@ -215,12 +250,37 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
 
     for loc_idx, loc in enumerate(state.locations):
         if loc.durability > 0 and loc.cooldown_current == 0:
-            actions.append(
-                Action(
-                    action_type=ActionType.ACTIVATE_LOCATION,
-                    source_index=loc_idx,
+            loc_text = getattr(loc, 'text', '') or ''
+            # Check if location effect needs a target
+            loc_targets = []
+            if loc_text:
+                try:
+                    from analysis.search.engine.mechanics.spell_target_resolver import TargetSpec
+                    resolver = _get_spell_target_resolver()
+                    # Create a minimal card-like object for the resolver
+                    class _LocCard:
+                        def __init__(self, text):
+                            self.text = text
+                            self.card_type = "LOCATION"
+                    loc_targets = resolver.resolve_targets(state, _LocCard(loc_text))
+                except Exception:
+                    loc_targets = []
+            if loc_targets:
+                for tgt in loc_targets:
+                    actions.append(
+                        Action(
+                            action_type=ActionType.ACTIVATE_LOCATION,
+                            source_index=loc_idx,
+                            target_index=tgt,
+                        )
+                    )
+            else:
+                actions.append(
+                    Action(
+                        action_type=ActionType.ACTIVATE_LOCATION,
+                        source_index=loc_idx,
+                    )
                 )
-            )
 
     actions.append(Action(action_type=ActionType.END_TURN))
 

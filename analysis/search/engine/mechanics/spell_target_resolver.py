@@ -1,12 +1,12 @@
-"""SpellTargetResolver — data-driven spell target resolution.
+"""TargetResolver — data-driven target resolution for ALL card types.
 
 Architecture:
   1. Parse card text → TargetSpec (side + entity_type + conditions)
   2. Apply TargetSpec to GameState → list of target indices
   3. Target encoding: 0=enemy hero, 1..N=enemy minion, -1..-M=friendly minion
 
-Target conditions are parsed from CN/EN card text via regex patterns.
-All Standard (Year of the Hydra) targeting conditions are supported.
+Supports: SPELL, MINION (battlecry), LOCATION, HERO_POWER, WEAPON, HERO
+All Standard (Year of the Hydra) targeting conditions are covered.
 """
 
 from __future__ import annotations
@@ -96,6 +96,33 @@ def _cost_geq(threshold: int) -> Callable[[Minion], bool]:
     return lambda m: m.cost >= threshold
 
 
+def _health_leq(threshold: int) -> Callable[[Minion], bool]:
+    return lambda m: m.health <= threshold
+
+
+def _has_race_tag(minion: Minion) -> bool:
+    """Check if minion has any race (not blank)."""
+    race = getattr(minion, 'race', '') or ''
+    return race != '' and race.upper() not in ('', 'NONE', 'ALL')
+
+
+def _is_location(minion: Minion) -> bool:
+    """Check if entity is a Location (by card_ref type or special check)."""
+    card_ref = getattr(minion, 'card_ref', None)
+    if card_ref:
+        return getattr(card_ref, 'card_type', '').upper() == 'LOCATION'
+    return False
+
+
+class _SelfHPThreshold:
+    """Dynamic threshold: minion HP ≤ source card's health attribute."""
+    def __init__(self, source_health: int):
+        self.threshold = source_health
+
+    def __call__(self, minion: Minion) -> bool:
+        return minion.health <= self.threshold
+
+
 # ── TargetSpec ─────────────────────────────────────────────────────
 
 @dataclass
@@ -121,7 +148,7 @@ _SIDE_FRIENDLY_MINION = [
 ]
 _SIDE_ANY_MINION = [
     re.compile(r"(?:a|an|one)\s+minion", re.IGNORECASE),
-    re.compile(r"对一个?[^。]*?随从"),  # "对一个未受伤的随从" — allows conditions between
+    re.compile(r"一个.{0,20}?随从"),  # "一个攻击力≥7的随从" — allow longer conditions
 ]
 _SIDE_ENEMY_HERO = [
     re.compile(r"enemy\s+hero", re.IGNORECASE),
@@ -138,6 +165,10 @@ _SIDE_ENEMY_CHARACTER = [
 _SIDE_ANY_CHARACTER = [
     re.compile(r"(?:any|a)\s+character", re.IGNORECASE),
     re.compile(r"一个?角色"),
+]
+_SIDE_ENEMY_LOCATION = [
+    re.compile(r"敌方地标"),
+    re.compile(r"enemy\s+location", re.IGNORECASE),
 ]
 
 # --- AOE patterns ---
@@ -167,11 +198,11 @@ _COND_FROZEN = [
     re.compile(r"frozen\s+(?:minion|character)", re.IGNORECASE),
 ]
 _COND_TAUNT = [
-    re.compile(r"嘲讽(?:的)?(?:随从|角色)"),
+    re.compile(r"嘲讽"),
     re.compile(r"(?:minion|character)\s+with\s+taunt", re.IGNORECASE),
 ]
-_COND_RACE_CN = re.compile(r"友方(.+?)(?:随从|角色)")
-_COND_RACE_EN = re.compile(r"friendly\s+(\w+)\s+(?:minion|character)", re.IGNORECASE)
+_COND_RACE_CN = re.compile(r"友方(龙|亡灵|野兽|恶魔|机械|元素|鱼人|海盗|图腾|精灵|树人)")
+_COND_RACE_EN = re.compile(r"friendly\s+(Dragon|Undead|Beast|Demon|Mechanical|Elemental|Murloc|Pirate|Totem|Elf|Treant)", re.IGNORECASE)
 
 # Race name mapping (CN → English race tag)
 _RACE_MAP_CN_EN = {
@@ -183,10 +214,27 @@ _RACE_MAP_CN_EN = {
 # --- Stat comparison patterns ---
 _COND_ATK_LE = re.compile(r"攻击力(?:小于等于?|≤|不超过)(\d+)")
 _COND_ATK_LE_EN = re.compile(r"(?:attack|attack.*?)(?:less|at most|≤)\s*(\d+)", re.IGNORECASE)
-_COND_ATK_GE = re.compile(r"攻击力(?:大于等于?|≥|不小于|至少)(\d+)")
+_COND_ATK_GE = re.compile(r"攻击力(?:大于(?:或)?等于?|≥|不小于|至少)(\d+)")
 _COND_ATK_GE_EN = re.compile(r"(?:attack|attack.*?)(?:more|at least|≥)\s*(\d+)", re.IGNORECASE)
 _COND_COST_GE = re.compile(r"法力值消耗(?:大于等于?|≥|不小于|至少)(\d+)")
 _COND_COST_GE_EN = re.compile(r"costs?\s*(?:at least|≥|more)\s*(\d+)", re.IGNORECASE)
+_COND_HP_LE = re.compile(r"(?:生命值|血量)(?:小于等于?|≤|不超过)(\d+)")
+_COND_HP_LE_EN = re.compile(r"(?:health|hp)(?:less|at most|≤)\s*(\d+)", re.IGNORECASE)
+
+# --- Location condition ---
+_COND_ENEMY_LOCATION = [
+    re.compile(r"敌方地标"),
+    re.compile(r"enemy\s+location", re.IGNORECASE),
+]
+
+# --- Race tag condition ("有种族标签的敌方随从" = pest control) ---
+_COND_HAS_RACE_TAG = [
+    re.compile(r"有种族标签(?:的)?(?:敌方)?(?:随从|角色)"),
+    re.compile(r"minion\s+with\s+a\s+race\s+tag", re.IGNORECASE),
+]
+
+# --- Self HP threshold ("HP ≤ 本随从攻击力/生命值") ---
+_COND_SELF_HP = re.compile(r"生命值(?:小于等于?|≤|不超过)本(?:随从|角色)")
 
 # --- Rarity patterns ---
 _COND_LEGENDARY = [
@@ -205,9 +253,10 @@ _NO_TARGET_KEYWORDS = [
 # If ANY of these appear in text, the spell definitely needs a target
 _TARGETING_KEYWORDS = [
     "敌方", "友方", "enemy", "friendly",
-    "一个.{0,4}随从", "a\s+minion", "an?\s+minion",
-    "一个.{0,4}角色", "a\s+character", "an?\s+character",
-    "一个.{0,4}英雄", "enemy\s+hero", "friendly\s+hero",
+    "一个.{0,20}随从", "a\s+minion", "an?\s+minion",
+    "一个.{0,20}角色", "a\s+character", "an?\s+character",
+    "一个.{0,20}英雄", "enemy\s+hero", "friendly\s+hero",
+    "敌方地标",
 ]
 
 
@@ -304,6 +353,9 @@ class SpellTargetResolver:
         if _any_match(_SIDE_ENEMY_MINION, text):
             return TargetSide.ENEMY, TargetEntityType.MINION
 
+        if _any_match(_SIDE_ENEMY_LOCATION, text):
+            return TargetSide.ENEMY, TargetEntityType.LOCATION
+
         if _any_match(_SIDE_FRIENDLY_MINION, text):
             return TargetSide.FRIENDLY, TargetEntityType.MINION
 
@@ -337,6 +389,16 @@ class SpellTargetResolver:
         # Default for damage spells: enemy characters
         if card_type == "SPELL" and has_damage:
             return TargetSide.ENEMY, TargetEntityType.CHARACTER
+
+        # Default for locations with targeting text: any minion
+        # (locations like 赤红深渊 "对一个随从造成..." target any minion)
+        if card_type == "LOCATION" and has_damage:
+            return TargetSide.ANY, TargetEntityType.MINION
+
+        # Default for minion battlecry with targeting text: depends on keywords
+        # If we got here with damage + minion, likely targets any character
+        if card_type == "MINION" and has_damage:
+            return TargetSide.ANY, TargetEntityType.CHARACTER
 
         # Unknown → no target
         return TargetSide.ENEMY, TargetEntityType.CHARACTER
@@ -382,6 +444,19 @@ class SpellTargetResolver:
         if _any_match(_COND_LEGENDARY, text):
             conditions.append(self._is_legendary)
 
+        # Location (敌方地标)
+        if _any_match(_COND_ENEMY_LOCATION, text):
+            conditions.append(_is_location)
+
+        # Has race tag (有种族标签的敌方随从 — Pest Control)
+        if _any_match(_COND_HAS_RACE_TAG, text):
+            conditions.append(_has_race_tag)
+
+        # HP ≤ N
+        m = _COND_HP_LE.search(text) or _COND_HP_LE_EN.search(text)
+        if m:
+            conditions.append(_health_leq(int(m.group(1))))
+
         # Race (from "友方X" patterns)
         m = _COND_RACE_CN.search(text)
         if m:
@@ -414,7 +489,15 @@ class SpellTargetResolver:
             return targets
 
         if spec.entity_type == TargetEntityType.LOCATION:
-            # Location target → not commonly targeted, skip for now
+            # Location targets: search enemy board for location-type entities
+            if spec.side in (TargetSide.ENEMY, TargetSide.ANY):
+                for i, m in enumerate(state.opponent.board):
+                    if _is_location(m) and _minion_passes(m):
+                        targets.append(i + 1)
+            if spec.side in (TargetSide.FRIENDLY, TargetSide.ANY):
+                for i, m in enumerate(state.board):
+                    if _is_location(m) and _minion_passes(m):
+                        targets.append(-(i + 1))
             return targets
 
         # Include hero targets?
