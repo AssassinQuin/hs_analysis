@@ -179,7 +179,16 @@ def main():
         engine_params.update({
             "time_budget_ms": cp.getfloat("engine", "time_budget_ms", fallback=8000.0) if cfg_loaded else 8000.0,
             "num_worlds": cp.getint("engine", "num_worlds", fallback=7) if cfg_loaded else 7,
+            "uct_constant": cp.getfloat("engine", "uct_constant", fallback=0.5) if cfg_loaded else 0.5,
+            "time_decay_gamma": cp.getfloat("engine", "time_decay_gamma", fallback=0.6) if cfg_loaded else 0.6,
+            "min_step_budget_ms": cp.getfloat("engine", "min_step_budget_ms", fallback=300.0) if cfg_loaded else 300.0,
+            "max_actions_per_turn": cp.getint("engine", "max_actions_per_turn", fallback=10) if cfg_loaded else 10,
         })
+
+    # Output settings from cfg
+    show_board = cp.getboolean("output", "show_board", fallback=True) if cfg_loaded else True
+    show_probabilities = cp.getboolean("output", "show_probabilities", fallback=True) if cfg_loaded else True
+    show_mcts_detail = cp.getboolean("output", "show_mcts_detail", fallback=True) if cfg_loaded else True
 
     if args.analyze:
         print(f"离线分析模式: {args.analyze} (engine={args.engine})")
@@ -202,8 +211,13 @@ def main():
             sys.exit(1)
 
         engine_label = args.engine.upper()
+        mcts_info = ""
+        if args.engine == "mcts":
+            mcts_info = (f", worlds={engine_params.get('num_worlds', 7)}, "
+                         f"uct_c={engine_params.get('uct_constant', 0.5)}, "
+                         f"gamma={engine_params.get('time_decay_gamma', 0.6)}")
         print(f"监听 Power.log: {log_path}")
-        print(f"{engine_label} 参数: pop={pop_size}, gens={max_gens}, budget={time_limit}ms")
+        print(f"{engine_label} 参数: pop={pop_size}, gens={max_gens}, budget={time_limit}ms{mcts_info}")
         if cfg_loaded:
             print(f"使用配置: {cfg_path}")
         print("按 Ctrl+C 停止\n")
@@ -214,6 +228,9 @@ def main():
             engine_params=engine_params,
             poll_interval=poll_interval,
             verbose=args.verbose,
+            show_board=show_board,
+            show_probabilities=show_probabilities,
+            show_mcts_detail=show_mcts_detail,
         )
 
         try:

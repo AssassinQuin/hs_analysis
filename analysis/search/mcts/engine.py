@@ -40,6 +40,25 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
+class ActionStats:
+    """Per-action statistics from MCTS root node children."""
+    action: Action
+    visit_count: int = 0
+    total_reward: float = 0.0
+    q_value: float = 0.0
+    visit_probability: float = 0.0  # visit_count / total_root_visits
+    win_rate: float = 0.0           # (q_value + 1) / 2, mapped to [0, 1]
+
+
+@dataclass
+class DetailedMCTSLog:
+    """Detailed MCTS search log entries for parameter tuning analysis."""
+    entries: List[dict] = field(default_factory=list)
+    # Each entry: {"iter": int, "nodes": int, "evals": int,
+    #              "remaining_ms": float, "best_q": float, "depth": int}
+
+
+@dataclass
 class SearchResult:
     """Result from MCTS search, compatible with existing pipeline."""
     best_sequence: List[Action]
@@ -47,6 +66,8 @@ class SearchResult:
     alternatives: List[Tuple[List[Action], float]] = field(default_factory=list)
     source: str = "mcts"
     mcts_stats: Optional[MCTSStats] = None
+    action_stats: List[ActionStats] = field(default_factory=list)
+    detailed_log: Optional[DetailedMCTSLog] = None
 
 
 @dataclass
@@ -114,7 +135,7 @@ class MCTSEngine:
         # Search action sequence (multi-step)
         start = time.time() * 1000
         total_stats = MCTSStats()
-        actions = self._search_action_sequence(state, effective_config, total_stats)
+        actions, action_stats, detailed_log = self._search_action_sequence(state, effective_config, total_stats)
         elapsed = time.time() * 1000 - start
 
         # Evaluate final fitness
@@ -138,25 +159,35 @@ class MCTSEngine:
             fitness=fitness,
             source="mcts",
             mcts_stats=stats,
+            action_stats=action_stats,
+            detailed_log=detailed_log,
         )
 
     def search_single_action(
         self,
         state: GameState,
         time_budget_ms: float,
-    ) -> Tuple[Action, MCTSStats]:
-        """Search for a single best action."""
+    ) -> Tuple[Action, MCTSStats, List[ActionStats], Optional[DetailedMCTSLog]]:
+        """Search for a single best action.
+
+        Returns:
+            (best_action, stats, action_stats_list, detailed_log)
+        """
         start = time.time() * 1000
 
         ctx = self._create_context(state, time_budget_ms)
-        self._run_mcts_loop(ctx)
+        detailed_log = self._run_mcts_loop(ctx)
 
-        best_ak = ctx.root_node.best_child_key
+        root = ctx.root_node
+        best_ak = root.best_child_key
         if best_ak is None:
             action = Action(action_type=ActionType.END_TURN)
         else:
-            edge = ctx.root_node.action_edges.get(best_ak)
+            edge = root.action_edges.get(best_ak)
             action = edge.action if edge else Action(action_type=ActionType.END_TURN)
+
+        # Collect per-action statistics from root node children
+        action_stats_list = self._collect_action_stats(root)
 
         elapsed = time.time() * 1000 - start
         stats = MCTSStats(
@@ -169,10 +200,10 @@ class MCTSEngine:
         )
 
         # Store for tree reuse
-        self._last_root = ctx.root_node
+        self._last_root = root
         self._last_action_key = best_ak
 
-        return action, stats
+        return action, stats, action_stats_list, detailed_log
 
     # ── Internal: multi-step search ────────────────────
 
@@ -181,13 +212,20 @@ class MCTSEngine:
         state: GameState,
         config: MCTSConfig,
         accum_stats: Optional[MCTSStats] = None,
-    ) -> List[Action]:
-        """Search for a complete action sequence with exponential time decay."""
+    ) -> Tuple[List[Action], List[ActionStats], Optional[DetailedMCTSLog]]:
+        """Search for a complete action sequence with exponential time decay.
+
+        Returns:
+            (actions, action_stats_list, detailed_log)
+            action_stats_list contains per-action stats from the *first* search step only.
+        """
         actions: List[Action] = []
         current_state = state
         remaining_budget = config.time_budget_ms
         gamma = config.time_decay_gamma
         step = 0
+        first_step_action_stats: List[ActionStats] = []
+        detailed_log: Optional[DetailedMCTSLog] = None
 
         # Compute first-step budget
         # Total = t0 * (1 + gamma + gamma^2 + ...) = t0 / (1 - gamma)
@@ -225,9 +263,14 @@ class MCTSEngine:
                 continue
 
             # Search for best action at this step
-            best_action, stats = self.search_single_action(
+            best_action, stats, a_stats, d_log = self.search_single_action(
                 current_state, step_budget
             )
+
+            # Capture first-step stats and detailed log
+            if step == 0:
+                first_step_action_stats = a_stats
+                detailed_log = d_log
 
             # Accumulate stats
             if accum_stats is not None:
@@ -251,7 +294,7 @@ class MCTSEngine:
         if not actions or actions[-1].action_type != ActionType.END_TURN:
             actions.append(Action(action_type=ActionType.END_TURN))
 
-        return actions
+        return actions, first_step_action_stats, detailed_log
 
     # ── Internal: single-step MCTS ─────────────────────
 
@@ -303,12 +346,54 @@ class MCTSEngine:
             time_budget_ms=budget_ms,
         )
 
-    def _run_mcts_loop(self, ctx: _SearchContext) -> None:
-        """Main MCTS iteration loop with hard iteration limit."""
+    def _collect_action_stats(self, root: MCTSNode) -> List[ActionStats]:
+        """Extract per-action statistics from root node's children."""
+        if not root.children:
+            return []
+
+        total_visits = sum(
+            child.visit_count for child in root.children.values()
+        )
+        if total_visits == 0:
+            return []
+
+        stats_list: List[ActionStats] = []
+        for ak, child in root.children.items():
+            edge = root.action_edges.get(ak)
+            action = edge.action if edge else None
+            if action is None:
+                continue
+
+            vc = child.visit_count
+            tr = child.total_reward
+            qv = child.q_value
+            prob = vc / total_visits if total_visits > 0 else 0.0
+            wr = (qv + 1.0) / 2.0  # Map from [-1,1] to [0,1]
+
+            stats_list.append(ActionStats(
+                action=action,
+                visit_count=vc,
+                total_reward=tr,
+                q_value=qv,
+                visit_probability=prob,
+                win_rate=wr,
+            ))
+
+        # Sort by visit count descending (best first)
+        stats_list.sort(key=lambda s: s.visit_count, reverse=True)
+        return stats_list
+
+    def _run_mcts_loop(self, ctx: _SearchContext) -> Optional[DetailedMCTSLog]:
+        """Main MCTS iteration loop with hard iteration limit.
+
+        Returns DetailedMCTSLog when debug_mode is enabled, else None.
+        """
         config = ctx.config
         log_interval = config.log_interval
         max_iters = 200000  # Hard safety cap
         time_check_every = 50  # Check wall-clock every N iterations
+
+        detailed_log = DetailedMCTSLog() if config.debug_mode else None
 
         while ctx.iterations_done < max_iters:
             # Time check (every N iterations to reduce syscalls)
@@ -336,12 +421,31 @@ class MCTSEngine:
             ctx.iterations_done += 1
 
             # Periodic logging
-            if config.debug_mode and ctx.iterations_done % log_interval == 0:
+            if ctx.iterations_done % log_interval == 0:
+                root = ctx.root_node
+                best_ak = root.best_child_key
+                best_q = 0.0
+                if best_ak and best_ak in root.children:
+                    best_q = root.children[best_ak].q_value
+
                 log.info(
-                    "MCTS iter=%d nodes=%d evals=%d remaining=%.0fms",
+                    "MCTS iter=%d nodes=%d evals=%d remaining=%.0fms best_q=%.4f",
                     ctx.iterations_done, ctx.expander._next_id,
-                    ctx.evaluations_done, ctx.time_remaining_ms,
+                    ctx.evaluations_done, ctx.time_remaining_ms, best_q,
                 )
+
+                # Collect detailed log entries for parameter tuning
+                if detailed_log is not None:
+                    detailed_log.entries.append({
+                        "iter": ctx.iterations_done,
+                        "nodes": ctx.expander._next_id,
+                        "evals": ctx.evaluations_done,
+                        "remaining_ms": ctx.time_remaining_ms,
+                        "best_q": best_q,
+                        "depth": leaf.depth if leaf else 0,
+                    })
+
+        return detailed_log
 
     def _traverse(
         self,

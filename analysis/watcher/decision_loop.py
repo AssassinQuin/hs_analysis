@@ -29,41 +29,193 @@ log = logging.getLogger(__name__)
 
 
 class DecisionPresenter:
-    """Formats and outputs decision suggestions."""
+    """Formats and outputs decision suggestions with rich terminal display."""
 
-    def __init__(self, output: TextIO = sys.stdout, verbose: bool = False):
+    def __init__(
+        self,
+        output: TextIO = sys.stdout,
+        verbose: bool = False,
+        show_board: bool = True,
+        show_probabilities: bool = True,
+        show_mcts_detail: bool = True,
+    ):
         self.output = output
         self.verbose = verbose
+        self.show_board = show_board
+        self.show_probabilities = show_probabilities
+        self.show_mcts_detail = show_mcts_detail
+
+    # ── helpers ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _card_display(card) -> str:
+        """Format card as 'name(cost)'."""
+        name = card.name or getattr(card, "card_id", None) or "未知"
+        return f"{name}({card.cost})"
+
+    @staticmethod
+    def _minion_display(m) -> str:
+        """Format minion as 'name(atk/hp)'."""
+        name = m.name or getattr(m, "card_id", None) or "?"
+        return f"{name}({m.attack}/{m.health})"
+
+    @staticmethod
+    def _progress_bar(ratio: float, width: int = 20) -> str:
+        """Return a progress bar string."""
+        filled = int(ratio * width)
+        return "█" * filled + "░" * (width - filled)
+
+    def _line(self, text: str = "") -> None:
+        self.output.write(f"│ {text}\n")
+
+    # ── board state ──────────────────────────────────────────────────
+
+    def _write_board(self, state) -> None:
+        hero = state.hero
+        mana = state.mana
+        hand = state.hand
+        board = state.board
+        opp = state.opponent
+
+        hero_str = f"英雄: {hero.hp}HP"
+        if getattr(hero, "armor", 0):
+            hero_str += f"/{hero.armor}A"
+        self._line(f"[场面] {hero_str}  法力: {mana.available}/{mana.max_mana}  手牌: {len(hand)}  场面: {len(board)}")
+
+        # Hand cards
+        if hand:
+            cards = " ".join(f"[{self._card_display(c)}]" for c in hand)
+            self._line(f"[手牌] {cards}")
+
+        # Our board
+        if board:
+            minions = " ".join(f"[{self._minion_display(m)}]" for m in board)
+            self._line(f"[我方] {minions}")
+
+        # Opponent
+        opp_hero = opp.hero
+        opp_board = opp.board
+        opp_parts = [f"对手英雄: {opp_hero.hp}HP"]
+        if getattr(opp_hero, "armor", 0):
+            opp_parts[0] += f"/{opp_hero.armor}A"
+        opp_parts.append(f"手牌: {opp.hand_count}")
+        secrets = getattr(opp, "secrets", None)
+        if secrets:
+            opp_parts.append(f"奥秘: {len(secrets)}")
+        if opp_board:
+            opp_minions = " ".join(f"[{self._minion_display(m)}]" for m in opp_board)
+            self._line(f"[敌方] {opp_minions}")
+        self._line(opp_parts[0] + "  " + "  ".join(opp_parts[1:]))
+
+    # ── main present ─────────────────────────────────────────────────
 
     def present(self, result: UnifiedSearchResult, state, elapsed_ms: float) -> None:
         """Print decision result to output."""
-        self.output.write(f"Turn {state.turn_number}:\n")
-        for i, action in enumerate(result.best_chromosome):
-            self.output.write(f"  {i + 1}. {action.describe(state)}\n")
-        self.output.write(f"Score: {result.best_fitness:+.2f} | Time: {elapsed_ms:.2f} ms\n")
-        self.output.write(
-            f"Decision: conf={result.confidence:.2f} | "
-            f"div={result.population_diversity:.2f} | "
-            f"gens={result.generations_run}\n"
-        )
+        turn = getattr(state, "turn_number", "?")
+        self.output.write(f"┌─ Turn {turn} ─────────────────────────────\n")
 
-        if result.timings:
-            self.output.write(
-                "Timing: "
-                f"utp={result.timings.get('utp', 0):.1f}ms, "
-                f"rhea={result.timings.get('rhea', 0):.1f}ms, "
-                f"phaseB={result.timings.get('phase_b', 0):.1f}ms, "
-                f"oppSim={result.timings.get('opp_sim', 0):.1f}ms, "
-                f"crossTurn={result.timings.get('cross_turn', 0):.1f}ms\n"
+        # Board state
+        if self.show_board:
+            self._write_board(state)
+
+        self._line()
+
+        # Optimal decision
+        conf_str = f"  conf={result.confidence:.2f}" if result.confidence > 0 else ""
+        self._line(f"★ 最优抉择 (Score: {result.best_fitness:+.2f} | {elapsed_ms:.0f}ms):{conf_str}")
+        for i, action in enumerate(result.best_chromosome):
+            prefix = ">>> " if i == 0 else "   "
+            self._line(f"{prefix}{i + 1}. {action.describe(state)}")
+
+        # Sub-optimal alternatives
+        if result.alternatives:
+            self._line()
+            self._line("○ 次优抉择:")
+            for rank, (chromo, fitness) in enumerate(result.alternatives, 1):
+                for i, action in enumerate(chromo):
+                    prefix = ">>> " if i == 0 else "   "
+                    self._line(f"{prefix}{i + 1}. {action.describe(state)}")
+                gap = result.best_fitness - fitness
+                self._line(f"   (score: {fitness:+.2f} | 差距: {gap:.2f})")
+                if rank < len(result.alternatives):
+                    self._line()
+
+        # Probability distribution (MCTS action_probs)
+        if self.show_probabilities and result.action_probs:
+            self._line()
+            self._line("[概率分布]")
+            for ap in result.action_probs:
+                desc = ap.action.describe(state)
+                if len(desc) > 20:
+                    desc = desc[:20]
+                bar = self._progress_bar(ap.probability, 20)
+                self._line(
+                    f"{desc:<20s} {bar} {ap.probability * 100:5.1f}%  "
+                    f"胜率: {ap.win_rate * 100:.1f}%  (visits: {ap.visit_count})"
+                )
+
+        # MCTS detail
+        if self.show_mcts_detail and result.mcts_stats is not None:
+            ms = result.mcts_stats
+            iters = getattr(ms, "iterations", 0)
+            nodes = getattr(ms, "nodes_created", 0)
+            evals = getattr(ms, "evaluations", iters)
+            worlds = getattr(ms, "world_count", 0)
+            time_ms = getattr(ms, "time_used_ms", elapsed_ms)
+            iter_per_s = int(iters / (time_ms / 1000.0)) if time_ms > 0 else 0
+            self._line()
+            self._line(
+                f"[MCTS] iters: {iters}  nodes: {nodes}  "
+                f"evals: {evals}  worlds: {worlds}  {iter_per_s} iter/s"
             )
 
-        if result.alternatives:
-            self.output.write("Alternatives:\n")
-            for rank, (chromo, fitness) in enumerate(result.alternatives, 1):
-                line = " -> ".join(action.describe(state) for action in chromo)
-                self.output.write(f"  {rank}. {line} | score={fitness:+.2f}\n")
+            # Detailed log
+            detailed_log = result.mcts_detailed_log
+            if detailed_log and detailed_log.entries:
+                entries = detailed_log.entries
+                n = len(entries)
+                step = max(1, n // 10)
+                sampled = entries[::step][:10]
+                self._line(
+                    f"[MCTS Log] iter={sampled[0].get('iter', '?')} "
+                    f"nodes={sampled[0].get('nodes', '?')} "
+                    f"evals={sampled[0].get('evals', '?')} "
+                    f"best_q={sampled[0].get('best_q', 0):.4f} "
+                    f"depth={sampled[0].get('depth', '?')}"
+                )
+                for entry in sampled[1:]:
+                    self._line(
+                        f"{'':13s}iter={entry.get('iter', '?')} "
+                        f"nodes={entry.get('nodes', '?')} "
+                        f"evals={entry.get('evals', '?')} "
+                        f"best_q={entry.get('best_q', 0):.4f} "
+                        f"depth={entry.get('depth', '?')}"
+                    )
 
-        self.output.write("\n")
+        # RHEA-specific output (when no MCTS stats)
+        if result.mcts_stats is None:
+            if result.timings:
+                self._line()
+                parts = []
+                for key, label in [
+                    ("utp", "utp"),
+                    ("rhea", "rhea"),
+                    ("phase_b", "phaseB"),
+                    ("opp_sim", "oppSim"),
+                    ("cross_turn", "crossTurn"),
+                ]:
+                    v = result.timings.get(key, 0)
+                    if v:
+                        parts.append(f"{label}={v:.1f}ms")
+                if parts:
+                    self._line(f"[Timing] {', '.join(parts)}")
+            self._line(
+                f"[RHEA] conf={result.confidence:.2f}  "
+                f"div={result.population_diversity:.2f}  "
+                f"gens={result.generations_run}"
+            )
+
+        self.output.write("└──────────────────────────────────────\n")
 
 
 class DecisionLoop:
@@ -89,6 +241,9 @@ class DecisionLoop:
         on_decision: Optional[Callable] = None,
         output: TextIO = sys.stdout,
         verbose: bool = False,
+        show_board: bool = True,
+        show_probabilities: bool = True,
+        show_mcts_detail: bool = True,
     ):
         """
         Args:
@@ -99,6 +254,9 @@ class DecisionLoop:
             on_decision: Callback(search_result, game_state) after each decision
             output: Where to print decisions
             verbose: Extra logging output
+            show_board: Show board state in output
+            show_probabilities: Show action probability distribution
+            show_mcts_detail: Show MCTS detailed search log
         """
         self.log_path = Path(log_path)
         self._engine_name = engine
@@ -111,7 +269,12 @@ class DecisionLoop:
         self._engine_factory = create_engine(self._engine_name, self.engine_params)
         self.poll_interval = poll_interval
         self.on_decision = on_decision
-        self.presenter = DecisionPresenter(output, verbose)
+        self.presenter = DecisionPresenter(
+            output, verbose,
+            show_board=show_board,
+            show_probabilities=show_probabilities,
+            show_mcts_detail=show_mcts_detail,
+        )
 
         self._tracker = GameTracker()
         self._bridge = StateBridge()

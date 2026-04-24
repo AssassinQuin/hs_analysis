@@ -18,6 +18,28 @@ from typing import Any, Callable, Dict, List, Tuple
 from analysis.search.rhea.actions import Action
 
 
+# ── Action probability / win-rate data ──────────────────────────────
+
+class ActionProb:
+    """Per-action probability and win-rate for display."""
+
+    __slots__ = ("action", "visit_count", "probability", "win_rate", "q_value")
+
+    def __init__(
+        self,
+        action: Action,
+        visit_count: int = 0,
+        probability: float = 0.0,
+        win_rate: float = 0.0,
+        q_value: float = 0.0,
+    ):
+        self.action = action
+        self.visit_count = visit_count
+        self.probability = probability
+        self.win_rate = win_rate
+        self.q_value = q_value
+
+
 # ── Unified result wrapper ──────────────────────────────────────────
 
 class UnifiedSearchResult:
@@ -36,6 +58,9 @@ class UnifiedSearchResult:
         "population_diversity",
         "generations_run",
         "timings",
+        "action_probs",
+        "mcts_stats",
+        "mcts_detailed_log",
     )
 
     def __init__(self, raw: Any):
@@ -52,6 +77,9 @@ class UnifiedSearchResult:
             self.population_diversity: float = getattr(raw, "population_diversity", 0.0)
             self.generations_run: int = getattr(raw, "generations_run", 0)
             self.timings: dict = getattr(raw, "timings", {})
+            self.action_probs: List[ActionProb] = []
+            self.mcts_stats = None
+            self.mcts_detailed_log = None
         # --- MCTS path (map field names) ---
         else:
             self.best_chromosome: List[Action] = raw.best_sequence
@@ -63,6 +91,20 @@ class UnifiedSearchResult:
             self.timings: dict = (
                 {"mcts": getattr(mcts_stats, "time_used_ms", 0.0)} if mcts_stats else {}
             )
+            # Extract per-action stats from MCTS
+            raw_action_stats = getattr(raw, "action_stats", [])
+            self.action_probs: List[ActionProb] = [
+                ActionProb(
+                    action=ast.action,
+                    visit_count=ast.visit_count,
+                    probability=ast.visit_probability,
+                    win_rate=ast.win_rate,
+                    q_value=ast.q_value,
+                )
+                for ast in raw_action_stats
+            ]
+            self.mcts_stats = mcts_stats
+            self.mcts_detailed_log = getattr(raw, "detailed_log", None)
 
 
 # ── Engine factories ────────────────────────────────────────────────
