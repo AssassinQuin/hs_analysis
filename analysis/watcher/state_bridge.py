@@ -86,12 +86,15 @@ class StateBridge:
         except Exception:
             return None
 
-    def convert(self, game, player_index: int = 0) -> GameState:
+    def convert(self, game, player_index: int = 0, global_state=None) -> GameState:
         """Convert an hslog Game object to a GameState.
 
         Args:
             game: hslog Game object (from GameTracker.export_entities())
             player_index: 0 = first player (friendly), 1 = opponent
+            global_state: Optional GlobalGameState from GlobalTracker.
+                          When provided, enriches GameState with opponent
+                          tracking data (known cards, mechanics, secrets, etc.)
 
         Returns:
             Fully populated GameState ready for RHEAEngine.search()
@@ -114,11 +117,19 @@ class StateBridge:
             state.hand = self._extract_hand(friendly)
             state.deck_remaining = self._extract_deck_remaining(friendly)
             state.turn_number = self._extract_turn(game)
-            state.opponent = OpponentState(
+
+            # Build OpponentState with basic board/hand info
+            opp_state = OpponentState(
                 hero=self._extract_hero(opponent),
                 board=self._extract_minions(opponent, owner="enemy"),
                 hand_count=self._count_hand(opponent),
             )
+
+            # Enrich from GlobalGameState if available
+            if global_state is not None:
+                self._enrich_from_global_state(opp_state, state, global_state)
+
+            state.opponent = opp_state
 
             return state
         except Exception as e:
@@ -438,6 +449,72 @@ class StateBridge:
         except Exception as e:
             log.warning(f"Error counting hand: {e}")
             return 0
+
+    def _enrich_from_global_state(self, opp_state: OpponentState,
+                                   game_state: GameState, global_state) -> None:
+        """Populate GameState with tracking data from GlobalGameState.
+
+        Args:
+            opp_state: OpponentState to enrich with opponent tracking data.
+            game_state: GameState to enrich with player mechanics.
+            global_state: GlobalGameState from GlobalTracker.
+        """
+        try:
+            # Opponent known cards
+            if global_state.opp_known_cards:
+                opp_state.opp_known_cards = [
+                    {"card_id": kc.card_id, "turn_seen": kc.turn_seen,
+                     "source": kc.source.value if hasattr(kc.source, 'value') else str(kc.source),
+                     "card_type": kc.card_type}
+                    for kc in global_state.opp_known_cards
+                ]
+
+            # Opponent generated card count
+            opp_state.opp_generated_count = len(global_state.opp_generated_seen)
+
+            # Opponent secrets triggered
+            if global_state.opp_secrets_triggered:
+                opp_state.opp_secrets_triggered = [
+                    {"card_id": kc.card_id, "turn_seen": kc.turn_seen}
+                    for kc in global_state.opp_secrets_triggered
+                ]
+
+            # Opponent active secrets
+            opp_state.secrets = list(global_state.opp_secrets)
+
+            # Opponent deck remaining
+            opp_state.deck_remaining = global_state.opp_deck_remaining
+
+            # Opponent weapon
+            opp_state.opp_weapon_card_id = global_state.opp_weapon or ""
+
+            # Opponent cumulative mechanics
+            opp_state.opp_corpses = global_state.opp_corpses
+            opp_state.opp_herald_count = global_state.opp_herald_count
+            if global_state.opp_quests:
+                opp_state.opp_quests = list(global_state.opp_quests)
+
+            # Opponent shuffled-into-deck tracking
+            if hasattr(global_state, 'opp_shuffled_into_deck'):
+                opp_state.opp_shuffled_into_deck = list(global_state.opp_shuffled_into_deck)
+
+            # Opponent corrupted cards tracking
+            if hasattr(global_state, 'opp_corrupted_cards'):
+                opp_state.opp_corrupted_cards = list(global_state.opp_corrupted_cards)
+
+            # Player mechanics from GlobalGameState → MechanicsState
+            from analysis.search.mechanics_state import MechanicsState
+            game_state._mechanics = MechanicsState.from_global_state(global_state)
+
+            # Direct fields on GameState
+            game_state.herald_count = global_state.player_herald_count
+            game_state.corpses = global_state.player_corpses
+            game_state.active_quests = list(global_state.player_quests)
+            game_state.last_turn_races = set(global_state.last_turn_races_player)
+            game_state.last_turn_schools = set(global_state.last_turn_schools_player)
+
+        except Exception as e:
+            log.warning(f"Error enriching from global state: {e}")
 
     def _create_weapon(self, entity) -> Weapon:
         """Create a Weapon from an hslog entity."""

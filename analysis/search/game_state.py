@@ -243,6 +243,14 @@ class OpponentState:
     opp_generated_count: int = 0  # 对手已打出的衍生牌数量
     opp_secrets_triggered: list = field(default_factory=list)  # 对手已触发的奥秘
 
+    # ---- 对手累计机制 (from GlobalTracker) ----
+    opp_corpses: int = 0  # 对手残骸资源
+    opp_herald_count: int = 0  # 对手兆示计数
+    opp_quests: list = field(default_factory=list)  # 对手活跃任务
+    opp_shuffled_into_deck: list = field(default_factory=list)  # 洗入对手牌库的已知牌
+    opp_corrupted_cards: list = field(default_factory=list)  # 对手已腐蚀升级的牌
+    opp_weapon_card_id: str = ""  # 对手当前武器card_id
+
 
 @dataclass
 class GameState:
@@ -338,6 +346,9 @@ class GameState:
             secrets=list(self.opponent.secrets),
             opp_known_cards=list(self.opponent.opp_known_cards),
             opp_secrets_triggered=list(self.opponent.opp_secrets_triggered),
+            opp_quests=list(self.opponent.opp_quests),
+            opp_shuffled_into_deck=list(self.opponent.opp_shuffled_into_deck),
+            opp_corrupted_cards=list(self.opponent.opp_corrupted_cards),
         )
 
         hero = dataclasses.replace(self.hero)

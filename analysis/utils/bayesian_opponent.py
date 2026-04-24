@@ -476,3 +476,80 @@ class BayesianOpponentModel:
         """Look up card name by dbfId."""
         info = self.cards_by_dbf.get(dbfId)
         return info["name"] if info else f"dbfId={dbfId}"
+
+    # ── Conditional Evidence (Phase 3) ────────────────
+
+    def conditional_evidence(self, evidence_type: str, value: str = "",
+                             likelihood_boost: float = 1.5) -> dict:
+        """Apply conditional card effect as Bayesian evidence.
+
+        When an opponent plays a card with a conditional effect that triggers
+        (e.g., "If you're holding a Dragon"), this provides evidence about
+        their hand composition and thus their deck archetype.
+
+        Args:
+            evidence_type: Type of conditional evidence:
+                "HOLDING_RACE" — holding a specific race (e.g., Dragon)
+                "HOLDING_SPELL_SCHOOL" — holding a specific spell school
+                "SPELL_CAST_THIS_TURN" — played a spell this turn
+                "MINION_DIED_THIS_TURN" — had a minion die this turn
+            value: The specific value (e.g., "DRAGON", "FIRE")
+            likelihood_boost: Multiplier for deck archetypes that commonly
+                contain cards of the specified type. Default 1.5.
+
+        Returns:
+            Updated posteriors.
+        """
+        if self.locked is not None:
+            return dict(self.posteriors)
+
+        if not self.decks or not self.cards_by_dbf:
+            return dict(self.posteriors)
+
+        # Determine target card attribute based on evidence type
+        target_races = set()
+        target_schools = set()
+
+        if evidence_type == "HOLDING_RACE" and value:
+            target_races.add(value.upper())
+        elif evidence_type == "HOLDING_SPELL_SCHOOL" and value:
+            target_schools.add(value.upper())
+
+        if not target_races and not target_schools:
+            return dict(self.posteriors)
+
+        # For each deck archetype, check if it contains cards of the
+        # specified type and boost accordingly
+        unnormalized = {}
+        for deck in self.decks:
+            aid = deck["archetype_id"]
+            prior = self.posteriors.get(aid, 0.0)
+            if prior == 0.0:
+                unnormalized[aid] = 0.0
+                continue
+
+            # Check if deck contains cards matching the condition
+            has_match = False
+            for dbf in deck["cards"]:
+                info = self.cards_by_dbf.get(dbf)
+                if not info:
+                    continue
+                if target_races and info.get("race", "").upper() in target_races:
+                    has_match = True
+                    break
+                if target_schools and info.get("spellSchool", "").upper() in target_schools:
+                    has_match = True
+                    break
+
+            likelihood = likelihood_boost if has_match else 1.0
+            unnormalized[aid] = likelihood * prior
+
+        # Normalize
+        total = sum(unnormalized.values())
+        if total > 0:
+            self.posteriors = {
+                aid: val / total for aid, val in unnormalized.items()
+            }
+
+        self.locked = self.get_lock()
+        return dict(self.posteriors)

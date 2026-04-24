@@ -66,6 +66,8 @@ class KnownCard:
     cost: int = 0
     spell_school: str = ""      # 法术学派 (FIRE, FROST, HOLY, etc.)
     race: str = ""              # 种族 (BEAST, DEMON, DRAGON, etc.)
+    conditional_evidence: str = ""  # 条件触发证据 (如 "HOLDING_DRAGON", "HOLDING_SPELL_SCHOOL:FIRE")
+    effect_triggered: bool = False  # 条件效果是否触发（True=确认手牌有对应类型）
 
 
 @dataclass
@@ -218,6 +220,20 @@ class GlobalGameState:
     active_enchantments: Dict[int, str] = field(default_factory=dict)
     """entity_id -> card_id of enchantment"""
 
+    # ---- 洗入牌库追踪 ----
+    opp_shuffled_into_deck: List[str] = field(default_factory=list)
+    """对手洗入牌库的已知 card_id（如爆牌鱼、污染等效果）"""
+
+    player_shuffled_into_deck: List[str] = field(default_factory=list)
+    """我方洗入牌库的已知 card_id"""
+
+    # ---- 腐蚀追踪 ----
+    opp_corrupted_cards: List[str] = field(default_factory=list)
+    """对手已腐蚀升级的原始 card_id 列表（升级前的card_id）"""
+
+    opp_corrupted_upgrades: Dict[str, str] = field(default_factory=dict)
+    """对手腐蚀映射: original_card_id -> upgraded_card_id"""
+
     # ---- 统计 ----
     player_stats: SideStats = field(default_factory=SideStats)
     opp_stats: SideStats = field(default_factory=SideStats)
@@ -360,6 +376,14 @@ class GlobalTracker:
         因为对手的 HAND→PLAY 区域变化对我们不可见。
         """
         if controller == self.opp_controller:
+            # 检测腐蚀升级：对手手牌中的卡牌 card_id 发生变化
+            # Corrupt: 在手中时 SHOW_ENTITY 更新 card_id 为升级版本
+            if entity_id in self.state.opp_hand_card_ids:
+                old_card_id = self.state.opp_hand_card_ids[entity_id][0]
+                if old_card_id and old_card_id != card_id and zone == self.ZONE_HAND:
+                    self.state.opp_corrupted_cards.append(old_card_id)
+                    self.state.opp_corrupted_upgrades[old_card_id] = card_id
+
             self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
 
             # 将对手揭示到PLAY/SECRET的卡牌追踪为"已打出"
@@ -479,6 +503,13 @@ class GlobalTracker:
 
         # 装备武器：隐式——通过PLAY区的武器实体追踪
         # 打出地点：通过PLAY区的地点实体追踪
+
+        # 洗入牌库: 任意区域 → DECK（如爆牌鱼、污染等）
+        if new_zone == self.ZONE_DECK and card_id:
+            if is_opp:
+                self.state.opp_shuffled_into_deck.append(card_id)
+            else:
+                self.state.player_shuffled_into_deck.append(card_id)
 
         # 硬币使用：检测硬币法术从HAND到PLAY/GRAVEYARD
         if (old_zone == self.ZONE_HAND and
