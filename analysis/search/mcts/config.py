@@ -84,6 +84,13 @@ class MCTSConfig:
     opponent_greedy_prob: float = 0.8        # probability opponent picks greedy action
     opponent_max_depth: int = 1              # how deep to simulate opponent turns
 
+    # === Cross-turn simulation ===
+    max_turns_ahead: int = 3              # max full turns to search ahead in tree
+    cross_turn_rollout_depth: int = 2     # greedy rollout turns beyond tree depth
+    cross_turn_budget_ratio: float = 0.30  # fraction of budget for beyond-current-turn
+    cross_turn_node_budget: int = 3000     # max nodes for cross-turn portion of tree
+    opponent_tree_actions: int = 3         # max opponent actions to consider per turn
+
     # === Debug ===
     debug_mode: bool = False
     log_interval: int = 100                  # log every N iterations
@@ -112,17 +119,20 @@ def get_phase_overrides(turn_number: int) -> dict:
         return {
             "uct_constant": 0.4,
             "num_worlds": 5,
-            "time_budget_ms": 5000,
+            "time_budget_ms": 15000,
+            "max_turns_ahead": 3,
         }
     elif phase == Phase.MID:
         return {
             "uct_constant": 0.5,
             "num_worlds": 7,
-            "time_budget_ms": 8000,
+            "time_budget_ms": 15000,
+            "max_turns_ahead": 3,
         }
     else:  # LATE
         return {
             "uct_constant": 0.7,
             "num_worlds": 9,
-            "time_budget_ms": 12000,
+            "time_budget_ms": 15000,
+            "max_turns_ahead": 3,
         }

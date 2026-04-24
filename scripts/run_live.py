@@ -120,6 +120,10 @@ def main():
         "--poll-interval", type=float, default=None,
         help="文件轮询间隔秒 (default: from cfg or 0.05)",
     )
+    parser.add_argument(
+        "--engine", choices=["rhea", "mcts"], default="rhea",
+        help="搜索引擎 (default: rhea)",
+    )
 
     args = parser.parse_args()
 
@@ -170,10 +174,18 @@ def main():
         "cross_turn": cp.getboolean("engine", "cross_turn", fallback=True) if cfg_loaded else True,
     }
 
+    # Merge MCTS-specific config when engine is mcts
+    if args.engine == "mcts":
+        engine_params.update({
+            "time_budget_ms": cp.getfloat("engine", "time_budget_ms", fallback=8000.0) if cfg_loaded else 8000.0,
+            "num_worlds": cp.getint("engine", "num_worlds", fallback=7) if cfg_loaded else 7,
+        })
+
     if args.analyze:
-        print(f"离线分析模式: {args.analyze}")
+        print(f"离线分析模式: {args.analyze} (engine={args.engine})")
         DecisionLoop.analyze_file(
             args.analyze,
+            engine=args.engine,
             **engine_params,
         )
     else:
@@ -189,14 +201,16 @@ def main():
             print("   用法: python scripts/run_live.py /path/to/Power.log")
             sys.exit(1)
 
+        engine_label = args.engine.upper()
         print(f"监听 Power.log: {log_path}")
-        print(f"RHEA 参数: pop={pop_size}, gens={max_gens}, budget={time_limit}ms")
+        print(f"{engine_label} 参数: pop={pop_size}, gens={max_gens}, budget={time_limit}ms")
         if cfg_loaded:
             print(f"使用配置: {cfg_path}")
         print("按 Ctrl+C 停止\n")
 
         loop = DecisionLoop(
             log_path,
+            engine=args.engine,
             engine_params=engine_params,
             poll_interval=poll_interval,
             verbose=args.verbose,

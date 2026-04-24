@@ -27,6 +27,7 @@ def evaluate_leaf(
     leaf_state: 'GameState',
     root_state: 'GameState',
     config: MCTSConfig,
+    turn_depth: int = 0,
 ) -> float:
     """Evaluate a leaf node and return reward in [-1, 1].
 
@@ -37,6 +38,12 @@ def evaluate_leaf(
     terminal = _get_terminal_reward(leaf_state)
     if terminal is not None:
         return terminal
+
+    # Cross-turn rollout for leaves beyond tree turn depth
+    if turn_depth > 0 and config.cross_turn_rollout_depth > 0:
+        return _eval_cross_turn_rollout(
+            leaf_state, root_state, config, config.cross_turn_rollout_depth
+        )
 
     if config.simulation_mode == SimulationMode.EVAL_CUTOFF:
         return _eval_cutoff(leaf_state, root_state, config)
@@ -61,6 +68,41 @@ def _get_terminal_reward(state: 'GameState') -> Optional[float]:
     if my_hp <= 0:
         return -1.0  # we dead → opponent wins
     return None
+
+
+def _eval_cross_turn_rollout(
+    leaf_state: 'GameState',
+    root_state: GameState,
+    config: MCTSConfig,
+    rollout_turns: int = 2,
+) -> float:
+    """Evaluate by doing greedy rollouts for N turns, then static eval.
+
+    Used when the MCTS tree has reached its turn-depth limit.
+    Each rollout turn: our greedy play → opponent greedy response → next turn.
+    """
+    from analysis.search.mcts.turn_advance import advance_full_turn
+
+    s = leaf_state
+    for _ in range(rollout_turns):
+        # Check terminal
+        if s.hero.hp <= 0:
+            return -1.0
+        if s.opponent.hero.hp <= 0:
+            return 1.0
+
+        # Advance a full turn (our greedy + opponent greedy)
+        s = advance_full_turn(s, greedy_opponent=True)
+
+    # Final evaluation
+    if s.hero.hp <= 0:
+        return -1.0
+    if s.opponent.hero.hp <= 0:
+        return 1.0
+
+    from analysis.evaluators.composite import evaluate_delta
+    raw = evaluate_delta(root_state, s)
+    return normalize_score(raw, config.eval_normalization_scale)
 
 
 def _eval_cutoff(

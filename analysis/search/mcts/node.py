@@ -76,6 +76,7 @@ class MCTSNode:
     # === Context ===
     is_player_turn: bool = True
     depth: int = 0
+    turn_depth: int = 0  # how many full turns ahead (0 = current turn, 1 = next turn, etc.)
 
     # === Progressive widening ===
     pw_threshold: int = 0

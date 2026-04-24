@@ -85,8 +85,14 @@ class Expander:
 
         # Determine turn ownership
         is_player_turn = node.is_player_turn
+        turn_depth = node.turn_depth
         if action.action_type == ActionType.END_TURN:
             is_player_turn = not is_player_turn
+            # When opponent ends their turn, we advance a full turn
+            if not node.is_player_turn:  # opponent just ended
+                turn_depth += 1
+                # Advance state to our next turn
+                new_state = self._advance_after_opponent_turn(new_state)
 
         # Compute hash
         state_hash = compute_state_hash(new_state, is_player_turn)
@@ -109,6 +115,7 @@ class Expander:
             parent=node,
             is_player_turn=is_player_turn,
             depth=node.depth + 1,
+            turn_depth=turn_depth,
         )
         self._next_id += 1
 
@@ -336,3 +343,11 @@ class Expander:
         if state.hero.hp <= 0:
             return -1.0
         return None
+
+    def _advance_after_opponent_turn(self, state: 'GameState') -> 'GameState':
+        """After opponent END_TURN, advance state to our next turn start."""
+        if self.config.max_turns_ahead <= 0:
+            return state
+
+        from analysis.search.mcts.turn_advance import advance_full_turn
+        return advance_full_turn(state, greedy_opponent=True)

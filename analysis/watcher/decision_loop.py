@@ -21,7 +21,8 @@ from typing import Callable, Optional, TextIO
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-from analysis.search.rhea_engine import RHEAEngine, SearchResult, Action
+from analysis.search.rhea.actions import Action
+from analysis.search.engine_adapter import UnifiedSearchResult, create_engine
 from analysis.utils.score_provider import load_scores_into_hand
 
 log = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ class DecisionPresenter:
         self.output = output
         self.verbose = verbose
 
-    def present(self, result: SearchResult, state, elapsed_ms: float) -> None:
+    def present(self, result: UnifiedSearchResult, state, elapsed_ms: float) -> None:
         """Print decision result to output."""
         self.output.write(f"Turn {state.turn_number}:\n")
         for i, action in enumerate(result.best_chromosome):
@@ -82,6 +83,7 @@ class DecisionLoop:
         self,
         log_path: str | Path,
         *,
+        engine: str = "rhea",
         engine_params: Optional[dict] = None,
         poll_interval: float = 0.05,
         on_decision: Optional[Callable] = None,
@@ -91,19 +93,22 @@ class DecisionLoop:
         """
         Args:
             log_path: Path to Hearthstone Power.log
-            engine_params: Override RHEAEngine params (pop_size, max_gens, time_limit, etc.)
+            engine: Search engine to use ("rhea" or "mcts").
+            engine_params: Override engine params (pop_size, max_gens, time_limit, etc.)
             poll_interval: File polling interval in seconds (default 50ms)
             on_decision: Callback(search_result, game_state) after each decision
             output: Where to print decisions
             verbose: Extra logging output
         """
         self.log_path = Path(log_path)
+        self._engine_name = engine
         self.engine_params = engine_params or {
             "pop_size": 30,
             "max_gens": 80,
             "max_chromosome_length": 8,
             "cross_turn": True,
         }
+        self._engine_factory = create_engine(self._engine_name, self.engine_params)
         self.poll_interval = poll_interval
         self.on_decision = on_decision
         self.presenter = DecisionPresenter(output, verbose)
@@ -285,22 +290,17 @@ class DecisionLoop:
         self._last_replan_at = time.perf_counter()
 
     def _run_search_and_present(self, state, signature: tuple | None = None) -> None:
-        """Run RHEA search on a prepared state and print result."""
+        """Run search on a prepared state and print result."""
 
         load_scores_into_hand(state)
 
-        engine = RHEAEngine(
-            pop_size=self.engine_params.get("pop_size", 30),
-            max_gens=self.engine_params.get("max_gens", 80),
-            time_limit=self.engine_params.get("time_limit", 75.0),
-            max_chromosome_length=self.engine_params.get("max_chromosome_length", 8),
-            cross_turn=self.engine_params.get("cross_turn", True),
-        )
+        engine = self._engine_factory()
 
         start_time = time.perf_counter()
-        result = engine.search(state)
+        raw_result = engine.search(state)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
+        result = UnifiedSearchResult(raw_result)
         self.presenter.present(result, state, elapsed_ms)
         if signature is not None:
             self._last_decision_signature = signature
@@ -312,7 +312,7 @@ class DecisionLoop:
                 log.error(f"Error in decision callback: {e}", exc_info=True)
 
     @staticmethod
-    def analyze_file(path: str | Path, output: TextIO = sys.stdout, **engine_kwargs) -> None:
+    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "rhea", **engine_kwargs) -> None:
         """One-shot: analyze an entire Power.log file and output decisions for each turn."""
         log_path = Path(path)
         if not log_path.exists():
@@ -323,6 +323,7 @@ class DecisionLoop:
 
         tracker = GameTracker()
         bridge = StateBridge()
+        engine_factory = create_engine(engine, engine_kwargs)
 
         events = tracker.load_file(log_path)
         log.info(f"Parsed {len(events)} events")
@@ -348,17 +349,11 @@ class DecisionLoop:
 
                     load_scores_into_hand(state)
 
-                    engine = RHEAEngine(
-                        pop_size=engine_kwargs.get("pop_size", 30),
-                        max_gens=engine_kwargs.get("max_gens", 80),
-                        time_limit=engine_kwargs.get("time_limit", 75.0),
-                        max_chromosome_length=engine_kwargs.get("max_chromosome_length", 8),
-                        cross_turn=engine_kwargs.get("cross_turn", True),
-                    )
-
+                    eng = engine_factory()
                     start_time = time.perf_counter()
-                    result = engine.search(state)
+                    raw_result = eng.search(state)
                     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+                    result = UnifiedSearchResult(raw_result)
                     presenter = DecisionPresenter(output=output)
                     presenter.present(result, state, elapsed_ms)
 

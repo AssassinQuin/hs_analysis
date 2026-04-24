@@ -323,7 +323,7 @@ class MCTSEngine:
             path, leaf, leaf_state = self._traverse(ctx, world_state)
 
             # 3. Evaluate leaf
-            reward = evaluate_leaf(leaf_state, ctx.root_state, config)
+            reward = evaluate_leaf(leaf_state, ctx.root_state, config, turn_depth=leaf.turn_depth)
             ctx.evaluations_done += 1
 
             # 4. Override with terminal reward if available
@@ -400,13 +400,17 @@ class MCTSEngine:
             node = child
             steps += 1
         if not node.is_terminal and node.is_leaf and node.depth < ctx.config.max_tree_depth:
-            child_result = ctx.expander.expand_node(node, state, ctx.tt)
-            if child_result is not None:
-                child_node, child_state = child_result
-                path.append(node)
-                node = child_node
-                state = child_state
-                ctx.nodes_created += 1
+            # Don't expand cross-turn nodes beyond budget
+            if node.turn_depth >= ctx.config.max_turns_ahead:
+                pass  # Will be evaluated statically (with rollout if configured)
+            else:
+                child_result = ctx.expander.expand_node(node, state, ctx.tt)
+                if child_result is not None:
+                    child_node, child_state = child_result
+                    path.append(node)
+                    node = child_node
+                    state = child_state
+                    ctx.nodes_created += 1
 
         return path, node, state
 
