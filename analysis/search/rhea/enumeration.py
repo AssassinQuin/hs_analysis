@@ -37,7 +37,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                 # Check if battlecry needs a target
                 try:
                     targets = _get_spell_target_resolver().resolve_targets(state, card)
-                except Exception:
+                except (ImportError, AttributeError, TypeError):
                     targets = []
                 if targets:
                     for tgt in targets:
@@ -124,7 +124,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                                 meta_tags=frozenset(tags),
                             )
                         )
-            except Exception:
+            except (ImportError, AttributeError, TypeError):
                 actions.append(
                     Action(
                         action_type=ActionType.PLAY,
@@ -145,7 +145,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                 # Check if location effect needs a target when activated
                 try:
                     targets = _get_spell_target_resolver().resolve_targets(state, card)
-                except Exception:
+                except (ImportError, AttributeError, TypeError):
                     targets = []
                 if targets:
                     for tgt in targets:
@@ -263,7 +263,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                             self.text = text
                             self.card_type = "LOCATION"
                     loc_targets = resolver.resolve_targets(state, _LocCard(loc_text))
-                except Exception:
+                except (ImportError, AttributeError, TypeError):
                     loc_targets = []
             if loc_targets:
                 for tgt in loc_targets:

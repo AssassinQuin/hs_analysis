@@ -112,6 +112,10 @@ class Minion:
             card_ref=card,
         )
 
+    def copy(self) -> "Minion":
+        """浅拷贝随从（enchantments 列表浅拷贝，其余字段直接复制）"""
+        return dataclasses.replace(self, enchantments=list(self.enchantments))
+
     @property
     def is_friendly(self) -> bool:
         return self.owner == "friendly"
@@ -156,6 +160,11 @@ class HeroState:
     hero_power_damage: int = 0
     is_hero_card: bool = False  # 是否已替换为英雄牌
 
+    def copy(self) -> "HeroState":
+        """拷贝英雄状态，含武器深拷贝"""
+        weapon = dataclasses.replace(self.weapon) if self.weapon is not None else None
+        return dataclasses.replace(self, weapon=weapon)
+
 
 @dataclass
 class ManaModifier:
@@ -176,6 +185,13 @@ class ManaState:
     overload_next: int = 0  # 下回合将被锁的法力
     max_mana_cap: int = 10
     modifiers: List[ManaModifier] = field(default_factory=list)
+
+    def copy(self) -> "ManaState":
+        """拷贝法力状态，含修饰器列表深拷贝"""
+        return dataclasses.replace(
+            self,
+            modifiers=[dataclasses.replace(mod) for mod in self.modifiers],
+        )
 
     def effective_cost(self, card) -> int:
         """计算卡牌经过修正器后的实际费用"""
@@ -250,6 +266,23 @@ class OpponentState:
     opp_shuffled_into_deck: list = field(default_factory=list)  # 洗入对手牌库的已知牌
     opp_corrupted_cards: list = field(default_factory=list)  # 对手已腐蚀升级的牌
     opp_weapon_card_id: str = ""  # 对手当前武器card_id
+    opp_cost_modifiers: list = field(default_factory=list)  # 对手费用修正 [(modifier_type, value, scope), ...]
+
+    def copy(self) -> "OpponentState":
+        """拷贝对手状态，含所有可变容器和嵌套英雄"""
+        return dataclasses.replace(
+            self,
+            hero=self.hero.copy(),
+            board=[m.copy() for m in self.board],
+            hand=list(self.hand),
+            secrets=list(self.secrets),
+            opp_known_cards=list(self.opp_known_cards),
+            opp_secrets_triggered=list(self.opp_secrets_triggered),
+            opp_quests=list(self.opp_quests),
+            opp_shuffled_into_deck=list(self.opp_shuffled_into_deck),
+            opp_corrupted_cards=list(self.opp_corrupted_cards),
+            opp_cost_modifiers=list(self.opp_cost_modifiers),
+        )
 
 
 @dataclass
@@ -333,65 +366,71 @@ class GameState:
     # ------------------------------------------------------------------
 
     def copy(self) -> "GameState":
-        """快速拷贝 — 不可变字段浅拷贝，可变容器深拷贝"""
-        opp_hero = dataclasses.replace(self.opponent.hero)
-        if self.opponent.hero.weapon is not None:
-            opp_hero.weapon = dataclasses.replace(self.opponent.hero.weapon)
+        """基于 dataclasses.fields() 反射的自动拷贝
 
-        opp = dataclasses.replace(
-            self.opponent,
-            hero=opp_hero,
-            board=[dataclasses.replace(m) for m in self.opponent.board],
-            hand=list(self.opponent.hand),
-            secrets=list(self.opponent.secrets),
-            opp_known_cards=list(self.opponent.opp_known_cards),
-            opp_secrets_triggered=list(self.opponent.opp_secrets_triggered),
-            opp_quests=list(self.opponent.opp_quests),
-            opp_shuffled_into_deck=list(self.opponent.opp_shuffled_into_deck),
-            opp_corrupted_cards=list(self.opponent.opp_corrupted_cards),
-        )
+        不可变字段直接复制，可变容器浅拷贝，
+        嵌套 dataclass 调用各自的 .copy()，
+        _mechanics / _zones 置 None 触发延迟重初始化。
+        新增字段无需手动维护此方法。
+        """
+        kwargs: dict = {}
+        for f in dataclasses.fields(self):
+            name = f.name
+            val = getattr(self, name)
 
-        hero = dataclasses.replace(self.hero)
-        if self.hero.weapon is not None:
-            hero.weapon = dataclasses.replace(self.hero.weapon)
+            # 懒初始化缓存 → 重置
+            if name in ("_mechanics", "_zones"):
+                kwargs[name] = None
+                continue
 
-        mana = dataclasses.replace(
-            self.mana,
-            modifiers=[
-                dataclasses.replace(mod) for mod in self.mana.modifiers
-            ],
-        )
+            # 死亡延迟 → 重置为默认值
+            if name == "_defer_deaths":
+                kwargs[name] = False
+                continue
+            if name == "_pending_dead_friendly":
+                kwargs[name] = []
+                continue
+            if name == "_pending_dead_enemy":
+                kwargs[name] = []
+                continue
 
-        gs = GameState(
-            hero=hero,
-            mana=mana,
-            board=[dataclasses.replace(m) for m in self.board],
-            locations=[dataclasses.replace(loc) for loc in self.locations],
-            hand=list(self.hand),
-            deck_list=list(self.deck_list) if self.deck_list is not None else None,
-            deck_remaining=self.deck_remaining,
-            opponent=opp,
-            turn_number=self.turn_number,
-            cards_played_this_turn=list(self.cards_played_this_turn),
-            fatigue_damage=self.fatigue_damage,
-            herald_count=self.herald_count,
-            last_turn_races=set(self.last_turn_races),
-            last_turn_schools=set(self.last_turn_schools),
-            active_quests=list(self.active_quests),
-            corpses=self.corpses,
-            kindred_double_next=self.kindred_double_next,
-            last_played_card=self.last_played_card,
-            _defer_deaths=self._defer_deaths,
-            _pending_dead_friendly=list(self._pending_dead_friendly),
-            _pending_dead_enemy=list(self._pending_dead_enemy),
-        )
-        # 拷贝机制状态
-        if self._mechanics is not None:
-            gs._mechanics = self._mechanics.copy()
-        # 拷贝区域管理器
-        if self._zones is not None:
-            gs._zones = (self._zones[0].copy(), self._zones[1].copy())
-        return gs
+            # None 或不可变标量
+            if val is None or isinstance(val, (int, float, str, bool)):
+                kwargs[name] = val
+                continue
+
+            # KeywordSet (frozenset) — 不可变
+            if isinstance(val, KeywordSet):
+                kwargs[name] = val
+                continue
+
+            # 嵌套 dataclass: HeroState, ManaState, OpponentState
+            if dataclasses.is_dataclass(val):
+                kwargs[name] = val.copy() if hasattr(val, 'copy') else dataclasses.replace(val)
+                continue
+
+            # 列表 / 字典 / 集合
+            if isinstance(val, list):
+                # 含 dataclass 元素时递归 copy
+                if val and dataclasses.is_dataclass(val[0]):
+                    kwargs[name] = [
+                        item.copy() if hasattr(item, 'copy')
+                        else dataclasses.replace(item)
+                        for item in val
+                    ]
+                else:
+                    kwargs[name] = list(val)
+            elif isinstance(val, dict):
+                kwargs[name] = dict(val)
+            elif isinstance(val, set):
+                kwargs[name] = set(val)
+            elif isinstance(val, tuple):
+                kwargs[name] = val  # tuple 不可变
+            else:
+                # 回退：直接引用（如 Card 对象视为不可变）
+                kwargs[name] = val
+
+        return GameState(**kwargs)
 
     def is_lethal(self) -> bool:
         """对手英雄 HP + 护甲 <= 0 时为 True"""

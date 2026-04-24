@@ -21,13 +21,14 @@ import hashlib
 import json
 import logging
 import time
-import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import DATA_BUILD, DATA_DIR, PROJECT_ROOT
+from ..utils import load_json
+from ..utils.http import http_get_json
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +62,8 @@ def _read_update_metadata(build: str) -> Dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+        return load_json(path)
+    except (OSError, ValueError):
         return {}
 
 
@@ -82,10 +83,7 @@ def _write_update_metadata(build: str, metadata: Dict[str, Any]) -> None:
 
 def _fetch_json(url: str, timeout: int = 30) -> List[dict]:
     """Fetch JSON from *url*. Returns parsed list/dict."""
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
-    return json.loads(raw.decode("utf-8"))
+    return http_get_json(url, timeout=timeout, user_agent=_UA)
 
 
 # ---------------------------------------------------------------------------
@@ -105,9 +103,9 @@ def _local_card_fingerprint(build: str, locale: str = "zhCN") -> Optional[str]:
     if not path.exists():
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_json(path)
         return _card_id_fingerprint(data)
-    except Exception:
+    except (OSError, ValueError, TypeError):
         return None
 
 
@@ -134,7 +132,7 @@ def check_remote_has_update(build: Optional[str] = None) -> Dict[str, Any]:
     try:
         remote_data = _fetch_json(url, timeout=15)
         remote_fp = _card_id_fingerprint(remote_data)
-    except Exception as exc:
+    except (OSError, ValueError, TypeError) as exc:
         logger.warning("Failed to fetch remote card data: %s", exc)
         return {
             "local_build": build,
@@ -176,7 +174,7 @@ def detect_latest_build() -> Optional[str]:
         else:
             logger.info("Local build %s is up-to-date", result["local_build"])
         return result["local_build"]
-    except Exception as exc:
+    except (OSError, ValueError, TypeError) as exc:
         logger.warning("Failed to detect latest build: %s", exc)
         return None
 
@@ -222,7 +220,7 @@ def get_data_status(build: Optional[str] = None) -> Dict[str, Any]:
     remote_check: Optional[Dict[str, Any]] = None
     try:
         remote_check = check_remote_has_update(build)
-    except Exception:
+    except (OSError, ValueError, TypeError):
         pass
 
     # --- staleness ---
@@ -285,9 +283,9 @@ def fetch_latest_cards(
             if not force and cache_path.exists():
                 skipped.append(rel)
                 try:
-                    data = json.loads(cache_path.read_text(encoding="utf-8"))
+                    data = load_json(cache_path)
                     card_counts[f"{locale}_{filename.replace('.json', '')}"] = len(data)
-                except Exception:
+                except (OSError, ValueError):
                     pass
                 continue
 
@@ -350,7 +348,7 @@ def import_card_json(
     if not src.exists():
         raise FileNotFoundError(f"Source file not found: {json_path}")
 
-    data = json.loads(src.read_text(encoding="utf-8"))
+    data = load_json(src)
     if not isinstance(data, list):
         raise ValueError("Expected a JSON array of card objects")
 
@@ -393,8 +391,8 @@ def _build_standard_db(data_dir: Path, output_path: Path) -> Dict[str, Any]:
     zh_path = data_dir / "zhCN" / "cards.collectible.json"
     en_path = data_dir / "enUS" / "cards.collectible.json"
 
-    zh_data: List[dict] = json.loads(zh_path.read_text(encoding="utf-8"))
-    en_data: List[dict] = json.loads(en_path.read_text(encoding="utf-8"))
+    zh_data: List[dict] = load_json(zh_path)
+    en_data: List[dict] = load_json(en_path)
     en_by_id = {c["id"]: c for c in en_data}
 
     cards = []
@@ -420,14 +418,14 @@ def _clear_singletons() -> None:
         from . import hsdb
         hsdb._db_cache.clear()
         logger.info("Cleared hsdb._db_cache")
-    except Exception as exc:
+    except (ImportError, AttributeError) as exc:
         logger.warning("Failed to clear hsdb cache: %s", exc)
 
     try:
         from . import card_index
         card_index._index = None
         logger.info("Cleared card_index._index")
-    except Exception as exc:
+    except (ImportError, AttributeError) as exc:
         logger.warning("Failed to clear card_index._index: %s", exc)
 
 

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import DATA_DIR, PROJECT_ROOT
+from ..utils import load_json
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +362,7 @@ def clean_card_pool(
         output_path = input_path
 
     logger.info("Loading cards from %s", input_path)
-    cards: List[Dict[str, Any]] = json.loads(input_path.read_text(encoding="utf-8"))
+    cards: List[Dict[str, Any]] = load_json(input_path)
     total = len(cards)
 
     # Stats counters

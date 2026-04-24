@@ -18,25 +18,38 @@ if TYPE_CHECKING:
 
 from analysis.search.game_state import Minion, Weapon
 from analysis.models.card import Card
+from analysis.data.card_effects import (
+    _COST_REDUCE_CN,
+    _COST_REDUCE_EN,
+    get_card_armor,
+    get_card_damage,
+    get_card_health_cost,
+)
+from analysis.search.aura_engine import recompute_auras
+from analysis.search.battlecry_dispatcher import dispatch_battlecry
+from analysis.search.choose_one import is_choose_one, resolve_choose_one
+from analysis.search.colossal import parse_colossal_value, summon_colossal_appendages
+from analysis.search.corpse import (
+    gain_corpses,
+    has_double_corpse_gen,
+    parse_corpse_effects,
+    resolve_corpse_effects,
+)
+from analysis.search.corrupt import check_corrupt_upgrade
+from analysis.search.deathrattle import resolve_deaths
+from analysis.search.dormant import is_dormant_card, apply_dormant, tick_dormant
+from analysis.search.herald import check_herald, apply_herald
+from analysis.search.imbue import apply_imbue, apply_hero_power
+from analysis.search.kindred import apply_kindred, set_kindred_double
+from analysis.search.location import activate_location, tick_location_cooldowns
+from analysis.search.outcast import check_outcast, apply_outcast_bonus
+from analysis.search.quest import parse_quest, track_quest_progress
+from analysis.search.shatter import check_shatter_on_draw
+from analysis.search.trigger_system import TriggerDispatcher
+from analysis.search.secret_triggers import check_secrets
+from analysis.utils.spell_simulator import resolve_effects
 
 log = logging.getLogger(__name__)
-
-
-# ------------------------------------------------------------------
-# Helper: optional mechanic application
-# ------------------------------------------------------------------
-
-
-def _try_mechanic(state, module_path: str, func_name: str, *args, **kwargs):
-    """Try applying an optional mechanic; return state unchanged on failure."""
-    try:
-        mod = __import__(module_path, fromlist=[func_name])
-        func = getattr(mod, func_name)
-        result = func(state, *args, **kwargs)
-        return result if isinstance(result, state.__class__) else state
-    except Exception:
-        log.debug("apply_action: %s.%s failed", module_path, func_name, exc_info=True)
-        return state
 
 
 # ------------------------------------------------------------------
@@ -55,7 +68,7 @@ def apply_action(state, action: Action):
     elif action.action_type == ActionType.HERO_POWER:
         s = _apply_hero_power(s, action)
     elif action.action_type == ActionType.ACTIVATE_LOCATION:
-        s = _try_mechanic(s, "analysis.search.location", "activate_location", action.source_index)
+        s = activate_location(s, action.source_index)
     elif action.action_type == ActionType.HERO_REPLACE:
         s = _apply_hero_replace(s, action)
     elif action.action_type == ActionType.TRANSFORM:
@@ -73,8 +86,6 @@ def apply_action(state, action: Action):
 
 def _apply_play_card(s, action: Action):
     """Handle PLAY and PLAY_WITH_TARGET actions."""
-    from analysis.search.game_state import GameState
-
     card_idx = action.card_index
     if card_idx < 0 or card_idx >= len(s.hand):
         return s
@@ -101,20 +112,56 @@ def _apply_play_card(s, action: Action):
     ):
         s.mana.add_modifier("reduce_next_spell", 3, "next_spell")
 
-    from analysis.data.card_effects import _COST_REDUCE_CN, _COST_REDUCE_EN
     reduce_match = _COST_REDUCE_CN.search(card_text) or _COST_REDUCE_EN.search(card_text)
     if reduce_match and "下一张法术" in card_text:
         s.mana.add_modifier(
             "reduce_next_spell", int(reduce_match.group(1)), "next_spell"
         )
 
+    # --- Health cost (消耗血量) ---
+    hp_cost = get_card_health_cost(card)
+    if hp_cost > 0:
+        # Guard: hero must have enough HP to pay the cost (min 1 HP remaining)
+        if s.hero.hp <= hp_cost:
+            # Can't pay health cost — skip this card play
+            return s
+        s.hero.hp -= hp_cost
+
+    # --- Corpse-only guard: cards that require corpses to be playable ---
+    corpse_effects = parse_corpse_effects(card_text)
+    for ce in corpse_effects:
+        if not ce.is_optional and s.corpses < ce.cost:
+            # Mandatory corpse cost but can't afford — skip this play
+            return s
+
+    # --- Opponent cost modifiers (对手加费 e.g. 异教低阶牧师) ---
+    if "对手" in card_text and "法力值消耗增加" in card_text:
+        import re as _re
+        _opp_cost_inc = _re.search(r'法力值消耗增加[（(]\s*(\d+)\s*[）)]', card_text)
+        if _opp_cost_inc:
+            amt = int(_opp_cost_inc.group(1))
+            # Determine scope: 法术→next_spell, 英雄技能→hero_power
+            if "法术" in card_text:
+                s.opponent.opp_cost_modifiers.append(("opp_spell_increase", amt, "next_spell"))
+            elif "英雄技能" in card_text:
+                s.opponent.opp_cost_modifiers.append(("opp_hero_power_increase", amt, "hero_power"))
+    if "opponent" in card_text.lower() and ("Cost" in card_text or "cost" in card_text):
+        import re as _re
+        _opp_cost_inc = _re.search(r'[Cc]osts?\s*(\d+)\s*more', card_text)
+        if _opp_cost_inc:
+            amt = int(_opp_cost_inc.group(1))
+            if "spell" in card_text.lower():
+                s.opponent.opp_cost_modifiers.append(("opp_spell_increase", amt, "next_spell"))
+
+    # --- Death Shadow (殒命暗影) transformation tracking ---
+    if card_id == "CORE_RLK_567" or card_id == "RLK_567" or "殒命暗影" in card.name or "Death Shadow" in (getattr(card, "ename", "") or ""):
+        # Death Shadow transforms into copies of spells cast
+        # Mark that the next spell will be "free" (0-cost) since Death Shadow costs 0
+        # The actual transformation is tracked by the watcher
+        pass  # No simulation action needed — card is already 0-cost
+
     # Check outcast bonus (before card is removed from hand)
-    outcast_active = False
-    try:
-        from analysis.search.outcast import check_outcast
-        outcast_active = check_outcast(s, card_idx, card)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    outcast_active = check_outcast(s, card_idx, card)
     s.hand.pop(card_idx)
 
     # Track cards played this turn for combo
@@ -136,10 +183,9 @@ def _apply_play_card(s, action: Action):
                 HeroCardHandler,
             )
             s = HeroCardHandler().apply_hero_card(s, card)
-        except Exception:
+        except (ImportError, AttributeError):
             armor = card.effective_armor() if hasattr(card, "effective_armor") else 0
             if armor == 0:
-                from analysis.data.card_effects import get_card_armor
                 armor = get_card_armor(card)
             s.hero.armor += armor
             hero_class = getattr(card, "card_class", "") or ""
@@ -149,28 +195,18 @@ def _apply_play_card(s, action: Action):
             s.hero.imbue_level = 0
 
     # Post-play mechanics
-    s = _try_mechanic(s, "analysis.search.imbue", "apply_imbue", card)
-    s = _try_mechanic(
-        s,
-        "analysis.search.quest",
-        "track_quest_progress",
-        ActionType.PLAY,
-        card,
-    )
+    s = apply_imbue(s, card)
+    s = track_quest_progress(s, ActionType.PLAY, card)
     if outcast_active:
-        s = _try_mechanic(s, "analysis.search.outcast", "apply_outcast_bonus", card_idx, card)
-    try:
-        from analysis.search.corpse import resolve_corpse_effects
-        card_class = getattr(card, "card_class", "") or ""
-        if card_class.upper() == "DEATHKNIGHT":
-            s = resolve_corpse_effects(s, card)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+        s = apply_outcast_bonus(s, card_idx, card)
+    card_class = getattr(card, "card_class", "") or ""
+    if card_class.upper() == "DEATHKNIGHT":
+        s = resolve_corpse_effects(s, card)
     try:
         s = dataclasses.replace(s, last_played_card=card)
-    except Exception:
+    except (TypeError, AttributeError):
         log.debug("apply_action: optional mechanic failed", exc_info=True)
-    s = _try_mechanic(s, "analysis.search.corrupt", "check_corrupt_upgrade", card)
+    s = check_corrupt_upgrade(s, card)
     _handle_overdraw(s)
 
     return s
@@ -183,75 +219,56 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
     s.board.insert(pos, new_minion)
 
     # Colossal appendage summoning
-    try:
-        from analysis.search.colossal import (
-            parse_colossal_value,
-            summon_colossal_appendages,
-        )
-        if parse_colossal_value(card) > 0:
-            s = summon_colossal_appendages(s, new_minion, card, pos, s.herald_count)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    if parse_colossal_value(card) > 0:
+        s = summon_colossal_appendages(s, new_minion, card, pos, s.herald_count)
 
-    s = _try_mechanic(s, "analysis.search.kindred", "apply_kindred", card)
-    try:
-        from analysis.search.kindred import has_kindred as _has_kindred
-        card_text = getattr(card, "text", "") or ""
-        if "延系效果会触发两次" in (card_text or ""):
-            from analysis.search.kindred import set_kindred_double
-            s = set_kindred_double(s)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    s = apply_kindred(s, card)
+    card_text = getattr(card, "text", "") or ""
+    if "延系效果会触发两次" in (card_text or ""):
+        s = set_kindred_double(s)
 
-    s = _try_mechanic(s, "analysis.search.battlecry_dispatcher", "dispatch_battlecry", card, new_minion)
+    s = dispatch_battlecry(s, card, new_minion)
 
-    try:
-        from analysis.search.choose_one import is_choose_one, resolve_choose_one
-        if is_choose_one(card):
-            s = resolve_choose_one(s, card, new_minion)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    if is_choose_one(card):
+        s = resolve_choose_one(s, card, new_minion)
 
-    try:
-        from analysis.search.dormant import is_dormant_card, apply_dormant
-        if is_dormant_card(card):
-            new_minion = apply_dormant(new_minion, card)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    if is_dormant_card(card):
+        new_minion = apply_dormant(new_minion, card)
 
-    try:
-        from analysis.search.herald import check_herald, apply_herald
-        if check_herald(card):
-            s = apply_herald(s, card)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    if check_herald(card):
+        s = apply_herald(s, card)
 
-    try:
-        from analysis.search.trigger_system import TriggerDispatcher
-        s = TriggerDispatcher().on_minion_played(s, new_minion, card)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    s = TriggerDispatcher().on_minion_played(s, new_minion, card)
 
-    s = _try_mechanic(s, "analysis.search.aura_engine", "recompute_auras")
+    s = recompute_auras(s)
     return s
 
 
 def _play_spell(s, card, action: Action):
     """Handle spell card play."""
-    try:
-        from analysis.utils.spell_simulator import resolve_effects
-        s = resolve_effects(s, card, target_index=action.target_index)
-    except Exception:
-        log.debug("apply_action: spell resolve_effects failed for %s", getattr(card, 'name', '?'), exc_info=True)
+    s = resolve_effects(s, card, target_index=action.target_index)
+
+    # --- Death Shadow (殒命暗影) transform: replaces self with copy of cast spell ---
+    for i, hc in enumerate(s.hand):
+        hc_card_id = getattr(hc, "card_id", "") or ""
+        hc_name = getattr(hc, "name", "")
+        if hc_card_id in ("CORE_RLK_567", "RLK_567") or "殒命暗影" in hc_name or "Death Shadow" in (getattr(hc, "ename", "") or ""):
+            # Transform Death Shadow into a copy of this spell
+            try:
+                import dataclasses
+                new_card = dataclasses.replace(card) if dataclasses.is_dataclass(card) else card
+                # Mark the transformed card as coming from Death Shadow
+                if hasattr(new_card, 'card_id'):
+                    new_card.card_id = getattr(card, 'card_id', '')
+                s.hand[i] = new_card
+            except (TypeError, AttributeError):
+                log.debug("Death Shadow transform failed", exc_info=True)
+            break  # Only one Death Shadow in hand
 
     # Activate quest if quest card
-    try:
-        from analysis.search.quest import parse_quest
-        quest = parse_quest(card)
-        if quest is not None:
-            s.active_quests.append(quest)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    quest = parse_quest(card)
+    if quest is not None:
+        s.active_quests.append(quest)
 
     card_text = getattr(card, "text", "") or ""
     if "冻结" in card_text or "FREEZE" in (
@@ -264,7 +281,7 @@ def _play_spell(s, card, action: Action):
                 for em in s.opponent.board:
                     em.frozen_until_next_turn = True
 
-    s = _try_mechanic(s, "analysis.search.aura_engine", "recompute_auras")
+    s = recompute_auras(s)
     return s
 
 
@@ -292,11 +309,7 @@ def _apply_attack(s, action: Action):
                 damage -= absorbed
             if not s.opponent.hero.is_immune:
                 s.opponent.hero.hp -= damage
-            try:
-                from analysis.search.secret_triggers import check_secrets
-                s = check_secrets(s, "on_attack_hero", {"attacker": None})
-            except Exception:
-                log.debug("apply_action: optional mechanic failed", exc_info=True)
+            s = check_secrets(s, "on_attack_hero", {"attacker": None})
         else:
             enemy_idx = tgt_idx - 1
             if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
@@ -337,7 +350,7 @@ def _apply_attack(s, action: Action):
             s.opponent.hero.hp -= damage
             if source.has_lifesteal:
                 s.hero.hp = min(s.hero.max_hp, s.hero.hp + source.attack)
-        s = _try_mechanic(s, "analysis.search.secret_triggers", "check_secrets", "on_attack_hero", {"attacker": source})
+        s = check_secrets(s, "on_attack_hero", {"attacker": source})
     else:
         enemy_idx = tgt_idx - 1
         if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
@@ -382,11 +395,7 @@ def _apply_attack(s, action: Action):
     s.board = [m for m in s.board if m.health > 0]
 
     # Resolve deathrattles
-    try:
-        from analysis.search.deathrattle import resolve_deaths
-        s = resolve_deaths(s)
-    except Exception:
-        log.debug("apply_action ATTACK: resolve_deaths failed", exc_info=True)
+    s = resolve_deaths(s)
 
     # Reborn: friendly minions
     if src_idx != -1:
@@ -410,13 +419,9 @@ def _apply_attack(s, action: Action):
             m.max_health = 1
     s.opponent.board = [m for m in s.opponent.board if m.health > 0]
 
-    try:
-        from analysis.search.corpse import gain_corpses, has_double_corpse_gen
-        amount = 2 if has_double_corpse_gen(s) else 1
-        s = gain_corpses(s, amount)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
-    s = _try_mechanic(s, "analysis.search.aura_engine", "recompute_auras")
+    amount = 2 if has_double_corpse_gen(s) else 1
+    s = gain_corpses(s, amount)
+    s = recompute_auras(s)
 
     # Mark source as having attacked (windfury tracking)
     if src_idx < len(s.board):
@@ -457,11 +462,7 @@ def _apply_hero_power(s, action: Action):
             damage -= absorbed
         target.health -= damage
 
-    try:
-        from analysis.search.imbue import apply_hero_power
-        s = apply_hero_power(s)
-    except Exception:
-        log.debug("apply_action: optional mechanic failed", exc_info=True)
+    s = apply_hero_power(s)
 
     return s
 
@@ -484,7 +485,7 @@ def _apply_hero_replace(s, action: Action):
                 HeroCardHandler,
             )
             s = HeroCardHandler().apply_hero_card(s, card)
-        except Exception:
+        except (ImportError, AttributeError):
             armor = getattr(card, "armor", 0) or 0
             s.hero.armor += armor
             hero_class = getattr(card, "card_class", "") or ""
@@ -546,7 +547,7 @@ def _apply_end_turn(s):
                 s.last_turn_races.add(race.upper())
             if school:
                 s.last_turn_schools.add(school.upper())
-    except Exception:
+    except (AttributeError, TypeError):
         log.debug("apply_action: optional mechanic failed", exc_info=True)
 
     s.cards_played_this_turn = []
@@ -557,17 +558,21 @@ def _apply_end_turn(s):
         s.hero.hp -= s.fatigue_damage
 
     s.mana.modifiers = []
+    # Clear expired opponent cost modifiers (next_spell scope)
+    s.opponent.opp_cost_modifiers = [
+        m for m in s.opponent.opp_cost_modifiers if m[2] not in ("next_spell", "this_turn")
+    ]
 
     # Unfreeze friendly minions
     for m in s.board:
         m.frozen_until_next_turn = False
 
-    s = _try_mechanic(s, "analysis.search.dormant", "tick_dormant")
+    s = tick_dormant(s)
     s.hero.is_immune = False
     for m in s.board:
         m.has_immune = False
 
-    s = _try_mechanic(s, "analysis.search.location", "tick_location_cooldowns")
+    s = tick_location_cooldowns(s)
 
     return s
 
@@ -601,11 +606,7 @@ def apply_draw(state, count: int = 1):
                 pass  # card is burned
             else:
                 s.hand.append(drawn)
-                try:
-                    from analysis.search.shatter import check_shatter_on_draw
-                    s = check_shatter_on_draw(s, len(s.hand) - 1)
-                except Exception:
-                    log.debug("apply_action: optional mechanic failed", exc_info=True)
+                s = check_shatter_on_draw(s, len(s.hand) - 1)
     return s
 
 
@@ -640,7 +641,6 @@ def next_turn_lethal_check(state) -> bool:
         if ct == "SPELL" and c.cost <= next_mana:
             dmg = c.total_damage() if hasattr(c, "total_damage") else 0
             if dmg == 0:
-                from analysis.data.card_effects import get_card_damage
                 dmg = get_card_damage(c)
             spell_burst += dmg
 

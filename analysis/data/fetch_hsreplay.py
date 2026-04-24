@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 HSReplay Data Fetcher — Fetch card statistics from HSReplay API.
 Caches results to SQLite for offline use and fallback.
@@ -20,8 +20,6 @@ import os
 import sqlite3
 import math
 import random
-import urllib.request
-import urllib.error
 import logging
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
@@ -49,6 +47,7 @@ from analysis.config import (
     get_api_headers,
     ensure_data_dir,
 )
+from analysis.utils.http import http_get_json
 
 # ── Paths ──────────────────────────────────────────
 DB_PATH = str(HSREPLAY_CACHE_DB)
@@ -110,21 +109,7 @@ def init_db(db_path=DB_PATH):
 def fetch_json(url, timeout=60):
     """Fetch JSON from URL using urllib. Returns parsed dict or None on error."""
     headers = get_api_headers()
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        log.info(f"Fetching: {url}")
-        resp = urllib.request.urlopen(req, timeout=timeout)
-        data = json.loads(resp.read().decode("utf-8"))
-        return data
-    except urllib.error.HTTPError as e:
-        log.warning(f"HTTP Error {e.code}: {e.reason} for {url}")
-        return None
-    except urllib.error.URLError as e:
-        log.warning(f"URL Error: {e.reason} for {url}")
-        return None
-    except Exception as e:
-        log.warning(f"Fetch error: {e}")
-        return None
+    return http_get_json(url, timeout=timeout, headers=headers, on_error_return_none=True)
 
 
 def fetch_card_stats_api():

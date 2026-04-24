@@ -16,6 +16,7 @@ import json
 import math
 import re
 from collections import defaultdict
+from types import SimpleNamespace
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -34,16 +35,12 @@ from analysis.config import (
     DATA_DIR, ENUMS_PATH, RANKINGS_PATH, CURVE_PARAMS_PATH,
     SCORING_REPORT_PATH, UNIFIED_DB_PATH,
 )
+from analysis.utils import load_json
 
 
 # ═══════════════════════════════════════════════════════════════════
 # 1. 数据加载
 # ═══════════════════════════════════════════════════════════════════
-
-def load_json(path):
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
 
 def load_enums(path):
     data = load_json(path)
@@ -346,12 +343,20 @@ def calc_rankings_calibration(card, model_score, rankings_db, model_min, model_m
 # 8. 类型评分器
 # ═══════════════════════════════════════════════════════════════════
 
-def score_minion(card, curve_popt, type_baselines):
+# ── Shared scoring pipeline ──────────────────────────────────────────
+
+def _score_card(card, curve_popt, type_baselines, *, l1_fn):
+    """Core scoring pipeline shared by all card-type scorers.
+
+    Parameters
+    ----------
+    l1_fn : callable
+        ``(card, ctx) -> (l1, extra_details_dict)``
+        where *ctx* is a SimpleNamespace with pre-computed intermediate
+        values (l2, d2, l_struct, d_struct, l2_5_race, d2_5r,
+        l2_5_spell, d2_5s, l3, d3, mana).
+    """
     mana = max(card.get("cost", 0), 0)
-    actual = card.get("attack", 0) + card.get("health", 0)
-    cls_mult = CLASS_MULTIPLIER.get(card.get("cardClass", "NEUTRAL"), 1.0)
-    expected = power_law(mana, *curve_popt) * cls_mult
-    l1 = actual - expected
 
     l2, d2 = calc_keyword_score(card, curve_popt)
     l_struct, d_struct = calc_structured_bonuses(card)
@@ -359,113 +364,133 @@ def score_minion(card, curve_popt, type_baselines):
     l2_5_spell, d2_5s = calc_spell_school(card)
     l3, d3 = parse_text_effects(card.get("text", ""))
 
-    base_l2l3 = l2 + l_struct + l2_5_race + l2_5_spell + l3
+    ctx = SimpleNamespace(
+        l2=l2, d2=d2,
+        l_struct=l_struct, d_struct=d_struct,
+        l2_5_race=l2_5_race, d2_5r=d2_5r,
+        l2_5_spell=l2_5_spell, d2_5s=d2_5s,
+        l3=l3, d3=d3,
+        mana=mana,
+    )
+    l1, extra = l1_fn(card, ctx, curve_popt, type_baselines)
+
+    base_l2l3 = extra.pop("_base_l2l3")
     l5, d5 = calc_conditional_ev(card, base_l2l3)
 
-    total = l1 + l2 + l_struct + l2_5_race + l2_5_spell + l3 + l5
-    details = {
-        "L1": l1, "L2": l2, "L_struct": l_struct, "L2_5_race": l2_5_race,
-        "L2_5_spell": l2_5_spell, "L3": l3, "L5": l5, "total_raw": total,
-        "breakdown": d2 + d_struct + d2_5r + d2_5s + d3 + d5,
-    }
+    total = extra.pop("_total")
+    details = extra  # remaining keys are the details dict
+    details["L5"] = l5
+    details["total_raw"] = total
+    details["breakdown"] = extra.pop("_breakdown") + d5
     return total, details
 
 
-def score_spell(card, curve_popt, type_baselines):
-    mana = max(card.get("cost", 0), 0)
+# ── L1 callbacks ─────────────────────────────────────────────────────
+
+def _minion_l1(card, ctx, curve_popt, type_baselines):
+    actual = card.get("attack", 0) + card.get("health", 0)
     cls_mult = CLASS_MULTIPLIER.get(card.get("cardClass", "NEUTRAL"), 1.0)
-    l2, d2 = calc_keyword_score(card, curve_popt)
-    l_struct, d_struct = calc_structured_bonuses(card)
-    l2_5_spell, d2_5s = calc_spell_school(card)
-    l3, d3 = parse_text_effects(card.get("text", ""))
-
-    bl = type_baselines.get("SPELL", {"params": None, "mean": 5.0})
-    expected = get_type_expected(mana, bl) * cls_mult
-    l1 = (l2 + l_struct + l2_5_spell + l3) - expected
-
-    base_l2l3 = l2 + l_struct + l2_5_spell + l3
-    l5, d5 = calc_conditional_ev(card, base_l2l3)
-
-    total = l1 + l5
-    details = {
-        "L1": l1, "L2": l2, "L_struct": l_struct, "L2_5_spell": l2_5_spell,
-        "L3": l3, "L5": l5, "total_raw": total,
-        "breakdown": d2 + d_struct + d2_5s + d3 + d5,
+    expected = power_law(ctx.mana, *curve_popt) * cls_mult
+    l1 = actual - expected
+    base_l2l3 = ctx.l2 + ctx.l_struct + ctx.l2_5_race + ctx.l2_5_spell + ctx.l3
+    total = l1 + base_l2l3  # L5 added later by pipeline
+    return l1, {
+        "L1": l1, "L2": ctx.l2, "L_struct": ctx.l_struct,
+        "L2_5_race": ctx.l2_5_race, "L2_5_spell": ctx.l2_5_spell,
+        "L3": ctx.l3,
+        "_base_l2l3": base_l2l3,
+        "_total": total,
+        "_breakdown": ctx.d2 + ctx.d_struct + ctx.d2_5r + ctx.d2_5s + ctx.d3,
     }
-    return total, details
 
 
-def score_weapon(card, curve_popt, type_baselines):
-    mana = max(card.get("cost", 0), 0)
+def _spell_l1(card, ctx, curve_popt, type_baselines):
+    cls_mult = CLASS_MULTIPLIER.get(card.get("cardClass", "NEUTRAL"), 1.0)
+    bl = type_baselines.get("SPELL", {"params": None, "mean": 5.0})
+    expected = get_type_expected(ctx.mana, bl) * cls_mult
+    l1 = (ctx.l2 + ctx.l_struct + ctx.l2_5_spell + ctx.l3) - expected
+    base_l2l3 = ctx.l2 + ctx.l_struct + ctx.l2_5_spell + ctx.l3
+    total = l1  # L5 added later
+    return l1, {
+        "L1": l1, "L2": ctx.l2, "L_struct": ctx.l_struct,
+        "L2_5_spell": ctx.l2_5_spell, "L3": ctx.l3,
+        "_base_l2l3": base_l2l3,
+        "_total": total,
+        "_breakdown": ctx.d2 + ctx.d_struct + ctx.d2_5s + ctx.d3,
+    }
+
+
+def _weapon_l1(card, ctx, curve_popt, type_baselines):
     atk = card.get("attack", 0)
     dur = card.get("health", 0)
     weapon_stats = atk * dur
-    expected_stats = power_law(mana, *curve_popt) * 0.7
+    expected_stats = power_law(ctx.mana, *curve_popt) * 0.7
     l1_raw = weapon_stats - expected_stats
-
-    l2, d2 = calc_keyword_score(card, curve_popt)
-    l_struct, d_struct = calc_structured_bonuses(card)
-    l3, d3 = parse_text_effects(card.get("text", ""))
-
     bl = type_baselines.get("WEAPON", {"params": None, "mean": 3.0})
-    expected_effects = get_type_expected(mana, bl)
-    l1 = l1_raw + (l2 + l_struct + l3) - expected_effects
-
-    l5, d5 = calc_conditional_ev(card, l2 + l_struct + l3)
-
-    total = l1 + l5
-    details = {
-        "L1": l1, "L2": l2, "L_struct": l_struct, "L3": l3, "L5": l5,
-        "total_raw": total,
-        "breakdown": d2 + d_struct + d3 + d5,
+    expected_effects = get_type_expected(ctx.mana, bl)
+    l1 = l1_raw + (ctx.l2 + ctx.l_struct + ctx.l3) - expected_effects
+    base_l2l3 = ctx.l2 + ctx.l_struct + ctx.l3
+    total = l1  # L5 added later
+    return l1, {
+        "L1": l1, "L2": ctx.l2, "L_struct": ctx.l_struct, "L3": ctx.l3,
+        "_base_l2l3": base_l2l3,
+        "_total": total,
+        "_breakdown": ctx.d2 + ctx.d_struct + ctx.d3,
     }
-    return total, details
+
+
+def _location_l1(card, ctx, curve_popt, type_baselines):
+    charges = max(card.get("health", 0), 1)
+    total_effect = ctx.l3 * charges
+    bl = type_baselines.get("LOCATION", {"params": None, "mean": 4.0})
+    expected = get_type_expected(ctx.mana, bl)
+    l1 = total_effect + ctx.l2 + ctx.l_struct - expected
+    base_l2l3 = ctx.l2 + ctx.l_struct + total_effect
+    total = l1  # L5 added later
+    return l1, {
+        "L1": l1, "L2": ctx.l2, "L_struct": ctx.l_struct,
+        "L3": ctx.l3, "L3_total": total_effect, "charges": charges,
+        "_base_l2l3": base_l2l3,
+        "_total": total,
+        "_breakdown": ctx.d2 + ctx.d_struct,  # no d3 in location breakdown
+    }
+
+
+def _hero_l1(card, ctx, curve_popt, type_baselines):
+    armor_budget = 5.0
+    bl = type_baselines.get("HERO", {"params": None, "mean": 7.0})
+    expected = get_type_expected(card.get("cost", 5), bl)
+    l1 = ctx.l2 + ctx.l_struct + ctx.l3 + armor_budget - expected
+    base_l2l3 = ctx.l2 + ctx.l_struct + ctx.l3
+    total = l1  # L5 added later
+    return l1, {
+        "L1": l1, "L2": ctx.l2, "L_struct": ctx.l_struct, "L3": ctx.l3,
+        "_base_l2l3": base_l2l3,
+        "_total": total,
+        "_breakdown": ctx.d2 + ctx.d_struct + ctx.d3,
+    }
+
+
+# ── Public thin wrappers ─────────────────────────────────────────────
+
+def score_minion(card, curve_popt, type_baselines):
+    return _score_card(card, curve_popt, type_baselines, l1_fn=_minion_l1)
+
+
+def score_spell(card, curve_popt, type_baselines):
+    return _score_card(card, curve_popt, type_baselines, l1_fn=_spell_l1)
+
+
+def score_weapon(card, curve_popt, type_baselines):
+    return _score_card(card, curve_popt, type_baselines, l1_fn=_weapon_l1)
 
 
 def score_location(card, curve_popt, type_baselines):
-    mana = max(card.get("cost", 0), 0)
-    charges = max(card.get("health", 0), 1)
-
-    l2, d2 = calc_keyword_score(card, curve_popt)
-    l_struct, d_struct = calc_structured_bonuses(card)
-    l3_per_use, _ = parse_text_effects(card.get("text", ""))
-    total_effect = l3_per_use * charges
-
-    bl = type_baselines.get("LOCATION", {"params": None, "mean": 4.0})
-    expected = get_type_expected(mana, bl)
-    l1 = total_effect + l2 + l_struct - expected
-
-    l5, d5 = calc_conditional_ev(card, l2 + l_struct + total_effect)
-
-    total = l1 + l5
-    details = {
-        "L1": l1, "L2": l2, "L_struct": l_struct, "L3": l3_per_use,
-        "L3_total": total_effect, "charges": charges, "L5": l5,
-        "total_raw": total,
-        "breakdown": d2 + d_struct + d5,
-    }
-    return total, details
+    return _score_card(card, curve_popt, type_baselines, l1_fn=_location_l1)
 
 
 def score_hero(card, curve_popt, type_baselines):
-    l2, d2 = calc_keyword_score(card, curve_popt)
-    l_struct, d_struct = calc_structured_bonuses(card)
-    l3, d3 = parse_text_effects(card.get("text", ""))
-    armor_budget = 5.0
-
-    bl = type_baselines.get("HERO", {"params": None, "mean": 7.0})
-    expected = get_type_expected(card.get("cost", 5), bl)
-    l1 = l2 + l_struct + l3 + armor_budget - expected
-
-    l5, d5 = calc_conditional_ev(card, l2 + l_struct + l3)
-
-    total = l1 + l5
-    details = {
-        "L1": l1, "L2": l2, "L_struct": l_struct, "L3": l3, "L5": l5,
-        "total_raw": total,
-        "breakdown": d2 + d_struct + d3 + d5,
-    }
-    return total, details
+    return _score_card(card, curve_popt, type_baselines, l1_fn=_hero_l1)
 
 
 SCORERS = {

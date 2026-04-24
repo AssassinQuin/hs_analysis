@@ -141,6 +141,11 @@ def apply_enchantment(minion, enchantment: Enchantment) -> None:
         minion.health = max(0, minion.health + enchantment.health_delta)
     if enchantment.max_health_delta != 0:
         minion.max_health = max(1, minion.max_health + enchantment.max_health_delta)
+    if enchantment.cost_delta != 0:
+        # Cost delta applies to hand cards, not minions.
+        # Store as a tag for external cost computation.
+        if hasattr(minion, 'cost'):
+            minion.cost = max(0, minion.cost + enchantment.cost_delta)
 
 
 def remove_enchantment(minion, enchantment_id: str) -> None:
@@ -160,6 +165,9 @@ def remove_enchantment(minion, enchantment_id: str) -> None:
                 minion.health = max(0, minion.health - e.health_delta)
             if e.max_health_delta != 0:
                 minion.max_health = max(1, minion.max_health - e.max_health_delta)
+            if e.cost_delta != 0:
+                if hasattr(minion, 'cost'):
+                    minion.cost = max(0, minion.cost - e.cost_delta)
             minion.enchantments.pop(i)
             return
 

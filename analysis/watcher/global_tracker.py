@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
 from analysis.constants.hs_enums import (
@@ -35,211 +34,16 @@ from analysis.constants.hs_enums import (
     CT_HERO, CT_MINION, CT_SPELL, CT_ENCHANTMENT,
     CT_WEAPON, CT_HERO_POWER, CT_LOCATION,
 )
-from analysis.search.secret_probability import SecretProbabilityModel
+from analysis.watcher.secret_probability import SecretProbabilityModel
+from analysis.watcher.tracker_types import (
+    CardSource, KnownCard, OppHandIntel, SideStats, GlobalGameState,
+)
+from analysis.watcher.tracker_rules import (
+    TrackingContext, TrackerRuleDispatcher,
+    ShuffleTrackerRule, CorruptTrackerRule,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# 卡牌来源分类
-# ---------------------------------------------------------------------------
-
-class CardSource(str, Enum):
-    """卡牌进入游戏的方式"""
-    DECK = "deck"           # 从牌库抽到的
-    GENERATED = "generated"  # 衍生/发现的牌（不在原始牌库中）
-    UNKNOWN = "unknown"      # 无法判断来源
-
-
-# ---------------------------------------------------------------------------
-# 已知卡牌记录（用于对手手牌追踪）
-# ---------------------------------------------------------------------------
-
-@dataclass
-class KnownCard:
-    """对手打出或揭示过的卡牌"""
-    card_id: str = ""
-    turn_seen: int = 0          # 回合数
-    source: CardSource = CardSource.UNKNOWN
-    from_zone: str = ""         # "HAND" / "DECK" / "SETASIDE" — 打出前在哪个区域
-    card_type: str = ""         # MINION / SPELL / WEAPON / HERO / LOCATION
-    cost: int = 0
-    spell_school: str = ""      # 法术学派 (FIRE, FROST, HOLY, etc.)
-    race: str = ""              # 种族 (BEAST, DEMON, DRAGON, etc.)
-    conditional_evidence: str = ""  # 条件触发证据 (如 "HOLDING_DRAGON", "HOLDING_SPELL_SCHOOL:FIRE")
-    effect_triggered: bool = False  # 条件效果是否触发（True=确认手牌有对应类型）
-
-
-@dataclass
-class OppHandIntel:
-    """结构化的对手手牌情报（用于展示）"""
-    confirmed_hand: List[str] = field(default_factory=list)
-    returned_to_hand: List[str] = field(default_factory=list)
-    graveyard_cards: List[str] = field(default_factory=list)
-    probable_hand_over_50: List[str] = field(default_factory=list)
-    secrets_active: List[str] = field(default_factory=list)
-    secrets_triggered: List[str] = field(default_factory=list)
-    deck_cards_played: List[str] = field(default_factory=list)
-    generated_cards: List[str] = field(default_factory=list)
-    hand_count: int = 0
-    deck_count: int = 0
-    confirmed_pct: int = 0
-
-
-# ---------------------------------------------------------------------------
-# 单方统计
-# ---------------------------------------------------------------------------
-
-@dataclass
-class SideStats:
-    """单方（玩家或对手）的运行时统计"""
-    # 卡牌类型统计
-    minions_played: int = 0
-    spells_played: int = 0
-    weapons_played: int = 0
-    heroes_played: int = 0
-    locations_played: int = 0
-
-    # 法术学派统计 {school_name: count}
-    spell_schools: Dict[str, int] = field(default_factory=dict)
-
-    # 衍生牌计数
-    generated_cards_played: int = 0
-    deck_cards_played: int = 0
-
-    # 种族统计 {race_name: count}
-    races_played: Dict[str, int] = field(default_factory=dict)
-
-    # 抽牌统计
-    cards_drawn: int = 0       # 总抽牌数（含疲劳抽牌）
-    cards_milled: int = 0      # 爆牌数（手牌满时抽牌直接进墓地）
-
-    # 疲劳追踪 (§8.3)
-    fatigue_damage: int = 0    # 下次疲劳伤害值
-    times_fatigued: int = 0    # 已经疲劳抽牌次数
-
-    # 过载追踪 (§2.2)
-    overload_next: int = 0     # 下回合被锁的法力
-
-
-# ---------------------------------------------------------------------------
-# 全局游戏状态
-# ---------------------------------------------------------------------------
-
-@dataclass
-class GlobalGameState:
-    """跨回合的全局游戏状态追踪器
-
-    在整场游戏回放过程中维护，由 GlobalTracker 随 Power.log
-    行的处理而更新。
-    """
-    # ---- 对手手牌追踪 ----
-    opp_known_cards: List[KnownCard] = field(default_factory=list)
-    """对手已知的卡牌（打出/揭示时记录）"""
-
-    opp_hand_card_ids: Dict[int, Tuple[str, int]] = field(default_factory=dict)
-    """对手手牌 entity_id -> (card_id, zone)（SHOW_ENTITY 揭示的）"""
-
-    # ---- 对手牌库追踪 ----
-    opp_deck_remaining: int = 0
-    """对手牌库剩余（精确 ZONE_DECK 计数）"""
-
-    opp_initial_deck_size: int = 0
-    """对手初始牌库大小（游戏开始时记录）"""
-
-    opp_generated_seen: Set[str] = field(default_factory=set)
-    """对手已打出的衍生牌 card_id 集合"""
-
-    opp_graveyard_seen: List[str] = field(default_factory=list)
-    """对手已进入墓地的已知 card_id 历史（按时间顺序）"""
-
-    opp_returned_to_hand_seen: List[str] = field(default_factory=list)
-    """对手已打出后回到手牌的 card_id 历史（100%确认）"""
-
-    # ---- 我方追踪 ----
-    player_generated_seen: Set[str] = field(default_factory=set)
-    """我方已打出的衍生牌 card_id 集合"""
-
-    player_cards_played_history: List[str] = field(default_factory=list)
-    """我方打出卡牌的 card_id 历史列表（按打出顺序）"""
-
-    player_minions_died: List[str] = field(default_factory=list)
-    """我方死亡随从的 card_id 列表"""
-
-    # ---- 先后手 (§1.7) ----
-    is_first_player: bool = True
-    """我方是否先手"""
-    coin_used: bool = False
-    """硬币是否已使用"""
-    coin_entity_id: int = 0
-    """硬币 entity_id"""
-
-    # ---- 英雄职业 ----
-    player_hero_class: str = ""
-    """我方英雄职业 (PRIEST, MAGE, etc.)"""
-    opp_hero_class: str = ""
-    """对手英雄职业"""
-
-    # ---- 对手武器/地点 ----
-    opp_weapon: str = ""
-    """对手当前武器 card_id"""
-    opp_weapon_atk: int = 0
-    opp_weapon_durability: int = 0
-
-    opp_locations: List[str] = field(default_factory=list)
-    """对手当前地点 card_id 列表"""
-
-    # ---- 残骸 (DK Corpse) ----
-    player_corpses: int = 0
-    opp_corpses: int = 0
-
-    # ---- 兆示 / 任务 ----
-    player_quests: List[Dict] = field(default_factory=list)
-    opp_quests: List[Dict] = field(default_factory=list)
-    player_herald_count: int = 0
-    opp_herald_count: int = 0
-
-    # ---- 奥秘 ----
-    opp_secrets: List[str] = field(default_factory=list)
-    """对手当前奥秘 card_id 列表"""
-
-    opp_secrets_triggered: List[KnownCard] = field(default_factory=list)
-    """对手已触发的奥秘"""
-
-    # ---- 本回合出牌记录 (延系等需要 §9.3) ----
-    cards_played_this_turn_player: List[str] = field(default_factory=list)
-    """我方本回合打出的 card_id"""
-    cards_played_this_turn_opp: List[str] = field(default_factory=list)
-    """对手本回合打出的 card_id"""
-    last_turn_races_player: Set[str] = field(default_factory=set)
-    """我方上回合打出的种族"""
-    last_turn_schools_player: Set[str] = field(default_factory=set)
-    """我方上回合打出的法术学派"""
-
-    # ---- 附魔追踪 (§5.5) ----
-    active_enchantments: Dict[int, str] = field(default_factory=dict)
-    """entity_id -> card_id of enchantment"""
-
-    # ---- 洗入牌库追踪 ----
-    opp_shuffled_into_deck: List[str] = field(default_factory=list)
-    """对手洗入牌库的已知 card_id（如爆牌鱼、污染等效果）"""
-
-    player_shuffled_into_deck: List[str] = field(default_factory=list)
-    """我方洗入牌库的已知 card_id"""
-
-    # ---- 腐蚀追踪 ----
-    opp_corrupted_cards: List[str] = field(default_factory=list)
-    """对手已腐蚀升级的原始 card_id 列表（升级前的card_id）"""
-
-    opp_corrupted_upgrades: Dict[str, str] = field(default_factory=dict)
-    """对手腐蚀映射: original_card_id -> upgraded_card_id"""
-
-    # ---- 统计 ----
-    player_stats: SideStats = field(default_factory=SideStats)
-    opp_stats: SideStats = field(default_factory=SideStats)
-
-    # ---- 回合数 ----
-    current_turn: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +99,26 @@ class GlobalTracker:
         self._bayesian_initialized = False
         self._secret_model: Optional['SecretProbabilityModel'] = None
 
+        # 区域转换分发表: (old_zone, new_zone) → handler
+        self._zone_handlers: Dict[Tuple[int, int], callable] = {
+            (self.ZONE_HAND, self.ZONE_PLAY): self._on_zone_hand_to_play,
+            (self.ZONE_DECK, self.ZONE_HAND): self._on_zone_deck_to_hand,
+            (self.ZONE_DECK, self.ZONE_GRAVEYARD): self._on_zone_deck_to_graveyard,
+            (self.ZONE_SETASIDE, self.ZONE_HAND): self._on_zone_setaside_to_hand,
+            (self.ZONE_SETASIDE, self.ZONE_PLAY): self._on_zone_setaside_to_play,
+            (self.ZONE_PLAY, self.ZONE_GRAVEYARD): self._on_zone_play_to_graveyard,
+            (self.ZONE_PLAY, self.ZONE_HAND): self._on_zone_return_to_hand,
+            (self.ZONE_SECRET, self.ZONE_HAND): self._on_zone_return_to_hand,
+            (self.ZONE_HAND, self.ZONE_SECRET): self._on_zone_hand_to_secret,
+            (self.ZONE_SECRET, self.ZONE_GRAVEYARD): self._on_zone_secret_resolved,
+            (self.ZONE_SECRET, self.ZONE_SETASIDE): self._on_zone_secret_resolved,
+        }
+
+        # 可插拔追踪规则
+        self._rule_dispatcher = TrackerRuleDispatcher()
+        self._rule_dispatcher.register(ShuffleTrackerRule())
+        self._rule_dispatcher.register(CorruptTrackerRule())
+
     def set_controllers(self, our: int, opp: int):
         self.our_controller = our
         self.opp_controller = opp
@@ -318,7 +142,7 @@ class GlobalTracker:
             try:
                 from analysis.data.hsdb import get_db
                 self._card_db = get_db()
-            except Exception:
+            except ImportError:
                 logger.warning("HSCardDB unavailable, race/school tracking disabled")
         return self._card_db
 
@@ -376,13 +200,11 @@ class GlobalTracker:
         因为对手的 HAND→PLAY 区域变化对我们不可见。
         """
         if controller == self.opp_controller:
-            # 检测腐蚀升级：对手手牌中的卡牌 card_id 发生变化
-            # Corrupt: 在手中时 SHOW_ENTITY 更新 card_id 为升级版本
-            if entity_id in self.state.opp_hand_card_ids:
-                old_card_id = self.state.opp_hand_card_ids[entity_id][0]
-                if old_card_id and old_card_id != card_id and zone == self.ZONE_HAND:
-                    self.state.opp_corrupted_cards.append(old_card_id)
-                    self.state.opp_corrupted_upgrades[old_card_id] = card_id
+            # 追踪规则分发（Corrupt升级检测等由 CorruptTrackerRule 处理）
+            self._rule_dispatcher.dispatch_show_entity(
+                entity_id, card_id, controller, zone,
+                card_type, self.state, is_opp=True,
+            )
 
             self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
 
@@ -422,15 +244,10 @@ class GlobalTracker:
                        card_id: str = "", card_type: int = 0):
         """实体ZONE标签变化时调用。
 
-        关键转换：
-        - HAND -> PLAY: 打出卡牌
-        - DECK -> HAND: 抽牌
-        - DECK -> GRAVEYARD: 爆牌 (§8.2)
-        - HAND -> SECRET: 打出奥秘
-        - SECRET -> GRAVEYARD: 奥秘触发
-        - PLAY -> GRAVEYARD: 随从死亡、武器摧毁
-        - SETASIDE -> HAND: 衍生牌进入手牌
-        - SETASIDE -> PLAY: 衍生随从登场
+        区域转换通过 _zone_handlers 分发表自动路由。
+        以下转换在分发后独立处理（不属于互斥分支）：
+        - 任意 -> DECK: 洗入牌库（爆牌鱼、污染等）
+        - HAND -> * (硬币): 硬币使用检测
         """
         is_opp = (controller == self.opp_controller)
 
@@ -442,79 +259,82 @@ class GlobalTracker:
             card_id = self.state.opp_hand_card_ids[entity_id][0]
             self.state.opp_hand_card_ids[entity_id] = (card_id, new_zone)
 
-        # 打出卡牌: HAND -> PLAY
-        if old_zone == self.ZONE_HAND and new_zone == self.ZONE_PLAY:
-            self._on_card_played(entity_id, controller, card_id, card_type)
+        # 区域转换分发
+        handler = self._zone_handlers.get((old_zone, new_zone))
+        if handler is not None:
+            handler(entity_id, controller, card_id, card_type, is_opp)
 
-        # 抽牌: DECK -> HAND (§8.2)
-        elif old_zone == self.ZONE_DECK and new_zone == self.ZONE_HAND:
-            stats = self.state.opp_stats if is_opp else self.state.player_stats
-            stats.cards_drawn += 1
+        # 追踪规则分发（跨切面关注点：洗入牌库等）
+        ctx = TrackingContext(
+            entity_id=entity_id, controller=controller,
+            old_zone=old_zone, new_zone=new_zone,
+            card_id=card_id, card_type=card_type,
+            is_opp=is_opp, state=self.state,
+        )
+        self._rule_dispatcher.dispatch_zone_change(ctx)
 
-        # 爆牌: DECK -> GRAVEYARD（手牌满时） (§8.2)
-        elif old_zone == self.ZONE_DECK and new_zone == self.ZONE_GRAVEYARD:
-            stats = self.state.opp_stats if is_opp else self.state.player_stats
-            stats.cards_milled += 1
-            stats.cards_drawn += 1  # 算作一次抽牌
-
-        # 疲劳抽牌：牌库无实体，游戏在HAND区创建新实体
-        # 通过牌库计数归零+抽牌事件隐式追踪
-
-        # 衍生牌进入手牌: SETASIDE -> HAND
-        elif old_zone == self.ZONE_SETASIDE and new_zone == self.ZONE_HAND:
-            pass  # 实体出生记录已标记为衍生
-
-        # 衍生随从登场: SETASIDE -> PLAY
-        elif old_zone == self.ZONE_SETASIDE and new_zone == self.ZONE_PLAY:
-            pass  # 召唤的衍生随从不算"打出"
-
-        # 随从死亡/武器摧毁: PLAY -> GRAVEYARD
-        elif old_zone == self.ZONE_PLAY and new_zone == self.ZONE_GRAVEYARD:
-            if is_opp and card_id:
-                self.state.opp_graveyard_seen.append(card_id)
-            if not is_opp and card_id:
-                self.state.player_minions_died.append(card_id)
-
-        # 打出的卡牌回手（弹回/召回）: PLAY/SECRET -> HAND
-        elif old_zone in (self.ZONE_PLAY, self.ZONE_SECRET) and new_zone == self.ZONE_HAND:
-            if is_opp and card_id:
-                self.state.opp_returned_to_hand_seen.append(card_id)
-
-        # 打出奥秘: HAND -> SECRET (§7)
-        elif old_zone == self.ZONE_HAND and new_zone == self.ZONE_SECRET:
-            if is_opp and card_id:
-                self.state.opp_secrets.append(card_id)
-            self._on_card_played(entity_id, controller, card_id, card_type)
-
-        # 奥秘触发/过期: SECRET -> GRAVEYARD/SETASIDE
-        elif old_zone == self.ZONE_SECRET and new_zone in (self.ZONE_GRAVEYARD, self.ZONE_SETASIDE):
-            if is_opp and card_id:
-                if card_id in self.state.opp_secrets:
-                    self.state.opp_secrets.remove(card_id)
-                self.state.opp_secrets_triggered.append(KnownCard(
-                    card_id=card_id,
-                    turn_seen=self.state.current_turn,
-                    source=self._classify_source(entity_id, card_id),
-                    card_type="SPELL",
-                ))
-                # 更新奥秘概率模型
-                if self._secret_model and card_id:
-                    self._secret_model.exclude(card_id)
-
-        # 装备武器：隐式——通过PLAY区的武器实体追踪
-        # 打出地点：通过PLAY区的地点实体追踪
-
-        # 洗入牌库: 任意区域 → DECK（如爆牌鱼、污染等）
-        if new_zone == self.ZONE_DECK and card_id:
-            if is_opp:
-                self.state.opp_shuffled_into_deck.append(card_id)
-            else:
-                self.state.player_shuffled_into_deck.append(card_id)
-
-        # 硬币使用：检测硬币法术从HAND到PLAY/GRAVEYARD
+        # 硬币使用：检测硬币法术从HAND离开
         if (old_zone == self.ZONE_HAND and
             card_id in self.COIN_CARD_IDS):
             self.state.coin_used = True
+
+    # ── 区域转换处理器 ─────────────────────────────────────────
+
+    def _on_zone_hand_to_play(self, entity_id, controller, card_id, card_type, is_opp):
+        """打出卡牌: HAND -> PLAY"""
+        self._on_card_played(entity_id, controller, card_id, card_type)
+
+    def _on_zone_deck_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
+        """抽牌: DECK -> HAND (§8.2)"""
+        stats = self.state.opp_stats if is_opp else self.state.player_stats
+        stats.cards_drawn += 1
+
+    def _on_zone_deck_to_graveyard(self, entity_id, controller, card_id, card_type, is_opp):
+        """爆牌: DECK -> GRAVEYARD（手牌满时）(§8.2)"""
+        stats = self.state.opp_stats if is_opp else self.state.player_stats
+        stats.cards_milled += 1
+        stats.cards_drawn += 1  # 算作一次抽牌
+
+    def _on_zone_setaside_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
+        """衍生牌进入手牌: SETASIDE -> HAND"""
+        pass  # 实体出生记录已标记为衍生
+
+    def _on_zone_setaside_to_play(self, entity_id, controller, card_id, card_type, is_opp):
+        """衍生随从登场: SETASIDE -> PLAY"""
+        pass  # 召唤的衍生随从不算"打出"
+
+    def _on_zone_play_to_graveyard(self, entity_id, controller, card_id, card_type, is_opp):
+        """随从死亡/武器摧毁: PLAY -> GRAVEYARD"""
+        if is_opp and card_id:
+            self.state.opp_graveyard_seen.append(card_id)
+        if not is_opp and card_id:
+            self.state.player_minions_died.append(card_id)
+
+    def _on_zone_return_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
+        """打出的卡牌回手（弹回/召回）: PLAY/SECRET -> HAND"""
+        if is_opp and card_id:
+            self.state.opp_returned_to_hand_seen.append(card_id)
+
+    def _on_zone_hand_to_secret(self, entity_id, controller, card_id, card_type, is_opp):
+        """打出奥秘: HAND -> SECRET (§7)"""
+        if is_opp and card_id:
+            self.state.opp_secrets.append(card_id)
+        self._on_card_played(entity_id, controller, card_id, card_type)
+
+    def _on_zone_secret_resolved(self, entity_id, controller, card_id, card_type, is_opp):
+        """奥秘触发/过期: SECRET -> GRAVEYARD/SETASIDE"""
+        if is_opp and card_id:
+            if card_id in self.state.opp_secrets:
+                self.state.opp_secrets.remove(card_id)
+            self.state.opp_secrets_triggered.append(KnownCard(
+                card_id=card_id,
+                turn_seen=self.state.current_turn,
+                source=self._classify_source(entity_id, card_id),
+                card_type="SPELL",
+            ))
+            # 更新奥秘概率模型
+            if self._secret_model and card_id:
+                self._secret_model.exclude(card_id)
 
     def _on_card_played(self, entity_id: int, controller: int,
                         card_id: str, card_type: int):

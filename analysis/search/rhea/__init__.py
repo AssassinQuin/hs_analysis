@@ -11,7 +11,6 @@ from analysis.search.rhea.simulation import (
     apply_action,
     apply_draw,
     next_turn_lethal_check,
-    _try_mechanic,
 )
 from analysis.search.rhea.result import SearchResult
 from analysis.search.rhea.engine import RHEAEngine

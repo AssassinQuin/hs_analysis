@@ -255,7 +255,7 @@ class BattlecryDispatcher:
                 else:
                     hero_class = ''
                 s = resolve_discover(s, bc_text, hero_class)
-            except Exception:
+            except (ImportError, ValueError, TypeError, KeyError):
                 pass
 
         return s
@@ -323,7 +323,7 @@ class BattlecryDispatcher:
                 if score + tiebreaker > best_score:
                     best_score = score + tiebreaker
                     best_target = target_id
-            except Exception:
+            except (ValueError, TypeError, IndexError):
                 continue  # fallback: skip failed evaluation
 
         return best_target
@@ -441,7 +441,7 @@ def dispatch_battlecry_branches(
         branches = resolve_discover_top_k(s, bc_text, hero_class, k=k)
         if len(branches) > 1:
             return branches
-    except Exception:
+    except (ImportError, ValueError, TypeError, KeyError):
         pass
 
     return [(s, 1.0)]

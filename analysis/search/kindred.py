@@ -11,6 +11,7 @@ no "KINDRED" mechanic tag exists in card data.
 from __future__ import annotations
 
 import logging
+import random
 import re
 from dataclasses import replace
 
@@ -163,14 +164,13 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
     if not cost_red:
         cost_red = _KINDRED_COST_RED_CN.search(text)
     if cost_red:
-        # Simplified: adjust hand card costs
         amount = int(cost_red.group(1))
         if s.hand:
-            # Reduce cost of a random card in hand (simplified)
-            for h_card in s.hand:
-                if hasattr(h_card, 'cost'):
-                    h_card.cost = max(0, h_card.cost - amount)
-                break  # Only reduce one card
+            # Collect eligible cards (those with a cost attribute)
+            eligible = [c for c in s.hand if hasattr(c, 'cost')]
+            if eligible:
+                target = random.choice(eligible)
+                target.cost = max(0, target.cost - amount)
         return s
 
     # Fallback: unparseable bonus — log and skip

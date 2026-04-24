@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from ..config import DATA_DIR
+from ..utils import load_json
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +63,8 @@ def build_wild_db(
     if not zh_path.exists():
         raise FileNotFoundError(f"zhCN data not found: {zh_path}")
 
-    zh_data: List[Dict[str, Any]] = json.loads(zh_path.read_text(encoding="utf-8"))
-    en_data: List[Dict[str, Any]] = json.loads(en_path.read_text(encoding="utf-8"))
+    zh_data: List[Dict[str, Any]] = load_json(zh_path)
+    en_data: List[Dict[str, Any]] = load_json(en_path)
     en_by_id = {c["id"]: c for c in en_data}
 
     wild_cards: List[Dict[str, Any]] = []

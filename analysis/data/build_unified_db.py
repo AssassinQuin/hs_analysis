@@ -14,6 +14,7 @@ from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 from analysis.config import DATA_DIR, UNIFIED_DB_PATH, DATA_BUILD
+from analysis.utils import load_json
 
 ZH_PATH = DATA_DIR / "zhCN" / "cards.collectible.json"
 EN_PATH = DATA_DIR / "enUS" / "cards.collectible.json"
@@ -74,8 +75,8 @@ def build_card(zh_card, en_card):
 
 
 def main():
-    zh_data = json.loads(ZH_PATH.read_text(encoding="utf-8"))
-    en_data = json.loads(EN_PATH.read_text(encoding="utf-8"))
+    zh_data = load_json(ZH_PATH)
+    en_data = load_json(EN_PATH)
 
     en_by_id = {c["id"]: c for c in en_data}
 

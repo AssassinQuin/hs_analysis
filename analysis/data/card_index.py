@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..config import DATA_DIR
+from ..utils import load_json
 
 logger = logging.getLogger(__name__)
 
@@ -469,7 +470,7 @@ def get_index(rebuild: bool = False) -> CardIndex:
 
         std_path = DATA_DIR / "unified_standard.json"
         if std_path.exists():
-            std_cards = json.loads(std_path.read_text(encoding="utf-8"))
+            std_cards = load_json(std_path)
             for c in std_cards:
                 c.setdefault("format", "standard")
             cards.extend(std_cards)
@@ -479,7 +480,7 @@ def get_index(rebuild: bool = False) -> CardIndex:
 
         wild_path = DATA_DIR / "unified_wild.json"
         if wild_path.exists():
-            wild_cards = json.loads(wild_path.read_text(encoding="utf-8"))
+            wild_cards = load_json(wild_path)
             for c in wild_cards:
                 c["format"] = "wild"
             cards.extend(wild_cards)

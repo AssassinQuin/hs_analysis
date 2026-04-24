@@ -181,7 +181,7 @@ class RHEAEngine:
                             fromlist=[_factor_cls_name],
                         )
                         fg.register(getattr(mod, _factor_cls_name)())
-                    except Exception:
+                    except (ImportError, AttributeError):
                         pass
 
                 utp = UnifiedTacticalPlanner(

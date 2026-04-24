@@ -16,7 +16,7 @@ from analysis.search.game_state import GameState, Minion
 # Aura definitions
 # ---------------------------------------------------------------------------
 
-AuraDef = dict  # {target_filter, attack_delta, health_delta, max_health_delta}
+AuraDef = dict  # {target_filter, attack_delta, health_delta, max_health_delta, cost_delta}
 
 AURA_REGISTRY: Dict[str, AuraDef] = {
     # Raid Leader — 雷德·黑手 is actually WRONG; Raid Leader CN = 掠夺者
@@ -182,11 +182,18 @@ def recompute_auras(state: GameState, max_iterations: int = 10) -> GameState:
 
 
 def _remove_all_auras(state: GameState) -> None:
-    """Remove every aura enchantment from every minion on both boards."""
+    """Remove every aura enchantment from every minion on both boards + hand cards."""
     for minion in state.board:
         _remove_auras_from_minion(minion)
     for minion in state.opponent.board:
         _remove_auras_from_minion(minion)
+    # Remove aura cost enchantments from hand cards
+    for card in state.hand:
+        if hasattr(card, 'enchantments'):
+            _remove_auras_from_minion(card)
+    for card in state.opponent.hand:
+        if hasattr(card, 'enchantments'):
+            _remove_auras_from_minion(card)
 
 
 def _remove_auras_from_minion(minion: Minion) -> None:
@@ -207,23 +214,52 @@ def _apply_all_auras(state: GameState) -> bool:
     for idx, minion in enumerate(state.board):
         if minion.name in AURA_REGISTRY:
             aura_def = AURA_REGISTRY[minion.name]
-            targets = _get_targets(minion, idx, state.board, aura_def["target_filter"])
-            for t_idx, target in targets:
-                ench = _make_aura_enchantment(minion, idx, t_idx, aura_def)
-                apply_enchantment(target, ench)
-                any_applied = True
+            if aura_def.get("cost_delta", 0) != 0 and aura_def.get("target_filter") in ("friendly_hand", "opponent_hand"):
+                # Cost-modifying auras target hand cards
+                targets = _get_hand_targets(state, aura_def["target_filter"])
+                for t_idx, target in targets:
+                    ench = _make_aura_enchantment(minion, idx, t_idx, aura_def)
+                    apply_enchantment(target, ench)
+                    any_applied = True
+            else:
+                targets = _get_targets(minion, idx, state.board, aura_def["target_filter"])
+                for t_idx, target in targets:
+                    ench = _make_aura_enchantment(minion, idx, t_idx, aura_def)
+                    apply_enchantment(target, ench)
+                    any_applied = True
 
     # Opponent board
     for idx, minion in enumerate(state.opponent.board):
         if minion.name in AURA_REGISTRY:
             aura_def = AURA_REGISTRY[minion.name]
-            targets = _get_targets(minion, idx, state.opponent.board, aura_def["target_filter"])
-            for t_idx, target in targets:
-                ench = _make_aura_enchantment(minion, idx, t_idx, aura_def, side="opp")
-                apply_enchantment(target, ench)
-                any_applied = True
+            if aura_def.get("cost_delta", 0) != 0 and aura_def.get("target_filter") in ("friendly_hand", "opponent_hand"):
+                targets = _get_hand_targets(state, aura_def["target_filter"], side="opp")
+                for t_idx, target in targets:
+                    ench = _make_aura_enchantment(minion, idx, t_idx, aura_def, side="opp")
+                    apply_enchantment(target, ench)
+                    any_applied = True
+            else:
+                targets = _get_targets(minion, idx, state.opponent.board, aura_def["target_filter"])
+                for t_idx, target in targets:
+                    ench = _make_aura_enchantment(minion, idx, t_idx, aura_def, side="opp")
+                    apply_enchantment(target, ench)
+                    any_applied = True
 
     return any_applied
+
+
+def _get_hand_targets(
+    state: GameState,
+    target_filter: str,
+    side: str = "friend",
+) -> List[tuple]:
+    """Return (index, card) pairs from the appropriate hand for cost auras."""
+    if target_filter == "friendly_hand":
+        return [(i, c) for i, c in enumerate(state.hand) if hasattr(c, 'cost')]
+    elif target_filter == "opponent_hand":
+        # Opponent hand cards are mostly hidden; apply to known/tracked cards
+        return [(i, c) for i, c in enumerate(state.opponent.hand) if hasattr(c, 'cost')]
+    return []
 
 
 def _make_aura_enchantment(
@@ -241,4 +277,5 @@ def _make_aura_enchantment(
         attack_delta=aura_def.get("attack_delta", 0),
         health_delta=aura_def.get("health_delta", 0),
         max_health_delta=aura_def.get("max_health_delta", 0),
+        cost_delta=aura_def.get("cost_delta", 0),
     )

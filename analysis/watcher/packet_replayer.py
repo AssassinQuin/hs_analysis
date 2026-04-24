@@ -1073,7 +1073,7 @@ class PacketReplayer:
             try:
                 from analysis.data.hsdb import get_db
                 card_db = get_db()
-            except Exception:
+            except ImportError:
                 card_db = None
             for entity in our_entities:
                 if entity.zone == Zone.HAND:
@@ -1270,7 +1270,7 @@ class PacketReplayer:
             for raw in raw_pool:
                 try:
                     cards.append(Card.from_hsdb_dict(raw))
-                except Exception:
+                except (TypeError, KeyError, ValueError):
                     continue
         except Exception:
             cards = []
@@ -1568,7 +1568,7 @@ class PacketReplayer:
             for raw in raw_pool:
                 try:
                     pool_cards.append(Card.from_hsdb_dict(raw))
-                except Exception:
+                except (TypeError, KeyError, ValueError):
                     continue
         except Exception:
             return []
@@ -1649,7 +1649,7 @@ class PacketReplayer:
                 raw = candidates[i % n]
                 try:
                     out.append(Card.from_hsdb_dict(raw))
-                except Exception:
+                except (TypeError, KeyError, ValueError):
                     pass
                 i += 1
                 if i > need_count * 3:
@@ -1720,7 +1720,7 @@ class PacketReplayer:
         try:
             from analysis.data.hsdb import get_db
             db = get_db()
-        except Exception:
+        except ImportError:
             db = None
 
         # 1) Known hand cards observed in HAND zone
@@ -1731,7 +1731,7 @@ class PacketReplayer:
                     continue
                 try:
                     card = Card.from_hsdb_dict(raw)
-                except Exception:
+                except (TypeError, KeyError, ValueError):
                     continue
                 roles = classify_card_roles(card)
                 if not roles:
@@ -1758,7 +1758,7 @@ class PacketReplayer:
                     continue
                 try:
                     card = Card.from_hsdb_dict(raw)
-                except Exception:
+                except (TypeError, KeyError, ValueError):
                     continue
                 roles = classify_card_roles(card)
                 if not roles:
@@ -2083,7 +2083,7 @@ class PacketReplayer:
                     elif isinstance(data, dict):
                         # unified format might be different
                         pass
-                except Exception:
+                except (OSError, json.JSONDecodeError):
                     pass
 
         # Also try HSCardDB for non-collectible (token) cards
@@ -2095,7 +2095,7 @@ class PacketReplayer:
                     name = card_data.get("name", "") or card_data.get("englishName", "")
                     if name:
                         name_map[cid] = name
-        except Exception:
+        except ImportError:
             pass
 
         return name_map

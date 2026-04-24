@@ -26,7 +26,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -36,6 +35,8 @@ _API_BASE = "https://api.hearthstonejson.com/v1"
 _UA = "hs_analysis/1.0"
 
 from analysis.config import PROJECT_ROOT
+from analysis.utils import load_json
+from analysis.utils.http import http_get_json
 
 _CACHE_DIR = Path(os.environ.get("HSJSON_CACHE_DIR", str(PROJECT_ROOT / "card_data")))
 
@@ -73,10 +74,7 @@ _hero_class_map_cache: Dict[str, Dict[int, str]] = {}
 
 
 def _fetch_json(url: str, timeout: int = 60) -> List[dict]:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
-    return json.loads(raw.decode("utf-8"))
+    return http_get_json(url, timeout=timeout, user_agent=_UA)
 
 
 def _cache_path(build: str, locale: str, name: str) -> Path:
@@ -89,8 +87,8 @@ def _load_cached(path: Path) -> Optional[List[dict]]:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+        return load_json(path)
+    except (OSError, ValueError):
         return None
 
 
@@ -98,7 +96,7 @@ def _save_cache(path: Path, data: list) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    except Exception as exc:
+    except OSError as exc:
         logger.warning("Cache write failed: %s", exc)
 
 
@@ -279,7 +277,7 @@ class HSCardDB:
             if importlib.util.find_spec("hearthstone_data") is None:
                 logger.info("hearthstone_data not installed, skipping XML fallback")
                 return
-        except Exception:
+        except (ImportError, ModuleNotFoundError):
             pass
 
         try:
@@ -623,7 +621,7 @@ def get_hero_class_map(build: str = "240397") -> Dict[int, str]:
                 cls = str(item.get("cardClass", "")).upper()
                 if dbf > 0 and cls:
                     mapping[dbf] = cls
-            except Exception:
+            except (TypeError, ValueError):
                 continue
     else:
         # 用默认值填充缓存，避免热路径触发重量级卡牌数据库初始化

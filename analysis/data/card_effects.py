@@ -37,6 +37,7 @@ class CardEffects:
     buff_health: int = 0
     discard: int = 0
     cost_reduce: int = 0
+    health_cost: int = 0
     overload: int = 0
     has_destroy: bool = False
     has_silence: bool = False
@@ -110,6 +111,8 @@ _DISCARD_CN = re.compile(r"弃掉?\s*(\d+)\s*张")
 _DISCARD_EN = re.compile(r"Discard\s*(\d+)", re.IGNORECASE)
 _COST_REDUCE_CN = re.compile(r"法力值消耗.*?减少\s*(\d+)")
 _COST_REDUCE_EN = re.compile(r"Costs?\s*(\d+)\s*less", re.IGNORECASE)
+_HEALTH_COST_CN = re.compile(r"消耗\s*(\d+)\s*点(?:生命值|血量)|支付\s*(\d+)\s*点生命")
+_HEALTH_COST_EN = re.compile(r"(?:Pay|Cost)\s*(\d+)\s*(?:Health|health)|Lose\s*(\d+)\s*(?:Health|health)", re.IGNORECASE)
 
 
 def _first_int(pattern: "re.Pattern", text: str, default: int = 0) -> int:
@@ -157,6 +160,15 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
     eff.discard = max(_first_int(_DISCARD_CN, text), _first_int(_DISCARD_EN, text))
     eff.cost_reduce = max(_first_int(_COST_REDUCE_CN, text), _first_int(_COST_REDUCE_EN, text))
 
+    # Health cost detection
+    m = _HEALTH_COST_CN.search(text)
+    if m:
+        eff.health_cost = int(m.group(1) or m.group(2))
+    else:
+        m = _HEALTH_COST_EN.search(text)
+        if m:
+            eff.health_cost = int(m.group(1) or m.group(2))
+
     if "消灭" in text or "Destroy" in text:
         eff.has_destroy = True
     if "沉默" in text or "Silence" in text:
@@ -188,3 +200,9 @@ def get_card_overload(card: Card) -> int:
     text = card.text or ""
     m = re.search(r"过载[：:]\s*[（(]\s*(\d+)\s*[）)]", text)
     return int(m.group(1)) if m else 0
+
+
+def get_card_health_cost(card: Card) -> int:
+    """Quick accessor: health cost — 0 means no health cost."""
+    eff = get_effects(card)
+    return eff.health_cost

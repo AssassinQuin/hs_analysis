@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, List
+from typing import Optional, List, NamedTuple, Callable, Any
 
 from hearthstone.enums import GameTag, Zone, CardType
 
@@ -33,6 +33,13 @@ _BOOL_TAG_MAP = {
 }
 
 
+class FieldMapping(NamedTuple):
+    """Declarative mapping from a GlobalGameState field to a target field."""
+    src_field: str
+    dst_field: str
+    transform: Callable[[Any], Any] = lambda x: x
+
+
 class StateBridge:
     """Bridges hslog entity model → GameState for the decision engine.
 
@@ -40,6 +47,28 @@ class StateBridge:
         bridge = StateBridge()
         game_state = bridge.convert(hslog_game, player_index=0)
     """
+
+    # Declarative field mappings: GlobalGameState → OpponentState
+    _OPP_FIELD_MAP: List[FieldMapping] = [
+        FieldMapping("opp_generated_seen", "opp_generated_count", len),
+        FieldMapping("opp_secrets", "secrets", list),
+        FieldMapping("opp_deck_remaining", "deck_remaining"),
+        FieldMapping("opp_weapon", "opp_weapon_card_id", lambda x: x or ""),
+        FieldMapping("opp_corpses", "opp_corpses"),
+        FieldMapping("opp_herald_count", "opp_herald_count"),
+        FieldMapping("opp_quests", "opp_quests", list),
+        FieldMapping("opp_shuffled_into_deck", "opp_shuffled_into_deck", list),
+        FieldMapping("opp_corrupted_cards", "opp_corrupted_cards", list),
+    ]
+
+    # Declarative field mappings: GlobalGameState → GameState (player fields)
+    _PLAYER_FIELD_MAP: List[FieldMapping] = [
+        FieldMapping("player_herald_count", "herald_count"),
+        FieldMapping("player_corpses", "corpses"),
+        FieldMapping("player_quests", "active_quests", list),
+        FieldMapping("last_turn_races_player", "last_turn_races", set),
+        FieldMapping("last_turn_schools_player", "last_turn_schools", set),
+    ]
 
     def __init__(self, card_lookup=None, entity_cache=None, deck_cards: Optional[List[Card]] = None):
         """Initialize with optional card database lookup and entity cache.
@@ -83,7 +112,7 @@ class StateBridge:
                     return Card.from_hsdb_dict(raw)
                 return None
             return _lookup
-        except Exception:
+        except ImportError:
             return None
 
     def convert(self, game, player_index: int = 0, global_state=None) -> GameState:
@@ -177,7 +206,7 @@ class StateBridge:
                 weapon=weapon,
                 hero_class=hero_class,
             )
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting hero state: {e}")
             return HeroState()
 
@@ -198,7 +227,7 @@ class StateBridge:
                 overloaded=overloaded,
                 overload_next=0,  # NOT extracted - this is next turn's overload
             )
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting mana state: {e}")
             return ManaState()
 
@@ -224,11 +253,11 @@ class StateBridge:
                     minion = self._create_minion(entity, owner)
                     if minion:
                         minions.append(minion)
-                except Exception as e:
+                except (AttributeError, KeyError, TypeError) as e:
                     log.warning(f"Error creating minion: {e}")
 
             return minions
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting minions: {e}")
             return []
 
@@ -385,11 +414,11 @@ class StateBridge:
                         )
 
                     hand_cards.append(card)
-                except Exception as e:
+                except (AttributeError, KeyError, TypeError) as e:
                     log.warning(f"Error creating hand card: {e}")
 
             return hand_cards
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting hand cards: {e}")
             return []
 
@@ -412,7 +441,7 @@ class StateBridge:
                     deck_count = deck_size_tag - initial_decklist_tag
 
             return max(0, deck_count)
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting deck remaining: {e}")
             return 0
 
@@ -432,7 +461,7 @@ class StateBridge:
 
             # Default to turn 1
             return 1
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting turn number: {e}")
             return 1
 
@@ -446,7 +475,7 @@ class StateBridge:
                     if card_type is None or card_type in (CardType.MINION, CardType.SPELL, CardType.WEAPON, CardType.HERO, CardType.LOCATION):
                         count += 1
             return count
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error counting hand: {e}")
             return 0
 
@@ -460,7 +489,7 @@ class StateBridge:
             global_state: GlobalGameState from GlobalTracker.
         """
         try:
-            # Opponent known cards
+            # Opponent known cards — complex per-field serialization (kept explicit)
             if global_state.opp_known_cards:
                 opp_state.opp_known_cards = [
                     {"card_id": kc.card_id, "turn_seen": kc.turn_seen,
@@ -469,52 +498,32 @@ class StateBridge:
                     for kc in global_state.opp_known_cards
                 ]
 
-            # Opponent generated card count
-            opp_state.opp_generated_count = len(global_state.opp_generated_seen)
-
-            # Opponent secrets triggered
+            # Opponent secrets triggered — complex per-field serialization (kept explicit)
             if global_state.opp_secrets_triggered:
                 opp_state.opp_secrets_triggered = [
                     {"card_id": kc.card_id, "turn_seen": kc.turn_seen}
                     for kc in global_state.opp_secrets_triggered
                 ]
 
-            # Opponent active secrets
-            opp_state.secrets = list(global_state.opp_secrets)
+            # Apply declarative opponent field mappings
+            self._apply_field_map(self._OPP_FIELD_MAP, opp_state, global_state)
 
-            # Opponent deck remaining
-            opp_state.deck_remaining = global_state.opp_deck_remaining
-
-            # Opponent weapon
-            opp_state.opp_weapon_card_id = global_state.opp_weapon or ""
-
-            # Opponent cumulative mechanics
-            opp_state.opp_corpses = global_state.opp_corpses
-            opp_state.opp_herald_count = global_state.opp_herald_count
-            if global_state.opp_quests:
-                opp_state.opp_quests = list(global_state.opp_quests)
-
-            # Opponent shuffled-into-deck tracking
-            if hasattr(global_state, 'opp_shuffled_into_deck'):
-                opp_state.opp_shuffled_into_deck = list(global_state.opp_shuffled_into_deck)
-
-            # Opponent corrupted cards tracking
-            if hasattr(global_state, 'opp_corrupted_cards'):
-                opp_state.opp_corrupted_cards = list(global_state.opp_corrupted_cards)
-
-            # Player mechanics from GlobalGameState → MechanicsState
+            # Player mechanics from GlobalGameState → MechanicsState (special case)
             from analysis.search.mechanics_state import MechanicsState
             game_state._mechanics = MechanicsState.from_global_state(global_state)
 
-            # Direct fields on GameState
-            game_state.herald_count = global_state.player_herald_count
-            game_state.corpses = global_state.player_corpses
-            game_state.active_quests = list(global_state.player_quests)
-            game_state.last_turn_races = set(global_state.last_turn_races_player)
-            game_state.last_turn_schools = set(global_state.last_turn_schools_player)
+            # Apply declarative player field mappings
+            self._apply_field_map(self._PLAYER_FIELD_MAP, game_state, global_state)
 
         except Exception as e:
             log.warning(f"Error enriching from global state: {e}")
+
+    @staticmethod
+    def _apply_field_map(field_map: List[FieldMapping], target, source) -> None:
+        """Apply a list of FieldMapping entries from source to target."""
+        for mapping in field_map:
+            value = getattr(source, mapping.src_field)
+            setattr(target, mapping.dst_field, mapping.transform(value))
 
     def _create_weapon(self, entity) -> Weapon:
         """Create a Weapon from an hslog entity."""
@@ -528,6 +537,6 @@ class StateBridge:
                 health=durability,
                 name=getattr(entity, "card_id", "") or "",
             )
-        except Exception as e:
+        except (AttributeError, KeyError) as e:
             log.warning(f"Error creating weapon: {e}")
             return Weapon(attack=0, health=0, name="")

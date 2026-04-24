@@ -23,9 +23,6 @@ from analysis.search.rhea import (  # noqa: F401
     RHEAEngine,
 )
 
-# Re-export internal helper used by other modules
-from analysis.search.rhea.simulation import _try_mechanic  # noqa: F401
-
 # Re-export optional dependencies that tests access as module attributes
 from analysis.search.rhea.engine import (  # noqa: F401
     check_lethal,

@@ -247,15 +247,15 @@ _NO_TARGET_KEYWORDS = [
     "draw", "抽牌", "summon", "召唤", "discover", "发现",
     "armor", "护甲", "heal.*?hero", "恢复.*?英雄",
     "secret", "奥秘", "quest", "任务", "shuffle", "洗入",
-    "discard", "弃牌", "freeze\s+all",
+    "discard", "弃牌", r"freeze\s+all",
 ]
 
 # If ANY of these appear in text, the spell definitely needs a target
 _TARGETING_KEYWORDS = [
     "敌方", "友方", "enemy", "friendly",
-    "一个.{0,20}随从", "a\s+minion", "an?\s+minion",
-    "一个.{0,20}角色", "a\s+character", "an?\s+character",
-    "一个.{0,20}英雄", "enemy\s+hero", "friendly\s+hero",
+    "一个.{0,20}随从", r"a\s+minion", r"an?\s+minion",
+    "一个.{0,20}角色", r"a\s+character", r"an?\s+character",
+    "一个.{0,20}英雄", r"enemy\s+hero", r"friendly\s+hero",
     "敌方地标",
 ]
 

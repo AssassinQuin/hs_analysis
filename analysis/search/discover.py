@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 from typing import List, Optional
 
 from analysis.data.card_index import get_index
@@ -16,6 +17,9 @@ from analysis.models.card import Card
 from analysis.utils.score_provider import ScoreProvider
 
 logger = logging.getLogger(__name__)
+
+_DISCOVER_COST_RED_CN = re.compile(r'发现.*?法力值消耗减少[（(]\s*(\d+)\s*[）)]')
+_DISCOVER_COST_RED_EN = re.compile(r'discover.*?costs?\s*(\d+)\s*less', re.IGNORECASE)
 
 _score_provider: Optional[ScoreProvider] = None
 
@@ -40,6 +44,21 @@ def _card_score(card: dict) -> float:
     if card_type == 'MINION':
         return (card.get('attack', 0) + card.get('health', 0) + card.get('cost', 0)) / 3.0
     return card.get('cost', 0) * 0.8
+
+
+def get_discover_cost_reduction(source_card_text: str) -> int:
+    """Check if the source card's text indicates discovered cards should cost less.
+    
+    Example: 宝库闯入者 "在你发现一张卡牌后，使其法力值消耗减少（1）点" → 1
+    """
+    m = _DISCOVER_COST_RED_CN.search(source_card_text or "")
+    if m:
+        return int(m.group(1))
+    m = _DISCOVER_COST_RED_EN.search(source_card_text or "")
+    if m:
+        return int(m.group(1))
+    return 0
+
 
 # ===================================================================
 # Race name mapping (Chinese → JSON race value)
@@ -160,7 +179,7 @@ def generate_discover_pool(
         if race:
             pool = [c for c in pool if race in (c.get('race', '') or '')]
         return pool
-    except Exception as exc:
+    except (ImportError, OSError) as exc:
         logger.error('Discover pool generation failed: %s', exc)
         return []
 
@@ -184,7 +203,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         try:
             from analysis.search.rune import parse_rune_discover_target, filter_by_rune
             rune_name = parse_rune_discover_target(card_text)
-        except Exception:
+        except ImportError:
             pass
 
         from_past_only = '来自过去' in card_text or 'from the past' in card_text.lower()
@@ -199,7 +218,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         if rune_name and pool:
             try:
                 pool = filter_by_rune(pool, rune_name)
-            except Exception:
+            except (ValueError, TypeError):
                 pass
 
         dark_gift_active = False
@@ -213,7 +232,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
                 dg_constraint = parse_dark_gift_constraint(card_text)
                 if dg_constraint:
                     pool = filter_dark_gift_pool(pool, dg_constraint)
-        except Exception:
+        except ImportError:
             pass
 
         if not pool:
@@ -236,11 +255,16 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
                 try:
                     from analysis.search.dark_gift import apply_dark_gift as _apply_dg
                     sample = [_apply_dg(c.copy()) for c in sample]
-                except Exception:
+                except (ImportError, TypeError, ValueError):
                     pass
             chosen_raw = max(sample, key=lambda c: _card_score(c))
 
         chosen_card = Card.from_hsdb_dict(chosen_raw)
+
+        # Apply discover cost reduction if source card has it
+        cost_red = get_discover_cost_reduction(card_text)
+        if cost_red > 0 and hasattr(chosen_card, 'cost'):
+            chosen_card.cost = max(0, chosen_card.cost - cost_red)
 
         hand = getattr(state, 'hand', None)
         if hand is not None:
@@ -292,6 +316,12 @@ def resolve_discover_top_k(
     branches: List[tuple] = []
     for chosen_raw in sample:
         chosen_card = Card.from_hsdb_dict(chosen_raw)
+
+        # Apply discover cost reduction if source card has it
+        cost_red = get_discover_cost_reduction(card_text)
+        if cost_red > 0 and hasattr(chosen_card, 'cost'):
+            chosen_card.cost = max(0, chosen_card.cost - cost_red)
+
         s = state.copy()
         if len(s.hand) < 10:
             s.hand.append(chosen_card)
