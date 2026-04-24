@@ -208,7 +208,13 @@ def run_mcts_analysis(
                 if current_turn == last_turn:
                     continue
 
-                # Turn 1: 检测对手英雄职业，重建带职业过滤的 Bayesian 模型
+                # 只分析自己的回合：
+                # Player 1 (先手, idx=0) 的回合: Turn 1,3,5... (奇数)
+                # Player 2 (后手, idx=1) 的回合: Turn 2,4,6... (偶数)
+                is_our_turn = (current_turn % 2 != _friendly_idx)
+
+                # ── 贝叶斯对手推断（每回合都更新） ──
+                # Turn 1: 检测对手职业，重建带职业过滤的 Bayesian 模型
                 if current_turn == 1:
                     opp_player = game.players[1 - _friendly_idx]
                     opp_class = None
@@ -218,7 +224,6 @@ def run_mcts_analysis(
                         if (tags.get(GameTag.ZONE) == HZone.PLAY and
                                 tags.get(GameTag.CARDTYPE) == HCardType.HERO):
                             cls_val = tags.get(GameTag.CLASS, 0)
-                            # cls_val 可能是 CardClass 枚举或 int
                             if isinstance(cls_val, HCardClass):
                                 opp_class = cls_val.name
                             elif isinstance(cls_val, int):
@@ -231,68 +236,30 @@ def run_mcts_analysis(
                         bayesian_model = BayesianOpponentModel(player_class=opp_class)
                         out(f"│ Opponent class: {opp_class} — {len(bayesian_model.decks)} archetypes")
                     else:
-                        # 无法检测职业，用全量模型
                         bayesian_model = BayesianOpponentModel()
                     _prev_opp_known = set()
 
-                # Per-turn time budget
-                turn_start_time = time.time()
-                remaining_turn_budget = budget_ms / 1000.0  # seconds
-
-                # Check legal actions
-                try:
-                    legal = enumerate_legal_actions(state)
-                    non_end = [a for a in legal if a.action_type != ActionType.END_TURN]
-                except Exception:
-                    non_end = []
-
-                # State summary (display layer — uses display_name)
-                out(f"\n┌─ Turn {current_turn} ─────────────────────")
-                out(f"│ Hero: {state.hero.hp}HP/{state.hero.armor}A  "
-                    f"Mana: {state.mana.available}/{state.mana.max_mana}  "
-                    f"Hand: {len(state.hand)}  Board: {len(state.board)}  "
-                    f"Legal: {len(non_end)} actions")
-
-                if state.hand:
-                    hand_str = " ".join(f"[{_card_display(c)}]" for c in state.hand)
-                    out(f"│ Hand: {hand_str}")
-
-                if state.board:
-                    board_str = " ".join(f"[{_minion_display(m)}]" for m in state.board)
-                    out(f"│ Board: {board_str}")
-
-                if state.opponent.board:
-                    opp_str = " ".join(f"[{_minion_display(m)}]" for m in state.opponent.board)
-                    out(f"│ Opp Board: {opp_str}")
-
-                # ── 贝叶斯对手推断 ──
-                # 收集新观察到的对手卡牌（已打出的、有 card_id 的）
+                # 收集新对手卡牌 → 贝叶斯更新
                 current_opp_known = set()
                 if game and len(game.players) >= 2:
                     _opp_idx = 1 - _friendly_idx
                     opp_player = game.players[_opp_idx]
-
-                    # 构建 card_id → dbfId 反向查找表
-                    # 1. 从 Bayesian model 的 cards_by_dbf (unified_standard.json) 提取
                     card_id_to_dbf = {}
                     for dbf, info in bayesian_model.cards_by_dbf.items():
                         cid = info.get("id", "")
                         if cid:
                             card_id_to_dbf[cid] = dbf
-                    # 2. 用 HSCardDB 按需查找（新系列/核心系列卡牌）
                     try:
                         from analysis.data.hsdb import get_db as _get_hsdb
                         _hsdb = _get_hsdb()
-                        _hsdb_lookup = _hsdb.card_id_to_dbf  # method: card_id → dbfId
+                        _hsdb_lookup = _hsdb.card_id_to_dbf
                     except Exception:
                         _hsdb_lookup = None
-
                     for ent in getattr(opp_player, 'entities', []):
                         cid = getattr(ent, 'card_id', '') or ''
                         if not cid:
                             continue
                         zone = ent.tags.get(GameTag.ZONE, 0) if hasattr(ent, 'tags') else 0
-                        # Zone.PLAY=1, Zone.SECRET=7 — 已打出的牌（跳过 HERO/HERO_POWER）
                         if zone in (HZone.PLAY, HZone.SECRET):
                             ctype = ent.tags.get(GameTag.CARDTYPE, 0)
                             if ctype in (HCardType.HERO, HCardType.HERO_POWER):
@@ -313,11 +280,51 @@ def run_mcts_analysis(
                         f"{' [LOCKED]' if bayesian_model.locked else ''}")
                 _prev_opp_known = current_opp_known
 
+                # 对手回合：只显示推断，不做 MCTS
+                if not is_our_turn:
+                    top = bayesian_model.get_top_decks(1)
+                    if top:
+                        out(f"\n┌─ Turn {current_turn} (对手回合) ────────────")
+                        out(f"│ Opp推断: {top[0][1]} ({top[0][2]:.0%})"
+                            f"{' [LOCKED]' if bayesian_model.locked else ''}")
+                        out(f"└──────────────────────────")
+                    last_turn = current_turn
+                    continue
+
+                # ── 我们的回合：MCTS 分析 ──
+                turn_start_time = time.time()
+                remaining_turn_budget = budget_ms / 1000.0
+
+                try:
+                    legal = enumerate_legal_actions(state)
+                    non_end = [a for a in legal if a.action_type != ActionType.END_TURN]
+                except Exception:
+                    non_end = []
+
+                out(f"\n┌─ Turn {current_turn} (你的回合) ────────────")
+                out(f"│ Hero: {state.hero.hp}HP/{state.hero.armor}A  "
+                    f"Mana: {state.mana.available}/{state.mana.max_mana}  "
+                    f"Hand: {len(state.hand)}  Board: {len(state.board)}  "
+                    f"Legal: {len(non_end)} actions")
+
+                if state.hand:
+                    hand_str = " ".join(f"[{_card_display(c)}]" for c in state.hand)
+                    out(f"│ Hand: {hand_str}")
+
+                if state.board:
+                    board_str = " ".join(f"[{_minion_display(m)}]" for m in state.board)
+                    out(f"│ Board: {board_str}")
+
+                if state.opponent.board:
+                    opp_str = " ".join(f"[{_minion_display(m)}]" for m in state.opponent.board)
+                    out(f"│ Opp Board: {opp_str}")
+
                 # 显示当前推断状态
                 if state.opponent.hand_count > 0:
                     top = bayesian_model.get_top_decks(1)
                     if top:
                         out(f"│ Opp推断: {top[0][1]} ({top[0][2]:.0%})"
+                            f"{' [LOCKED]' if bayesian_model.locked else ''}"
                             f" | 手牌数={state.opponent.hand_count}"
                             f" | 候选池={len(bayesian_model.predict_hand(state.opponent, state))}")
 
