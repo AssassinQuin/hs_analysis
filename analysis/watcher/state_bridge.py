@@ -264,6 +264,15 @@ class StateBridge:
         minion_data.owner = owner
         minion_data.card_id = card_id
 
+        # Resolve name from card database if card_id is known but name is empty
+        if card_id and not getattr(minion_data, 'name', ''):
+            try:
+                card_obj = self.card_lookup(card_id)
+                if card_obj and card_obj.name:
+                    minion_data.name = card_obj.name
+            except Exception:
+                pass
+
         # Build KeywordSet from the boolean fields we just set
         minion_data.keywords = KeywordSet.from_minion(minion_data)
 

@@ -27,6 +27,7 @@ from analysis.watcher.deck_provider import DeckProvider
 from analysis.search.mcts import MCTSEngine, MCTSConfig
 from analysis.search.rhea.enumeration import enumerate_legal_actions
 from analysis.search.rhea.actions import ActionType
+from analysis.search.rhea.simulation import apply_action as _apply_sim_action
 from analysis.utils.bayesian_opponent import BayesianOpponentModel
 from hearthstone.enums import GameTag, Zone as HZone, CardType as HCardType
 
@@ -351,9 +352,17 @@ def run_mcts_analysis(
 
                     out(f"│")
                     out(f"│ MCTS Plan ({len(result.best_sequence)} steps):")
+                    # 逐步应用 action，用正确的状态显示每步
+                    plan_state = state
                     for i, a in enumerate(result.best_sequence):
                         marker = ">>>" if i == 0 else "   "
-                        out(f"│ {marker} {i+1}. {_action_display(a, state)}")
+                        out(f"│ {marker} {i+1}. {_action_display(a, plan_state)}")
+                        # 应用当前 action 得到下一步的状态（用于显示正确的手牌索引）
+                        if a.action_type != ActionType.END_TURN:
+                            try:
+                                plan_state = _apply_sim_action(plan_state, a)
+                            except Exception:
+                                break
 
                     out(f"│")
                     out(f"│ Fitness: {result.fitness:+.4f}")

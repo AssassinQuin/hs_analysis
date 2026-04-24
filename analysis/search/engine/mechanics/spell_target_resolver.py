@@ -59,7 +59,10 @@ class SpellTargetResolver:
         if self._is_aoe(text):
             return []
 
-        if self._is_no_target(text):
+        # 卡牌有伤害文本 → 必然需要目标，跳过 _is_no_target 检查
+        # （避免"造成伤害。抽牌/法力值..."等混合效果被误判为无目标）
+        has_damage = self._has_damage(text)
+        if not has_damage and self._is_no_target(text):
             return []
 
         # Detect target condition restrictions
