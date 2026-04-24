@@ -64,13 +64,27 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                             )
                         )
                 else:
-                    actions.append(
-                        Action(
-                            action_type=ActionType.PLAY,
-                            card_index=idx,
-                            meta_tags=frozenset(tags),
-                        )
+                    # No targets returned — check if this is a no-target spell
+                    # (AOE, draw, armor) or a targeted spell with no valid targets
+                    text = getattr(card, "text", "") or ""
+                    from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN
+                    has_damage = bool(_DAMAGE_EN.search(text) or _DAMAGE_CN.search(text))
+                    has_target_keyword = any(
+                        kw in text for kw in
+                        ("受伤", "damaged", "敌方随从", "enemy minion",
+                         "友方随从", "friendly minion", "一个?随从")
                     )
+                    # If spell has damage text and mentions target conditions,
+                    # empty targets means no valid target → cannot play.
+                    # Otherwise it's a no-target spell (draw, armor, AOE etc.)
+                    if not (has_damage and has_target_keyword):
+                        actions.append(
+                            Action(
+                                action_type=ActionType.PLAY,
+                                card_index=idx,
+                                meta_tags=frozenset(tags),
+                            )
+                        )
             except Exception:
                 actions.append(
                     Action(

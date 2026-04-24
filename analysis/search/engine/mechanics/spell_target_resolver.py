@@ -39,6 +39,16 @@ class SpellTargetResolver:
         re.compile(r"(?:对|造成).*?英雄"),
     ]
 
+    # ── Target condition patterns (restrict WHO can be targeted) ──
+    _DAMAGED_CONDITION = [
+        re.compile(r"受伤(?:的)?(?:随从|角色|友方)"),
+        re.compile(r"damaged\s+(?:minion|character|friendly)", re.IGNORECASE),
+    ]
+    _DAMAGED_MINION_ONLY = [
+        re.compile(r"受伤(?:的)?随从"),
+        re.compile(r"damaged\s+minion", re.IGNORECASE),
+    ]
+
     def resolve_targets(self, state: GameState, card: Card) -> List[int]:
         text = getattr(card, "text", "") or ""
         if not text:
@@ -52,36 +62,70 @@ class SpellTargetResolver:
         if self._is_no_target(text):
             return []
 
+        # Detect target condition restrictions
+        damaged_only = self._is_damaged_condition(text)
+        minion_only = self._is_minion_only_target(text)
+
         targets: List[int] = []
 
         if self._matches_enemy_minion(text):
-            for i in range(len(state.opponent.board)):
+            for i, m in enumerate(state.opponent.board):
+                if damaged_only and not self._is_minion_damaged(m):
+                    continue
                 targets.append(i + 1)
             if not targets:
                 return []
             return targets
 
         if self._matches_friendly_minion(text):
-            for i in range(len(state.board)):
+            for i, m in enumerate(state.board):
+                if damaged_only and not self._is_minion_damaged(m):
+                    continue
                 targets.append(-(i + 1))
             return targets
 
         if self._matches_any_minion(text):
-            for i in range(len(state.opponent.board)):
+            for i, m in enumerate(state.opponent.board):
+                if damaged_only and not self._is_minion_damaged(m):
+                    continue
                 targets.append(i + 1)
-            for i in range(len(state.board)):
+            for i, m in enumerate(state.board):
+                if damaged_only and not self._is_minion_damaged(m):
+                    continue
                 targets.append(-(i + 1))
             if not targets:
                 return []
             return targets
 
         if self._matches_enemy_hero(text):
-            targets.append(0)
-            for i in range(len(state.opponent.board)):
+            if not damaged_only:  # 英雄不受"受伤"条件限制（除非文本明确排除英雄）
+                targets.append(0)
+            for i, m in enumerate(state.opponent.board):
+                if damaged_only and not self._is_minion_damaged(m):
+                    continue
                 targets.append(i + 1)
             return targets
 
+        # Default: SPELL with damage text
         if card_type == "SPELL" and self._has_damage(text):
+            # "受伤的随从" — minion-only, damaged only
+            if damaged_only and minion_only:
+                for i, m in enumerate(state.opponent.board):
+                    if self._is_minion_damaged(m):
+                        targets.append(i + 1)
+                for i, m in enumerate(state.board):
+                    if self._is_minion_damaged(m):
+                        targets.append(-(i + 1))
+                return targets
+            # "受伤的角色" — any damaged character (hero + minions)
+            if damaged_only:
+                if state.hero.hp < 30:
+                    targets.append(0)
+                for i, m in enumerate(state.opponent.board):
+                    if self._is_minion_damaged(m):
+                        targets.append(i + 1)
+                return targets
+            # Normal damage spell: enemy hero + all enemy minions
             targets.append(0)
             for i in range(len(state.opponent.board)):
                 targets.append(i + 1)
@@ -148,3 +192,18 @@ class SpellTargetResolver:
 
     def _has_damage(self, text: str) -> bool:
         return bool(_DAMAGE_EN.search(text) or _DAMAGE_CN.search(text))
+
+    def _is_damaged_condition(self, text: str) -> bool:
+        """Check if card text requires target to be damaged (受伤)."""
+        return any(p.search(text) for p in self._DAMAGED_CONDITION)
+
+    def _is_minion_only_target(self, text: str) -> bool:
+        """Check if card text restricts target to minions only (随从, not 英雄)."""
+        return any(p.search(text) for p in self._DAMAGED_MINION_ONLY)
+
+    @staticmethod
+    def _is_minion_damaged(minion) -> bool:
+        """Check if a minion has taken damage (health < max_health)."""
+        max_hp = getattr(minion, 'max_health', getattr(minion, 'health', 0))
+        cur_hp = getattr(minion, 'health', 0)
+        return cur_hp < max_hp
