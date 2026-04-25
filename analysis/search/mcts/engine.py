@@ -3,9 +3,14 @@
 
 Orchestrates:
 1. Determinized world creation (DUCT)
-2. MCTS main loop: select → expand → evaluate → backpropagate
-3. Multi-step action sequence with exponential time decay
-4. Tree reuse between consecutive action decisions
+2. MCTS main loop: select -> expand -> evaluate -> backpropagate
+3. Single-pass deep search: tree naturally explores full turn sequences
+4. Best sequence extraction from tree path
+
+The tree explores complete action sequences within a single search pass.
+Each branch from root follows: PLAY -> PLAY -> ATTACK -> ... -> END_TURN,
+so the engine discovers card ordering effects, mana synergy, and combo plays
+through simulation rather than greedy single-step decisions.
 
 Usage:
     engine = MCTSEngine(config)
@@ -46,16 +51,14 @@ class ActionStats:
     visit_count: int = 0
     total_reward: float = 0.0
     q_value: float = 0.0
-    visit_probability: float = 0.0  # visit_count / total_root_visits
-    win_rate: float = 0.0           # (q_value + 1) / 2, mapped to [0, 1]
+    visit_probability: float = 0.0
+    win_rate: float = 0.0
 
 
 @dataclass
 class DetailedMCTSLog:
     """Detailed MCTS search log entries for parameter tuning analysis."""
     entries: List[dict] = field(default_factory=list)
-    # Each entry: {"iter": int, "nodes": int, "evals": int,
-    #              "remaining_ms": float, "best_q": float, "depth": int}
 
 
 @dataclass
@@ -96,7 +99,13 @@ class _SearchContext:
 
 
 class MCTSEngine:
-    """MCTS/UCT search engine for Hearthstone."""
+    """MCTS/UCT search engine for Hearthstone.
+
+    Single-pass deep search: the MCTS tree naturally explores complete
+    turn action sequences (PLAY -> PLAY -> ATTACK -> ... -> END_TURN),
+    discovering card ordering effects, mana curve synergy, and combo
+    plays through multi-dimensional simulation.
+    """
 
     def __init__(self, config: Optional[MCTSConfig] = None):
         self.config = config or MCTSConfig()
@@ -108,14 +117,21 @@ class MCTSEngine:
         state: GameState,
         time_budget_ms: Optional[float] = None,
         bayesian_model=None,
+        opp_playstyle: str = "unknown",
     ) -> SearchResult:
         """Execute MCTS search and return action sequence.
+
+        Single-pass deep search: the tree explores full turn sequences
+        so card ordering, mana efficiency, and combos are evaluated
+        through simulation, not greedy single-step decisions.
 
         Args:
             state: Current game state (may have incomplete information).
             time_budget_ms: Time budget in ms. None = use config default.
             bayesian_model: Pre-loaded BayesianOpponentModel with observed
                 opponent cards. If None, Determinizer creates a fresh model.
+            opp_playstyle: Opponent playstyle from Bayesian prediction
+                (aggro/control/combo/midrange/unknown).
 
         Returns:
             SearchResult with best_sequence and stats.
@@ -123,8 +139,7 @@ class MCTSEngine:
         self._bayesian_model = bayesian_model
         budget = time_budget_ms or self.config.time_budget_ms
 
-        # Apply phase overrides
-        overrides = get_phase_overrides(state.turn_number)
+        overrides = get_phase_overrides(state.turn_number, opp_playstyle=opp_playstyle)
         effective_config = MCTSConfig(**{
             **{f.name: getattr(self.config, f.name)
                for f in self.config.__dataclass_fields__.values()},
@@ -132,198 +147,161 @@ class MCTSEngine:
             "time_budget_ms": budget,
         })
 
-        # Search action sequence (multi-step)
         start = time.time() * 1000
-        total_stats = MCTSStats()
-        actions, action_stats, detailed_log = self._search_action_sequence(state, effective_config, total_stats)
+
+        ctx = self._create_context(state, effective_config)
+        detailed_log = self._run_mcts_loop(ctx)
+
+        root = ctx.root_node
+        action_stats = self._collect_action_stats(root)
+
+        best_sequence = self._extract_best_sequence(root, state)
+
         elapsed = time.time() * 1000 - start
 
-        # Evaluate final fitness
         final_state = state
-        for a in actions:
+        for a in best_sequence:
             final_state = apply_action(final_state, a)
 
         from analysis.evaluators.composite import evaluate_delta
         fitness = evaluate_delta(state, final_state)
 
-        stats = MCTSStats(
-            iterations=total_stats.iterations,
-            nodes_created=total_stats.nodes_created,
-            evaluations_done=total_stats.evaluations_done,
-            time_used_ms=elapsed,
-            world_count=effective_config.num_worlds,
-        )
+        alternatives = self._extract_alternatives(root, state)
 
-        return SearchResult(
-            best_sequence=actions,
-            fitness=fitness,
-            source="mcts",
-            mcts_stats=stats,
-            action_stats=action_stats,
-            detailed_log=detailed_log,
-        )
-
-    def search_single_action(
-        self,
-        state: GameState,
-        time_budget_ms: float,
-    ) -> Tuple[Action, MCTSStats, List[ActionStats], Optional[DetailedMCTSLog]]:
-        """Search for a single best action.
-
-        Returns:
-            (best_action, stats, action_stats_list, detailed_log)
-        """
-        start = time.time() * 1000
-
-        ctx = self._create_context(state, time_budget_ms)
-        detailed_log = self._run_mcts_loop(ctx)
-
-        root = ctx.root_node
-        best_ak = root.best_child_key
-        if best_ak is None:
-            action = Action(action_type=ActionType.END_TURN)
-        else:
-            edge = root.action_edges.get(best_ak)
-            action = edge.action if edge else Action(action_type=ActionType.END_TURN)
-
-        # Collect per-action statistics from root node children
-        action_stats_list = self._collect_action_stats(root)
-
-        elapsed = time.time() * 1000 - start
         stats = MCTSStats(
             iterations=ctx.iterations_done,
             nodes_created=ctx.nodes_created,
             evaluations_done=ctx.evaluations_done,
             time_used_ms=elapsed,
             world_count=len(ctx.worlds),
-            transposition_hits=ctx.tt.hit_rate,
         )
 
-        # Store for tree reuse
         self._last_root = root
-        self._last_action_key = best_ak
+        self._last_action_key = root.best_child_key
 
-        return action, stats, action_stats_list, detailed_log
+        return SearchResult(
+            best_sequence=best_sequence,
+            fitness=fitness,
+            source="mcts",
+            mcts_stats=stats,
+            action_stats=action_stats,
+            detailed_log=detailed_log,
+            alternatives=alternatives,
+        )
 
-    # ── Internal: multi-step search ────────────────────
+    # ── Sequence extraction ────────────────────────────
 
-    def _search_action_sequence(
+    def _extract_best_sequence(
         self,
-        state: GameState,
-        config: MCTSConfig,
-        accum_stats: Optional[MCTSStats] = None,
-    ) -> Tuple[List[Action], List[ActionStats], Optional[DetailedMCTSLog]]:
-        """Search for a complete action sequence with exponential time decay.
+        root: MCTSNode,
+        root_state: GameState,
+    ) -> List[Action]:
+        """Extract the best action sequence by following highest-visit children.
 
-        Returns:
-            (actions, action_stats_list, detailed_log)
-            action_stats_list contains per-action stats from the *first* search step only.
+        Follows root -> best_child -> best_grandchild -> ... until END_TURN
+        or no more children.  This naturally produces the full turn sequence
+        that MCTS discovered through simulation.
         """
         actions: List[Action] = []
-        current_state = state
-        remaining_budget = config.time_budget_ms
-        gamma = config.time_decay_gamma
-        step = 0
-        first_step_action_stats: List[ActionStats] = []
-        detailed_log: Optional[DetailedMCTSLog] = None
+        node = root
+        state = root_state
+        max_steps = 20
 
-        # Compute first-step budget
-        # Total = t0 * (1 + gamma + gamma^2 + ...) = t0 / (1 - gamma)
-        if gamma < 1.0:
-            t0 = remaining_budget * (1.0 - gamma)
-        else:
-            t0 = remaining_budget
-
-        while remaining_budget > config.min_step_budget_ms:
-            # Step budget with exponential decay
-            step_budget = t0 * (gamma ** step)
-            step_budget = max(step_budget, config.min_step_budget_ms)
-            step_budget = min(step_budget, remaining_budget * 0.85)
-
-            if step_budget < config.min_step_budget_ms:
+        for _ in range(max_steps):
+            best_ak = node.best_child_key
+            if best_ak is None:
                 break
 
-            # Quick play check
-            legal = enumerate_legal_actions(current_state)
-            non_end = [a for a in legal if a.action_type != ActionType.END_TURN]
-            if not non_end:
-                actions.append(Action(action_type=ActionType.END_TURN))
-                break
-            if len(legal) <= 2:
-                # With 1-2 actions, just pick the best without full MCTS
-                best = max(legal, key=lambda a: (
-                    0 if a.action_type == ActionType.END_TURN else 1
-                ))
-                actions.append(best)
-                if best.action_type == ActionType.END_TURN:
-                    break
-                current_state = apply_action(current_state, best)
-                remaining_budget -= step_budget * 0.1
-                step += 1
-                continue
-
-            # Search for best action at this step
-            best_action, stats, a_stats, d_log = self.search_single_action(
-                current_state, step_budget
-            )
-
-            # Capture first-step stats and detailed log
-            if step == 0:
-                first_step_action_stats = a_stats
-                detailed_log = d_log
-
-            # Accumulate stats
-            if accum_stats is not None:
-                accum_stats.iterations += stats.iterations
-                accum_stats.nodes_created += stats.nodes_created
-                accum_stats.evaluations_done += stats.evaluations_done
-
-            actions.append(best_action)
-
-            if best_action.action_type == ActionType.END_TURN:
+            edge = node.action_edges.get(best_ak)
+            if edge is None:
                 break
 
-            current_state = apply_action(current_state, best_action)
-            remaining_budget -= step_budget
-            step += 1
+            action = edge.action
+            actions.append(action)
 
-            if step >= config.max_actions_per_turn:
+            if action.action_type == ActionType.END_TURN:
                 break
 
-        # Ensure sequence ends with END_TURN
+            child = node.children.get(best_ak)
+            if child is None:
+                break
+            node = child
+
         if not actions or actions[-1].action_type != ActionType.END_TURN:
             actions.append(Action(action_type=ActionType.END_TURN))
 
-        return actions, first_step_action_stats, detailed_log
+        return actions
 
-    # ── Internal: single-step MCTS ─────────────────────
+    def _extract_alternatives(
+        self,
+        root: MCTSNode,
+        root_state: GameState,
+    ) -> List[Tuple[List[Action], float]]:
+        """Extract alternative action sequences from root's top children."""
+        if not root.children:
+            return []
+
+        alternatives: List[Tuple[List[Action], float]] = []
+        sorted_children = sorted(
+            root.children.items(),
+            key=lambda kv: kv[1].visit_count,
+            reverse=True,
+        )
+
+        best_ak = root.best_child_key
+        for ak, child in sorted_children[:4]:
+            if ak == best_ak:
+                continue
+
+            edge = root.action_edges.get(ak)
+            if edge is None:
+                continue
+
+            first_action = edge.action
+            seq = [first_action]
+
+            sub_node = child
+            for _ in range(10):
+                sub_best_ak = sub_node.best_child_key
+                if sub_best_ak is None:
+                    break
+                sub_edge = sub_node.action_edges.get(sub_best_ak)
+                if sub_edge is None:
+                    break
+                seq.append(sub_edge.action)
+                if sub_edge.action.action_type == ActionType.END_TURN:
+                    break
+                sub_child = sub_node.children.get(sub_best_ak)
+                if sub_child is None:
+                    break
+                sub_node = sub_child
+
+            if not seq or seq[-1].action_type != ActionType.END_TURN:
+                seq.append(Action(action_type=ActionType.END_TURN))
+
+            qv = child.q_value
+            fitness = (qv + 1.0) / 2.0
+            alternatives.append((seq, fitness))
+
+        return alternatives[:3]
+
+    # ── Context creation ───────────────────────────────
 
     def _create_context(
         self,
         state: GameState,
-        budget_ms: float,
+        config: MCTSConfig,
     ) -> _SearchContext:
         """Set up search context: worlds, root node, transposition table."""
-        config = self.config
-
-        # Try tree reuse
-        root = self._try_reuse_tree(state)
-
-        # Create transposition table
         tt = TranspositionTable(max_size=config.transposition_max_size)
 
-        if root is None:
-            state_hash = compute_state_hash(state, is_player_turn=True)
-            root = MCTSNode(
-                node_id=0,
-                state_hash=state_hash,
-                is_player_turn=True,
-            )
-        else:
-            # Reuse existing TT data if available
-            pass
+        state_hash = compute_state_hash(state, is_player_turn=True)
+        root = MCTSNode(
+            node_id=0,
+            state_hash=state_hash,
+            is_player_turn=True,
+        )
 
-        # Create determinized worlds
         bayesian = getattr(self, '_bayesian_model', None)
         determinizer = Determinizer(config, bayesian_model=bayesian)
         worlds = determinizer.create_worlds(state)
@@ -343,8 +321,10 @@ class MCTSEngine:
             pruner=pruner,
             expander=expander,
             start_time=time.time() * 1000,
-            time_budget_ms=budget_ms,
+            time_budget_ms=config.time_budget_ms,
         )
+
+    # ── Statistics ─────────────────────────────────────
 
     def _collect_action_stats(self, root: MCTSNode) -> List[ActionStats]:
         """Extract per-action statistics from root node's children."""
@@ -368,7 +348,7 @@ class MCTSEngine:
             tr = child.total_reward
             qv = child.q_value
             prob = vc / total_visits if total_visits > 0 else 0.0
-            wr = (qv + 1.0) / 2.0  # Map from [-1,1] to [0,1]
+            wr = (qv + 1.0) / 2.0
 
             stats_list.append(ActionStats(
                 action=action,
@@ -379,53 +359,53 @@ class MCTSEngine:
                 win_rate=wr,
             ))
 
-        # Sort by visit count descending (best first)
         stats_list.sort(key=lambda s: s.visit_count, reverse=True)
         return stats_list
 
+    # ── Main MCTS loop ─────────────────────────────────
+
     def _run_mcts_loop(self, ctx: _SearchContext) -> Optional[DetailedMCTSLog]:
-        """Main MCTS iteration loop with hard iteration limit.
+        """Main MCTS iteration loop.
+
+        Each iteration: select a determinized world, traverse the tree
+        (which naturally follows PLAY -> PLAY -> ATTACK -> END_TURN paths),
+        evaluate the leaf, and backpropagate.
 
         Returns DetailedMCTSLog when debug_mode is enabled, else None.
         """
         config = ctx.config
         log_interval = config.log_interval
-        max_iters = 200000  # Hard safety cap
-        time_check_every = 50  # Check wall-clock every N iterations
+        max_iters = 200000
+        time_check_every = 50
 
         detailed_log = DetailedMCTSLog() if config.debug_mode else None
 
         while ctx.iterations_done < max_iters:
-            # Time check (every N iterations to reduce syscalls)
             if ctx.iterations_done % time_check_every == 0 and ctx.should_stop:
                 break
 
-            # 1. Select world
             world = random.choice(ctx.worlds)
             world_state = world.state
 
-            # 2. Selection + Expansion + Evaluation + Backpropagation
             path, leaf, leaf_state = self._traverse(ctx, world_state)
 
-            # 3. Evaluate leaf
-            reward = evaluate_leaf(leaf_state, ctx.root_state, config, turn_depth=leaf.turn_depth)
+            reward = evaluate_leaf(
+                leaf_state, ctx.root_state, config,
+                turn_depth=leaf.turn_depth,
+            )
             ctx.evaluations_done += 1
 
-            # 4. Override with terminal reward if available
             if leaf.is_terminal and leaf.terminal_reward is not None:
                 reward = leaf.terminal_reward
 
-            # 5. Backpropagate
-            backpropagate(path, reward)
+            backpropagate(path, reward, leaf=leaf)
 
             ctx.iterations_done += 1
 
-            # Periodic re-determinization: refresh some worlds
-            redet_interval = ctx.config.log_interval * 5  # every 500 iterations by default
+            redet_interval = config.log_interval * 5
             if ctx.iterations_done > 0 and ctx.iterations_done % redet_interval == 0:
                 self._refresh_worlds(ctx)
 
-            # Periodic logging
             if ctx.iterations_done % log_interval == 0:
                 root = ctx.root_node
                 best_ak = root.best_child_key
@@ -439,7 +419,9 @@ class MCTSEngine:
                     ctx.evaluations_done, ctx.time_remaining_ms, best_q,
                 )
 
-                # Collect detailed log entries for parameter tuning
+                if ctx.iterations_done % (log_interval * 5) == 0:
+                    self._log_root_children(root, ctx.iterations_done)
+
                 if detailed_log is not None:
                     detailed_log.entries.append({
                         "iter": ctx.iterations_done,
@@ -452,12 +434,17 @@ class MCTSEngine:
 
         return detailed_log
 
+    # ── Tree traversal ─────────────────────────────────
+
     def _traverse(
         self,
         ctx: _SearchContext,
         world_state: GameState,
     ) -> Tuple[List[MCTSNode], MCTSNode, GameState]:
         """Selection + Expansion: traverse tree to a leaf.
+
+        The tree naturally follows action sequences:
+        root(PLAY A) -> child(PLAY B) -> grandchild(ATTACK) -> ... -> END_TURN
 
         Returns:
             (path, leaf_node, leaf_state)
@@ -467,40 +454,34 @@ class MCTSEngine:
         path: List[MCTSNode] = []
         max_depth = ctx.config.max_tree_depth
         steps = 0
-        max_steps = 30  # Hard safety cap on traversal depth
+        max_steps = 30
 
         while (not node.is_leaf and not node.is_terminal
                and node.children and node.depth < max_depth
                and steps < max_steps):
-            # Select child
             result = select_child(node, state, ctx.config)
             if result is None:
                 break
 
             ak, child = result
 
-            # For chance nodes, select an outcome
             from analysis.search.mcts.config import NodeType
             if child.node_type == NodeType.CHANCE:
-                # Apply the stochastic action to get to the chance node
                 edge = node.action_edges.get(ak)
                 if edge:
                     state = apply_action(state, edge.action)
                 path.append(node)
                 node = child
 
-                # Now select an outcome from the chance node
                 outcome_result = select_child(node, state, ctx.config)
                 if outcome_result is None:
                     break
                 _, outcome_child = outcome_result
                 path.append(node)
                 node = outcome_child
-                steps += 2  # chance node + outcome
-                # State already reflects the outcome (sampled in expansion)
+                steps += 2
                 continue
 
-            # Apply action to advance state
             edge = node.action_edges.get(ak)
             if edge:
                 state = apply_action(state, edge.action)
@@ -508,10 +489,10 @@ class MCTSEngine:
             path.append(node)
             node = child
             steps += 1
+
         if not node.is_terminal and node.is_leaf and node.depth < ctx.config.max_tree_depth:
-            # Don't expand cross-turn nodes beyond budget
             if node.turn_depth >= ctx.config.max_turns_ahead:
-                pass  # Will be evaluated statically (with rollout if configured)
+                pass
             else:
                 child_result = ctx.expander.expand_node(node, state, ctx.tt)
                 if child_result is not None:
@@ -523,22 +504,19 @@ class MCTSEngine:
 
         return path, node, state
 
-    def _refresh_worlds(self, ctx: _SearchContext) -> None:
-        """Re-determinize a portion of worlds using updated tree information.
+    # ── Helpers ────────────────────────────────────────
 
-        Replaces the worst-performing worlds with fresh determinizations
-        from the current root state.
-        """
+    def _refresh_worlds(self, ctx: _SearchContext) -> None:
+        """Re-determinize a portion of worlds."""
         if len(ctx.worlds) <= 1:
             return
 
-        # Re-determinize half the worlds (every other one)
         bayesian = getattr(self, '_bayesian_model', None)
         determinizer = Determinizer(ctx.config, bayesian_model=bayesian)
 
         n_refresh = max(1, len(ctx.worlds) // 2)
         for i in range(n_refresh):
-            idx = i * 2  # refresh every other world
+            idx = i * 2
             if idx < len(ctx.worlds):
                 new_state = determinizer._determinize(ctx.root_state)
                 ctx.worlds[idx] = DeterminizedWorld(
@@ -552,14 +530,24 @@ class MCTSEngine:
             n_refresh, len(ctx.worlds), ctx.iterations_done,
         )
 
-    def _try_reuse_tree(self, state: GameState) -> Optional[MCTSNode]:
-        """Try to reuse subtree from previous search step."""
-        if self._last_root is None or self._last_action_key is None:
-            return None
-
-        child = self._last_root.children.get(self._last_action_key)
-        if child is not None:
-            child.parent = None
-            return child
-
-        return None
+    def _log_root_children(self, root: MCTSNode, iteration: int) -> None:
+        """Log per-action visit counts and Q values for debugging."""
+        if not root.children:
+            return
+        total_visits = sum(c.visit_count for c in root.children.values())
+        lines = [f"MCTS root children at iter={iteration} total_visits={total_visits}:"]
+        sorted_children = sorted(
+            root.children.items(),
+            key=lambda kv: kv[1].visit_count,
+            reverse=True,
+        )
+        for ak, child in sorted_children[:8]:
+            edge = root.action_edges.get(ak)
+            action_desc = str(edge.action) if edge else str(ak)
+            vc = child.visit_count
+            qv = child.q_value
+            wr = (qv + 1.0) / 2.0
+            lines.append(
+                f"  {action_desc}: visits={vc} q={qv:+.4f} winrate={wr:.1%}"
+            )
+        log.info("\n".join(lines))

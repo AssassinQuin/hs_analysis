@@ -3,7 +3,7 @@
 
 import pytest
 
-from analysis.search.rhea_engine import Action, ActionType
+from analysis.search.rhea import Action, ActionType
 from analysis.search.game_state import GameState
 from analysis.search.action_normalize import (
     action_hash,

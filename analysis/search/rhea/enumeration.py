@@ -30,6 +30,8 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
     for idx, card in enumerate(state.hand):
         tags = _probe_tags_for_card(state, card)
         eff_cost = state.mana.effective_cost(card)
+        from analysis.search.rhea.simulation import _apply_text_cost_reduction
+        eff_cost = _apply_text_cost_reduction(card, state.hand, idx, eff_cost)
         if eff_cost > state.mana.available:
             continue
         if card.card_type.upper() == "MINION":
@@ -142,31 +144,13 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
             )
         elif card.card_type.upper() == "LOCATION":
             if not state.location_full():
-                # Check if location effect needs a target when activated
-                try:
-                    targets = _get_spell_target_resolver().resolve_targets(state, card)
-                except (ImportError, AttributeError, TypeError):
-                    targets = []
-                if targets:
-                    for tgt in targets:
-                        actions.append(
-                            Action(
-                                action_type=ActionType.ACTIVATE_LOCATION,
-                                card_index=idx,
-                                target_index=tgt,
-                                position=0,
-                                meta_tags=frozenset(tags),
-                            )
-                        )
-                else:
-                    actions.append(
-                        Action(
-                            action_type=ActionType.PLAY,
-                            card_index=idx,
-                            position=0,
-                            meta_tags=frozenset(tags),
-                        )
+                actions.append(
+                    Action(
+                        action_type=ActionType.PLAY,
+                        card_index=idx,
+                        meta_tags=frozenset(tags),
                     )
+                )
 
     enemy_taunts = [m for m in state.opponent.board if m.has_taunt]
 

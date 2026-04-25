@@ -24,6 +24,7 @@ try:
         eval_threat,
         eval_lingering,
         eval_trigger,
+        eval_mana_efficiency,
     )
 except ImportError:
     def eval_board(state) -> float:
@@ -43,6 +44,10 @@ except ImportError:
     def eval_trigger(state) -> float:
         return 0.0
 
+    def eval_mana_efficiency(state) -> float:
+        wasted = state.mana.available
+        return -wasted if wasted > 0 else 0.0
+
 
 DEFAULT_WEIGHTS = {
     "w_hand":      1.0,
@@ -50,7 +55,28 @@ DEFAULT_WEIGHTS = {
     "w_threat":    1.5,
     "w_lingering": 0.8,
     "w_trigger":   0.5,
+    "w_mana":      0.3,
 }
+
+
+def target_selection_eval(state: GameState) -> float:
+    """Lightweight state evaluation for target/option selection.
+
+    Uses board power difference + hero HP delta + kill bonuses.
+    Intentionally simple — no scorer, no sub-models, no BSV.
+    """
+    friendly_power = sum(m.attack + m.health for m in state.board if m.health > 0)
+    enemy_power = 0
+    dead_enemies = 0
+    for m in state.opponent.board:
+        if m.health <= 0:
+            dead_enemies += 1
+        else:
+            enemy_power += m.attack + m.health
+    if state.opponent.hero.hp <= 0:
+        return 1000.0
+    hero_delta = state.hero.hp - state.opponent.hero.hp
+    return friendly_power - enemy_power + hero_delta + dead_enemies * 10
 
 
 def evaluate(state: GameState, weights: dict | None = None) -> float:
@@ -66,6 +92,7 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
     threat_score    = eval_threat(state)
     lingering_score = eval_lingering(state)
     trigger_score   = eval_trigger(state)
+    mana_score      = eval_mana_efficiency(state)
 
     V = (
         w["w_hand"]      * hand_score
@@ -73,6 +100,7 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
       + w["w_threat"]    * threat_score
       + w["w_lingering"] * lingering_score
       + w["w_trigger"]   * trigger_score
+      + w["w_mana"]      * mana_score
     )
     return V
 

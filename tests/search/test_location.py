@@ -4,7 +4,7 @@ import pytest
 
 from analysis.search.game_state import GameState, HeroState, ManaState, Minion, OpponentState
 from analysis.search.location import Location, activate_location, tick_location_cooldowns
-from analysis.search.rhea_engine import (
+from analysis.search.rhea import (
     Action,
     ActionType,
     enumerate_legal_actions,

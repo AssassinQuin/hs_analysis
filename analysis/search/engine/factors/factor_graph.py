@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from analysis.search.game_state import GameState
-from analysis.search.rhea_engine import Action
+from analysis.search.rhea import Action
 from analysis.search.engine.factors.factor_base import (
     EvalContext, EvaluationFactor,
 )

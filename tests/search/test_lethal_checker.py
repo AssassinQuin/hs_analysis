@@ -13,7 +13,7 @@ from analysis.search.game_state import (
     Weapon,
 )
 from analysis.models.card import Card
-from analysis.search.rhea_engine import ActionType
+from analysis.search.rhea import ActionType
 from analysis.search.lethal_checker import check_lethal, max_damage_bound
 
 

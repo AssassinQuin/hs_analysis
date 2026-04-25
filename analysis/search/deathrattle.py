@@ -123,7 +123,7 @@ def _execute_deathrattle(
 
     Checks for deathrattle in:
     1. Enchantments with trigger_type="deathrattle"
-    2. Card text containing "亡语："
+    2. Card text parsed via parse_deathrattle_text
     """
     s = state
 
@@ -136,8 +136,25 @@ def _execute_deathrattle(
                 logger.warning("Deathrattle enchantment failed: %s — %s", ench.trigger_effect, exc)
 
     # Source 2: Text-based deathrattles (parse from minion name/text)
-    # We check enchantments first since they're more precise.
-    # Text-based parsing is a fallback for cards without enchantments.
+    minion_text = getattr(minion, 'text', '') or ''
+    if not minion_text:
+        card_ref = getattr(minion, 'card_ref', None)
+        if card_ref is not None:
+            minion_text = getattr(card_ref, 'text', '') or ''
+    if minion_text:
+        dr_effect = parse_deathrattle_text(minion_text)
+        if dr_effect:
+            try:
+                s = _apply_deathrattle_effect(s, dr_effect, board_type, position)
+            except Exception as exc:
+                logger.warning("Text deathrattle failed: %s — %s", dr_effect, exc)
+
+    # Source 3: Mechanics tag based (DEATHRATTLE tag but no parsed text)
+    if not minion_text:
+        mechanics = getattr(minion, 'mechanics', []) or []
+        if 'DEATHRATTLE' in mechanics:
+            name = getattr(minion, 'name', '')
+            logger.debug("Deathrattle minion with no text parsed: %s", name)
 
     return s
 

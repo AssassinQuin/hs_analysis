@@ -566,10 +566,17 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
     if not entries:
         return 0
 
+    seen_codes: dict[str, tuple] = {}
+    for code, name_hint, arch_hint in entries:
+        if code not in seen_codes:
+            seen_codes[code] = (code, name_hint, arch_hint)
+    deduped = list(seen_codes.values())
+    log.info(f"Deck codes: {len(entries)} entries, {len(deduped)} unique")
+
     today = datetime.now().strftime("%Y-%m-%d")
     stored = 0
 
-    for i, (code, name_hint, arch_hint) in enumerate(entries):
+    for i, (code, name_hint, arch_hint) in enumerate(deduped):
         try:
             deck = Deck.from_deckstring(code)
             # Get hero class from hero card
@@ -619,7 +626,7 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
                     name,
                     json.dumps(cards_list),
                     None,
-                    1.0 / len(entries),
+                    1.0 / len(deduped),
                     today,
                     playstyle,
                 ),

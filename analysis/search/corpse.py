@@ -131,13 +131,16 @@ def has_double_corpse_gen(state: GameState) -> bool:
 # Effect resolution
 # ---------------------------------------------------------------------------
 
-def resolve_corpse_effects(state: GameState, card: dict) -> GameState:
+def resolve_corpse_effects(state: GameState, card) -> GameState:
     """Parse and resolve corpse effects from a DK card.
 
     For optional effects: apply if affordable, otherwise skip.
     For mandatory effects: always apply (spend what we can).
     """
-    card_text = card.get("text", "") or ""
+    if isinstance(card, dict):
+        card_text = card.get("text", "") or ""
+    else:
+        card_text = getattr(card, "text", "") or ""
     if not isinstance(card_text, str):
         card_text = str(card_text)
 

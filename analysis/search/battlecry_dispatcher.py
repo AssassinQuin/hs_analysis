@@ -17,6 +17,7 @@ from typing import List, Optional, Tuple
 
 from analysis.search.game_state import GameState, Minion, HeroState
 from analysis.models.card import Card
+from analysis.evaluators.composite import target_selection_eval
 from analysis.utils.spell_simulator import EffectParser, EffectApplier
 
 logger = logging.getLogger(__name__)
@@ -258,32 +259,55 @@ class BattlecryDispatcher:
             except (ImportError, ValueError, TypeError, KeyError):
                 pass
 
+        s = self._apply_equip_weapon(s, bc_text)
+
         return s
+
+    # ---------------------------------------------------------------
+    # Equip weapon from battlecry
+    # ---------------------------------------------------------------
+
+    _EQUIP_WEAPON_CN = re.compile(r'装备一把(\d+)/(\d+)的?\w*')
+    _EQUIP_WEAPON_EN = re.compile(r'Equip\s+a\s+(\d+)/(\d+)', re.IGNORECASE)
+    _HOLDING_RACE_CN = re.compile(r'手牌中有(\w+?)牌')
+
+    def _apply_equip_weapon(self, state: GameState, bc_text: str) -> GameState:
+        """Handle battlecry weapon equip effects.
+
+        Patterns:
+        - "装备一把2/2的剑"
+        - "Equip a 2/2 Sword"
+        With condition: "如果你的手牌中有龙牌" / "if you're holding a Dragon"
+        """
+        m = self._EQUIP_WEAPON_CN.search(bc_text)
+        if not m:
+            m = self._EQUIP_WEAPON_EN.search(bc_text)
+        if not m:
+            return state
+
+        atk = int(m.group(1))
+        dur = int(m.group(2))
+
+        cond = self._HOLDING_RACE_CN.search(bc_text)
+        if cond:
+            from analysis.search.rhea.simulation import _RACE_CN_TO_EN
+            race_cn = cond.group(1)
+            race_en = _RACE_CN_TO_EN.get(race_cn, race_cn.upper())
+            has_race = any(
+                getattr(h, 'race', '').upper() == race_en or
+                race_en in [r.upper() for r in (getattr(h, 'races', None) or [])]
+                for h in state.hand
+            )
+            if not has_race:
+                return state
+
+        from analysis.search.game_state import Weapon
+        state.hero.weapon = Weapon(attack=atk, health=dur, name="BattlecryWeapon")
+        return state
 
     # ---------------------------------------------------------------
     # Target selection helpers
     # ---------------------------------------------------------------
-
-    @staticmethod
-    def _quick_eval(state: GameState) -> float:
-        """Quick state evaluation for target selection.
-
-        Heuristic: friendly board strength - enemy board strength + hero delta
-        + removal bonus for dead enemy minions.
-        """
-        friendly_power = sum(m.attack + m.health for m in state.board if m.health > 0)
-        enemy_power = 0
-        dead_enemies = 0
-        for m in state.opponent.board:
-            if m.health <= 0:
-                dead_enemies += 1
-            else:
-                enemy_power += m.attack + m.health
-        removal_bonus = dead_enemies * 10  # kills are very valuable
-        if state.opponent.hero.hp <= 0:
-            return 1000  # lethal beats everything
-        hero_delta = state.hero.hp - state.opponent.hero.hp
-        return friendly_power - enemy_power + hero_delta + removal_bonus
 
     def _select_best_target_exhaustive(
         self,
@@ -313,7 +337,7 @@ class BattlecryDispatcher:
             try:
                 sim = state.copy()
                 sim = effect_fn(sim, target_id)
-                score = self._quick_eval(sim)
+                score = target_selection_eval(sim)
                 # Tiebreaker: prefer minion over hero, higher attack wins
                 tiebreaker = 0.0
                 if target_id.startswith('enemy_minion:'):

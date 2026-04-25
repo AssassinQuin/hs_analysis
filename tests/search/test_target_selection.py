@@ -51,16 +51,18 @@ def lethal_state() -> GameState:
 # ---------------------------------------------------------------------------
 
 class TestQuickEval:
-    def test_superior_board(self, dispatcher, state_with_enemies):
-        score = dispatcher._quick_eval(state_with_enemies)
+    def test_superior_board(self, state_with_enemies):
+        from analysis.evaluators.composite import target_selection_eval
+        score = target_selection_eval(state_with_enemies)
         assert isinstance(score, (int, float))
 
-    def test_lethal_eval(self, dispatcher, lethal_state):
+    def test_lethal_eval(self, lethal_state):
         """After lethal damage, score should be very high."""
+        from analysis.evaluators.composite import target_selection_eval
         sim = lethal_state.copy()
         sim.opponent.hero.hp = 0
-        score = dispatcher._quick_eval(sim)
-        assert score > dispatcher._quick_eval(lethal_state)
+        score = target_selection_eval(sim)
+        assert score > target_selection_eval(lethal_state)
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from analysis.search.game_state import GameState, Minion
-from analysis.search.rhea_engine import Action, ActionType, apply_action
+from analysis.search.rhea import Action, ActionType, apply_action
 
 
 @dataclass

@@ -80,6 +80,7 @@ class Minion:
     enchantments: list = field(default_factory=list)
     owner: str = "friendly"  # "friendly" 或 "enemy"
     card_ref: object = None  # 可选：引用源 Card 对象
+    abilities: list = field(default_factory=list)
 
     @classmethod
     def from_card(cls, card, owner: str = "friendly", turn_played: int = 0) -> "Minion":
@@ -110,6 +111,7 @@ class Minion:
             owner=owner,
             turn_played=turn_played,
             card_ref=card,
+            abilities=getattr(card, 'abilities', []),
         )
 
     def copy(self) -> "Minion":

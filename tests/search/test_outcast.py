@@ -3,7 +3,7 @@
 import pytest
 from analysis.search.game_state import GameState, HeroState, Minion, ManaState, OpponentState
 from analysis.models.card import Card
-from analysis.search.rhea_engine import apply_action, Action
+from analysis.search.rhea import apply_action, Action
 from analysis.search.outcast import check_outcast, apply_outcast_bonus, _parse_outcast_bonus
 
 

@@ -74,7 +74,7 @@ class V8ContextualScorer:
         """Compute contextual score for a single card in the given state."""
         base = getattr(card, "score", 0.0)
         if base == 0.0:
-            return 0.0
+            base = self._fallback_base_score(card)
         result = base
         result *= self._turn_factor(card, state)
         result *= self._type_factor(card, state)
@@ -89,6 +89,30 @@ class V8ContextualScorer:
         base_sum = sum(self.contextual_score(c, state) for c in state.hand)
         synergy = self._synergy_bonus(state)
         return base_sum + synergy
+
+    def _fallback_base_score(self, card: Card) -> float:
+        """Compute a reasonable base score when card.score is 0 (no scoring_report.json).
+
+        Uses card stats and cost to approximate value:
+        - Minion: (attack * 1.0 + health * 0.8) / max(cost, 1) — efficiency metric
+        - Spell: cost * 0.8 — higher cost = more impact expected
+        - Weapon: (attack * durability * 0.9) / max(cost, 1)
+        - Other: cost * 0.5
+        """
+        from analysis.models.card import CardType
+        ct = getattr(card, "card_type", CardType.INVALID)
+        cost = max(getattr(card, "cost", 0), 1)
+        atk = getattr(card, "attack", 0)
+        hp = getattr(card, "health", 0)
+
+        if ct == CardType.MINION or (ct == CardType.INVALID and hp > 0):
+            return (atk * 1.0 + hp * 0.8) / cost
+        if ct == CardType.WEAPON:
+            dur = getattr(card, "durability", 1)
+            return (atk * dur * 0.9) / cost
+        if ct == CardType.SPELL:
+            return cost * 0.8
+        return cost * 0.5
 
     # ------------------------------------------------------------------
     # Component 1: Turn Curve Adjuster

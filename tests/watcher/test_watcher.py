@@ -129,30 +129,28 @@ class TestDecisionLoop:
         """analyze_file runs without errors on test Power.log."""
         from analysis.watcher.decision_loop import DecisionLoop
 
-        DecisionLoop.analyze_file(power_log_path, pop_size=5, max_gens=5, time_limit=100.0)
+        DecisionLoop.analyze_file(power_log_path, time_budget_ms=200, num_worlds=2)
 
-        # Should have produced some output
         captured = capsys.readouterr()
-        # Just verify it doesn't crash — output content depends on game state
 
     def test_presenter_format(self, capsys):
         """DecisionPresenter formats output correctly."""
         from analysis.watcher.decision_loop import DecisionPresenter
-        from analysis.search.rhea_engine import SearchResult
+        from analysis.search.engine_adapter import UnifiedSearchResult
         from analysis.search.game_state import GameState
 
         output = StringIO()
         presenter = DecisionPresenter(output=output, verbose=True)
 
-        result = SearchResult(
-            best_chromosome=[],
-            best_fitness=0.0,
-            alternatives=[],
-            generations_run=10,
-            time_elapsed=50.0,
-            population_diversity=0.1,
-            confidence=0.95,
-        )
+        class MockRaw:
+            best_sequence = []
+            fitness = 0.0
+            alternatives = []
+            action_stats = []
+            mcts_stats = None
+            detailed_log = None
+
+        result = UnifiedSearchResult(MockRaw())
 
         state = GameState()
         presenter.present(result, state, 50.0)

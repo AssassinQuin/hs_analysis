@@ -9,7 +9,7 @@ from analysis.search.game_state import (
     ManaModifier,
 )
 from analysis.models.card import Card
-from analysis.search.rhea_engine import (
+from analysis.search.rhea import (
     Action,
     ActionType,
     apply_action,

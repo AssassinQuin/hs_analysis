@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""rhea — Rolling Horizon Evolutionary Algorithm for Hearthstone turn planning.
+"""rhea — Shared search primitives for Hearthstone turn planning.
 
-This package contains the decomposed RHEA engine. All public symbols are
-re-exported here for backward compatibility with ``analysis.search.rhea_engine``.
+Contains Action types, enumeration, and simulation logic shared by MCTS engine.
+The RHEA engine class has been removed — only MCTS is active.
 """
 
 from analysis.search.rhea.actions import Action, ActionType, action_key, action_in_list
@@ -12,8 +12,6 @@ from analysis.search.rhea.simulation import (
     apply_draw,
     next_turn_lethal_check,
 )
-from analysis.search.rhea.result import SearchResult
-from analysis.search.rhea.engine import RHEAEngine
 
 __all__ = [
     "Action",
@@ -24,6 +22,4 @@ __all__ = [
     "apply_action",
     "apply_draw",
     "next_turn_lethal_check",
-    "SearchResult",
-    "RHEAEngine",
 ]

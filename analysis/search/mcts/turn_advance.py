@@ -19,36 +19,28 @@ def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> Game
     """Advance state from our END_TURN to the start of our next turn.
 
     Cycle:
-    1. Our end-of-turn cleanup (overload, fatigue, dormant, freeze, immune, locations)
-       — already done by _apply_end_turn before this function is called.
-    2. Opponent's turn: mana refresh, draw, minions can attack, opponent plays greedy.
+    1. Our end-of-turn cleanup — already done by _apply_end_turn.
+    2. Opponent's turn: mana refresh, draw, minions attack, opponent greedy.
     3. Opponent's end-of-turn cleanup.
-    4. Our next turn: mana refresh, draw, minions can attack.
+    4. Our next turn: mana refresh, draw, minions can attack, greedy play.
 
     Args:
         state: GameState after our END_TURN has been applied (cleanup done).
-        greedy_opponent: If True, simulate opponent playing minions greedily.
+        greedy_opponent: If True, simulate opponent attacking greedily.
 
     Returns:
-        New GameState at the start of our next turn.
+        New GameState at the end of our next turn (after greedy play).
     """
     s = state.copy()
-
-    # === Step 1: Our end-of-turn cleanup is already done by _apply_end_turn ===
 
     # === Step 2: Opponent's turn start ===
     s.turn_number += 1
 
-    # Opponent mana refresh — heuristic: opponent mana ≈ min(10, turn//2 + 1)
-    # We don't track opponent mana directly; estimate based on turn number.
-    # Each player gains one mana per their turn.
     opp_estimated_max = min(10, max(1, s.turn_number // 2 + 1))
 
-    # Opponent draw
     if s.opponent.deck_remaining > 0:
         s.opponent.deck_remaining -= 1
 
-    # Opponent minions can attack
     for m in s.opponent.board:
         if not m.has_rush:
             m.can_attack = True
@@ -56,12 +48,10 @@ def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> Game
         m.frozen_until_next_turn = False
         m.has_immune = False
 
-    # === Step 2b: Opponent plays (greedy) ===
     if greedy_opponent:
         s = _greedy_opponent_play(s)
 
     # === Step 3: Opponent's end-of-turn cleanup ===
-    # Clear our minions' freeze/immune (applied at opponent's end-of-turn)
     for m in s.board:
         m.frozen_until_next_turn = False
         m.has_immune = False
@@ -70,7 +60,6 @@ def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> Game
     # === Step 4: Our next turn start ===
     s.turn_number += 1
 
-    # Our mana refresh
     next_max = min(s.mana.max_mana_cap, s.mana.max_mana + 1)
     s.mana.max_mana = next_max
     s.mana.overloaded = s.mana.overload_next
@@ -78,26 +67,133 @@ def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> Game
     s.mana.available = max(0, next_max - s.mana.overloaded)
     s.mana.modifiers = []
 
-    # Our draw — decrement deck count without adding specific cards to hand.
-    # MCTS doesn't know which specific cards we'll draw; the static evaluator
-    # estimates hand quality based on hand size.
     if s.deck_remaining > 0:
         s.deck_remaining -= 1
     else:
         s.fatigue_damage += 1
         s.hero.hp -= s.fatigue_damage
 
-    # Our minions can attack
     for m in s.board:
         m.can_attack = True
         m.has_attacked_once = False
         m.frozen_until_next_turn = False
         m.has_immune = False
 
-    # Clear turn-level tracking
     s.cards_played_this_turn = []
 
+    _apply_turn_start_triggers(s)
+
+    # === Step 4b: Our greedy play — spend mana efficiently ===
+    s = _greedy_self_play(s)
+
+    # Greedy attacks with our minions
+    s = _greedy_self_attacks(s)
+
     return s
+
+
+def _greedy_self_play(state: GameState) -> GameState:
+    """Play cards greedily to maximise mana usage.
+
+    Strategy: play the most expensive affordable card first, repeat.
+    This simulates reasonable turn play in cross-turn rollouts.
+    """
+    from analysis.search.rhea.actions import ActionType
+    from analysis.search.rhea.simulation import apply_action
+    from analysis.search.rhea.enumeration import enumerate_legal_actions
+
+    s = state
+    max_plays = 7
+
+    for _ in range(max_plays):
+        if s.mana.available <= 0:
+            break
+
+        actions = enumerate_legal_actions(s)
+        playable = [
+            a for a in actions
+            if a.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET)
+        ]
+        if not playable:
+            break
+
+        def _play_value(a):
+            idx = a.card_index
+            if 0 <= idx < len(s.hand):
+                card = s.hand[idx]
+                cost = getattr(card, 'cost', 0) or 0
+                atk = getattr(card, 'attack', 0) or 0
+                hp = getattr(card, 'health', 0) or 0
+                eff_cost = s.mana.effective_cost(card)
+                if eff_cost > s.mana.available:
+                    return -100
+                return atk + hp
+            return 0
+
+        best = max(playable, key=_play_value)
+        bv = _play_value(best)
+        if bv < 0:
+            break
+
+        s = apply_action(s, best)
+
+    return s
+
+
+def _greedy_self_attacks(state: GameState) -> GameState:
+    """Attack greedily with our minions in cross-turn rollout."""
+    from analysis.search.rhea.actions import ActionType
+    from analysis.search.rhea.simulation import apply_action
+    from analysis.search.rhea.enumeration import enumerate_legal_actions
+
+    s = state
+
+    for _ in range(7):
+        actions = enumerate_legal_actions(s)
+        attacks = [
+            a for a in actions
+            if a.action_type == ActionType.ATTACK
+        ]
+        if not attacks:
+            break
+
+        face_attacks = [a for a in attacks if a.target_index == 0]
+        if face_attacks:
+            s = apply_action(s, face_attacks[0])
+        else:
+            s = apply_action(s, attacks[0])
+
+    return s
+
+
+def _apply_turn_start_triggers(state: GameState) -> None:
+    """Apply turn-start effects from card text on board minions.
+
+    Handles patterns like:
+    - "在你的回合开始时获得+1/+1"
+    - "At the start of your turn, gain +1/+1"
+    """
+    import re
+    _TURN_START_BUFF_CN = re.compile(r'回合开始时获得\s*\+(\d+)/\+(\d+)')
+    _TURN_START_BUFF_EN = re.compile(
+        r'start of your turn.*?gain\s*\+(\d+)/\+(\d+)', re.IGNORECASE
+    )
+    for m in state.board:
+        text = ''
+        card_ref = getattr(m, 'card_ref', None)
+        if card_ref is not None:
+            text = getattr(card_ref, 'text', '') or ''
+        if not text:
+            text = getattr(m, 'text', '') or ''
+        if not text:
+            continue
+        match = _TURN_START_BUFF_CN.search(text) or _TURN_START_BUFF_EN.search(text)
+        if match:
+            atk_bonus = int(match.group(1))
+            hp_bonus = int(match.group(2))
+            m.attack += atk_bonus
+            m.health += hp_bonus
+            m.max_health += hp_bonus
 
 
 def _greedy_opponent_play(state: GameState) -> GameState:

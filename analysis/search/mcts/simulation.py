@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+_CROSS_TURN_DISCOUNT = 0.7
+
 
 def evaluate_leaf(
     leaf_state: 'GameState',
@@ -31,26 +33,35 @@ def evaluate_leaf(
 ) -> float:
     """Evaluate a leaf node and return reward in [-1, 1].
 
-    Terminal states return ±1.0 directly.
+    Terminal states return +/-1.0 directly.
     Non-terminal states use evaluate_delta normalised via tanh.
+
+    For cross-turn leaves (turn_depth > 0), a cutoff evaluation is always
+    computed first.  If cross_turn_rollout_depth > 0, a rollout is also
+    performed and the two scores are blended (cutoff * 0.6 + rollout * 0.4)
+    with a time-discount factor applied to the rollout component so that
+    far-future simulations do not dominate the current-turn decision.
     """
-    # Terminal check
     terminal = _get_terminal_reward(leaf_state)
     if terminal is not None:
         return terminal
 
-    # Cross-turn rollout for leaves beyond tree turn depth
+    cutoff_score = _eval_cutoff(leaf_state, root_state, config)
+
     if turn_depth > 0 and config.cross_turn_rollout_depth > 0:
-        return _eval_cross_turn_rollout(
+        rollout_score = _eval_cross_turn_rollout(
             leaf_state, root_state, config, config.cross_turn_rollout_depth
         )
+        discount = _CROSS_TURN_DISCOUNT ** turn_depth
+        blended = cutoff_score * 0.6 + rollout_score * 0.4 * discount
+        return max(-1.0, min(1.0, blended))
 
-    if config.simulation_mode == SimulationMode.EVAL_CUTOFF:
-        return _eval_cutoff(leaf_state, root_state, config)
-    elif config.simulation_mode == SimulationMode.HYBRID:
+    if config.simulation_mode == SimulationMode.HYBRID:
         return _eval_hybrid(leaf_state, root_state, config)
-    else:
+    elif config.simulation_mode == SimulationMode.RANDOM:
         return _eval_random_rollout(leaf_state, config)
+
+    return cutoff_score
 
 
 def normalize_score(raw_score: float, scale: float = 15.0) -> float:
@@ -64,9 +75,9 @@ def _get_terminal_reward(state: 'GameState') -> Optional[float]:
     opp_hp = state.opponent.hero.hp
 
     if opp_hp <= 0:
-        return 1.0   # opponent dead → we win
+        return 1.0
     if my_hp <= 0:
-        return -1.0  # we dead → opponent wins
+        return -1.0
     return None
 
 
@@ -79,22 +90,19 @@ def _eval_cross_turn_rollout(
     """Evaluate by doing greedy rollouts for N turns, then static eval.
 
     Used when the MCTS tree has reached its turn-depth limit.
-    Each rollout turn: our greedy play → opponent greedy response → next turn.
+    Each rollout turn: our greedy play -> opponent greedy response -> next turn.
     """
     from analysis.search.mcts.turn_advance import advance_full_turn
 
     s = leaf_state
     for _ in range(rollout_turns):
-        # Check terminal
         if s.hero.hp <= 0:
             return -1.0
         if s.opponent.hero.hp <= 0:
             return 1.0
 
-        # Advance a full turn (our greedy + opponent greedy)
         s = advance_full_turn(s, greedy_opponent=True)
 
-    # Final evaluation
     if s.hero.hp <= 0:
         return -1.0
     if s.opponent.hero.hp <= 0:
@@ -131,7 +139,6 @@ def _eval_hybrid(
         if not actions:
             break
 
-        # Filter to reasonable actions for rollout
         filtered = _filter_rollout_actions(actions, current)
         if not filtered:
             filtered = actions
@@ -139,7 +146,6 @@ def _eval_hybrid(
         action = random.choice(filtered)
         current = apply_action(current, action)
 
-        # Check terminal
         terminal = _get_terminal_reward(current)
         if terminal is not None:
             return terminal
@@ -185,7 +191,6 @@ def _filter_rollout_actions(actions: list, state: 'GameState') -> list:
     filtered = []
     for action in actions:
         if action.action_type == ActionType.PLAY_WITH_TARGET:
-            # Skip self-damage spells targeting own hero
             if action.target_index == 0:
                 continue
         filtered.append(action)

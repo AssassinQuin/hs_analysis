@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from analysis.search.engine.models.probability_panel import ProbabilityPanel
-from analysis.search.rhea_engine import Action
+from analysis.search.rhea import Action
 
 
 @dataclass

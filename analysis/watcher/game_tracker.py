@@ -285,7 +285,7 @@ class GameTracker:
             return None
 
     def _parse_entity_cache_line(self, line: str) -> None:
-        """解析 SHOW_ENTITY / FULL_ENTITY / TAG_CHANGE 行，更新 entity_cache。"""
+        """解析 SHOW_ENTITY / FULL_ENTITY / TAG_CHANGE 行，更新 entity_cache 和 GlobalTracker。"""
         stripped = line.strip()
 
         # SHOW_ENTITY line — start of a new block

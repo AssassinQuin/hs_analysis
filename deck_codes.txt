@@ -83,3 +83,93 @@ AAECAa0GDPCfBMP/BsODB4OKB8WUB6iWB/ypB4CqB4SqB+SyB4O/B5a/BwnLoASg+waFhgedrQeFvweb
 
 # name: Zoo Warlock V3 | arch: aggro
 AAECAf0EBO/8BsODB6ebB/KyBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeT2geG4AcAAA==
+
+### 龙战
+# 职业：战士
+# 模式：标准模式
+# 甲虫年
+#
+# 2x (1) 暮光龙卵
+# 2x (1) 永时困苦
+# 2x (1) 烈火炙烤
+# 2x (1) 赤红深渊
+# 2x (1) 载蛋雏龙
+# 2x (1) 黑暗的龙骑士
+# 2x (2) 先行打击
+# 2x (2) 影焰晕染
+# 2x (2) 灼热裂隙
+# 1x (2) 蔽影密探
+# 2x (2) 龙巢守护者
+# 2x (3) 喷发火山
+# 2x (4) 现场播报员
+# 2x (7) 先觉蜿变幼龙
+# 2x (8) 乘风浮龙
+# 1x (8) 格罗玛什·地狱咆哮
+# 
+AAECAYwWAougBPnDBw7j5gaq/Aar/AbohwfSlwe3rQePsQfQsgfssge1wAf2wQeVwgebwgecwgcAAA==
+# 
+# 想要使用这副套牌，请先复制到剪贴板，然后在游戏中点击“新套牌”进行粘贴。
+
+### 兆灌贼
+# 职业：潜行者
+# 模式：标准模式
+# 甲虫年
+#
+# 2x (0) 伺机待发
+# 1x (0) 殒命暗影
+# 1x (1) 似曾相识
+# 2x (1) 古神的眼线
+# 2x (1) 梦魇供能
+# 2x (2) 不测之变
+# 1x (2) 异教地图
+# 2x (2) 暮光祭礼
+# 2x (2) 狐人老千
+# 2x (2) 苦花骑士
+# 2x (2) 闪回
+# 2x (3) 癫狂的追随者
+# 1x (3) 米尔雷斯，晶化镜甲龙
+# 1x (4) 半兽人迦罗娜
+# 1x (3) 莱恩国王
+# 1x (2) 弑君者
+# 1x (4) 梦魇之王萨维斯
+# 1x (6) 奥卓克希昂
+# 1x (6) 希奈丝特拉
+# 1x (6) 潜踪大师奥普
+# 1x (10) 灭世者死亡之翼
+# 
+AAECAfahBwzDgwfBlwfRnQfspQeGqAeHqAeIqAfHrgfQvweK1Aeb1AeI2QcJ958E94EHkIMHjK0H2a8HmrMHtMEHncUH1cUHAAA=
+# 
+# 想要使用这副套牌，请先复制到剪贴板，然后在游戏中点击“新套牌”进行粘贴。
+
+### End of Turnadin
+AAECAZ8FBvD+BsODB+6oB++oB/CoB+XBBwzJoAS6lgfLqQfErgf1rwe+sgfiwQfowQfqwQf2wQeDwgerxgcAAA==
+
+### Harold Shaman
+AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
+
+### End of Turnadin
+AAECAZ8FCKiKBPD+BsODB+6oB++oB/CoB8avB+XBBwvJoAS6lgfLqQfErge+sgfiwQfowQfqwQf2wQeDwgerxgcAAA==
+
+### Merithra Druid
+AAECAZICCqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LABwqunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAeT8QcAAA==
+
+### 铺场德
+AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nweqrwfXwAfYwAfbwAfswAf2wQcAAA==
+
+### Harold Rogue
+AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwSQgwfBlweMrQfZrwe0wQfAwQedxQfVxQcAAA==
+
+### Merithra Druid
+AAECAZICDKn1BqGBB5KDB8ODB6+HB6yIB4KYB+ixB7iyB+DAB+LAB4/BBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
+
+### 任务法
+AAECAf0EBu/8BsODB7OHB6ebB/KyB5PaBwyb8gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
+
+### 空手猎
+AAECAR8GsYcHmacHmqcHm6cHxbEHhMQHDKmfBKqfBK+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
+
+### 铺场德
+AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nwfJrAeqrwfXwAfbwAfswAf2wQcAAA==
+
+### Merithra Druid
+AAECAZICDM2eBqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LAB4/BBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==

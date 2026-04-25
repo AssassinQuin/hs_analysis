@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Set, Tuple
 
 from analysis.search.game_state import GameState, Minion
-from analysis.search.rhea_engine import Action, ActionType
+from analysis.search.rhea import Action, ActionType
 
 
 class ActionPruner:

@@ -262,26 +262,18 @@ class TestStateConversion:
 class TestEngineSearch:
     """Run actual search on extracted game states with minimal budget."""
 
+    FAST_MCTS_PARAMS = {"time_budget_ms": 200, "num_worlds": 2}
+
     @pytest.fixture(scope="class")
     def game_states(self, game_states_for_search):
-        """Return dict of {game_name: GameState} for engine search."""
         return game_states_for_search
 
-    @pytest.mark.parametrize("engine_name", ["rhea", "mcts"])
-    def test_search_returns_result(self, game_states, engine_name):
-        """Each engine should produce a valid SearchResult."""
+    def test_search_returns_result(self, game_states):
         if not game_states:
             pytest.skip("No game states available for search")
 
-        # Use the first available state
         state = next(iter(game_states.values()))
-
-        params = {
-            "rhea": {"pop_size": 4, "max_gens": 2, "time_limit": 50, "max_chromosome_length": 3},
-            "mcts": {"time_budget_ms": 200, "num_worlds": 2},
-        }[engine_name]
-
-        engine_factory = create_engine(engine_name, params)
+        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
         engine = engine_factory()
         raw_result = engine.search(state)
         result = UnifiedSearchResult(raw_result)
@@ -289,96 +281,60 @@ class TestEngineSearch:
         assert result is not None
         assert result.best_chromosome is not None
 
-    @pytest.mark.parametrize("engine_name", ["rhea", "mcts"])
-    def test_best_sequence_not_empty(self, game_states, engine_name):
-        """Best action sequence should be non-empty."""
+    def test_best_sequence_not_empty(self, game_states):
         if not game_states:
             pytest.skip("No game states available for search")
 
         state = next(iter(game_states.values()))
-
-        params = {
-            "rhea": {"pop_size": 4, "max_gens": 2, "time_limit": 50, "max_chromosome_length": 3},
-            "mcts": {"time_budget_ms": 200, "num_worlds": 2},
-        }[engine_name]
-
-        engine_factory = create_engine(engine_name, params)
+        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
         engine = engine_factory()
         raw_result = engine.search(state)
         result = UnifiedSearchResult(raw_result)
 
-        assert len(result.best_chromosome) > 0, (
-            f"{engine_name}: best_chromosome should not be empty"
-        )
+        assert len(result.best_chromosome) > 0
 
-    @pytest.mark.parametrize("engine_name", ["rhea", "mcts"])
-    def test_sequence_ends_with_end_turn(self, game_states, engine_name):
-        """Sequence should end with END_TURN."""
+    def test_sequence_ends_with_end_turn(self, game_states):
         if not game_states:
             pytest.skip("No game states available for search")
 
         state = next(iter(game_states.values()))
-
-        params = {
-            "rhea": {"pop_size": 4, "max_gens": 2, "time_limit": 50, "max_chromosome_length": 3},
-            "mcts": {"time_budget_ms": 200, "num_worlds": 2},
-        }[engine_name]
-
-        engine_factory = create_engine(engine_name, params)
+        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
         engine = engine_factory()
         raw_result = engine.search(state)
         result = UnifiedSearchResult(raw_result)
 
-        assert result.best_chromosome[-1].action_type == ActionType.END_TURN, (
-            f"{engine_name}: last action should be END_TURN, "
-            f"got {result.best_chromosome[-1].action_type}"
-        )
+        assert result.best_chromosome[-1].action_type == ActionType.END_TURN
 
-    @pytest.mark.parametrize("engine_name", ["rhea", "mcts"])
-    def test_search_on_all_games(self, game_states, engine_name):
-        """Each engine should produce results for all available game states."""
+    def test_search_on_all_games(self, game_states):
         if not game_states:
             pytest.skip("No game states available for search")
-
-        params = {
-            "rhea": {"pop_size": 4, "max_gens": 2, "time_limit": 50, "max_chromosome_length": 3},
-            "mcts": {"time_budget_ms": 200, "num_worlds": 2},
-        }[engine_name]
 
         for game_name, state in game_states.items():
-            engine_factory = create_engine(engine_name, params)
+            engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
             engine = engine_factory()
             raw_result = engine.search(state)
             result = UnifiedSearchResult(raw_result)
 
             assert len(result.best_chromosome) > 0, (
-                f"{engine_name} on {game_name}: best_chromosome should not be empty"
+                f"MCTS on {game_name}: best_chromosome should not be empty"
             )
             assert result.best_chromosome[-1].action_type == ActionType.END_TURN, (
-                f"{engine_name} on {game_name}: last action should be END_TURN"
+                f"MCTS on {game_name}: last action should be END_TURN"
             )
 
-    @pytest.mark.parametrize("engine_name", ["rhea", "mcts"])
-    def test_best_fitness_is_finite(self, game_states, engine_name):
-        """Best fitness should be a finite number."""
+    def test_best_fitness_is_finite(self, game_states):
         if not game_states:
             pytest.skip("No game states available for search")
 
         state = next(iter(game_states.values()))
-
-        params = {
-            "rhea": {"pop_size": 4, "max_gens": 2, "time_limit": 50, "max_chromosome_length": 3},
-            "mcts": {"time_budget_ms": 200, "num_worlds": 2},
-        }[engine_name]
-
-        engine_factory = create_engine(engine_name, params)
+        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
         engine = engine_factory()
         raw_result = engine.search(state)
         result = UnifiedSearchResult(raw_result)
 
         import math
         assert math.isfinite(result.best_fitness), (
-            f"{engine_name}: best_fitness should be finite, got {result.best_fitness}"
+            f"MCTS: best_fitness should be finite, got {result.best_fitness}"
         )
 
 
@@ -469,14 +425,14 @@ class TestDecisionPresenter:
         assert "[场面]" in text, f"Output should contain [场面], got:\n{text}"
 
     def test_output_contains_best_action(self):
-        """Output should contain ★ 最优抉择."""
+        """Output should contain ★ 最优操作."""
         output = StringIO()
         presenter = DecisionPresenter(output=output, show_board=True)
         result = self._make_mock_result()
         state = self._make_mock_state()
         presenter.present(result, state, 100.0)
         text = output.getvalue()
-        assert "★ 最优抉择" in text, f"Output should contain ★ 最优抉择, got:\n{text}"
+        assert "★ 最优操作" in text, f"Output should contain ★ 最优操作, got:\n{text}"
 
     def test_output_contains_probabilities_for_mcts(self):
         """With MCTS action_probs, output should contain [概率分布]."""
@@ -628,7 +584,6 @@ class TestLiveGameIntegration:
 
     def test_full_pipeline_with_search(self):
         """Full pipeline: parse → state → search → present for one game."""
-        # Pick dk_vs_rogue as medium-length game
         turn_states = _extract_turn_states("dk_vs_rogue", min_turn=3)
         if not turn_states:
             pytest.skip("No qualifying turn states from dk_vs_rogue game")
@@ -636,21 +591,19 @@ class TestLiveGameIntegration:
         _, state = turn_states[0]
         load_scores_into_hand(state)
 
-        # Run RHEA search
-        engine_factory = create_engine("rhea", {
-            "pop_size": 4, "max_gens": 2, "time_limit": 50, "max_chromosome_length": 3,
+        engine_factory = create_engine("mcts", {
+            "time_budget_ms": 200, "num_worlds": 2,
         })
         engine = engine_factory()
         raw_result = engine.search(state)
         result = UnifiedSearchResult(raw_result)
 
-        # Present
         output = StringIO()
         presenter = DecisionPresenter(output=output, show_board=True)
         presenter.present(result, state, 50.0)
 
         text = output.getvalue()
-        assert "★ 最优抉择" in text
+        assert "★ 最优操作" in text
         assert "END_TURN" in text or "结束回合" in text
         assert "[场面]" in text
 
@@ -679,5 +632,5 @@ class TestLiveGameIntegration:
         presenter.present(result, state, 200.0)
 
         text = output.getvalue()
-        assert "★ 最优抉择" in text
+        assert "★ 最优操作" in text
         assert "[MCTS]" in text

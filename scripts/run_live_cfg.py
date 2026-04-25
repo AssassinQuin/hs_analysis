@@ -29,7 +29,6 @@ def _resolve_paths(paths: list[str]) -> list[Path]:
 
 
 def _parse_session_datetime(path: Path) -> datetime | None:
-    """Parse datetime from folder like Hearthstone_2026_04_23_08_43_35."""
     m = re.match(r"^Hearthstone_(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})", path.name)
     if not m:
         return None
@@ -41,13 +40,6 @@ def _parse_session_datetime(path: Path) -> datetime | None:
 
 
 def _resolve_candidate_to_log(candidate: Path) -> Path | None:
-    """Resolve candidate path to an actual Power.log file.
-
-    Supported candidate types:
-    - Power.log file path
-    - A game-session directory containing Power.log
-    - A root Logs directory containing many Hearthstone_YYYY_MM_DD_HH_MM_SS subdirs
-    """
     if not candidate.exists():
         return None
 
@@ -57,12 +49,10 @@ def _resolve_candidate_to_log(candidate: Path) -> Path | None:
     if not candidate.is_dir():
         return None
 
-    # 1) Session directory itself
     direct_power = candidate / "Power.log"
     if direct_power.exists() and direct_power.is_file():
         return direct_power
 
-    # 2) Root logs directory: pick newest session's Power.log
     scored: list[tuple[datetime, Path]] = []
     for child in candidate.iterdir():
         if not child.is_dir():
@@ -72,7 +62,6 @@ def _resolve_candidate_to_log(candidate: Path) -> Path | None:
             continue
         ts = _parse_session_datetime(child)
         if ts is None:
-            # Fallback: use Power.log mtime if folder name doesn't follow naming convention
             ts = datetime.fromtimestamp(p.stat().st_mtime)
         scored.append((ts, p))
 
@@ -84,7 +73,6 @@ def _resolve_candidate_to_log(candidate: Path) -> Path | None:
 
 
 def _has_unfinished_game(log_path: Path) -> bool:
-    """Return True if the log ends with an in-progress game state."""
     try:
         from analysis.watcher.game_tracker import GameTracker
     except Exception:
@@ -99,7 +87,6 @@ def _has_unfinished_game(log_path: Path) -> bool:
 
 
 def _pick_recent_unfinished_log(candidate: Path) -> Path | None:
-    """Pick the newest session Power.log that still has an unfinished game."""
     if not candidate.exists() or not candidate.is_dir():
         return None
 
@@ -155,31 +142,19 @@ def _load_cfg(cfg_path: Path) -> dict:
         "verbose": cp.getboolean("output", "verbose", fallback=False),
         "save_to_file": cp.getboolean("output", "save_to_file", fallback=True),
         "file_path": cp.get("output", "file_path", fallback="").strip(),
+        "show_board": cp.getboolean("output", "show_board", fallback=True),
+        "show_probabilities": cp.getboolean("output", "show_probabilities", fallback=True),
+        "show_mcts_detail": cp.getboolean("output", "show_mcts_detail", fallback=True),
         "engine_params": {
-            "pop_size": cp.getint("engine", "pop_size", fallback=30),
-            "max_gens": cp.getint("engine", "max_gens", fallback=80),
-            "time_limit": cp.getfloat("engine", "time_limit", fallback=300.0),
-            "max_chromosome_length": cp.getint("engine", "max_chromosome_length", fallback=8),
-            "cross_turn": cp.getboolean("engine", "cross_turn", fallback=True),
+            "time_budget_ms": cp.getfloat("engine", "time_budget_ms", fallback=8000.0),
+            "num_worlds": cp.getint("engine", "num_worlds", fallback=7),
+            "uct_constant": cp.getfloat("engine", "uct_constant", fallback=0.5),
+            "time_decay_gamma": cp.getfloat("engine", "time_decay_gamma", fallback=0.6),
+            "min_step_budget_ms": cp.getfloat("engine", "min_step_budget_ms", fallback=300.0),
+            "max_actions_per_turn": cp.getint("engine", "max_actions_per_turn", fallback=10),
             "replan_cooldown_s": cp.getfloat("engine", "replan_cooldown_s", fallback=0.8),
         },
     }
-
-
-class TeeWriter:
-    """Write decision output to both console and file."""
-
-    def __init__(self, *targets):
-        self._targets = targets
-
-    def write(self, data: str) -> int:
-        for target in self._targets:
-            target.write(data)
-        return len(data)
-
-    def flush(self) -> None:
-        for target in self._targets:
-            target.flush()
 
 
 def main() -> int:
@@ -229,8 +204,7 @@ def main() -> int:
 
         live_log_path.parent.mkdir(parents=True, exist_ok=True)
         output_file = live_log_path.open("a", encoding="utf-8", buffering=1)
-        output_stream = TeeWriter(sys.stdout, output_file)
-        print(f"[INFO] 实时输出落盘: {live_log_path}")
+        print(f"[INFO] 日志落盘: {live_log_path}")
 
     if mode == "analyze":
         analyze_path = cfg["analyze_path"]
@@ -258,14 +232,13 @@ def main() -> int:
         if output_file is not None:
             output_file.close()
         return 1
-    print(f"[INFO] 使用配置: {cfg_path}")
-    print(f"[INFO] 监听日志: {log_path}")
-    print(
-        "[INFO] RHEA 参数: "
-        f"pop={engine_params['pop_size']}, "
-        f"gens={engine_params['max_gens']}, "
-        f"budget={engine_params['time_limit']}ms"
-    )
+
+    mcts_info = (f"budget={engine_params.get('time_budget_ms', 8000)}ms, "
+                 f"worlds={engine_params.get('num_worlds', 7)}, "
+                 f"uct_c={engine_params.get('uct_constant', 0.5)}")
+    print(f"[INFO] 配置: {cfg_path}")
+    print(f"[INFO] 监听: {log_path}")
+    print(f"[INFO] MCTS: {mcts_info}")
     print("[INFO] 按 Ctrl+C 停止\n")
 
     loop = DecisionLoop(
@@ -274,6 +247,10 @@ def main() -> int:
         poll_interval=poll_interval,
         output=output_stream,
         verbose=cfg["verbose"],
+        show_board=cfg["show_board"],
+        show_probabilities=cfg["show_probabilities"],
+        show_mcts_detail=cfg["show_mcts_detail"],
+        file_log=output_file,
     )
     try:
         loop.run()

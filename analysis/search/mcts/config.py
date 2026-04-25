@@ -110,29 +110,49 @@ class MCTSStats:
     chance_node_samples: int = 0
 
 
-def get_phase_overrides(turn_number: int) -> dict:
-    """Return parameter overrides based on game phase."""
+_PLAYSTYLE_UCT = {
+    "aggro": -0.15,
+    "control": 0.15,
+    "combo": 0.10,
+    "midrange": 0.0,
+    "unknown": 0.0,
+}
+
+
+def get_phase_overrides(turn_number: int, opp_playstyle: str = "unknown") -> dict:
+    """Return parameter overrides based on game phase + opponent playstyle.
+
+    uct_constant is tuned per-phase then adjusted by opponent playstyle:
+      - aggro: lower exploration (we need exploitation to survive)
+      - control: higher exploration (search deeper for win condition)
+      - combo: moderate-high exploration
+      - midrange: neutral
+    """
     from analysis.models.phase import detect_phase, Phase
     phase = detect_phase(turn_number)
+    style_delta = _PLAYSTYLE_UCT.get(opp_playstyle, 0.0)
 
     if phase == Phase.EARLY:
-        return {
+        base = {
             "uct_constant": 0.4,
             "num_worlds": 5,
             "time_budget_ms": 15000,
             "max_turns_ahead": 3,
         }
     elif phase == Phase.MID:
-        return {
+        base = {
             "uct_constant": 0.5,
             "num_worlds": 7,
             "time_budget_ms": 15000,
             "max_turns_ahead": 3,
         }
     else:  # LATE
-        return {
+        base = {
             "uct_constant": 0.7,
             "num_worlds": 9,
             "time_budget_ms": 15000,
             "max_turns_ahead": 3,
         }
+
+    base["uct_constant"] = round(max(0.2, min(1.2, base["uct_constant"] + style_delta)), 2)
+    return base

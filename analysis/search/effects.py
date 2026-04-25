@@ -304,7 +304,7 @@ def _handle_summon(state: "GameState", spec: EffectSpec, source: Any = None, **c
 @register(EffectKind.DRAW)
 def _handle_draw(state: "GameState", spec: EffectSpec, source: Any = None, **ctx) -> "GameState":
     """Draw *value* cards from deck."""
-    from analysis.search.rhea_engine import apply_draw
+    from analysis.search.rhea import apply_draw
     return apply_draw(state, spec.value)
 
 

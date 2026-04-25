@@ -43,7 +43,8 @@ from analysis.search.discover import _parse_discover_constraint
 from analysis.search.engine.models.probability_panel import compute_panel
 from analysis.search.engine.models.discover_model import DiscoverModel
 from analysis.search.engine.models.draw_model import DrawModel
-from analysis.search.rhea_engine import Action, RHEAEngine, enumerate_legal_actions
+from analysis.search.rhea import Action, enumerate_legal_actions
+from analysis.search.engine_adapter import create_engine
 from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (
     normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
@@ -813,23 +814,22 @@ class PacketReplayer:
             for desc in action_descriptions:
                 self._main_logger.info(desc)
 
-            # Run RHEA
             self._main_logger.info("")
-            self._main_logger.info("🔍 运行 RHEA 分析...")
+            self._main_logger.info("🔍 运行 MCTS 分析...")
             t0 = time.perf_counter()
 
             try:
-                rhea_engine = RHEAEngine(**self.engine_params)
-                search_result = rhea_engine.search(game_state)
+                mcts_factory = create_engine("mcts", self.engine_params)
+                mcts_engine = mcts_factory()
+                search_result = mcts_engine.search(game_state)
 
                 t1 = time.perf_counter()
                 rhea_time_ms = (t1 - t0) * 1000.0
 
-                # Evaluate decision quality
                 decision_quality, decision_score = self._evaluate_decision(
                     game_state=game_state,
-                    best_actions=search_result.best_chromosome,
-                    best_score=search_result.best_fitness,
+                    best_actions=search_result.best_sequence,
+                    best_score=search_result.fitness,
                     legal_actions=legal_actions,
                 )
                 effect_pool_reports = self._analyze_effect_pools(game_state)

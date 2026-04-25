@@ -53,6 +53,71 @@ log = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------
+# Text-based cost reduction (passive aura effects from card text)
+# ------------------------------------------------------------------
+
+_COST_REDUCE_RACE_CN = __import__('re').compile(
+    r'如果你的手牌中有其他?(\w+?)牌.*?法力值消耗减少[（(]\s*(\d+)\s*[）)]'
+)
+_COST_REDUCE_RACE_EN = __import__('re').compile(
+    r"If you['']?re holding (?:a |an )?(\w+?)[,.]?\s*Costs?\s+\d+\s+less",
+    __import__('re').IGNORECASE,
+)
+_RACE_CN_TO_EN = {
+    "龙": "DRAGON", "恶魔": "DEMON", "野兽": "BEAST", "鱼人": "MURLOC",
+    "海盗": "PIRATE", "元素": "ELEMENTAL", "亡灵": "UNDEAD", "图腾": "TOTEM",
+    "机械": "MECHANICAL", "纳迦": "NAGA", "德莱尼": "DRAENEI",
+}
+
+
+def _apply_text_cost_reduction(card, hand, card_idx, current_cost):
+    """Apply passive text-based cost reductions from card text.
+
+    Patterns handled:
+    - "如果你的手牌中有其他龙牌，本牌的法力值消耗减少（3）点"
+    - Similar patterns for other races
+    """
+    text = getattr(card, 'text', '') or ''
+    if not text:
+        return current_cost
+
+    m = _COST_REDUCE_RACE_CN.search(text)
+    if m:
+        race_cn = m.group(1)
+        reduction = int(m.group(2))
+        race_en = _RACE_CN_TO_EN.get(race_cn, race_cn.upper())
+        has_other = False
+        for i, h in enumerate(hand):
+            if i == card_idx:
+                continue
+            h_race = getattr(h, 'race', '').upper()
+            h_races = getattr(h, 'races', None)
+            if h_race == race_en:
+                has_other = True
+                break
+            if h_races and race_en in [r.upper() for r in h_races]:
+                has_other = True
+                break
+        if has_other:
+            return max(0, current_cost - reduction)
+
+    m = _COST_REDUCE_RACE_EN.search(text)
+    if m:
+        race_en = m.group(1).upper()
+        has_other = any(
+            i != card_idx and (
+                getattr(h, 'race', '').upper() == race_en or
+                race_en in [r.upper() for r in (getattr(h, 'races', None) or [])]
+            )
+            for i, h in enumerate(hand)
+        )
+        if has_other:
+            return max(0, current_cost - 1)
+
+    return current_cost
+
+
+# ------------------------------------------------------------------
 # Main simulation entry point
 # ------------------------------------------------------------------
 
@@ -92,6 +157,7 @@ def _apply_play_card(s, action: Action):
     card = s.hand[card_idx]
 
     eff_cost = s.mana.effective_cost(card)
+    eff_cost = _apply_text_cost_reduction(card, s.hand, card_idx, eff_cost)
     s.mana.available -= eff_cost
     s.mana.consume_modifiers(card)
 
@@ -175,6 +241,8 @@ def _apply_play_card(s, action: Action):
             health=card.health,
             name=card.name,
         )
+    elif card.card_type.upper() == "LOCATION":
+        s = _play_location(s, card)
     elif card.card_type.upper() == "SPELL":
         s = _play_spell(s, card, action)
     elif card.card_type.upper() == "HERO":
@@ -209,6 +277,23 @@ def _apply_play_card(s, action: Action):
     s = check_corrupt_upgrade(s, card)
     _handle_overdraw(s)
 
+    return s
+
+
+def _play_location(s, card):
+    """Handle LOCATION card play — add to locations list on board."""
+    from analysis.search.location import Location
+    loc = Location(
+        dbf_id=getattr(card, 'dbf_id', 0),
+        name=card.name,
+        cost=getattr(card, 'cost', 0),
+        durability=getattr(card, 'health', 3),
+        cooldown_current=0,
+        cooldown_max=1,
+        text=getattr(card, 'text', '') or '',
+    )
+    if not s.location_full():
+        s.locations.append(loc)
     return s
 
 

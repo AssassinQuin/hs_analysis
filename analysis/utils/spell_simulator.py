@@ -19,6 +19,7 @@ from typing import List, Optional, Tuple
 from analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
 from analysis.models.card import Card
 from analysis.data.card_effects import get_effects, CardEffects
+from analysis.evaluators.composite import target_selection_eval
 
 
 # ===================================================================
@@ -425,7 +426,7 @@ def _pick_target_for_damage(state: GameState, amount: int = 1) -> str:
                 idx = int(target_id.split(':')[1])
                 if idx < len(sim.opponent.board):
                     sim.opponent.board[idx].health -= amount
-            score = _quick_eval(sim)
+            score = target_selection_eval(sim)
             # Tiebreaker: prefer minions, higher attack wins
             tiebreaker = 0.0
             if target_id.startswith('enemy_minion:'):
@@ -439,26 +440,6 @@ def _pick_target_for_damage(state: GameState, amount: int = 1) -> str:
             continue
 
     return best_target
-
-
-def _quick_eval(state: GameState) -> float:
-    """Quick state evaluation for target selection.
-
-    Heuristic: friendly power - enemy power + hero delta + removal bonus.
-    """
-    friendly_power = sum(m.attack + m.health for m in state.board if m.health > 0)
-    enemy_power = 0
-    dead_enemies = 0
-    for m in state.opponent.board:
-        if m.health <= 0:
-            dead_enemies += 1
-        else:
-            enemy_power += m.attack + m.health
-    removal_bonus = dead_enemies * 10
-    if state.opponent.hero.hp <= 0:
-        return 1000  # lethal beats everything
-    hero_delta = state.hero.hp - state.opponent.hero.hp
-    return friendly_power - enemy_power + hero_delta + removal_bonus
 
 
 def _resolve_deaths(state: GameState) -> GameState:

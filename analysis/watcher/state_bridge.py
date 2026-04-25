@@ -281,11 +281,16 @@ class StateBridge:
             overloaded = tags.get(GameTag.OVERLOAD_LOCKED, 0)
             available = max(0, max_mana - resources_used - overloaded + temp)
 
+            log.debug(
+                f"Mana extraction: max={max_mana} used={resources_used} "
+                f"temp={temp} overloaded={overloaded} → available={available}"
+            )
+
             return ManaState(
                 max_mana=max_mana,
                 available=available,
                 overloaded=overloaded,
-                overload_next=0,  # NOT extracted - this is next turn's overload
+                overload_next=0,
             )
         except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting mana state: {e}")

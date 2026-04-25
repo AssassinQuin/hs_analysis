@@ -5,26 +5,12 @@
 1. hsdb.py 的 Dict（轻量级，纯数据索引） — 用于快速池查询、DB操作
 2. 本文件 Card dataclass（面向对象，带行为方法） — 用于评分引擎、搜索树
 
-通过 from_hsdb_dict() / from_cardxml() 工厂方法从不同数据源构建。
+通过 from_hsdb_dict() 工厂方法从 HSCardDB 数据源构建。
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Optional
-
-
-@dataclass(frozen=True)
-class MinionData:
-    """随从/武器的静态属性"""
-    attack: int = 0
-    health: int = 0
-
-
-@dataclass(frozen=True)
-class SpellData:
-    """法术的静态属性"""
-    spell_damage: int = 0
-    spell_school: str = ""
 
 
 @dataclass
@@ -34,9 +20,9 @@ class Card:
     字段覆盖所有卡牌类型（随从、法术、武器、英雄、地点）。
     部分字段仅对特定类型有意义（如 health 仅对随从有效）。
     """
-    card_id: str = ""        # Hearthstone card ID (e.g. "TLC_460") — primary identifier
-    dbf_id: int = 0          # Numeric DBF ID — secondary identifier
-    name: str = ""           # Localized display name (zhCN by default)
+    card_id: str = ""
+    dbf_id: int = 0
+    name: str = ""
     cost: int = 0
     original_cost: int = 0
     card_type: str = ""
@@ -50,40 +36,38 @@ class Card:
     mechanics: list = None
     set_name: str = ""
     ename: str = ""
+    english_text: str = ""
     overload: int = 0
     spell_damage: int = 0
     armor: int = 0
     durability: int = 0
     spell_school: str = ""
-    minion_data: Optional[MinionData] = None
-    spell_data: Optional[SpellData] = None
     roles: frozenset = field(default_factory=frozenset)
 
     def __post_init__(self):
         if self.mechanics is None:
             self.mechanics = []
-        # 从直接字段自动填充组件数据对象（未显式提供时）
-        if self.minion_data is None and (self.attack > 0 or self.health > 0):
-            self.minion_data = MinionData(attack=self.attack, health=self.health)
-        elif self.minion_data is not None:
-            # 从显式提供的 minion_data 同步回直接字段
-            self.attack = self.minion_data.attack
-            self.health = self.minion_data.health
-        if self.spell_data is None and (self.spell_damage > 0 or self.spell_school):
-            self.spell_data = SpellData(spell_damage=self.spell_damage, spell_school=self.spell_school)
-        elif self.spell_data is not None:
-            # 从显式提供的 spell_data 同步回直接字段
-            self.spell_damage = self.spell_data.spell_damage
-            self.spell_school = self.spell_data.spell_school
         if not self.roles:
             try:
                 from analysis.data.card_roles import classify_card_roles
                 self.roles = frozenset(classify_card_roles(self))
             except Exception:
-                # RoleTag 是高层增强信息，分类失败不应影响核心逻辑
                 self.roles = frozenset()
+        self._abilities = None
 
-    # ── 机制辅助方法 ──────────────────────────────────────────
+    @property
+    def abilities(self):
+        if self._abilities is None:
+            try:
+                from analysis.search.abilities.parser import AbilityParser
+                self._abilities = AbilityParser.parse(self)
+            except Exception:
+                self._abilities = []
+        return self._abilities
+
+    @abilities.setter
+    def abilities(self, value):
+        self._abilities = value
 
     @property
     def mechanics_set(self) -> set:
@@ -92,48 +76,37 @@ class Card:
     def has_mechanic(self, keyword: str) -> bool:
         return keyword in (self.mechanics or [])
 
-    # ── 效果解析 ─────────────────────────────────────────────
-
     def get_effects(self):
-        """返回本卡牌的结构化 CardEffects"""
         from analysis.data.card_effects import get_effects
         return get_effects(self)
 
     def compute_mechanics(self) -> list:
-        """通过 card_cleaner 从文本 + 现有标签重新提取机制"""
         from analysis.data.card_cleaner import extract_mechanics
         self.mechanics = extract_mechanics(
             self.text, self.mechanics, self.card_type,
         )
         return self.mechanics
 
-    # ── 结构化字段访问器（带文本正则回退） ────────────────────
-
     def effective_overload(self) -> int:
-        """过载值：优先结构化字段，其次文本正则回退"""
         if self.overload > 0:
             return self.overload
         import re
-        m = re.search(r"过载[：:]\s*[（(]\s*(\d+)\s*[）)]", self.text or "")
+        m = re.search(r"Overload\s*\(\s*(\d+)\s*\)", self.english_text or self.text or "")
         return int(m.group(1)) if m else 0
 
     def effective_armor(self) -> int:
-        """护甲值：优先结构化字段，其次文本正则回退"""
         if self.armor > 0:
             return self.armor
         import re
-        m = re.search(r"获得\s*(\d+)\s*点护甲", self.text or "")
+        m = re.search(r"Gain\s+(\d+)\s+Armor", self.english_text or self.text or "")
         return int(m.group(1)) if m else 0
 
     def effective_spell_damage(self) -> int:
         return self.spell_damage
 
     def total_damage(self) -> int:
-        """快速访问器：直接伤害 + 随机伤害"""
         eff = self.get_effects()
         return eff.damage + eff.random_damage
-
-    # ── 类型判断属性 ─────────────────────────────────────────
 
     @property
     def is_minion(self) -> bool:
@@ -155,15 +128,8 @@ class Card:
     def is_location(self) -> bool:
         return (self.card_type or "").upper() == "LOCATION"
 
-    # ── 身份与显示 (i18n 分离) ──────────────────────────────────
-
     @property
     def identity_key(self) -> str:
-        """唯一标识键 — 用于内部搜索、哈希、比较。
-
-        优先用 card_id (如 "TLC_460")，其次 dbf_id，最后 name。
-        所有内部逻辑应使用此属性，不直接用 name。
-        """
         if self.card_id:
             return self.card_id
         if self.dbf_id:
@@ -172,11 +138,6 @@ class Card:
 
     @property
     def display_name(self) -> str:
-        """显示名称 — 仅用于日志/UI输出。
-
-        遵循 i18n 分层：name (当前语言) → ename (英文) → card_id → dbf_id。
-        内部逻辑不应依赖此属性。
-        """
         if self.name:
             return self.name
         if self.ename:
@@ -185,107 +146,17 @@ class Card:
             return self.card_id
         return str(self.dbf_id) if self.dbf_id else "???"
 
-    # ── 从外部数据格式构建 ───────────────────────────────────
-
-    @classmethod
-    def from_cardxml(cls, card_xml) -> "Card":
-        """从 python-hearthstone CardDefs XML 对象构建"""
-        from hearthstone.enums import CardType, CardClass, Race, Rarity
-
-        card_type = card_xml.type.name if card_xml.type else ""
-        card_class = card_xml.card_class.name if card_xml.card_class else "NEUTRAL"
-        rarity = card_xml.rarity.name if card_xml.rarity else ""
-        races = " ".join(r.name for r in (card_xml.races or []) if r) if card_xml.races else ""
-        if not races and card_xml.race:
-            races = card_xml.race.name
-
-        mechanics = []
-        _MECH_MAP = {
-            "taunt": "TAUNT", "charge": "CHARGE", "divine_shield": "DIVINE_SHIELD",
-            "battlecry": "BATTLECRY", "deathrattle": "DEATHRATTLE",
-            "windfury": "WINDFURY", "lifesteal": "LIFESTEAL",
-            "poisonous": "POISONOUS", "rush": "RUSH", "reborn": "REBORN",
-            "discover": "DISCOVER", "secret": "SECRET", "quest": "QUEST",
-            "sidequest": "SIDE_QUEST", "outcast": "OUTCAST",
-            "spellburst": "SPELLBURST", "combo": "COMBO",
-            "choose_one": "CHOOSE_ONE", "overkill": "OVERKILL",
-            "inspire": "INSPIRE", "corrupt": "CORRUPT",
-            "echo": "ECHO", "twinspell": "TWINSPELL",
-            "tradeable": "TRADEABLE", "dredge": "DREDGE",
-            "colossal": "COLOSSAL", "titan": "TITAN",
-            "forge": "FORGE", "overheal": "OVERHEAL",
-            "miniaturize": "MINIATURIZE", "frenzy": "FRENZY",
-            "magnetic": "MAGNETIC", "immune": "IMMUNE",
-        }
-        for prop, name in _MECH_MAP.items():
-            if getattr(card_xml, prop, False):
-                mechanics.append(name)
-        from hearthstone.enums import GameTag
-        _TAG_MECHS = {
-            GameTag.OVERLOAD: "OVERLOAD", GameTag.SPELLPOWER: "SPELLPOWER",
-            GameTag.FREEZE: "FREEZE", GameTag.SILENCE: "SILENCE",
-            GameTag.TRIGGER_VISUAL: "TRIGGER_VISUAL",
-            GameTag.IMBUE: "IMBUE", GameTag.EXCAVATE: "EXCAVATE",
-            GameTag.AURA: "AURA",
-        }
-        for tag, name in _TAG_MECHS.items():
-            if card_xml.tags.get(tag, 0) > 0 and name not in mechanics:
-                mechanics.append(name)
-        mechanics.sort()
-
-        overload_val = card_xml.tags.get(GameTag.OVERLOAD, 0) if hasattr(card_xml, "tags") else 0
-        spellpower_val = card_xml.tags.get(GameTag.SPELLPOWER, 0) if hasattr(card_xml, "tags") else 0
-
-        atk_val = card_xml.atk or 0
-        health_val = card_xml.health or 0
-
-        minion_data = MinionData(attack=atk_val, health=health_val) if atk_val > 0 or health_val > 0 or card_type in ("MINION", "WEAPON") else None
-        spell_data = SpellData(spell_damage=spellpower_val) if spellpower_val > 0 or card_type == "SPELL" else None
-
-        return cls(
-            dbf_id=card_xml.dbf_id,
-            name=card_xml.name or "",
-            cost=card_xml.cost or 0,
-            original_cost=card_xml.cost or 0,
-            card_type=card_type,
-            attack=atk_val,
-            health=health_val,
-            text=card_xml.description or "",
-            rarity=rarity,
-            card_class=card_class,
-            race=races,
-            mechanics=mechanics,
-            set_name=card_xml.card_set.name if card_xml.card_set else "",
-            ename=card_xml.english_name or "",
-            overload=overload_val,
-            spell_damage=spellpower_val,
-            armor=card_xml.armor or 0,
-            durability=card_xml.durability or 0,
-            minion_data=minion_data,
-            spell_data=spell_data,
-        )
-
     @classmethod
     def from_hsdb_dict(cls, data: dict) -> "Card":
-        """从 HSCardDB 的字典格式构建（主数据源转换入口）"""
-        atk_val = data.get("attack", 0)
-        health_val = data.get("health", 0)
-        card_type = data.get("type", "")
-        spell_damage_val = data.get("spellDamage", 0)
-        spell_school_val = data.get("spellSchool", "")
-
-        minion_data = MinionData(attack=atk_val, health=health_val) if atk_val > 0 or health_val > 0 or card_type in ("MINION", "WEAPON") else None
-        spell_data = SpellData(spell_damage=spell_damage_val, spell_school=spell_school_val) if spell_damage_val > 0 or card_type == "SPELL" else None
-
         return cls(
             card_id=data.get("cardId", ""),
             dbf_id=data.get("dbfId", 0),
             name=data.get("name", ""),
             cost=data.get("cost", 0),
             original_cost=data.get("cost", 0),
-            card_type=card_type,
-            attack=atk_val,
-            health=health_val,
+            card_type=data.get("type", ""),
+            attack=data.get("attack", 0),
+            health=data.get("health", 0),
             text=data.get("text", ""),
             rarity=data.get("rarity", ""),
             card_class=data.get("cardClass", ""),
@@ -293,54 +164,15 @@ class Card:
             mechanics=data.get("mechanics", []),
             set_name=data.get("set", ""),
             ename=data.get("englishName", ""),
+            english_text=data.get("englishText", ""),
             overload=data.get("overload", 0),
-            spell_damage=spell_damage_val,
+            spell_damage=data.get("spellDamage", 0),
             armor=data.get("armor", 0),
             durability=data.get("durability", 0),
-            spell_school=spell_school_val,
-            minion_data=minion_data,
-            spell_data=spell_data,
-        )
-
-    @classmethod
-    def from_hsjson(cls, data: dict) -> "Card":
-        """从 HearthstoneJSON API 原始字典构建"""
-        atk_val = data.get("attack", 0)
-        health_val = data.get("health", 0)
-        card_type = data.get("type", "")
-        spell_damage_val = data.get("spellDamage", 0)
-        spell_school_val = data.get("spellSchool", "")
-
-        minion_data = MinionData(attack=atk_val, health=health_val) if atk_val > 0 or health_val > 0 or card_type in ("MINION", "WEAPON") else None
-        spell_data = SpellData(spell_damage=spell_damage_val, spell_school=spell_school_val) if spell_damage_val > 0 or card_type == "SPELL" else None
-
-        return cls(
-            card_id=data.get("cardId", ""),
-            dbf_id=data.get("dbfId", 0),
-            name=data.get("name", ""),
-            cost=data.get("cost", 0),
-            original_cost=data.get("cost", 0),
-            card_type=card_type,
-            attack=atk_val,
-            health=health_val,
-            text=data.get("text", ""),
-            rarity=data.get("rarity", ""),
-            card_class=data.get("cardClass", ""),
-            race=data.get("race", ""),
-            mechanics=data.get("mechanics", []),
-            set_name=data.get("set", ""),
-            ename=data.get("ename", ""),
-            overload=data.get("overload", 0),
-            spell_damage=spell_damage_val,
-            armor=data.get("armor", 0),
-            durability=data.get("durability", 0),
-            spell_school=spell_school_val,
-            minion_data=minion_data,
-            spell_data=spell_data,
+            spell_school=data.get("spellSchool", ""),
         )
 
     def to_dict(self) -> dict:
-        """导出为纯字典格式（用于序列化/日志）"""
         return {
             "dbf_id": self.dbf_id,
             "name": self.name,

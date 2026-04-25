@@ -147,6 +147,24 @@ def eval_lingering(state: GameState) -> float:
 
 
 # ──────────────────────────────────────────────────────────────
+# E) Mana Efficiency  (Sub-Model E)
+# ──────────────────────────────────────────────────────────────
+def eval_mana_efficiency(state: GameState) -> float:
+    """Penalise unspent mana — rewards sequences that use the full curve.
+
+    Scale: [-max_mana, 0].  Only applied when it is still our turn
+    (i.e. the state represents a mid-turn snapshot).
+    """
+    mana = state.mana
+    wasted = mana.available
+    if wasted <= 0:
+        return 0.0
+    max_mana = max(mana.max_mana, 1)
+    penalty = -wasted * (wasted / max_mana)
+    return penalty
+
+
+# ──────────────────────────────────────────────────────────────
 # D) Trigger / Random Effects EV  (Sub-Model D)
 # ──────────────────────────────────────────────────────────────
 def eval_trigger(state: GameState) -> float:

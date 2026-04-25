@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from analysis.search.game_state import GameState, Minion
 from analysis.models.card import Card
+from analysis.evaluators.composite import target_selection_eval
 
 
 def is_choose_one(card) -> bool:
@@ -105,7 +106,7 @@ def _pick_best_option(state: GameState, options: list[dict], minion: Minion) -> 
         try:
             sim = state.copy()
             sim = _apply_option(sim, opt, minion)
-            score = _quick_eval(sim)
+            score = target_selection_eval(sim)
             if score > best_score:
                 best_score = score
                 best_opt = opt
@@ -141,10 +142,3 @@ def _apply_option(state: GameState, option: dict, minion: Minion) -> GameState:
         elif eff[0] == 'give_rush':
             minion.has_rush = True
     return s
-
-
-def _quick_eval(state: GameState) -> float:
-    friendly = sum(m.attack + m.health for m in state.board if m.health > 0)
-    enemy = sum(m.attack + m.health for m in state.opponent.board if m.health > 0)
-    hero_delta = state.hero.hp - state.opponent.hero.hp
-    return friendly - enemy + hero_delta
