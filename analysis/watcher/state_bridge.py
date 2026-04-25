@@ -163,6 +163,12 @@ class StateBridge:
 
             state.opponent = opp_state
 
+            state.our_playstyle = self._infer_our_playstyle(state)
+            if global_state is not None:
+                opp_ps = getattr(global_state, 'opp_playstyle', 'unknown')
+                if opp_ps and opp_ps != 'unknown':
+                    state.opp_playstyle = opp_ps
+
             return state
         except Exception as e:
             log.warning(f"StateBridge conversion failed: {e}")
@@ -576,6 +582,53 @@ class StateBridge:
         except (AttributeError, KeyError) as e:
             log.warning(f"Error counting hand: {e}")
             return 0
+
+    @staticmethod
+    def _infer_our_playstyle(state: GameState) -> str:
+        """Infer our deck archetype from hand composition.
+
+        Uses mana cost distribution of hand cards as a proxy for deck archetype.
+        Falls back to 'unknown' if hand is too small.
+        """
+        hand = state.hand
+        if not hand or len(hand) < 3:
+            return "unknown"
+
+        low = 0
+        mid = 0
+        high = 0
+        total_cost = 0
+        n = 0
+        for c in hand:
+            cost = getattr(c, "cost", 0)
+            if not isinstance(cost, (int, float)):
+                continue
+            total_cost += cost
+            n += 1
+            if cost <= 2:
+                low += 1
+            elif cost <= 4:
+                mid += 1
+            else:
+                high += 1
+
+        if n < 3:
+            return "unknown"
+
+        avg = total_cost / n
+        low_pct = low / n
+        high_pct = high / n
+
+        if avg <= 2.0 and low_pct >= 0.55:
+            return "aggro"
+        if avg <= 2.8 and low_pct >= 0.40 and high_pct <= 0.20:
+            return "tempo"
+        if avg >= 4.0 and high_pct >= 0.30:
+            return "control"
+        if low_pct >= 0.30 and mid_pct >= 0.25:
+            return "midrange"
+
+        return "unknown"
 
     def _enrich_from_global_state(self, opp_state: OpponentState,
                                    game_state: GameState, global_state) -> None:

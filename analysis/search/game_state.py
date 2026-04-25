@@ -318,6 +318,8 @@ class GameState:
     deck_remaining: int = 15
     opponent: OpponentState = field(default_factory=OpponentState)
     turn_number: int = 1
+    our_playstyle: str = "unknown"
+    opp_playstyle: str = "unknown"
     cards_played_this_turn: list = field(default_factory=list)
     fatigue_damage: int = 0
     herald_count: int = 0  # 兆示机制计数器

@@ -13,7 +13,6 @@ from analysis.evaluators.bsv import (
     eval_value_v10,
     eval_survival_v10,
     PHASE_WEIGHTS,
-    ABSOLUTE_LETHAL_VALUE,
 )
 from analysis.models.phase import Phase, detect_phase
 from analysis.search.game_state import HeroState, ManaState, Minion, OpponentState, Weapon

@@ -144,6 +144,8 @@ def extract_card_type_from_condition(text: str) -> str:
         return "HOLY"
     if "shadow spell" in tl or "shadow" in tl:
         return "SHADOW"
+    if "fel spell" in tl or "fel" in tl:
+        return "FEL"
     if "spell" in tl:
         return "SPELL"
     if "weapon" in tl:

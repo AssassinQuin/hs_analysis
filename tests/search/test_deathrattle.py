@@ -8,7 +8,7 @@ import pytest
 
 from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
 from analysis.search.enchantment import Enchantment, apply_enchantment
-from analysis.search.deathrattle import resolve_deaths, parse_deathrattle_text
+from analysis.search.deathrattle import resolve_deaths
 
 
 # ===================================================================
@@ -201,30 +201,6 @@ class TestDeathrattleNoEffect:
         result = resolve_deaths(fresh_state)
         assert len(result.board) == 0
         assert len(result.opponent.board) == 0
-
-
-class TestDeathrattleTextParse:
-    """Text-based deathrattle parsing."""
-
-    def test_parse_summon(self):
-        effect = parse_deathrattle_text("亡语：召唤两个1/1的蜘蛛")
-        assert effect == "summon:1:1"
-
-    def test_parse_random_damage(self):
-        effect = parse_deathrattle_text("亡语：对随机敌人造成2点伤害")
-        assert effect == "damage:random_enemy:2"
-
-    def test_parse_draw(self):
-        effect = parse_deathrattle_text("亡语：抽1张牌")
-        assert effect == "draw:1"
-
-    def test_parse_no_deathrattle(self):
-        effect = parse_deathrattle_text("战吼：造成3点伤害")
-        assert effect is None
-
-    def test_parse_empty_text(self):
-        effect = parse_deathrattle_text("")
-        assert effect is None
 
 
 class TestDeathrattleDivineShield:

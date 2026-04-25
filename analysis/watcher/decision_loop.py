@@ -611,6 +611,7 @@ class DecisionLoop:
         load_scores_into_hand(state)
 
         opp_playstyle = _infer_opp_playstyle(state)
+        state.opp_playstyle = opp_playstyle
 
         engine = self._engine_factory()
 
@@ -623,11 +624,49 @@ class DecisionLoop:
         if signature is not None:
             self._last_decision_signature = signature
 
+        self._log_evaluation_detail(result, state, elapsed_ms)
+
         if self.on_decision:
             try:
                 self.on_decision(result, state)
             except Exception as e:
                 log.error(f"Error in decision callback: {e}", exc_info=True)
+
+    def _log_evaluation_detail(self, result, state, elapsed_ms: float) -> None:
+        """Log structured evaluation details to file_log for research."""
+        file_log = self._display._file_log
+        if file_log is None:
+            return
+
+        try:
+            from analysis.evaluators.bsv import (
+                eval_tempo_v10, eval_value_v10, eval_survival_v10, _get_weights,
+            )
+            from analysis.evaluators.eval_logger import log_evaluation
+
+            tempo = eval_tempo_v10(state)
+            value = eval_value_v10(state)
+            survival = eval_survival_v10(state)
+            weights = _get_weights(state)
+            final_score = result.best_fitness
+
+            action_desc = ""
+            if result.best_chromosome:
+                action_desc = result.best_chromosome[0].describe(state)
+
+            log_evaluation(
+                file_log,
+                state=state,
+                action_desc=action_desc,
+                tempo=tempo,
+                value=value,
+                survival=survival,
+                final_score=final_score,
+                axis_weights=weights,
+                elapsed_ms=elapsed_ms,
+            )
+        except Exception as e:
+            log.debug(f"Eval logging failed: {e}")
 
     @staticmethod
     def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "mcts", **engine_kwargs) -> None:

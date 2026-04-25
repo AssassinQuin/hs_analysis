@@ -1,11 +1,15 @@
-"""Location card support for Hearthstone AI decision engine.
+"""Location card support — activation, deathrattle, and cooldown management.
 
-Handles location activation, cooldown ticking, and effect resolution.
+Location lifecycle:
+  1. Play: added to state.locations (max 2)
+  2. Activate: resolve effect, consume durability, set cooldown
+  3. Spell react: spellSchool-based cooldown reset (e.g. Fel → Nespirah)
+  4. Durability 0: remove from locations, trigger deathrattle
+  5. End of turn: tick cooldowns
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -15,120 +19,167 @@ if TYPE_CHECKING:
 
 @dataclass
 class Location:
-    """A location card on the board."""
-
     dbf_id: int = 0
     name: str = ""
     cost: int = 0
-    durability: int = 0          # charges remaining
-    cooldown_current: int = 0    # turns until next activation (0 = ready)
-    cooldown_max: int = 2        # typical cooldown (most locations have 2-turn cooldown)
-    text: str = ""               # card text for effect parsing
+    durability: int = 0
+    cooldown_current: int = 0
+    cooldown_max: int = 2
+    text: str = ""
+    english_text: str = ""
+    card_id: str = ""
+    card_type: str = "LOCATION"
+    mechanics: list = None
+
+    def __post_init__(self):
+        if self.mechanics is None:
+            self.mechanics = []
+
+    @property
+    def has_deathrattle(self) -> bool:
+        if "DEATHRATTLE" in (self.mechanics or []):
+            return True
+        etext = (self.english_text or self.text or "").lower()
+        return "deathrattle" in etext
 
 
 def activate_location(state: "GameState", location_index: int) -> "GameState":
-    """Activate a location card by index.
-
-    Validates the location is ready (durability > 0, cooldown == 0).
-    Reduces durability by 1 and sets cooldown to cooldown_max.
-    Attempts to resolve the location's text effect.
-
-    Returns a modified copy of state, or unchanged copy if invalid.
-    """
+    """Activate a location: resolve effect, consume durability, handle death."""
     s = state.copy()
 
-    # Validate index
     if location_index < 0 or location_index >= len(s.locations):
         return s
 
     loc = s.locations[location_index]
 
-    # Validate ready state
-    if loc.durability <= 0:
-        return s
-    if loc.cooldown_current > 0:
+    if loc.durability <= 0 or loc.cooldown_current > 0:
         return s
 
-    # Resolve location effect from text
     try:
         s = _resolve_location_effect(s, loc)
     except Exception:
-        pass  # graceful degradation — still consume charge
+        pass
 
-    # Consume durability and start cooldown
     loc.durability -= 1
     loc.cooldown_current = loc.cooldown_max
 
+    if loc.durability <= 0:
+        s = _handle_location_death(s, location_index, loc)
+
+    return s
+
+
+def _handle_location_death(state: "GameState", index: int, loc: Location) -> "GameState":
+    """Handle location durability reaching 0: trigger deathrattle, remove."""
+    s = state
+
+    if loc.has_deathrattle:
+        s = _execute_location_deathrattle(s, loc)
+
+    if index < len(s.locations):
+        s.locations.pop(index)
+
+    return s
+
+
+def _execute_location_deathrattle(state: "GameState", loc: Location) -> "GameState":
+    """Execute a location's deathrattle effect."""
+    s = state
+    etext = (loc.english_text or loc.text or "").lower()
+
+    if "deathrattle" in etext:
+        after_dr = etext.split("deathrattle", 1)[1].strip().lstrip(":").strip()
+    else:
+        return s
+
+    if "summon" in after_dr:
+        from analysis.data.token_cards import get_token
+        token_id = _extract_summon_token_id(loc)
+        if token_id:
+            token_data = get_token(token_id)
+            if token_data:
+                s = _summon_token(s, token_data)
+        else:
+            s = _summon_generic_from_text(s, after_dr)
+
+    return s
+
+
+def _extract_summon_token_id(loc: Location) -> str:
+    """Try to find the token cardId referenced by this location."""
+    card_id = getattr(loc, "card_id", "") or ""
+    TOKEN_MAP = {
+        "CATA_527": "CATA_527t2",
+    }
+    return TOKEN_MAP.get(card_id, "")
+
+
+def _summon_token(s: "GameState", token_data: dict) -> "GameState":
+    """Summon a minion from token data onto the friendly board."""
+    from analysis.search.game_state import Minion
+
+    minion = Minion(
+        card_id=token_data.get("cardId", ""),
+        name=token_data.get("name", ""),
+        dbf_id=token_data.get("dbfId", 0),
+        attack=token_data.get("attack", 0),
+        health=token_data.get("health", 1),
+        cost=token_data.get("cost", 0),
+        mechanics=token_data.get("mechanics", []),
+        text=token_data.get("text", ""),
+        english_text=token_data.get("ename", ""),
+        has_deathrattle="DEATHRATTLE" in token_data.get("mechanics", []),
+        has_trigger="TRIGGER_VISUAL" in token_data.get("mechanics", []),
+    )
+    if len(s.board) < 7:
+        s.board.append(minion)
+    return s
+
+
+def _summon_generic_from_text(s: "GameState", text: str) -> "GameState":
+    """Fallback: summon a generic minion parsed from text stats."""
+    from analysis.search.game_state import Minion
+
+    atk, hp = 0, 0
+    idx = text.find("/")
+    if idx > 0:
+        before = text[:idx].strip()
+        after = text[idx+1:idx+4].strip()
+        nums_before = [c for c in before if c.isdigit()]
+        nums_after = [c for c in after if c.isdigit()]
+        if nums_before:
+            atk = int("".join(nums_before))
+        if nums_after:
+            hp = int("".join(nums_after))
+
+    if atk > 0 and hp > 0:
+        minion = Minion(name="Token", attack=atk, health=hp)
+        if len(s.board) < 7:
+            s.board.append(minion)
     return s
 
 
 def tick_location_cooldowns(state: "GameState") -> "GameState":
-    """Tick cooldowns on all locations at end of turn.
-
-    Decrements cooldown_current by 1 for all locations with cooldown > 0.
-    Returns a modified copy of state.
-    """
+    """Tick cooldowns on all locations at end of turn."""
     s = state.copy()
-
     for loc in s.locations:
         if loc.cooldown_current > 0:
             loc.cooldown_current -= 1
-
     return s
 
 
-# ------------------------------------------------------------------
-# Internal helpers
-# ------------------------------------------------------------------
-
 def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":
-    """Parse location text and apply effect via unified dispatcher.
+    """Resolve location activate effect via unified abilities executor."""
+    from analysis.search.abilities.parser import AbilityParser
+    from analysis.search.abilities.definition import AbilityTrigger
 
-    Supported patterns (Chinese/English card text):
-      - 造成N点伤害 → damage to enemy hero
-      - 恢复N点生命 → heal friendly hero
-      - 使一个随从获得+N/+N → buff first friendly minion
-      - 召唤一个N/N → summon a token
-      - 发现 → discover (no-op for now)
-    """
-    from analysis.search.effects import EffectKind, EffectSpec, dispatch
+    abilities = getattr(loc, 'abilities', [])
+    if not abilities:
+        abilities = AbilityParser.parse(loc)
 
-    text = loc.text or ""
-
-    # --- Try card_effects regex patterns first (structured lookup) ---
-    from analysis.data.card_effects import (
-        _DAMAGE_CN, _DAMAGE_EN, _HEAL_CN, _HEAL_EN,
-        _BUFF_ATK_CN, _BUFF_ATK_EN, _SUMMON_STATS_CN, _SUMMON_STATS_EN,
-    )
-
-    dmg_match = _DAMAGE_EN.search(text) or _DAMAGE_CN.search(text)
-    if dmg_match:
-        damage = int(dmg_match.group(1))
-        return dispatch(state, EffectSpec(kind=EffectKind.DAMAGE, value=damage, target_filter="enemy_hero"))
-
-    heal_match = _HEAL_EN.search(text) or _HEAL_CN.search(text)
-    if heal_match:
-        heal_amount = int(heal_match.group(1))
-        return dispatch(state, EffectSpec(kind=EffectKind.HEAL, value=heal_amount, target_filter="hero"))
-
-    buff_match = re.search(r"Give\s*\+(\d+)/\+(\d+)", text, re.IGNORECASE)
-    if not buff_match:
-        buff_match = re.search(r"Gain\s*\+(\d+)/\+(\d+)", text, re.IGNORECASE)
-    if not buff_match:
-        buff_match = re.search(r'获得\+?(\d+)/\+?(\d+)', text)
-    if buff_match:
-        atk_bonus = int(buff_match.group(1))
-        hp_bonus = int(buff_match.group(2))
-        return dispatch(state, EffectSpec(kind=EffectKind.BUFF, value=atk_bonus, value2=hp_bonus, target_filter="friendly"))
-
-    summon_match = _SUMMON_STATS_EN.search(text) or _SUMMON_STATS_CN.search(text)
-    if summon_match:
-        atk = int(summon_match.group(1))
-        hp = int(summon_match.group(2))
-        return dispatch(state, EffectSpec(kind=EffectKind.SUMMON, value=atk, value2=hp))
-
-    if '发现' in text or re.search(r'Discover', text, re.IGNORECASE):
-        # Discover is handled separately by the discover framework
-        return state
+    for ability in abilities:
+        if ability.trigger != AbilityTrigger.ACTIVATE:
+            continue
+        state = ability.execute(state, loc)
 
     return state

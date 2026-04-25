@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 from analysis.search.game_state import Minion, Weapon
 from analysis.models.card import Card
 from analysis.data.card_effects import (
-    _COST_REDUCE_CN,
-    _COST_REDUCE_EN,
     get_card_armor,
     get_card_damage,
     get_card_health_cost,
@@ -52,67 +50,84 @@ from analysis.utils.spell_simulator import resolve_effects
 log = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------
-# Text-based cost reduction (passive aura effects from card text)
-# ------------------------------------------------------------------
+_COIN_CARD_IDS = frozenset({"GAME_005"})
+_PREP_CARD_IDS = frozenset({"CS2_033"})
+_DEATH_SHADOW_CARD_IDS = frozenset({"CORE_RLK_567", "RLK_567"})
 
-_COST_REDUCE_RACE_CN = __import__('re').compile(
-    r'如果你的手牌中有其他?(\w+?)牌.*?法力值消耗减少[（(]\s*(\d+)\s*[）)]'
-)
-_COST_REDUCE_RACE_EN = __import__('re').compile(
-    r"If you['']?re holding (?:a |an )?(\w+?)[,.]?\s*Costs?\s+\d+\s+less",
-    __import__('re').IGNORECASE,
-)
-_RACE_CN_TO_EN = {
-    "龙": "DRAGON", "恶魔": "DEMON", "野兽": "BEAST", "鱼人": "MURLOC",
-    "海盗": "PIRATE", "元素": "ELEMENTAL", "亡灵": "UNDEAD", "图腾": "TOTEM",
-    "机械": "MECHANICAL", "纳迦": "NAGA", "德莱尼": "DRAENEI",
-}
+
+def _trigger_minion_on_spell_cast(s):
+    """After casting a spell, check friendly minions for ON_SPELL_CAST triggers."""
+    from analysis.search.abilities.parser import AbilityParser
+    from analysis.search.abilities.definition import AbilityTrigger
+
+    for m in s.board:
+        if m.health <= 0:
+            continue
+        abilities = getattr(m, 'abilities', [])
+        if not abilities:
+            abilities = AbilityParser.parse(m)
+        for ability in abilities:
+            if ability.trigger != AbilityTrigger.TRIGGER_VISUAL:
+                continue
+            if not ability.is_active(s, m):
+                continue
+            try:
+                s = ability.execute(s, m)
+            except Exception as exc:
+                log.debug("ON_SPELL_CAST ability failed for %s: %s", getattr(m, 'name', '?'), exc)
+
+    return s
+
+
+def _trigger_location_spell_react(s, card):
+    """After casting a spell, check if any LOCATION should react.
+
+    Uses abilities executor to detect spellSchool-based cooldown resets.
+    """
+    from analysis.search.abilities.parser import AbilityParser
+    from analysis.search.abilities.definition import AbilityTrigger
+
+    spell_school = getattr(card, "spell_school", "") or ""
+    if not spell_school:
+        return s
+
+    locations = getattr(s, "locations", [])
+    if not locations:
+        return s
+
+    for loc in locations:
+        abilities = getattr(loc, 'abilities', [])
+        if not abilities:
+            abilities = AbilityParser.parse(loc)
+        for ability in abilities:
+            if ability.trigger != AbilityTrigger.WHENEVER:
+                continue
+            etext = ability.text_raw.lower()
+            school_lower = spell_school.lower()
+            if school_lower in etext and "refresh" in etext:
+                if loc.cooldown_current > 0:
+                    loc.cooldown_current = 0
+
+    return s
 
 
 def _apply_text_cost_reduction(card, hand, card_idx, current_cost):
-    """Apply passive text-based cost reductions from card text.
+    """Apply passive text-based cost reductions via abilities system."""
+    from analysis.search.abilities.parser import AbilityParser
+    from analysis.search.abilities.definition import AbilityTrigger, EffectKind
 
-    Patterns handled:
-    - "如果你的手牌中有其他龙牌，本牌的法力值消耗减少（3）点"
-    - Similar patterns for other races
-    """
-    text = getattr(card, 'text', '') or ''
-    if not text:
-        return current_cost
+    abilities = getattr(card, 'abilities', [])
+    if not abilities:
+        abilities = AbilityParser.parse(card)
 
-    m = _COST_REDUCE_RACE_CN.search(text)
-    if m:
-        race_cn = m.group(1)
-        reduction = int(m.group(2))
-        race_en = _RACE_CN_TO_EN.get(race_cn, race_cn.upper())
-        has_other = False
-        for i, h in enumerate(hand):
-            if i == card_idx:
-                continue
-            h_race = getattr(h, 'race', '').upper()
-            h_races = getattr(h, 'races', None)
-            if h_race == race_en:
-                has_other = True
-                break
-            if h_races and race_en in [r.upper() for r in h_races]:
-                has_other = True
-                break
-        if has_other:
-            return max(0, current_cost - reduction)
-
-    m = _COST_REDUCE_RACE_EN.search(text)
-    if m:
-        race_en = m.group(1).upper()
-        has_other = any(
-            i != card_idx and (
-                getattr(h, 'race', '').upper() == race_en or
-                race_en in [r.upper() for r in (getattr(h, 'races', None) or [])]
-            )
-            for i, h in enumerate(hand)
-        )
-        if has_other:
-            return max(0, current_cost - 1)
+    for ability in abilities:
+        if ability.trigger != AbilityTrigger.PASSIVE_COST:
+            continue
+        if ability.condition and not ability.condition.check(None, card):
+            continue
+        for effect in ability.effects:
+            if effect.kind == EffectKind.REDUCE_COST and effect.value > 0:
+                return max(0, current_cost - effect.value)
 
     return current_cost
 
@@ -169,22 +184,23 @@ def _apply_play_card(s, action: Action):
         s.mana.overload_next += overload_val
 
     card_id = getattr(card, "card_id", "") or ""
-    if card_id == "GAME_005" or "幸运币" in card.name or "The Coin" in (getattr(card, "ename", "") or ""):
+    if card_id in _COIN_CARD_IDS:
         s.mana.available += 1
         s.mana.add_modifier("temporary_crystal", 1, "this_turn")
 
-    if card_id == "CS2_033" or "伺机待发" in card.name or "Preparation" in (
-        getattr(card, "ename", "") or ""
-    ):
+    if card_id in _PREP_CARD_IDS:
         s.mana.add_modifier("reduce_next_spell", 3, "next_spell")
 
-    reduce_match = _COST_REDUCE_CN.search(card_text) or _COST_REDUCE_EN.search(card_text)
-    if reduce_match and "下一张法术" in card_text:
-        s.mana.add_modifier(
-            "reduce_next_spell", int(reduce_match.group(1)), "next_spell"
-        )
+    from analysis.data.card_effects import get_effects as _get_effects
+    card_effects_data = _get_effects(card)
+    if card_effects_data and card_effects_data.cost_reduce > 0:
+        etext = (getattr(card, 'english_text', '') or card_text).lower()
+        if "next spell" in etext or "your next spell" in etext:
+            s.mana.add_modifier(
+                "reduce_next_spell", card_effects_data.cost_reduce, "next_spell"
+            )
 
-    # --- Health cost (消耗血量) ---
+    # --- Health cost ---
     hp_cost = get_card_health_cost(card)
     if hp_cost > 0:
         # Guard: hero must have enough HP to pay the cost (min 1 HP remaining)
@@ -200,31 +216,20 @@ def _apply_play_card(s, action: Action):
             # Mandatory corpse cost but can't afford — skip this play
             return s
 
-    # --- Opponent cost modifiers (对手加费 e.g. 异教低阶牧师) ---
-    if "对手" in card_text and "法力值消耗增加" in card_text:
-        import re as _re
-        _opp_cost_inc = _re.search(r'法力值消耗增加[（(]\s*(\d+)\s*[）)]', card_text)
-        if _opp_cost_inc:
-            amt = int(_opp_cost_inc.group(1))
-            # Determine scope: 法术→next_spell, 英雄技能→hero_power
-            if "法术" in card_text:
+    # --- Opponent cost modifiers (e.g. Hysteria, Mutanus-type effects) ---
+    etext_lower = (getattr(card, 'english_text', '') or card_text).lower()
+    if "opponent" in etext_lower and "cost" in etext_lower and "more" in etext_lower:
+        from analysis.search.abilities.extractors import extract_number_after
+        amt = extract_number_after(etext_lower, "more")
+        if amt > 0:
+            if "spell" in etext_lower:
                 s.opponent.opp_cost_modifiers.append(("opp_spell_increase", amt, "next_spell"))
-            elif "英雄技能" in card_text:
+            elif "hero power" in etext_lower:
                 s.opponent.opp_cost_modifiers.append(("opp_hero_power_increase", amt, "hero_power"))
-    if "opponent" in card_text.lower() and ("Cost" in card_text or "cost" in card_text):
-        import re as _re
-        _opp_cost_inc = _re.search(r'[Cc]osts?\s*(\d+)\s*more', card_text)
-        if _opp_cost_inc:
-            amt = int(_opp_cost_inc.group(1))
-            if "spell" in card_text.lower():
-                s.opponent.opp_cost_modifiers.append(("opp_spell_increase", amt, "next_spell"))
 
-    # --- Death Shadow (殒命暗影) transformation tracking ---
-    if card_id == "CORE_RLK_567" or card_id == "RLK_567" or "殒命暗影" in card.name or "Death Shadow" in (getattr(card, "ename", "") or ""):
-        # Death Shadow transforms into copies of spells cast
-        # Mark that the next spell will be "free" (0-cost) since Death Shadow costs 0
-        # The actual transformation is tracked by the watcher
-        pass  # No simulation action needed — card is already 0-cost
+    # --- Death Shadow transformation tracking ---
+    if card_id in _DEATH_SHADOW_CARD_IDS:
+        pass
 
     # Check outcast bonus (before card is removed from hand)
     outcast_active = check_outcast(s, card_idx, card)
@@ -291,6 +296,9 @@ def _play_location(s, card):
         cooldown_current=0,
         cooldown_max=1,
         text=getattr(card, 'text', '') or '',
+        english_text=getattr(card, 'english_text', '') or '',
+        card_id=getattr(card, 'card_id', '') or '',
+        mechanics=getattr(card, 'mechanics', []) or [],
     )
     if not s.location_full():
         s.locations.append(loc)
@@ -309,7 +317,8 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
 
     s = apply_kindred(s, card)
     card_text = getattr(card, "text", "") or ""
-    if "延系效果会触发两次" in (card_text or ""):
+    card_text_en = getattr(card, 'english_text', '') or ''
+    if "kindred" in card_text_en.lower() and "twice" in card_text_en.lower():
         s = set_kindred_double(s)
 
     s = dispatch_battlecry(s, card, new_minion)
@@ -333,38 +342,38 @@ def _play_spell(s, card, action: Action):
     """Handle spell card play."""
     s = resolve_effects(s, card, target_index=action.target_index)
 
-    # --- Death Shadow (殒命暗影) transform: replaces self with copy of cast spell ---
+    # --- Death Shadow transform: replaces self with copy of cast spell ---
     for i, hc in enumerate(s.hand):
         hc_card_id = getattr(hc, "card_id", "") or ""
-        hc_name = getattr(hc, "name", "")
-        if hc_card_id in ("CORE_RLK_567", "RLK_567") or "殒命暗影" in hc_name or "Death Shadow" in (getattr(hc, "ename", "") or ""):
-            # Transform Death Shadow into a copy of this spell
+        if hc_card_id in _DEATH_SHADOW_CARD_IDS:
             try:
                 import dataclasses
                 new_card = dataclasses.replace(card) if dataclasses.is_dataclass(card) else card
-                # Mark the transformed card as coming from Death Shadow
                 if hasattr(new_card, 'card_id'):
                     new_card.card_id = getattr(card, 'card_id', '')
                 s.hand[i] = new_card
             except (TypeError, AttributeError):
                 log.debug("Death Shadow transform failed", exc_info=True)
-            break  # Only one Death Shadow in hand
+            break
 
     # Activate quest if quest card
     quest = parse_quest(card)
     if quest is not None:
         s.active_quests.append(quest)
 
-    card_text = getattr(card, "text", "") or ""
-    if "冻结" in card_text or "FREEZE" in (
-        getattr(card, "mechanics", None) or []
-    ):
+    # Freeze via abilities system
+    mechanics = set(getattr(card, 'mechanics', []) or [])
+    etext = (getattr(card, 'english_text', '') or '').lower()
+    if "FREEZE" in mechanics or "freeze" in etext:
         if s.opponent.board:
             if action.target_index > 0 and action.target_index <= len(s.opponent.board):
                 s.opponent.board[action.target_index - 1].frozen_until_next_turn = True
-            elif action.target_index == 0 or "所有" in card_text or "all" in card_text.lower():
+            elif action.target_index == 0 or "all" in etext:
                 for em in s.opponent.board:
                     em.frozen_until_next_turn = True
+
+    s = _trigger_location_spell_react(s, card)
+    s = _trigger_minion_on_spell_cast(s)
 
     s = recompute_auras(s)
     return s

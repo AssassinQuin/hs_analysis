@@ -20,7 +20,8 @@ def _make_state_with_location(
     durability: int = 3,
     cooldown_current: int = 0,
     cooldown_max: int = 2,
-    text: str = "造成2点伤害",
+    text: str = "",
+    english_text: str = "Deal 2 damage",
 ) -> GameState:
     """Build a GameState with one ready location."""
     loc = Location(
@@ -31,6 +32,7 @@ def _make_state_with_location(
         cooldown_current=cooldown_current,
         cooldown_max=cooldown_max,
         text=text,
+        english_text=english_text,
     )
     return GameState(
         hero=HeroState(hp=30),
@@ -188,7 +190,7 @@ def test_gamestate_copy_includes_locations():
 
 def test_activate_location_damage_effect():
     """Location with damage text deals damage to enemy hero."""
-    state = _make_state_with_location(durability=3, text="造成2点伤害")
+    state = _make_state_with_location(durability=3, english_text="Deal 2 damage")
     result = activate_location(state, 0)
     assert result.opponent.hero.hp == 28  # 30 - 2
 
@@ -199,7 +201,7 @@ def test_activate_location_damage_effect():
 
 def test_activate_location_heal_effect():
     """Location with heal text heals friendly hero."""
-    state = _make_state_with_location(durability=3, text="恢复3点生命")
+    state = _make_state_with_location(durability=3, english_text="Restore 3 Health")
     state.hero.hp = 25
     result = activate_location(state, 0)
     assert result.hero.hp == 28  # 25 + 3

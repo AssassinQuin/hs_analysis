@@ -15,6 +15,17 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _draw_from_deck(state: GameState) -> object | None:
+    """Draw a random card from deck_list, or return None if empty."""
+    deck = getattr(state, 'deck_list', None)
+    if deck and len(deck) > 0:
+        import random
+        idx = random.randint(0, len(deck) - 1)
+        card = deck.pop(idx)
+        return card
+    return None
+
+
 def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> GameState:
     """Advance state from our END_TURN to the start of our next turn.
 
@@ -40,6 +51,7 @@ def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> Game
 
     if s.opponent.deck_remaining > 0:
         s.opponent.deck_remaining -= 1
+        s.opponent.hand_count += 1
 
     for m in s.opponent.board:
         if not m.has_rush:
@@ -68,6 +80,9 @@ def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> Game
     s.mana.modifiers = []
 
     if s.deck_remaining > 0:
+        drawn = _draw_from_deck(s)
+        if drawn is not None:
+            s.hand.append(drawn)
         s.deck_remaining -= 1
     else:
         s.fatigue_damage += 1

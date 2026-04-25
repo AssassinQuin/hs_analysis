@@ -1,12 +1,13 @@
-"""V10 Board State Value (BSV) — three-axis board evaluation.
+"""V10 Board State Value (BSV) — archetype-aware board evaluation.
 
-Axes:
-  1. Tempo  — board presence + mana efficiency
-  2. Value  — hand quality + card advantage
-  3. Survival — hero safety + lethal threat
+Three axes, all concrete metrics weighted by archetype profile:
 
-Fusion via softmax-weighted combination with phase-dependent weights.
-Lethal override: returns 999.0 when lethal is detected.
+  1. Tempo  — board impact + mana efficiency
+  2. Value  — resource advantage (hand/deck/board)
+  3. Survival — hero safety weighted by archetype:
+      Aggro:   self_hp LOW weight, opp_hp HIGH weight
+      Control: self_hp HIGH weight, opp_hp LOW weight
+      Combo:   self_hp MEDIUM, draw VERY HIGH
 """
 
 from __future__ import annotations
@@ -16,191 +17,126 @@ from typing import List, Tuple
 
 from analysis.search.game_state import GameState, Minion
 from analysis.models.phase import Phase, detect_phase
+from analysis.evaluators.archetype_profile import get_profile
+from analysis.evaluators.card_impact import (
+    _minion_impact,
+    _weapon_impact,
+    _location_impact,
+)
 
-# Import SIV for per-card scoring
-from analysis.evaluators.siv import siv_score
-
-# Import lethal checker
-try:
-    from analysis.search.lethal_checker import check_lethal
-except ImportError:
-    def check_lethal(state, time_budget_ms=5.0):  # type: ignore[misc]
-        return None
-
-# ===================================================================
-# Constants
-# ===================================================================
-ABSOLUTE_LETHAL_VALUE = 999.0
-LETHAL_SCALE = 3.0
 TEMPERATURE = 0.5
 
-# Phase weights: (tempo, value, survival)
 PHASE_WEIGHTS = {
     Phase.EARLY: (1.3, 0.7, 0.5),
     Phase.MID:   (1.0, 1.0, 1.0),
     Phase.LATE:  (0.7, 1.2, 1.5),
 }
 
+_ARCHETYPE_AXIS_ADJUST = {
+    "aggro":    (0.4, -0.1, -0.3),
+    "tempo":    (0.2,  0.0, -0.1),
+    "midrange": (0.0,  0.1,  0.0),
+    "control":  (-0.3, 0.2,  0.4),
+    "combo":    (-0.2, 0.3,  0.2),
+}
 
-# ===================================================================
-# Softmax utility
-# ===================================================================
+_OPP_THREAT_ADJUST = {
+    "aggro":    (-0.1, -0.1, 0.5),
+    "tempo":    (0.0,  -0.1, 0.2),
+    "midrange": (0.0,   0.0, 0.0),
+    "control":  (0.1,   0.0, -0.2),
+    "combo":    (0.0,   0.1, 0.1),
+}
+
 
 def softmax(values: List[float], temperature: float = TEMPERATURE) -> List[float]:
-    """Numerically stable softmax with temperature scaling.
-
-    Args:
-        values: Raw values to normalize.
-        temperature: Temperature parameter (lower = sharper).
-
-    Returns:
-        Probability distribution summing to 1.0.
-    """
     if not values:
         return []
-
     scaled = [v / temperature for v in values]
-
-    # Shift for numerical stability
     max_val = max(scaled)
     exps = [math.exp(s - max_val) for s in scaled]
     total = sum(exps)
-
     if total == 0:
         return [1.0 / len(values)] * len(values)
-
     return [e / total for e in exps]
 
 
-# ===================================================================
-# Phase selection
-# ===================================================================
+def _get_weights(state: GameState) -> Tuple[float, float, float]:
+    base = PHASE_WEIGHTS.get(detect_phase(state.turn_number), (1.0, 1.0, 1.0))
+    our_adj = _ARCHETYPE_AXIS_ADJUST.get(state.our_playstyle, (0.0, 0.0, 0.0))
+    opp_adj = _OPP_THREAT_ADJUST.get(state.opp_playstyle, (0.0, 0.0, 0.0))
+    return tuple(max(0.1, b + o + p) for b, o, p in zip(base, our_adj, opp_adj))
 
-def _get_phase_weights(turn_number: int) -> Tuple[float, float, float]:
-    phase = detect_phase(turn_number)
-    return PHASE_WEIGHTS.get(phase, (1.0, 1.0, 1.0))
-
-
-# ===================================================================
-# Helper: minion-to-card-like wrapper
-# ===================================================================
-
-class _MinionCardLike:
-    """Wraps a Minion to provide Card-like interface for SIV scoring."""
-
-    def __init__(self, minion: Minion):
-        self.dbf_id = getattr(minion, "dbf_id", 0)
-        self.name = minion.name or ""
-        self.cost = getattr(minion, "cost", 0)
-        self.original_cost = self.cost
-        self.card_type = "MINION"
-        self.attack = minion.attack
-        self.health = minion.health
-        self.score = minion.attack * 1.0 + minion.health * 0.8
-        self.text = ""
-        self.mechanics = []
-        self.race = getattr(minion, "race", "") or ""
-
-        # Translate Minion flags to mechanics
-        if minion.has_taunt:
-            self.mechanics.append("TAUNT")
-        if minion.has_divine_shield:
-            self.mechanics.append("DIVINE_SHIELD")
-        if minion.has_charge:
-            self.mechanics.append("CHARGE")
-        if minion.has_rush:
-            self.mechanics.append("RUSH")
-        if minion.has_windfury:
-            self.mechanics.append("WINDFURY")
-        if minion.has_poisonous:
-            self.mechanics.append("POISONOUS")
-        if minion.has_stealth:
-            self.mechanics.append("STEALTH")
-
-
-def _minion_to_card_like(minion: Minion) -> _MinionCardLike:
-    """Convert a Minion to a Card-like object for SIV scoring."""
-    return _MinionCardLike(minion)
-
-
-# ===================================================================
-# Axis 1: Tempo
-# ===================================================================
 
 def eval_tempo_v10(state: GameState) -> float:
-    """Tempo axis: board presence + mana efficiency.
+    """Tempo: concrete board impact + mana efficiency, archetype-weighted."""
+    profile = get_profile(state.our_playstyle)
 
-    = Σ siv_score(friendly minion) - Σ siv_score(enemy minion) × 1.2
-    + mana_efficiency × 5.0
-    + weapon_attack × 1.5
-    """
-    # Friendly board SIV
-    friendly_siv = 0.0
+    friendly_impact = 0.0
     for m in state.board:
-        card_like = _minion_to_card_like(m)
-        friendly_siv += siv_score(card_like, state)
+        if m.health > 0:
+            friendly_impact += _minion_impact(m, state)
 
-    # Enemy board SIV (penalised ×1.2)
-    enemy_siv = 0.0
+    enemy_impact = 0.0
     for m in state.opponent.board:
-        card_like = _minion_to_card_like(m)
-        enemy_siv += siv_score(card_like, state) * 1.2
+        if m.health > 0:
+            enemy_impact += _minion_impact(m, state)
+    enemy_impact *= 1.2
 
-    # Mana efficiency: (used / total) → higher = more tempo
     max_mana = max(state.mana.max_mana, 1)
     mana_efficiency = (max_mana - state.mana.available) / max_mana
 
-    # Weapon value
     weapon_value = 0.0
     if state.hero.weapon is not None:
-        weapon_value = state.hero.weapon.attack * 1.5
+        weapon_value = _weapon_impact(state.hero.weapon, state)
 
-    return friendly_siv - enemy_siv + mana_efficiency * 5.0 + weapon_value
+    location_value = _location_impact(state)
 
+    board_weight = profile["board_control_weight"]
+    return (friendly_impact - enemy_impact) * board_weight + mana_efficiency * 5.0 + weapon_value + location_value
 
-# ===================================================================
-# Axis 2: Value
-# ===================================================================
 
 def eval_value_v10(state: GameState) -> float:
-    """Value axis: hand quality + card advantage.
+    """Value: resource advantage, archetype-weighted."""
+    profile = get_profile(state.our_playstyle)
 
-    = Σ siv_score(hand card)
-    + card_advantage × 2.0
-    + resource_generation × 1.5
-    """
-    # Hand SIV sum
-    hand_siv = 0.0
-    for card in state.hand:
-        hand_siv += siv_score(card, state)
+    our_hand = len(state.hand)
+    opp_hand = state.opponent.hand_count
+    card_advantage = our_hand - opp_hand
 
-    # Card advantage: (hand + board) - (opp_hand + opp_board)
-    friendly_resources = len(state.hand) + len(state.board)
-    enemy_resources = state.opponent.hand_count + len(state.opponent.board)
-    card_advantage = friendly_resources - enemy_resources
+    hand_quality = 0.0
+    if state.hand:
+        total_cost = sum(getattr(c, 'cost', 0) or 0 for c in state.hand)
+        avg_cost = total_cost / len(state.hand)
+        hand_quality = avg_cost * len(state.hand) * 0.3
 
-    # Resource generation proxy
-    resource_gen = len(state.cards_played_this_turn) * 1.5
+    board_advantage = len(state.board) - len(state.opponent.board)
 
-    return hand_siv + card_advantage * 2.0 + resource_gen
+    deck_safety = 0.0
+    if state.deck_remaining <= 3:
+        deck_safety = -2.0 * (3 - state.deck_remaining)
 
+    ca_w = profile["card_advantage_weight"]
+    draw_w = profile["draw_value"]
 
-# ===================================================================
-# Axis 3: Survival
-# ===================================================================
+    return card_advantage * 1.5 * ca_w + hand_quality * draw_w + board_advantage * 1.0 + deck_safety
+
 
 def eval_survival_v10(state: GameState) -> float:
-    """Survival axis: hero safety.
+    """Survival: hero safety weighted by archetype.
 
-    = (hero.hp + hero.armor) / 30.0 × 10.0
-    - enemy_observable_damage × 0.5
-    - lethal_threat × 50.0
-    + healing_potential × 0.3
+    Key insight from user:
+    - Aggro: self_hp barely matters, opp_hp matters a LOT
+    - Control: self_hp matters a LOT, opp_hp barely matters
+    - Combo: self_hp matters moderately, draw matters most
     """
-    hero = state.hero
-    hero_safety = (hero.hp + hero.armor) / 30.0 * 10.0
+    profile = get_profile(state.our_playstyle)
 
-    # Enemy observable damage
+    hero = state.hero
+    self_hp_total = hero.hp + hero.armor
+
+    self_hp_value = (self_hp_total / 30.0 * 10.0) * profile["self_hp_sensitivity"]
+
     enemy_damage = 0.0
     for m in state.opponent.board:
         if m.can_attack or m.has_charge or m.has_rush:
@@ -208,43 +144,46 @@ def eval_survival_v10(state: GameState) -> float:
     if state.opponent.hero.weapon is not None:
         enemy_damage += state.opponent.hero.weapon.attack
 
-    # Lethal threat: if enemy can kill us
     lethal_threat = 0.0
-    total_defense = hero.hp + hero.armor
-    if enemy_damage >= total_defense:
+    if enemy_damage >= self_hp_total:
         lethal_threat = 1.0
 
-    # Healing potential: scan hand for heal cards
+    damage_pressure = enemy_damage * 0.5 * profile["self_hp_sensitivity"]
+
+    opp_hp = state.opponent.hero.hp + state.opponent.hero.armor
+    opp_pressure = 0.0
+    if opp_hp > 0 and opp_hp <= 15:
+        opp_pressure = (15 - opp_hp) / 15.0 * 5.0 * profile["opp_hp_sensitivity"]
+
     heal_potential = 0.0
     for card in state.hand:
         text = getattr(card, "text", "") or ""
-        if "恢复" in text or "治疗" in text or "heal" in text.lower():
-            heal_potential += 1.0
+        etext = getattr(card, "english_text", "") or ""
+        if "恢复" in text or "治疗" in text or "heal" in text.lower() or "Heal" in etext:
+            heal_potential += 1.0 * profile["heal_value"]
+
+    taunt_defense = 0.0
+    for m in state.board:
+        if m.has_taunt and m.health > 0:
+            taunt_defense += (m.health * 0.2) * profile["taunt_value"]
 
     return (
-        hero_safety
-        - enemy_damage * 0.5
+        self_hp_value
+        - damage_pressure
         - lethal_threat * 50.0
         + heal_potential * 0.3
+        + taunt_defense
+        + opp_pressure
     )
 
 
-# ===================================================================
-# Fusion
-# ===================================================================
-
 def bsv_fusion(state: GameState) -> float:
-    """Combine three axes with phase-weighted softmax fusion.
-
-    Lethal check is intentionally NOT done here — it is handled at the
-    RHEA engine level (Layer 0 + chromosome evaluation) to avoid the
-    expensive DFS inside the inner evaluation loop.
-    """
+    """Combine three axes with archetype-aware softmax fusion."""
     tempo = eval_tempo_v10(state)
     value = eval_value_v10(state)
     survival = eval_survival_v10(state)
 
-    w_tempo, w_value, w_survival = _get_phase_weights(state.turn_number)
+    w_tempo, w_value, w_survival = _get_weights(state)
 
     weighted = [
         tempo * w_tempo,
@@ -253,6 +192,4 @@ def bsv_fusion(state: GameState) -> float:
     ]
 
     weights = softmax(weighted, TEMPERATURE)
-    bsv = sum(w * a for w, a in zip(weights, weighted))
-
-    return bsv
+    return sum(w * a for w, a in zip(weights, weighted))
