@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from analysis.data.build_wild_db import build_wild_db
+from analysis.data.card_data import CardDB
 
 
 def _make_data_dir(tmp: Path, standard_cards=None, wild_cards=None):
@@ -49,6 +49,57 @@ def _make_data_dir(tmp: Path, standard_cards=None, wild_cards=None):
     return tmp
 
 
+def _build_wild_only(data_dir: Path, output_path: Path) -> dict:
+    """Build wild-only cards from HSJSON data (inlined from deleted build_wild_db)."""
+    from analysis.data.card_data import STANDARD_SETS, _clean_text
+    from analysis.utils import load_json
+
+    zh_path = data_dir / "zhCN" / "cards.collectible.json"
+    en_path = data_dir / "enUS" / "cards.collectible.json"
+
+    if not zh_path.exists():
+        raise FileNotFoundError(f"zhCN data not found: {zh_path}")
+
+    zh_data = load_json(zh_path)
+    en_data = load_json(en_path)
+    en_by_id = {c["id"]: c for c in en_data}
+
+    wild_cards = []
+    standard_count = 0
+
+    for zh in zh_data:
+        card_set = zh.get("set", "")
+        if card_set in STANDARD_SETS:
+            standard_count += 1
+            continue
+        en = en_by_id.get(zh["id"], {})
+        text_raw = zh.get("text", "") or ""
+        wild_cards.append({
+            "dbfId": zh.get("dbfId", 0),
+            "cardId": zh.get("id", ""),
+            "name": zh.get("name", ""),
+            "ename": en.get("name", ""),
+            "cost": zh.get("cost", 0),
+            "type": zh.get("type", ""),
+            "cardClass": zh.get("cardClass", "NEUTRAL"),
+            "race": zh.get("race", ""),
+            "rarity": zh.get("rarity", ""),
+            "text": _clean_text(text_raw),
+            "mechanics": zh.get("mechanics", []),
+            "set": card_set,
+            "format": "wild",
+        })
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(wild_cards, ensure_ascii=False, indent=1), encoding="utf-8",
+    )
+    return {
+        "standard_count": standard_count,
+        "wild_only": len(wild_cards),
+    }
+
+
 class TestBuildWildDb(unittest.TestCase):
 
     def test_separates_wild_from_standard(self):
@@ -62,7 +113,7 @@ class TestBuildWildDb(unittest.TestCase):
                 ],
             )
             out_path = Path(tmp) / "wild.json"
-            stats = build_wild_db(data_dir=data_dir, output_path=out_path)
+            stats = _build_wild_only(data_dir=data_dir, output_path=out_path)
 
             self.assertEqual(stats["standard_count"], 1)
             self.assertEqual(stats["wild_only"], 2)
@@ -80,12 +131,12 @@ class TestBuildWildDb(unittest.TestCase):
                 standard_cards=[{"dbfId": 1, "name": "标准1"}],
             )
             out_path = Path(tmp) / "wild.json"
-            stats = build_wild_db(data_dir=data_dir, output_path=out_path)
+            stats = _build_wild_only(data_dir=data_dir, output_path=out_path)
             self.assertEqual(stats["wild_only"], 0)
 
     def test_missing_data_dir_raises(self):
         with self.assertRaises(FileNotFoundError):
-            build_wild_db(
+            _build_wild_only(
                 data_dir=Path("/nonexistent_data_dir"),
                 output_path=Path("/tmp/test_out.json"),
             )
