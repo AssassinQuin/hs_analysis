@@ -7,7 +7,7 @@ Public API:
     SearchResult — search output (compatible with existing pipeline)
 """
 
-from analysis.search.mcts.config import MCTSConfig, MCTSStats, NodeType, SimulationMode, ExpansionOrder
+from analysis.search.mcts.config import MCTSConfig, MCTSStats, NodeType, ExpansionOrder
 from analysis.search.mcts.engine import MCTSEngine, SearchResult
 from analysis.search.mcts.node import MCTSNode, ActionEdge
 from analysis.search.mcts.pruning import ActionPruner
@@ -21,6 +21,5 @@ __all__ = [
     "ActionEdge",
     "ActionPruner",
     "NodeType",
-    "SimulationMode",
     "ExpansionOrder",
 ]

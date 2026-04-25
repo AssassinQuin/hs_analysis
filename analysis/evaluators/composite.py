@@ -46,7 +46,27 @@ except ImportError:
 
     def eval_mana_efficiency(state) -> float:
         wasted = state.mana.available
-        return -wasted if wasted > 0 else 0.0
+        # Unused mana modifiers represent potential future value
+        # e.g. "next spell costs 2 less" with a spell still in hand
+        modifier_potential = 0.0
+        for mod in state.mana.modifiers:
+            if mod.used:
+                continue
+            # Check if hand has a matching card for this modifier
+            for card in state.hand:
+                if mod.scope == "next_spell" and getattr(card, 'card_type', '').upper() == "SPELL":
+                    modifier_potential += mod.value * 0.5
+                    break
+                elif mod.scope == "next_minion" and getattr(card, 'card_type', '').upper() == "MINION":
+                    modifier_potential += mod.value * 0.5
+                    break
+                elif mod.scope == "next_combo_card" and "COMBO" in (getattr(card, 'mechanics', None) or []):
+                    modifier_potential += mod.value * 0.5
+                    break
+                elif mod.scope == "this_turn":
+                    modifier_potential += mod.value * 0.3
+                    break
+        return -wasted + modifier_potential
 
 
 DEFAULT_WEIGHTS = {

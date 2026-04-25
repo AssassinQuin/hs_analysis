@@ -54,14 +54,33 @@ _PREP_CARD_IDS = frozenset({"CS2_033"})
 _DEATH_SHADOW_CARD_IDS = frozenset({"CORE_RLK_567", "RLK_567"})
 
 
-def _trigger_minion_on_spell_cast(s):
-    """After casting a spell, check friendly minions for ON_SPELL_CAST triggers."""
+def _trigger_minion_on_spell_cast(s, card=None):
+    """After casting a spell, check friendly minions for spell-cast triggers.
+
+    card: the spell just cast (used to check spell_school for FEL-only triggers).
+    """
     from analysis.search.abilities.parser import AbilityParser
     from analysis.search.abilities.definition import AbilityTrigger
+
+    spell_school = getattr(card, 'spell_school', '') or '' if card else ''
+    is_fel = spell_school.upper() == 'FEL'
 
     for m in s.board:
         if m.health <= 0:
             continue
+
+        trigger_type = getattr(m, 'trigger_type', '')
+        trigger_effect = getattr(m, 'trigger_effect', '')
+
+        # Fast path for token trigger effects
+        if trigger_effect == 'ADD_RANDOM_NAGA':
+            # Only triggers on Fel spells
+            if trigger_type == 'ON_FEL_SPELL_CAST' and not is_fel:
+                continue
+            s = _add_random_naga_to_hand(s)
+            continue
+
+        # General ability-based dispatch (for non-token abilities)
         abilities = getattr(m, 'abilities', [])
         if not abilities:
             abilities = AbilityParser.parse(m)
@@ -75,6 +94,16 @@ def _trigger_minion_on_spell_cast(s):
             except Exception as exc:
                 log.debug("ON_SPELL_CAST ability failed for %s: %s", getattr(m, 'name', '?'), exc)
 
+    return s
+
+
+def _add_random_naga_to_hand(s):
+    """Add a random 1-Cost Naga minion to hand (e.g. Nespirah, Freed trigger)."""
+    from analysis.data.token_cards import get_random_naga, create_naga_card
+
+    naga_data = get_random_naga(max_cost=1)
+    card = create_naga_card(naga_data)
+    s.hand.append(card)
     return s
 
 
@@ -341,6 +370,10 @@ def _play_spell(s, card, action: Action):
     """Handle spell card play."""
     s = resolve_effects(s, card, target_index=action.target_index)
 
+    # Herald (兆示) can appear on spells too (e.g. Rite of Twilight)
+    if check_herald(card):
+        s = apply_herald(s, card)
+
     # --- Death Shadow transform: replaces self with copy of cast spell ---
     for i, hc in enumerate(s.hand):
         hc_card_id = getattr(hc, "card_id", "") or ""
@@ -372,7 +405,7 @@ def _play_spell(s, card, action: Action):
                     em.frozen_until_next_turn = True
 
     s = _trigger_location_spell_react(s, card)
-    s = _trigger_minion_on_spell_cast(s)
+    s = _trigger_minion_on_spell_cast(s, card=card)
 
     s = recompute_auras(s)
     return s

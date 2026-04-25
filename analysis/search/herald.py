@@ -38,7 +38,9 @@ def check_herald(card) -> bool:
     """
     mechanics = getattr(card, 'mechanics', []) or []
     text = getattr(card, 'text', '') or ''
-    return '兆示' in text or 'HERALD' in mechanics
+    eng_text = getattr(card, 'english_text', '') or ''
+    return ('兆示' in text or 'herald' in eng_text.lower()
+            or 'HERALD' in mechanics)
 
 
 def apply_herald(state: 'GameState', card) -> 'GameState':

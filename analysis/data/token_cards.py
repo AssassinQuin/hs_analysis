@@ -12,17 +12,17 @@ _TOKEN_DB = {
         "dbfId": 122774,
         "name": "奈瑟匹拉，脱困古灵",
         "ename": "Nespirah, Freed",
-        "cost": 3,
-        "attack": 3,
-        "health": 5,
+        "cost": 6,
+        "attack": 6,
+        "health": 6,
         "type": "MINION",
         "cardClass": "DEMONHUNTER",
         "race": "NAGA",
         "rarity": "FREE",
-        "text": "每当你施放一个法术，将一张随机娜迦随从牌置入你的手牌。",
-        "englishText": "Whenever you cast a spell, add a random Naga minion to your hand.",
+        "text": "每当你施放一个邪能法术，将一张随机（费用为1点）的娜迦随从牌置入你的手牌。",
+        "englishText": "After you cast a Fel spell, add a random 1-Cost Naga minion to your hand.",
         "mechanics": ["TRIGGER_VISUAL"],
-        "trigger_type": "ON_SPELL_CAST",
+        "trigger_type": "ON_FEL_SPELL_CAST",
         "trigger_effect": "ADD_RANDOM_NAGA",
     },
 }
@@ -58,10 +58,16 @@ def get_token(card_id: str) -> dict | None:
     return _TOKEN_DB.get(card_id)
 
 
-def get_random_naga() -> dict:
-    """Return a random Naga minion data for token generation."""
+def get_random_naga(max_cost: int = 99) -> dict:
+    """Return a random Naga minion data for token generation.
+    
+    max_cost: filter to nagas at or below this cost (default: no filter).
+    """
     import random
-    return random.choice(_NAGA_POOL)
+    pool = [n for n in _NAGA_POOL if n.get("cost", 99) <= max_cost]
+    if not pool:
+        pool = _NAGA_POOL
+    return random.choice(pool)
 
 
 def create_naga_card(naga_data: dict) -> object:

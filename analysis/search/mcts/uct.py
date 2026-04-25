@@ -27,6 +27,27 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Progressive bias: constant bonus added to UCB1 score based on action type.
+# This nudges selection toward productive actions without overriding Q-value.
+# Values are small enough that strong Q signals still dominate.
+_ACTION_BIAS = {
+    ActionType.PLAY: 0.15,
+    ActionType.PLAY_WITH_TARGET: 0.15,
+    ActionType.ACTIVATE_LOCATION: 0.12,
+    ActionType.ATTACK: 0.10,
+    ActionType.HERO_POWER: 0.03,
+    ActionType.DISCOVER_PICK: 0.12,
+    ActionType.CHOOSE_ONE: 0.10,
+    ActionType.TRANSFORM: 0.05,
+    ActionType.HERO_REPLACE: 0.03,
+    ActionType.END_TURN: -0.20,
+}
+
+
+def _action_bias(edge: ActionEdge) -> float:
+    """Progressive bias for UCT selection based on action type."""
+    return _ACTION_BIAS.get(edge.action.action_type, 0.0)
+
 
 def uct_select(
     node: MCTSNode,
@@ -58,7 +79,11 @@ def uct_select(
         # Exploration: UCB bonus
         exploration = c * math.sqrt(log_parent / max(child.visit_count, 1))
 
-        score = q + exploration
+        # Progressive bias: nudge toward productive actions
+        edge = node.action_edges.get(ak)
+        bias = _action_bias(edge) if edge else 0.0
+
+        score = q + exploration + bias
         if score > best_score:
             best_score = score
             best_pair = (ak, child)

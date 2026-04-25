@@ -116,7 +116,14 @@ class Minion:
 
     def copy(self) -> "Minion":
         """浅拷贝随从（enchantments 列表浅拷贝，其余字段直接复制）"""
-        return dataclasses.replace(self, enchantments=list(self.enchantments))
+        new = dataclasses.replace(self, enchantments=list(self.enchantments))
+        # Preserve dynamic attributes not in dataclass fields
+        # (e.g. trigger_type, trigger_effect, english_text injected by token summon)
+        for attr in ('trigger_type', 'trigger_effect', 'english_text', 'abilities'):
+            val = getattr(self, attr, None)
+            if val is not None:
+                setattr(new, attr, val)
+        return new
 
     @property
     def is_friendly(self) -> bool:
@@ -212,6 +219,11 @@ class ManaState:
                 base = max(0, base - mod.value)
             elif mod.scope == "this_turn":
                 base = max(0, base - mod.value)
+            elif mod.scope == "next_combo_card":
+                # 狐人老千等：下一张连击牌减费
+                mechanics = getattr(card, "mechanics", []) or []
+                if "COMBO" in mechanics:
+                    base = max(0, base - mod.value)
             elif mod.scope == "first_dragon":
                 # 龙群先锋等效果：本回合第一张龙牌费用变为 N
                 # 检查卡牌种族是否为龙族
@@ -244,6 +256,10 @@ class ManaState:
                 mod.used = True
                 return
             if mod.scope == "first_dragon" and race == "DRAGON":
+                mod.used = True
+                return
+            mechanics = getattr(card, "mechanics", []) or []
+            if mod.scope == "next_combo_card" and "COMBO" in mechanics:
                 mod.used = True
                 return
 
@@ -382,16 +398,23 @@ class GameState:
     # 工具方法
     # ------------------------------------------------------------------
 
-    def copy(self) -> "GameState":
-        """基于 dataclasses.fields() 反射的自动拷贝
+    # Pre-computed fields list (avoid repeated dataclasses.fields() reflection)
+    _FIELDS = None
 
-        不可变字段直接复制，可变容器浅拷贝，
-        嵌套 dataclass 调用各自的 .copy()，
-        _mechanics / _zones 置 None 触发延迟重初始化。
-        新增字段无需手动维护此方法。
+    def copy(self) -> "GameState":
+        """Fast copy: cached fields + minimal allocation.
+
+        Hot path optimization:
+        - Caches dataclasses.fields() to avoid per-call reflection
+        - Skips isinstance() checks for known field types
+        - Nested dataclasses use their own .copy() methods
         """
+        # Lazy-init fields cache
+        if GameState._FIELDS is None:
+            GameState._FIELDS = dataclasses.fields(self)
+
         kwargs: dict = {}
-        for f in dataclasses.fields(self):
+        for f in GameState._FIELDS:
             name = f.name
             val = getattr(self, name)
 

@@ -18,13 +18,6 @@ class NodeType(Enum):
     CHANCE = auto()
 
 
-class SimulationMode(Enum):
-    """Leaf evaluation strategy."""
-    EVAL_CUTOFF = "eval_cutoff"   # use evaluate_delta directly (fastest)
-    HYBRID = "hybrid"             # short rollout (1-2 steps) + eval cutoff
-    RANDOM = "random"             # full random rollout (baseline)
-
-
 class ExpansionOrder(Enum):
     """Order in which untried actions are selected for expansion."""
     RANDOM = "random"
@@ -37,8 +30,8 @@ class MCTSConfig:
     """Complete parameter configuration for the MCTS search engine."""
 
     # === UCT parameters ===
-    uct_constant: float = 0.5               # UCB1 exploration constant c
-    # range: 0.25-1.0  (aggro low / control high)
+    uct_constant: float = 1.0               # UCB1 exploration constant c
+    # range: 0.5-1.5  (aggro low / control high)
 
     # === Determinization parameters ===
     num_worlds: int = 7                      # DUCT world count
@@ -51,8 +44,7 @@ class MCTSConfig:
     # k = floor(C * n^alpha)
 
     # === Simulation / evaluation parameters ===
-    simulation_mode: SimulationMode = SimulationMode.EVAL_CUTOFF
-    rollout_depth: int = 1                   # hybrid mode rollout depth (turns)
+    rollout_depth: int = 10                  # max actions per rollout (= max_actions_per_turn)
     eval_normalization_scale: float = 15.0   # tanh(raw/scale) normalization factor
 
     # === Chance node sampling ===
@@ -86,7 +78,6 @@ class MCTSConfig:
 
     # === Cross-turn simulation ===
     max_turns_ahead: int = 3              # max full turns to search ahead in tree
-    cross_turn_rollout_depth: int = 2     # greedy rollout turns beyond tree depth
     cross_turn_budget_ratio: float = 0.30  # fraction of budget for beyond-current-turn
     cross_turn_node_budget: int = 3000     # max nodes for cross-turn portion of tree
     opponent_tree_actions: int = 3         # max opponent actions to consider per turn
@@ -134,25 +125,25 @@ def get_phase_overrides(turn_number: int, opp_playstyle: str = "unknown") -> dic
 
     if phase == Phase.EARLY:
         base = {
-            "uct_constant": 0.4,
+            "uct_constant": 0.8,
             "num_worlds": 5,
             "time_budget_ms": 15000,
             "max_turns_ahead": 3,
         }
     elif phase == Phase.MID:
         base = {
-            "uct_constant": 0.5,
+            "uct_constant": 1.0,
             "num_worlds": 7,
             "time_budget_ms": 15000,
             "max_turns_ahead": 3,
         }
     else:  # LATE
         base = {
-            "uct_constant": 0.7,
+            "uct_constant": 1.2,
             "num_worlds": 9,
             "time_budget_ms": 15000,
             "max_turns_ahead": 3,
         }
 
-    base["uct_constant"] = round(max(0.2, min(1.2, base["uct_constant"] + style_delta)), 2)
+    base["uct_constant"] = round(max(0.5, min(2.0, base["uct_constant"] + style_delta)), 2)
     return base

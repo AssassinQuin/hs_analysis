@@ -70,7 +70,7 @@ def test_location_dataclass():
 def test_activate_location_valid():
     """Activating a ready location decreases durability and sets cooldown."""
     state = _make_state_with_location(durability=3, cooldown_current=0)
-    result = activate_location(state, 0)
+    result = activate_location(state.copy(), 0)
 
     assert result.locations[0].durability == 2
     assert result.locations[0].cooldown_current == 2  # set to cooldown_max
@@ -85,11 +85,11 @@ def test_activate_location_valid():
 def test_activate_location_cooldown():
     """After activation, location is on cooldown and cannot be reactivated."""
     state = _make_state_with_location(durability=3)
-    result = activate_location(state, 0)
+    result = activate_location(state.copy(), 0)
     assert result.locations[0].cooldown_current == 2
 
     # Try to activate again on same result — should fail
-    result2 = activate_location(result, 0)
+    result2 = activate_location(result.copy(), 0)
     assert result2.locations[0].durability == 2  # unchanged
     assert result2.locations[0].cooldown_current == 2  # unchanged
 
@@ -101,7 +101,7 @@ def test_activate_location_cooldown():
 def test_activate_location_no_durability():
     """Location with 0 durability cannot be activated."""
     state = _make_state_with_location(durability=0)
-    result = activate_location(state, 0)
+    result = activate_location(state.copy(), 0)
     assert result.locations[0].durability == 0  # unchanged
     assert result.locations[0].cooldown_current == 0  # unchanged
 
@@ -113,7 +113,7 @@ def test_activate_location_no_durability():
 def test_activate_location_on_cooldown():
     """Location with cooldown > 0 cannot be activated."""
     state = _make_state_with_location(durability=3, cooldown_current=1)
-    result = activate_location(state, 0)
+    result = activate_location(state.copy(), 0)
     assert result.locations[0].durability == 3  # unchanged
     assert result.locations[0].cooldown_current == 1  # unchanged
 
@@ -125,7 +125,7 @@ def test_activate_location_on_cooldown():
 def test_tick_location_cooldowns():
     """After END_TURN, cooldowns decrement."""
     state = _make_state_with_location(durability=2, cooldown_current=2)
-    result = tick_location_cooldowns(state)
+    result = tick_location_cooldowns(state.copy())
     assert result.locations[0].cooldown_current == 1
     # Original unchanged
     assert state.locations[0].cooldown_current == 2
@@ -138,7 +138,7 @@ def test_tick_location_cooldowns():
 def test_tick_cooldown_reaches_zero():
     """After enough turns, location becomes ready again."""
     state = _make_state_with_location(durability=2, cooldown_current=1)
-    result = tick_location_cooldowns(state)
+    result = tick_location_cooldowns(state.copy())
     assert result.locations[0].cooldown_current == 0  # ready!
 
 
@@ -191,7 +191,7 @@ def test_gamestate_copy_includes_locations():
 def test_activate_location_damage_effect():
     """Location with damage text deals damage to enemy hero."""
     state = _make_state_with_location(durability=3, english_text="Deal 2 damage")
-    result = activate_location(state, 0)
+    result = activate_location(state.copy(), 0)
     assert result.opponent.hero.hp == 28  # 30 - 2
 
 
@@ -203,7 +203,7 @@ def test_activate_location_heal_effect():
     """Location with heal text heals friendly hero."""
     state = _make_state_with_location(durability=3, english_text="Restore 3 Health")
     state.hero.hp = 25
-    result = activate_location(state, 0)
+    result = activate_location(state.copy(), 0)
     assert result.hero.hp == 28  # 25 + 3
 
 

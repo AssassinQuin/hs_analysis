@@ -94,8 +94,10 @@ def apply_imbue(state: GameState, card) -> GameState:
     """
     mechanics = getattr(card, "mechanics", None) or []
     text = getattr(card, "text", "") or ""
+    eng_text = getattr(card, "english_text", "") or ""
 
-    has_imbue = "IMBUE" in mechanics or "灌注" in text
+    has_imbue = ("IMBUE" in mechanics or "灌注" in text
+                 or "imbue" in eng_text.lower())
 
     if has_imbue:
         state.hero.imbue_level += 1

@@ -44,8 +44,12 @@ class Location:
 
 
 def activate_location(state: "GameState", location_index: int) -> "GameState":
-    """Activate a location: resolve effect, consume durability, handle death."""
-    s = state.copy()
+    """Activate a location: resolve effect, consume durability, handle death.
+
+    NOTE: Caller must provide a mutable copy (apply_action already copies).
+    This function mutates state in-place and returns it.
+    """
+    s = state
 
     if location_index < 0 or location_index >= len(s.locations):
         return s
@@ -136,6 +140,20 @@ def _summon_token(s: "GameState", token_data: dict) -> "GameState":
         cost=token_data.get("cost", 0),
         keywords=KeywordSet(kw),
     )
+
+    # Inject english_text so AbilityParser can discover trigger effects
+    english_text = token_data.get("englishText", "") or token_data.get("text", "")
+    if english_text:
+        minion.english_text = english_text  # type: ignore[attr-defined]
+
+    # Inject trigger metadata for direct dispatch without text parsing
+    trigger_type = token_data.get("trigger_type", "")
+    trigger_effect = token_data.get("trigger_effect", "")
+    if trigger_type:
+        minion.trigger_type = trigger_type  # type: ignore[attr-defined]
+    if trigger_effect:
+        minion.trigger_effect = trigger_effect  # type: ignore[attr-defined]
+
     if len(s.board) < 7:
         s.board.append(minion)
     return s
@@ -165,12 +183,14 @@ def _summon_generic_from_text(s: "GameState", text: str) -> "GameState":
 
 
 def tick_location_cooldowns(state: "GameState") -> "GameState":
-    """Tick cooldowns on all locations at end of turn."""
-    s = state.copy()
-    for loc in s.locations:
+    """Tick cooldowns on all locations at end of turn.
+
+    NOTE: Caller must provide a mutable copy. Mutates in-place.
+    """
+    for loc in state.locations:
         if loc.cooldown_current > 0:
             loc.cooldown_current -= 1
-    return s
+    return state
 
 
 def _resolve_location_effect(state: "GameState", loc: Location) -> "GameState":

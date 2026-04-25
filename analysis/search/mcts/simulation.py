@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""simulation.py — Leaf evaluation strategies for MCTS.
+"""simulation.py — Leaf evaluation for MCTS via random rollout.
 
-Three modes:
-- EVAL_CUTOFF: evaluate_delta directly (fastest, recommended for Python)
-- HYBRID: short rollout (1-2 steps) + eval cutoff
-- RANDOM: full random rollout (baseline comparison)
+Every non-terminal leaf is evaluated by random playout:
+  1. Pick a legal action (weighted: card plays > attacks > hero power > end turn)
+  2. Apply it
+  3. Repeat until terminal or max_depth reached
+  4. Return reward in [-1, 1]
+
+Terminal states (hero or opponent dead) return ±1.0 directly.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ import random
 import logging
 from typing import Optional, TYPE_CHECKING
 
-from analysis.search.mcts.config import MCTSConfig, SimulationMode
+from analysis.search.mcts.config import MCTSConfig
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState
@@ -22,7 +25,21 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-_CROSS_TURN_DISCOUNT = 0.7
+# Rollout action weights — higher = more likely to be picked during simulation.
+# Card plays and location activations are strong tempo actions; END_TURN is
+# a last resort when nothing else is affordable or useful.
+_ROLLOUT_WEIGHTS = {
+    "PLAY": 5,
+    "PLAY_WITH_TARGET": 5,
+    "ACTIVATE_LOCATION": 4,
+    "ATTACK": 3,
+    "HERO_POWER": 2,
+    "DISCOVER_PICK": 4,
+    "CHOOSE_ONE": 4,
+    "HERO_REPLACE": 1,
+    "TRANSFORM": 2,
+    "END_TURN": 1,
+}
 
 
 def evaluate_leaf(
@@ -31,37 +48,17 @@ def evaluate_leaf(
     config: MCTSConfig,
     turn_depth: int = 0,
 ) -> float:
-    """Evaluate a leaf node and return reward in [-1, 1].
+    """Evaluate a leaf node by random rollout.  Returns reward in [-1, 1].
 
     Terminal states return +/-1.0 directly.
-    Non-terminal states use evaluate_delta normalised via tanh.
-
-    For cross-turn leaves (turn_depth > 0), a cutoff evaluation is always
-    computed first.  If cross_turn_rollout_depth > 0, a rollout is also
-    performed and the two scores are blended (cutoff * 0.6 + rollout * 0.4)
-    with a time-discount factor applied to the rollout component so that
-    far-future simulations do not dominate the current-turn decision.
+    Non-terminal states are evaluated by random playout up to max_depth,
+    then normalised via tanh(evaluate / scale).
     """
     terminal = _get_terminal_reward(leaf_state)
     if terminal is not None:
         return terminal
 
-    cutoff_score = _eval_cutoff(leaf_state, root_state, config)
-
-    if turn_depth > 0 and config.cross_turn_rollout_depth > 0:
-        rollout_score = _eval_cross_turn_rollout(
-            leaf_state, root_state, config, config.cross_turn_rollout_depth
-        )
-        discount = _CROSS_TURN_DISCOUNT ** turn_depth
-        blended = cutoff_score * 0.6 + rollout_score * 0.4 * discount
-        return max(-1.0, min(1.0, blended))
-
-    if config.simulation_mode == SimulationMode.HYBRID:
-        return _eval_hybrid(leaf_state, root_state, config)
-    elif config.simulation_mode == SimulationMode.RANDOM:
-        return _eval_random_rollout(leaf_state, config)
-
-    return cutoff_score
+    return _eval_random_rollout(leaf_state, config, max_depth=config.rollout_depth)
 
 
 def normalize_score(raw_score: float, scale: float = 15.0) -> float:
@@ -71,94 +68,56 @@ def normalize_score(raw_score: float, scale: float = 15.0) -> float:
 
 def _get_terminal_reward(state: 'GameState') -> Optional[float]:
     """Check for terminal state and return reward. None = not terminal."""
-    my_hp = state.hero.hp
-    opp_hp = state.opponent.hero.hp
-
-    if opp_hp <= 0:
+    if state.opponent.hero.hp <= 0:
         return 1.0
-    if my_hp <= 0:
+    if state.hero.hp <= 0:
         return -1.0
     return None
 
 
-def _eval_cross_turn_rollout(
-    leaf_state: 'GameState',
-    root_state: GameState,
-    config: MCTSConfig,
-    rollout_turns: int = 2,
-) -> float:
-    """Evaluate by doing greedy rollouts for N turns, then static eval.
+def _weighted_choice(actions: list) -> 'Action':
+    """Pick a random action weighted by type priority.
 
-    Used when the MCTS tree has reached its turn-depth limit.
-    Each rollout turn: our greedy play -> opponent greedy response -> next turn.
+    Card plays and location activations get 4-5x weight vs END_TURN (1x).
+    This prevents rollouts from prematurely ending turns.
     """
-    from analysis.search.mcts.turn_advance import advance_full_turn
+    if len(actions) == 1:
+        return actions[0]
 
-    s = leaf_state
-    for _ in range(rollout_turns):
-        if s.hero.hp <= 0:
-            return -1.0
-        if s.opponent.hero.hp <= 0:
-            return 1.0
+    weights = [_ROLLOUT_WEIGHTS.get(a.action_type.name, 1) for a in actions]
 
-        s = advance_full_turn(s, greedy_opponent=True)
+    # Fast path: if there are non-END_TURN actions, exclude END_TURN entirely
+    # unless it's the only option. This forces the rollout to actually play cards.
+    non_end = [(a, w) for a, w in zip(actions, weights) if a.action_type.name != "END_TURN"]
+    if non_end:
+        actions, weights = zip(*non_end)
+        actions, weights = list(actions), list(weights)
 
-    if s.hero.hp <= 0:
-        return -1.0
-    if s.opponent.hero.hp <= 0:
-        return 1.0
+    total = sum(weights)
+    if total <= 0:
+        return random.choice(actions)
 
-    from analysis.evaluators.composite import evaluate_delta
-    raw = evaluate_delta(root_state, s)
-    return normalize_score(raw, config.eval_normalization_scale)
-
-
-def _eval_cutoff(
-    leaf_state: 'GameState',
-    root_state: 'GameState',
-    config: MCTSConfig,
-) -> float:
-    """Evaluation cutoff: directly evaluate the leaf state."""
-    from analysis.evaluators.composite import evaluate_delta
-    raw = evaluate_delta(root_state, leaf_state)
-    return normalize_score(raw, config.eval_normalization_scale)
-
-
-def _eval_hybrid(
-    leaf_state: 'GameState',
-    root_state: 'GameState',
-    config: MCTSConfig,
-) -> float:
-    """Hybrid: short random rollout (1-2 steps) + eval cutoff."""
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
-    from analysis.search.abilities.simulation import apply_action
-
-    current = leaf_state
-    for _ in range(config.rollout_depth):
-        actions = enumerate_legal_actions(current)
-        if not actions:
-            break
-
-        filtered = _filter_rollout_actions(actions, current)
-        if not filtered:
-            filtered = actions
-
-        action = random.choice(filtered)
-        current = apply_action(current, action)
-
-        terminal = _get_terminal_reward(current)
-        if terminal is not None:
-            return terminal
-
-    return _eval_cutoff(current, root_state, config)
+    r = random.random() * total
+    cumulative = 0
+    for action, w in zip(actions, weights):
+        cumulative += w
+        if r <= cumulative:
+            return action
+    return actions[-1]
 
 
 def _eval_random_rollout(
     state: 'GameState',
     config: MCTSConfig,
-    max_depth: int = 3,
+    max_depth: int = 10,
 ) -> float:
-    """Full random rollout (baseline)."""
+    """Rollout: play out the current turn until mana exhausted or no useful actions.
+
+    Skips END_TURN — the rollout simulates spending all available resources,
+    then evaluates the resulting board state. This matches the Hearthstone
+    principle: play all affordable cards unless saving for a better turn.
+    """
+    from analysis.search.abilities.actions import ActionType
     from analysis.search.abilities.enumeration import enumerate_legal_actions
     from analysis.search.abilities.simulation import apply_action
 
@@ -172,7 +131,12 @@ def _eval_random_rollout(
         if not actions:
             break
 
-        action = random.choice(actions)
+        # Filter out END_TURN — we want to play out the full turn
+        useful = [a for a in actions if a.action_type != ActionType.END_TURN]
+        if not useful:
+            break  # only END_TURN left = turn naturally exhausted
+
+        action = _weighted_choice(useful)
         current = apply_action(current, action)
 
     terminal = _get_terminal_reward(current)
@@ -182,16 +146,3 @@ def _eval_random_rollout(
     from analysis.evaluators.composite import evaluate
     raw = evaluate(current)
     return normalize_score(raw, config.eval_normalization_scale)
-
-
-def _filter_rollout_actions(actions: list, state: 'GameState') -> list:
-    """Quick filter for rollout: remove obviously bad actions."""
-    from analysis.search.abilities.actions import ActionType
-
-    filtered = []
-    for action in actions:
-        if action.action_type == ActionType.PLAY_WITH_TARGET:
-            if action.target_index == 0:
-                continue
-        filtered.append(action)
-    return filtered

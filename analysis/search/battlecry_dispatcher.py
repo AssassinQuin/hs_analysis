@@ -77,7 +77,7 @@ class BattlecryDispatcher:
     """
 
     def dispatch(self, state: GameState, card: Card, minion: Minion) -> GameState:
-        card_text = getattr(card, 'text', '') or ''
+        card_text = getattr(card, 'text', '') or getattr(card, 'english_text', '') or ''
         if not card_text:
             return state
 
@@ -276,6 +276,15 @@ class BattlecryDispatcher:
                 target_idx = self._pick_destroy_target(s)
                 if target_idx is not None:
                     _silence_minion(s.opponent.board[target_idx])
+
+        # Combo cost reduction: "Your next Combo card costs (N) less this turn"
+        # 狐人老千: "你的下一张连击牌法力值消耗减少（2）点"
+        combo_less_match = re.search(
+            r'(?:Combo card costs|连击牌.*?消耗减少).*?(\d+)', bc_text
+        )
+        if combo_less_match:
+            discount = int(combo_less_match.group(1))
+            s.mana.add_modifier('combo_discount', discount, 'next_combo_card')
 
         if _DISCOVER_EN.search(bc_text) or '发现' in bc_text:
             try:

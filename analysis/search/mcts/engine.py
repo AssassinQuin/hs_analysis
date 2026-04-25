@@ -196,19 +196,45 @@ class MCTSEngine:
         root: MCTSNode,
         root_state: GameState,
     ) -> List[Action]:
-        """Extract the best action sequence by following highest-visit children.
+        """Extract the best action sequence by following highest-Q children.
 
-        Follows root -> best_child -> best_grandchild -> ... until END_TURN
-        or no more children.  This naturally produces the full turn sequence
-        that MCTS discovered through simulation.
+        Uses robust_best_child_key (highest Q-value among well-visited
+        children) instead of most-visited, so END_TURN never wins over
+        high-value card plays.
+
+        At each step, validates the chosen action is still legal in the
+        current state (tree may cache children from earlier game states).
         """
+        from analysis.search.abilities.enumeration import enumerate_legal_actions
+
         actions: List[Action] = []
         node = root
         state = root_state
-        max_steps = 20
+        max_steps = 15
 
         for _ in range(max_steps):
-            best_ak = node.best_child_key
+            if not node.children:
+                break
+
+            # Build set of currently legal action keys for validation
+            legal = enumerate_legal_actions(state)
+            legal_keys = {action_key(a) for a in legal}
+
+            # Pick best child whose action is still legal
+            best_ak = None
+            # Sort children by Q-value descending, pick first legal one
+            candidates = sorted(
+                node.children.items(),
+                key=lambda kv: kv[1].q_value,
+                reverse=True,
+            )
+            for ak, child in candidates:
+                if child.visit_count < 3:
+                    continue
+                if ak in legal_keys:
+                    best_ak = ak
+                    break
+
             if best_ak is None:
                 break
 
@@ -221,6 +247,10 @@ class MCTSEngine:
 
             if action.action_type == ActionType.END_TURN:
                 break
+
+            # Advance state to validate next step
+            from analysis.search.abilities.simulation import apply_action
+            state = apply_action(state, action)
 
             child = node.children.get(best_ak)
             if child is None:

@@ -326,11 +326,15 @@ class Expander:
                 # Prefer high tempo plays
                 score += (atk + hp - cost) * 0.3
 
+
         elif action.action_type == ActionType.HERO_POWER:
-            score += 0.5  # hero power is usually decent
+            score += 0.3  # hero power worth considering but lower priority
+
+        elif action.action_type == ActionType.ACTIVATE_LOCATION:
+            score += 1.0  # location activations are strong tempo
 
         elif action.action_type == ActionType.END_TURN:
-            score -= 1.0  # deprioritise end turn
+            score -= 3.0  # strongly deprioritise end turn
 
         return score
 

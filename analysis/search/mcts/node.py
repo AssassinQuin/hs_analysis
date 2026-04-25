@@ -105,6 +105,23 @@ class MCTSNode:
         return max(self.children.keys(),
                    key=lambda k: self.children[k].visit_count)
 
+    @property
+    def robust_best_child_key(self) -> Optional[tuple]:
+        """Key of child with highest Q-value among well-visited children.
+
+        Requires at least 5 visits for reliability. Falls back to
+        highest visit count if no child meets the threshold.
+        """
+        if not self.children:
+            return None
+        min_visits = 5
+        candidates = {k: c for k, c in self.children.items()
+                      if c.visit_count >= min_visits}
+        if not candidates:
+            return self.best_child_key
+        return max(candidates.keys(),
+                   key=lambda k: candidates[k].q_value)
+
     # ── Methods ─────────────────────────────────────────
 
     def get_untried_actions(

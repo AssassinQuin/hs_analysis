@@ -34,7 +34,12 @@ class ActionPruner:
         self.enable_sim = enable_sim
 
     def filter(self, actions: List[Action], state: 'GameState') -> List[Action]:
-        """Filter actions for the tree phase (lenient)."""
+        """Filter actions for the tree phase (lenient).
+
+        After pruning, deduplicate identical card plays so the tree
+        does not waste iterations exploring functionally equivalent
+        branches (e.g., two copies of the same card in hand).
+        """
         if not self.enable_tree:
             return list(actions)
 
@@ -42,7 +47,7 @@ class ActionPruner:
         for action in actions:
             if not self._should_prune_tree(action, state):
                 filtered.append(action)
-        return filtered
+        return self._deduplicate_cards(filtered, state)
 
     def filter_simulate(self, actions: List[Action], state: 'GameState') -> List[Action]:
         """Filter actions for the simulation phase (strict)."""
@@ -196,3 +201,49 @@ class ActionPruner:
             if any(kw in text for kw in ('对友方', '对所有友方', 'destroy your own')):
                 return True
         return False
+
+    # ------------------------------------------------------------------
+    # Deduplication
+    # ------------------------------------------------------------------
+
+    def _deduplicate_cards(
+        self, actions: List[Action], state: 'GameState'
+    ) -> List[Action]:
+        """Merge PLAY/PLAY_WITH_TARGET actions for identical cards.
+
+        When the hand contains multiple copies of the same card (same
+        card_id, cost, type), only the first index is kept.  This prevents
+        the MCTS tree from spawning N identical branches and wasting
+        iterations exploring all permutations.
+
+        For example, 5 identical Fel spells at indices 0-4 produce 5
+        separate PLAY actions.  After dedup, only one remains — the tree
+        explores 5× deeper instead of 5× wider.
+        """
+        seen: Set[tuple] = set()
+        deduped: List[Action] = []
+
+        for action in actions:
+            if action.action_type not in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
+                deduped.append(action)
+                continue
+
+            card_idx = action.card_index
+            if card_idx < 0 or card_idx >= len(state.hand):
+                deduped.append(action)
+                continue
+
+            card = state.hand[card_idx]
+            card_id = getattr(card, 'card_id', '') or ''
+            card_type = getattr(card, 'card_type', '') or ''
+            cost = getattr(card, 'cost', -1)
+
+            # Dedup key: card identity + play context (position, target)
+            # NOT card_index — that's the variable we're collapsing
+            key = (card_id, card_type, cost, action.position, action.target_index)
+
+            if key not in seen:
+                seen.add(key)
+                deduped.append(action)
+
+        return deduped
