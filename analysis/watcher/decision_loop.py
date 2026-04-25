@@ -95,7 +95,11 @@ class DecisionPresenter:
         # Opponent
         opp_hero = opp.hero
         opp_board = opp.board
-        opp_parts = [f"对手英雄: {opp_hero.hp}HP"]
+        opp_class = getattr(opp_hero, "hero_class", "") or ""
+        if opp_class and opp_class != "UNKNOWN":
+            opp_parts = [f"对手[{opp_class}]: {opp_hero.hp}HP"]
+        else:
+            opp_parts = [f"对手英雄: {opp_hero.hp}HP"]
         if getattr(opp_hero, "armor", 0):
             opp_parts[0] += f"/{opp_hero.armor}A"
         opp_parts.append(f"手牌: {opp.hand_count}")
@@ -192,28 +196,9 @@ class DecisionPresenter:
                         f"depth={entry.get('depth', '?')}"
                     )
 
-        # RHEA-specific output (when no MCTS stats)
-        if result.mcts_stats is None:
-            if result.timings:
-                self._line()
-                parts = []
-                for key, label in [
-                    ("utp", "utp"),
-                    ("rhea", "rhea"),
-                    ("phase_b", "phaseB"),
-                    ("opp_sim", "oppSim"),
-                    ("cross_turn", "crossTurn"),
-                ]:
-                    v = result.timings.get(key, 0)
-                    if v:
-                        parts.append(f"{label}={v:.1f}ms")
-                if parts:
-                    self._line(f"[Timing] {', '.join(parts)}")
-            self._line(
-                f"[RHEA] conf={result.confidence:.2f}  "
-                f"div={result.population_diversity:.2f}  "
-                f"gens={result.generations_run}"
-            )
+        # RHEA-specific output — [DISABLED] only MCTS is active
+        # if result.mcts_stats is None:
+        #     ... (RHEA timing breakdown removed)
 
         self.output.write("└──────────────────────────────────────\n")
 
@@ -235,7 +220,7 @@ class DecisionLoop:
         self,
         log_path: str | Path,
         *,
-        engine: str = "rhea",
+        engine: str = "mcts",
         engine_params: Optional[dict] = None,
         poll_interval: float = 0.05,
         on_decision: Optional[Callable] = None,
@@ -248,8 +233,8 @@ class DecisionLoop:
         """
         Args:
             log_path: Path to Hearthstone Power.log
-            engine: Search engine to use ("rhea" or "mcts").
-            engine_params: Override engine params (pop_size, max_gens, time_limit, etc.)
+            engine: Search engine to use (only "mcts" is active).
+            engine_params: Override engine params (time_budget_ms, num_worlds, etc.)
             poll_interval: File polling interval in seconds (default 50ms)
             on_decision: Callback(search_result, game_state) after each decision
             output: Where to print decisions
@@ -261,10 +246,11 @@ class DecisionLoop:
         self.log_path = Path(log_path)
         self._engine_name = engine
         self.engine_params = engine_params or {
-            "pop_size": 30,
-            "max_gens": 80,
-            "max_chromosome_length": 8,
-            "cross_turn": True,
+            "time_budget_ms": 8000.0,
+            "num_worlds": 7,
+            "uct_constant": 0.5,
+            "time_decay_gamma": 0.6,
+            "max_actions_per_turn": 10,
         }
         self._engine_factory = create_engine(self._engine_name, self.engine_params)
         self.poll_interval = poll_interval
@@ -283,6 +269,16 @@ class DecisionLoop:
         self._last_decision_signature: tuple | None = None
         self._last_replan_at = 0.0
         self._replan_cooldown_s = float(self.engine_params.get("replan_cooldown_s", 0.8))
+
+        # Deck hot-reloader: watches deck_codes.txt for mid-game changes
+        self._deck_reloader = None
+        deck_codes_path = Path(log_path).parent.parent / "deck_codes.txt"
+        if not deck_codes_path.exists():
+            deck_codes_path = Path(__file__).resolve().parents[2] / "deck_codes.txt"
+        if deck_codes_path.exists():
+            from analysis.watcher.deck_hot_reloader import DeckHotReloader
+            self._deck_reloader = DeckHotReloader(deck_codes_path)
+            log.info(f"Deck hot-reloader watching: {deck_codes_path}")
 
     @staticmethod
     def _latest_unfinished_game_lines(lines: list[str]) -> list[str]:
@@ -341,6 +337,10 @@ class DecisionLoop:
 
     def _on_line(self, line: str) -> None:
         """Process a single new line from the log."""
+        # Periodic deck hot-reload check (non-blocking, rate-limited)
+        if self._deck_reloader is not None:
+            self._deck_reloader.check_and_reload()
+
         event = self._tracker.feed_line(line)
         if event is None:
             return
@@ -407,10 +407,38 @@ class DecisionLoop:
         game = self._tracker.export_entities()
         if game is None:
             return None
-        state = self._bridge.convert(game, player_index=0)
+        player_index = self._detect_friendly_idx(game)
+        state = self._bridge.convert(game, player_index=player_index)
         if state.turn_number == 0:
             return None
         return state
+
+    @staticmethod
+    def _detect_friendly_idx(game) -> int:
+        """Detect which player index is the friendly (logging) player.
+
+        The logging player's hand cards have visible card_id (from SHOW_ENTITY
+        during mulligan), while the opponent's hand cards are always hidden.
+
+        Returns:
+            0 or 1
+        """
+        from hearthstone.enums import GameTag as HGameTag, Zone as HZone
+
+        if not hasattr(game, 'players') or len(game.players) < 2:
+            return 0
+
+        visible = []
+        for p in game.players:
+            count = sum(
+                1 for e in getattr(p, 'entities', [])
+                if getattr(e, 'card_id', '') and
+                   getattr(e, 'tags', {}).get(HGameTag.ZONE) == HZone.HAND
+            )
+            visible.append(count)
+
+        # The player with more visible hand cards is the friendly player
+        return 1 if visible[1] > visible[0] else 0
 
     def _maybe_replan_on_action(self) -> None:
         """Replan during our action phase when board/hand state changes."""
@@ -505,7 +533,7 @@ class DecisionLoop:
                         last_turn = current_turn
                         continue
 
-                    state = bridge.convert(game, player_index=0)
+                    state = bridge.convert(game, player_index=cls._detect_friendly_idx(game))
                     if state.turn_number == 0:
                         last_turn = current_turn
                         continue

@@ -84,6 +84,12 @@ class GlobalTracker:
     # 已知的硬币卡牌ID
     COIN_CARD_IDS = {"GAME_005", "TB_BlingBrawl_Coin", "NEW1_008t"}
 
+    # Standard deck rules: max copies per rarity
+    _MAX_COPIES = {
+        'COMMON': 2, 'RARE': 2, 'EPIC': 2,
+        'LEGENDARY': 1, 'FREE': 2,
+    }
+
     def __init__(self, our_controller: int = 0, opp_controller: int = 0):
         self.state = GlobalGameState()
         self.our_controller = our_controller
@@ -93,6 +99,9 @@ class GlobalTracker:
         self._entity_birth: Dict[int, _EntityBirth] = {}
         # 卡牌数据库引用，用于种族/学派查询（延迟加载）
         self._card_db = None
+
+        # 对手打出的每张牌的次数追踪（用于检测衍生牌）
+        self._opp_card_play_count = {}  # card_id → count
 
         # 贝叶斯对手模型（延迟初始化）
         self._bayesian_model = None
@@ -131,6 +140,7 @@ class GlobalTracker:
         self._bayesian_model = None
         self._bayesian_initialized = False
         self._secret_model = None
+        self._opp_card_play_count.clear()
 
     # ---------------------------------------------------------------
     # 延迟加载卡牌数据库
@@ -213,6 +223,9 @@ class GlobalTracker:
             if zone == self.ZONE_PLAY and card_type not in (self.CT_ENCHANTMENT,):
                 # 跳过附魔（type 6）— 它们是增益效果，不是打出的卡牌
                 self._on_card_played(entity_id, controller, card_id, card_type)
+                # 检测洗入牌库的牌被打出 → 标记为 GENERATED
+                if card_id and card_id in self.state.opp_shuffled_into_deck:
+                    self._mark_shuffled_card_played(card_id)
             elif zone == self.ZONE_SECRET:
                 self.state.opp_secrets.append(card_id)
                 self._on_card_played(entity_id, controller, card_id, card_type)
@@ -222,10 +235,34 @@ class GlobalTracker:
                     self._secret_model.exclude(card_id)
 
             # 为对手揭示到PLAY/SECRET的卡牌喂入贝叶斯模型
+            # 检测衍生牌：来源为GENERATED 或 超过标准牌库张数限制
             if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id:
+                card_source = self._classify_source(entity_id, card_id)
+                is_generated = (card_source == CardSource.GENERATED 
+                               or self._is_over_copy_limit(card_id))
                 if not self._bayesian_initialized:
                     self._init_bayesian_model(self.state.opp_hero_class)
-                self.feed_bayesian_update(card_id)
+                if is_generated:
+                    # 衍生牌：记录但不更新后验
+                    self.feed_bayesian_generated_update(card_id)
+                else:
+                    # 牌库牌：正常更新后验
+                    self.feed_bayesian_update(card_id)
+
+            # 为对手揭示到HAND的卡牌喂入贝叶斯模型 (Tracking/发现效果/Mulligan)
+            # 同样需要区分来源和张数限制
+            if zone == self.ZONE_HAND and card_id:
+                card_source = self._classify_source(entity_id, card_id)
+                is_generated = (card_source == CardSource.GENERATED
+                               or self._is_over_copy_limit(card_id))
+                if not self._bayesian_initialized:
+                    self._init_bayesian_model(self.state.opp_hero_class)
+                if is_generated:
+                    self.feed_bayesian_generated_update(card_id)
+                else:
+                    self.feed_bayesian_hand_update(card_id)
+                # 记录已知手牌（无论来源，用于 Determinizer 采样）
+                self._record_known_hand_card(card_id)
 
         if entity_id in self._entity_birth:
             self._entity_birth[entity_id].card_id = card_id
@@ -367,8 +404,13 @@ class GlobalTracker:
         if is_opp:
             self.state.cards_played_this_turn_opp.append(card_id)
             self.state.opp_known_cards.append(known)
-            if source == CardSource.GENERATED:
+            # 追踪打出次数（用于检测超过牌库限制的衍生牌）
+            self._opp_card_play_count[card_id] = self._opp_card_play_count.get(card_id, 0) + 1
+            if source == CardSource.GENERATED or self._is_over_copy_limit(card_id):
                 self.state.opp_generated_seen.add(card_id)
+                # Override source to GENERATED if over copy limit
+                if source != CardSource.GENERATED:
+                    known.source = CardSource.GENERATED
         else:
             self.state.cards_played_this_turn_player.append(card_id)
             self.state.player_cards_played_history.append(card_id)
@@ -405,6 +447,47 @@ class GlobalTracker:
                 return CardSource.DECK
 
         return CardSource.UNKNOWN
+
+    def _mark_shuffled_card_played(self, card_id: str):
+        """Mark a shuffled card as played — it was generated, not from original deck.
+        
+        Removes the card from shuffled tracking and ensures it's in
+        the generated set so it doesn't affect deck inference.
+        """
+        self.state.opp_generated_seen.add(card_id)
+        # Remove from shuffled list (it's been played)
+        if card_id in self.state.opp_shuffled_into_deck:
+            self.state.opp_shuffled_into_deck.remove(card_id)
+        # Remove from known shuffled cards
+        self.state.opp_shuffled_known_cards.pop(card_id, None)
+        
+        log.debug(
+            "Shuffled card played (marked GENERATED): %s",
+            card_id,
+        )
+
+    def _is_over_copy_limit(self, card_id: str) -> bool:
+        """检查对手是否打出了超过标准牌库限制的同一张牌。
+        
+        Standard rules: max 2 copies (common/rare/epic), 1 copy (legendary).
+        If opponent plays a 3rd+ copy, it must be GENERATED.
+        
+        Args:
+            card_id: Hearthstone card_id string
+            
+        Returns:
+            True if this card has been played more times than a deck allows.
+        """
+        count = self._opp_card_play_count.get(card_id, 0)
+        if count == 0:
+            return False
+        
+        # Check rarity from card metadata
+        meta = self._card_metadata(card_id) if card_id else {}
+        rarity = meta.get('rarity', 'COMMON').upper()
+        max_copies = self._MAX_COPIES.get(rarity, 2)
+        
+        return count >= max_copies
 
     def _card_type_name(self, card_type: int) -> str:
         """将数字卡牌类型转换为字符串"""
@@ -708,6 +791,55 @@ class GlobalTracker:
         dbf = db.card_id_to_dbf(card_id)
         if dbf is not None:
             self._bayesian_model.update(dbf)
+
+    def feed_bayesian_hand_update(self, card_id: str):
+        """Update Bayesian model from a card seen in opponent's hand.
+
+        Uses lower confidence than play observations.
+
+        Args:
+            card_id: Hearthstone card_id string (e.g. "EX1_001")
+        """
+        if self._bayesian_model is None:
+            return
+        db = self._ensure_card_db()
+        dbf = db.card_id_to_dbf(card_id)
+        if dbf is not None:
+            self._bayesian_model.update_from_hand(dbf)
+
+    def feed_bayesian_generated_update(self, card_id: str):
+        """Record a GENERATED-source card observation in Bayesian model.
+        
+        Generated cards (discover, create, shuffle effects) do NOT
+        indicate deck composition. We record them for exclusion but
+        do NOT update posteriors.
+        
+        Args:
+            card_id: Hearthstone card_id string
+        """
+        if self._bayesian_model is None:
+            return
+        db = self._ensure_card_db()
+        dbf = db.card_id_to_dbf(card_id)
+        if dbf is not None:
+            self._bayesian_model.update_generated(dbf)
+    
+    def _record_known_hand_card(self, card_id: str):
+        """Record a card definitively seen in opponent's hand.
+        
+        Called when a card is revealed in HAND zone (Tracking,
+        Discover, card text effects). These cards are known-certain
+        for hand sampling.
+        
+        Args:
+            card_id: Hearthstone card_id string
+        """
+        if self._bayesian_model is None:
+            return
+        db = self._ensure_card_db()
+        dbf = db.card_id_to_dbf(card_id)
+        if dbf is not None:
+            self._bayesian_model.record_known_hand_card(dbf, self.state.current_turn)
 
     def get_bayesian_state(self) -> Dict:
         """Get current Bayesian inference state.

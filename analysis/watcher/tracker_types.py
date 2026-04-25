@@ -200,6 +200,12 @@ class GlobalGameState:
     # ---- 洗入牌库追踪 ----
     opp_shuffled_into_deck: List[str] = field(default_factory=list)
     """对手洗入牌库的已知 card_id（如爆牌鱼、污染等效果）"""
+    
+    opp_shuffled_known_cards: Dict[str, bool] = field(default_factory=dict)
+    """对手洗入的已知卡牌: card_id → 是否已知 (True=已知是什么牌, False=未知)"""
+    
+    opp_shuffled_card_sources: Dict[int, str] = field(default_factory=dict)
+    """洗入牌的来源追踪: entity_id → source_card_id (是谁衍生的)"""
 
     player_shuffled_into_deck: List[str] = field(default_factory=list)
     """我方洗入牌库的已知 card_id"""

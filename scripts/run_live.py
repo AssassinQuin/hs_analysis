@@ -104,25 +104,18 @@ def main():
         action="store_true",
         help="详细输出",
     )
-    parser.add_argument(
-        "--pop-size", type=int, default=None,
-        help="RHEA 种群大小 (default: from cfg or 30)",
-    )
-    parser.add_argument(
-        "--gens", type=int, default=None,
-        help="RHEA 最大迭代 (default: from cfg or 80)",
-    )
-    parser.add_argument(
-        "--time-limit", type=float, default=None,
-        help="RHEA 时间预算 ms (default: from cfg or 300)",
-    )
+    # [DISABLED] RHEA CLI args — only MCTS is active
+    # parser.add_argument("--pop-size", ...)
+    # parser.add_argument("--gens", ...)
+    # parser.add_argument("--time-limit", ...)
     parser.add_argument(
         "--poll-interval", type=float, default=None,
         help="文件轮询间隔秒 (default: from cfg or 0.05)",
     )
+    # engine flag kept for backward compat, always resolves to mcts
     parser.add_argument(
-        "--engine", choices=["rhea", "mcts"], default="rhea",
-        help="搜索引擎 (default: rhea)",
+        "--engine", choices=["rhea", "mcts"], default="mcts",
+        help="搜索引擎 (default: mcts, rhea is disabled)",
     )
 
     args = parser.parse_args()
@@ -145,18 +138,6 @@ def main():
     if poll_interval is None:
         poll_interval = cp.getfloat("log", "poll_interval", fallback=0.05) if cfg_loaded else 0.05
 
-    pop_size = args.pop_size
-    if pop_size is None:
-        pop_size = cp.getint("engine", "pop_size", fallback=30) if cfg_loaded else 30
-
-    max_gens = args.gens
-    if max_gens is None:
-        max_gens = cp.getint("engine", "max_gens", fallback=80) if cfg_loaded else 80
-
-    time_limit = args.time_limit
-    if time_limit is None:
-        time_limit = cp.getfloat("engine", "time_limit", fallback=300.0) if cfg_loaded else 300.0
-
     level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(
         level=level,
@@ -166,24 +147,15 @@ def main():
 
     from analysis.watcher.decision_loop import DecisionLoop
 
+    # Always MCTS — RHEA params no longer read from cfg
     engine_params = {
-        "pop_size": pop_size,
-        "max_gens": max_gens,
-        "time_limit": time_limit,
-        "max_chromosome_length": cp.getint("engine", "max_chromosome_length", fallback=8) if cfg_loaded else 8,
-        "cross_turn": cp.getboolean("engine", "cross_turn", fallback=True) if cfg_loaded else True,
+        "time_budget_ms": cp.getfloat("engine", "time_budget_ms", fallback=8000.0) if cfg_loaded else 8000.0,
+        "num_worlds": cp.getint("engine", "num_worlds", fallback=7) if cfg_loaded else 7,
+        "uct_constant": cp.getfloat("engine", "uct_constant", fallback=0.5) if cfg_loaded else 0.5,
+        "time_decay_gamma": cp.getfloat("engine", "time_decay_gamma", fallback=0.6) if cfg_loaded else 0.6,
+        "min_step_budget_ms": cp.getfloat("engine", "min_step_budget_ms", fallback=300.0) if cfg_loaded else 300.0,
+        "max_actions_per_turn": cp.getint("engine", "max_actions_per_turn", fallback=10) if cfg_loaded else 10,
     }
-
-    # Merge MCTS-specific config when engine is mcts
-    if args.engine == "mcts":
-        engine_params.update({
-            "time_budget_ms": cp.getfloat("engine", "time_budget_ms", fallback=8000.0) if cfg_loaded else 8000.0,
-            "num_worlds": cp.getint("engine", "num_worlds", fallback=7) if cfg_loaded else 7,
-            "uct_constant": cp.getfloat("engine", "uct_constant", fallback=0.5) if cfg_loaded else 0.5,
-            "time_decay_gamma": cp.getfloat("engine", "time_decay_gamma", fallback=0.6) if cfg_loaded else 0.6,
-            "min_step_budget_ms": cp.getfloat("engine", "min_step_budget_ms", fallback=300.0) if cfg_loaded else 300.0,
-            "max_actions_per_turn": cp.getint("engine", "max_actions_per_turn", fallback=10) if cfg_loaded else 10,
-        })
 
     # Output settings from cfg
     show_board = cp.getboolean("output", "show_board", fallback=True) if cfg_loaded else True
@@ -211,13 +183,12 @@ def main():
             sys.exit(1)
 
         engine_label = args.engine.upper()
-        mcts_info = ""
-        if args.engine == "mcts":
-            mcts_info = (f", worlds={engine_params.get('num_worlds', 7)}, "
-                         f"uct_c={engine_params.get('uct_constant', 0.5)}, "
-                         f"gamma={engine_params.get('time_decay_gamma', 0.6)}")
+        mcts_info = (f"worlds={engine_params.get('num_worlds', 7)}, "
+                     f"uct_c={engine_params.get('uct_constant', 0.5)}, "
+                     f"gamma={engine_params.get('time_decay_gamma', 0.6)}, "
+                     f"budget={engine_params.get('time_budget_ms', 8000)}ms")
         print(f"监听 Power.log: {log_path}")
-        print(f"{engine_label} 参数: pop={pop_size}, gens={max_gens}, budget={time_limit}ms{mcts_info}")
+        print(f"MCTS 参数: {mcts_info}")
         if cfg_loaded:
             print(f"使用配置: {cfg_path}")
         print("按 Ctrl+C 停止\n")

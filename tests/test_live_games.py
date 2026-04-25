@@ -398,12 +398,16 @@ class TestDecisionPresenter:
             pass
 
         raw = MockResult()
-        raw.best_chromosome = [
+        # MCTS-style fields (now the only path)
+        raw.best_sequence = [
             Action(action_type=ActionType.PLAY, card_index=0),
             Action(action_type=ActionType.END_TURN),
         ]
-        raw.best_fitness = 1.5
+        raw.fitness = 1.5
+        raw.best_chromosome = raw.best_sequence  # backward compat
+        raw.best_fitness = raw.fitness
         raw.alternatives = []
+        raw.action_stats = []
         raw.confidence = 0.8
         raw.population_diversity = 0.3
         raw.generations_run = 5
@@ -552,15 +556,15 @@ class TestDecisionPresenter:
         text = output.getvalue()
         assert "[场面]" not in text, f"Output should NOT contain [场面] when disabled, got:\n{text}"
 
-    def test_output_contains_rhea_stats(self):
-        """With RHEA result (no mcts_stats), output should contain [RHEA] section."""
+    def test_output_no_rhea_stats(self):
+        """RHEA output section is disabled — should NOT contain [RHEA]."""
         output = StringIO()
         presenter = DecisionPresenter(output=output, show_board=True)
         result = self._make_mock_result(has_mcts_stats=False)
         state = self._make_mock_state()
         presenter.present(result, state, 100.0)
         text = output.getvalue()
-        assert "[RHEA]" in text, f"Output should contain [RHEA], got:\n{text}"
+        assert "[RHEA]" not in text, f"[RHEA] section should be disabled, got:\n{text}"
 
     def test_output_turn_number(self):
         """Output header should contain the turn number."""

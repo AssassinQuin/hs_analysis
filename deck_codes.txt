@@ -1,50 +1,85 @@
+# deck_codes.txt — 对手卡组代码库
+#
+# 格式说明:
+#   1. 注释行以 # 开头
+#   2. 在卡组代码前可用注释指定名称和类型:
+#      # name: 卡组名称 | arch: aggro/control/midrange/tempo/combo
+#   3. 未标注的卡组将自动根据费用曲线分类
+#   4. 对局中修改此文件会自动热更新（无需重启）
+#
+# 支持热更新：对局中可随时添加/修改卡组，保存后自动生效
+
+# name: Aggro Paladin | arch: aggro
 AAECAZ8FBM/+BrqWB8avB+XBBw2WoATJoATTngbUngbI/wb1gQeFlQfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
 
+# name: Control Warrior | arch: control
 AAECAQcCi6AE+cMHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
 
+# name: Control Warrior V2 | arch: control
 AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
 
+# name: Control Warrior V3 | arch: control
 AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB4S9B7XAB5XCB5vCB5zCBwAA
 
+# name: Aggro Paladin V2 | arch: aggro
 AAECAZ8FAvGbB8avBw6roATJoATTngbUngbP/gb1gQeFlQe6lgfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
 
+# name: Midrange Shaman
 AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
 
+# name: Tempo Demon Hunter
 AAECAea5AwSKqgeSqgeTqgensQcN4fgF3v8G/oMHqocHtpcH550HnrEHobEHv7EHwLEH6LEHkr8Hlb8HAAA=
 
+# name: Tempo Demon Hunter V2
 AAECAea5AwaKqgeSqgeTqgensQfosQeUvwcM4fgF3v8G/oMHqocHtJcHtpcH550HnrEHobEHwLEHkr8Hlb8HAAA=
 
+# name: Tempo Demon Hunter V3
 AAECAea5AwjsoAS0lweKqgeSqgeTqgensQfosQeUvwcL4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEHkr8Hlb8HAAA=
 
+# name: Face Hunter | arch: aggro
 AAECAR8EmacHmqcHm6cHxbEHDamfBKqfBNOeBq+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
 
+# name: Ramp Druid | arch: midrange
 AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nweqrwfXwAfYwAfbwAfswAf2wQcAAA==
 
+# name: Token Druid
 AAECAZICCqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LABwqunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAeT8QcAAA==
 
+# name: Token Druid V2
 AAECAZICDKn1BqGBB5KDB8ODB6+HB6yIB4KYB+ixB7iyB+DAB+LAB4/BBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
 
+# name: Miracle Rogue | arch: combo
 AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwn3nwT3gQeQgweMrQfHrgfZrweaswedxQfVxQcAAA==
 
+# name: Miracle Rogue V2 | arch: combo
 AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB8euB9C/B4rUB5vUB4jZBwn3nwT3gQeQgweMrQfZrweaswe0wQedxQfVxQcAAA==
 
+# name: Zoo Warlock | arch: aggro
 AAECAf0EBO/8BqebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
 
+# name: Rogue Tempo
 AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwTBlweMrQfZrwe0wQfAwQedxQfVxQfD8gcAAA==
 
+# name: Rogue Midrange
 AAECAaIHCs2eBs6eBoaoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwr3nwTTngac+wb3gQeMrQfZrweaswe6swedxQfVxQcAAA==
 
-
+# name: Zoo Warlock V2 | arch: aggro
 AAECAf0EBMODB6ebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
 
+# name: Control Death Knight | arch: control
 AAECAfHhBAyH9gS1+gaSgwfDgweDigeCmAf0qgeosQfisQfQvwfqyQeb1AcJ2OUGgf0Gl4IHupUHn54HkasHj74HmsUH0MUHAAA=
 
+# name: Reno Warlock | arch: control
 AAECAf0GBMSeBvWYB+ybB9edBw2PnwSRoATnoATrhAepiAeEmQfenQfgnQfhnQeTvgfXvgfYvgfgvgcAAA==
 
+# name: Priest Midrange
 AAECAa0GBqiWB/ypB4CqB4SqB+SyB4O/BwzwnwTLoASg+wbD/waFhge2lAedrQeFvwebvweixAeyxQeW/AcAAA==
 
+# name: Control Death Knight V2 | arch: control
 AAECAfHhBAqH9gTDgweCmAfSrgeosQfisQfQvwfqyQeb1AfO6gcK2OUGgf0Gl4IHupUH0JsHn54HkasHjr8HmsUH0MUHAAA=
 
+# name: Highlander Priest | arch: control
 AAECAa0GDPCfBMP/BsODB4OKB8WUB6iWB/ypB4CqB4SqB+SyB4O/B5a/BwnLoASg+waFhgedrQeFvwebvweixAeyxQeW/AcAAA==
 
+# name: Zoo Warlock V3 | arch: aggro
 AAECAf0EBO/8BsODB6ebB/KyBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeT2geG4AcAAA==

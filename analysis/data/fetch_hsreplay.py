@@ -14,6 +14,7 @@ Table: card_stats(dbfId, fetch_date, winrate, deck_winrate, play_rate,
 """
 
 import json
+import re
 import sys
 import io
 import os
@@ -86,7 +87,8 @@ CREATE TABLE IF NOT EXISTS meta_decks (
     cards_json   TEXT,
     winrate      REAL,
     usage_rate   REAL,
-    fetch_date   TEXT
+    fetch_date   TEXT,
+    playstyle    TEXT DEFAULT 'unknown'
 );
 CREATE INDEX IF NOT EXISTS idx_meta_decks_class ON meta_decks(class);
 CREATE INDEX IF NOT EXISTS idx_meta_decks_date  ON meta_decks(fetch_date);
@@ -99,6 +101,11 @@ def init_db(db_path=DB_PATH):
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA_CARD_STATS)
     conn.executescript(SCHEMA_META_DECKS)
+    # Migration: add playstyle column if missing
+    try:
+        conn.execute("ALTER TABLE meta_decks ADD COLUMN playstyle TEXT DEFAULT 'unknown'")
+    except Exception:
+        pass  # Column already exists
     conn.commit()
     return conn
 
@@ -478,6 +485,7 @@ def get_meta_decks(conn):
                 "cards": json.loads(row[3]) if row[3] else [],
                 "winrate": row[4],
                 "usage_rate": row[5],
+                "playstyle": row[7] if len(row) > 7 else "unknown",
             }
         )
     return decks
@@ -530,21 +538,38 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
         "DEATHKNIGHT": "DEATHKNIGHT",
     }
 
-    # Read deck codes
-    codes = []
+    # Read deck codes with optional annotations
+    entries = []  # list of (code, name_hint, arch_hint)
+    current_name = None
+    current_arch = None
+    
     with open(deck_codes_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if line and not line.startswith("#"):
-                codes.append(line)
-
-    if not codes:
+            if not line:
+                continue
+            if line.startswith("#"):
+                # Parse annotations: # name: X | arch: Y
+                name_match = re.search(r'name:\s*([^|]+)', line, re.IGNORECASE)
+                arch_match = re.search(r'arch:\s*(\w+)', line, re.IGNORECASE)
+                if name_match:
+                    current_name = name_match.group(1).strip()
+                if arch_match:
+                    current_arch = arch_match.group(1).strip().lower()
+                continue
+            # Deck code line
+            if line.startswith("AAE"):
+                entries.append((line, current_name, current_arch))
+                current_name = None
+                current_arch = None
+    
+    if not entries:
         return 0
 
     today = datetime.now().strftime("%Y-%m-%d")
     stored = 0
 
-    for i, code in enumerate(codes):
+    for i, (code, name_hint, arch_hint) in enumerate(entries):
         try:
             deck = Deck.from_deckstring(code)
             # Get hero class from hero card
@@ -563,25 +588,40 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
                         cls = card.get("cardClass", "")
                         hero_class = CLASS_MAP.get(cls.upper(), cls.upper())
 
-            # Convert cards to dbfId list
-            cards_list = [dbf for dbf, _ in deck.cards]
+            # Convert cards to dbfId list with counts
+            # deck.cards is list of (dbfId, count) tuples from deckstrings
+            # Store as flat list with duplicates (e.g., 2 copies = [dbf, dbf])
+            # This allows count-aware exclusion in Bayesian model
+            cards_list = []
+            for dbf, count in deck.cards:
+                cards_list.extend([dbf] * count)
 
             archetype_id = 9000 + i
-            name = f"Custom_{hero_class}_{i + 1}"
+            name = name_hint or f"Custom_{hero_class}_{i + 1}"
+
+            # Compute playstyle
+            playstyle = arch_hint or "unknown"
+            if playstyle == "unknown":
+                try:
+                    from analysis.utils.deck_classifier import classify_deck
+                    playstyle = classify_deck(deck.cards, name=name_hint or "")
+                except Exception:
+                    pass
 
             conn.execute(
                 """INSERT OR REPLACE INTO meta_decks
                    (archetype_id, class, name, cards_json, winrate,
-                    usage_rate, fetch_date)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    usage_rate, fetch_date, playstyle)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     archetype_id,
                     hero_class,
                     name,
                     json.dumps(cards_list),
                     None,
-                    1.0 / len(codes),  # uniform usage rate
+                    1.0 / len(entries),
                     today,
+                    playstyle,
                 ),
             )
             stored += 1

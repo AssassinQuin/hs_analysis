@@ -420,6 +420,11 @@ class MCTSEngine:
 
             ctx.iterations_done += 1
 
+            # Periodic re-determinization: refresh some worlds
+            redet_interval = ctx.config.log_interval * 5  # every 500 iterations by default
+            if ctx.iterations_done > 0 and ctx.iterations_done % redet_interval == 0:
+                self._refresh_worlds(ctx)
+
             # Periodic logging
             if ctx.iterations_done % log_interval == 0:
                 root = ctx.root_node
@@ -517,6 +522,35 @@ class MCTSEngine:
                     ctx.nodes_created += 1
 
         return path, node, state
+
+    def _refresh_worlds(self, ctx: _SearchContext) -> None:
+        """Re-determinize a portion of worlds using updated tree information.
+
+        Replaces the worst-performing worlds with fresh determinizations
+        from the current root state.
+        """
+        if len(ctx.worlds) <= 1:
+            return
+
+        # Re-determinize half the worlds (every other one)
+        bayesian = getattr(self, '_bayesian_model', None)
+        determinizer = Determinizer(ctx.config, bayesian_model=bayesian)
+
+        n_refresh = max(1, len(ctx.worlds) // 2)
+        for i in range(n_refresh):
+            idx = i * 2  # refresh every other world
+            if idx < len(ctx.worlds):
+                new_state = determinizer._determinize(ctx.root_state)
+                ctx.worlds[idx] = DeterminizedWorld(
+                    world_id=ctx.worlds[idx].world_id,
+                    state=new_state,
+                    weight=ctx.worlds[idx].weight,
+                )
+
+        log.debug(
+            "Re-determinized %d/%d worlds at iter=%d",
+            n_refresh, len(ctx.worlds), ctx.iterations_done,
+        )
 
     def _try_reuse_tree(self, state: GameState) -> Optional[MCTSNode]:
         """Try to reuse subtree from previous search step."""

@@ -18,10 +18,13 @@ Data sources:
 import sys
 import os
 import json
+import logging
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+log = logging.getLogger(__name__)
 
 # ── Paths (from centralized config) ────────────────
 from analysis.config import PROJECT_ROOT, HSREPLAY_CACHE_DB, UNIFIED_DB_PATH
@@ -114,7 +117,17 @@ class BayesianOpponentModel:
         self.card_to_decks = defaultdict(set)
         self.cards_by_dbf = {}
         self.locked = None
-        self._seen_cards = []
+
+        # Separate tracking for source correctness
+        self._seen_deck_cards = Counter()  # dbfId → count, DECK source only
+        self._seen_cards_counter = Counter()  # dbfId → count, all sources (DECK+GENERATED)
+        self._seen_cards = []               # kept for backward compat (append-only history)
+
+        # Known hand cards (from reveal effects like Tracking, card text)
+        self._known_hand_cards = []    # list of (dbfId, turn_seen) tuples
+
+        # Hand-held inference: track how many turns cards stay in hand
+        self._hand_hold_since = {}     # entity_id → turn_first_seen_in_hand
 
         # Load card name lookups
         self._load_card_data()
@@ -206,6 +219,9 @@ class BayesianOpponentModel:
           - 0.8 if seen_card is in deck_i's signature core
           - 0.02 otherwise (epsilon, accounts for non-signature cards)
 
+        Unlock: If locked and the observed card is NOT in the locked deck's
+        signature, the lock may be wrong → trigger unlock.
+
         Args:
             seen_card_dbfId: dbfId of the card observed being played.
 
@@ -213,10 +229,30 @@ class BayesianOpponentModel:
             dict[int, float]: Updated posterior probabilities.
         """
         self._seen_cards.append(seen_card_dbfId)
+        self._seen_deck_cards[seen_card_dbfId] += 1
+        self._seen_cards_counter[seen_card_dbfId] += 1
 
-        # If already locked, no further updates needed
+        # Unlock check: if locked and card doesn't match locked deck
         if self.locked is not None:
-            return dict(self.posteriors)
+            locked_deck = None
+            for deck in self.decks:
+                if deck["archetype_id"] == self.locked[0]:
+                    locked_deck = deck
+                    break
+            
+            if locked_deck is not None:
+                if seen_card_dbfId not in locked_deck["cards"]:
+                    # Card doesn't belong to locked deck — might be wrong deck
+                    self._unlock_count = getattr(self, '_unlock_count', 0) + 1
+                    if self._unlock_count >= 2:
+                        # 2+ inconsistent cards → unlock
+                        self._do_unlock()
+                else:
+                    # Consistent card — reset unlock counter
+                    self._unlock_count = 0
+            
+            if self.locked is not None:
+                return dict(self.posteriors)
 
         unnormalized = {}
         for deck in self.decks:
@@ -260,6 +296,151 @@ class BayesianOpponentModel:
             self.update(dbf)
         return dict(self.posteriors)
 
+    def update_from_hand(self, seen_card_dbfId: int) -> dict:
+        """Update posteriors from a card seen in opponent's hand.
+        
+        Used for Tracking, Mulligan reveals, and other effects that
+        show opponent hand cards. Uses lower confidence than play
+        observations (the card might not have been played this game).
+        
+        Args:
+            seen_card_dbfId: dbfId of the card seen in hand.
+        
+        Returns:
+            dict[int, float]: Updated posterior probabilities.
+        """
+        self._seen_cards.append(seen_card_dbfId)
+        self._seen_cards_counter[seen_card_dbfId] += 1
+        
+        # Don't update if locked
+        if self.locked is not None:
+            return dict(self.posteriors)
+        
+        # Lower likelihood for hand observations (less certain than play)
+        HAND_LIKELIHOOD = 0.6     # card in deck signature
+        HAND_EPSILON = 0.05       # card not in signature
+        
+        unnormalized = {}
+        for deck in self.decks:
+            aid = deck["archetype_id"]
+            prior = self.posteriors.get(aid, 0.0)
+            if prior == 0.0:
+                unnormalized[aid] = 0.0
+                continue
+            
+            if seen_card_dbfId in deck["cards"]:
+                likelihood = HAND_LIKELIHOOD
+            else:
+                likelihood = HAND_EPSILON
+            
+            unnormalized[aid] = likelihood * prior
+        
+        total = sum(unnormalized.values())
+        if total > 0:
+            self.posteriors = {
+                aid: val / total for aid, val in unnormalized.items()
+            }
+        
+        self.locked = self.get_lock()
+        return dict(self.posteriors)
+
+    def update_generated(self, seen_card_dbfId: int) -> dict:
+        """Record a GENERATED-source card observation.
+
+        Generated/discovered cards are NOT from the original deck.
+        We track them for exclusion in predict_hand() but do NOT
+        update posteriors — they provide no information about deck composition.
+
+        Args:
+            seen_card_dbfId: dbfId of the generated card.
+
+        Returns:
+            dict[int, float]: Current posteriors (unchanged).
+        """
+        self._seen_cards.append(seen_card_dbfId)
+        self._seen_cards_counter[seen_card_dbfId] += 1
+        # Do NOT append to _seen_deck_cards — generated cards aren't evidence
+        # Do NOT update posteriors — generated cards don't indicate deck choice
+        return dict(self.posteriors)
+
+    def record_known_hand_card(self, dbf_id: int, turn: int):
+        """Record a card definitively seen in opponent's hand.
+
+        Used for Tracking, Insight, and other reveal effects.
+        These cards will be prioritized in hand sampling over
+        generic predictions.
+
+        Args:
+            dbf_id: dbfId of the card seen in hand.
+            turn: Current turn number.
+        """
+        self._known_hand_cards.append((dbf_id, turn))
+        # Also add to exclusion set
+        if dbf_id not in self._seen_cards:
+            self._seen_cards.append(dbf_id)
+
+    def update_hand_hold(self, entity_id: int, current_turn: int):
+        """Track how long an opponent hand card has been held.
+
+        Cards held for many turns are likely high-cost.
+
+        Args:
+            entity_id: The entity ID of the hand card.
+            current_turn: Current turn number.
+        """
+        if entity_id not in self._hand_hold_since:
+            self._hand_hold_since[entity_id] = current_turn
+
+    def get_cost_bias_for_hand(self, opp_hand_count: int, current_turn: int) -> dict:
+        """Compute cost-probability bias based on how long cards have been held.
+
+        If the opponent has held cards for many turns without playing them,
+        those cards are more likely to be high-cost.
+
+        Args:
+            opp_hand_count: Number of cards in opponent's hand.
+            current_turn: Current turn number.
+
+        Returns:
+            dict mapping cost → bias multiplier. Higher costs get higher
+            bias when cards have been held long.
+        """
+        if not self._hand_hold_since or opp_hand_count <= 0:
+            return {}
+
+        # Compute average hold duration for known hand entities
+        hold_durations = []
+        for eid, start_turn in self._hand_hold_since.items():
+            duration = current_turn - start_turn
+            if duration > 0:
+                hold_durations.append(duration)
+
+        if not hold_durations:
+            return {}
+
+        avg_hold = sum(hold_durations) / len(hold_durations)
+
+        # If average hold is <= 1 turn, no bias needed
+        if avg_hold <= 1:
+            return {}
+
+        # Bias: cards held for N+ turns are increasingly likely to be high cost
+        # Scale: 1 turn = no bias, 3+ turns = strong high-cost bias
+        bias_strength = min(1.0, avg_hold / 5.0)  # cap at 1.0
+
+        cost_bias = {}
+        for cost in range(0, 11):
+            if cost <= 2:
+                cost_bias[cost] = 1.0 - 0.3 * bias_strength  # low cost: slight penalty
+            elif cost <= 4:
+                cost_bias[cost] = 1.0  # mid cost: neutral
+            elif cost <= 6:
+                cost_bias[cost] = 1.0 + 0.5 * bias_strength  # high cost: boost
+            else:
+                cost_bias[cost] = 1.0 + 1.0 * bias_strength  # very high: strong boost
+
+        return cost_bias
+
     def get_lock(self) -> tuple:
         """Check if any archetype exceeds the lock threshold.
 
@@ -274,6 +455,28 @@ class BayesianOpponentModel:
         if best_prob > LOCK_THRESHOLD:
             return (best_id, best_prob)
         return None
+
+    def _do_unlock(self):
+        """Unlock the current archetype lock.
+        
+        Resets lock and reduces all posteriors toward uniform,
+        keeping relative ordering but dampening confidence.
+        """
+        log.info(
+            f"BayesianModel: unlocking from {self._deck_name(self.locked[0])} "
+            f"(confidence was {self.locked[1]:.2f}, {getattr(self, '_unlock_count', 0)} inconsistencies)"
+        )
+        self.locked = None
+        self._unlock_count = 0
+        
+        # Dampen posteriors: blend 50% current + 50% uniform
+        if self.posteriors:
+            n = len(self.posteriors)
+            uniform = 1.0 / n
+            self.posteriors = {
+                aid: 0.5 * prob + 0.5 * uniform
+                for aid, prob in self.posteriors.items()
+            }
 
     def get_top_decks(self, n=5) -> list:
         """Return top N archetypes by posterior probability.
@@ -323,7 +526,15 @@ class BayesianOpponentModel:
             return []
 
         # Cards not yet seen
-        unseen = [dbf for dbf in deck["cards"] if dbf not in self._seen_cards]
+        # Count-aware: deck cards minus seen deck cards
+        deck_remaining = list(deck["cards"])
+        seen_copy = dict(self._seen_deck_cards)
+        unseen = []
+        for dbf in deck_remaining:
+            if seen_copy.get(dbf, 0) > 0:
+                seen_copy[dbf] -= 1
+            else:
+                unseen.append(dbf)
         if not unseen:
             return []
 
@@ -341,17 +552,24 @@ class BayesianOpponentModel:
         """Reset posteriors to prior, clear seen cards and lock."""
         self.posteriors = self.build_prior(self.player_class)
         self._seen_cards = []
+        self._seen_deck_cards = Counter()
+        self._seen_cards_counter = Counter()
+        self._known_hand_cards = []
+        self._hand_hold_since = {}
         self.locked = None
 
-    def predict_hand(self, opp, state) -> list:
+    def predict_hand(self, opp, state, current_turn: int = 0) -> list:
         """预测对手手牌候选池（供 Determinizer 采样）。
 
-        基于锁定/最高后验卡组，返回尚未被观察到的卡牌列表，
-        转换为 Card 对象供 MCTS 搜索使用。
+        综合多种信息源：
+        1. 已知手牌（从窥牌效果看到的）— 最高优先级
+        2. 锁定/最高后验卡组中未观测到的牌 — 基础池
+        3. 持有回合推断 — 对长期未打的手牌增加高费牌权重
 
         Args:
             opp: OpponentState（用于读取已打出卡牌信息）
             state: GameState（备用上下文）
+            current_turn: 当前回合数（用于持有回合推断）
 
         Returns:
             List[Card]: 对手可能持有的卡牌候选池
@@ -371,17 +589,76 @@ class BayesianOpponentModel:
         if not deck:
             return []
 
-        # 排除已看到的卡牌
-        seen = set(self._seen_cards)
+        # 计数排除：已用张数的牌不再出现
+        # deck["cards"] 是带重复的 flat list（如 [dbf1, dbf1, dbf2, ...]）
+        # _seen_cards_counter 跟踪每种牌已出现的次数
+        remaining_dbfs = list(deck["cards"])  # copy the flat list
+        
+        # 按 dbfId 计数排除
+        seen_counts = dict(self._seen_cards_counter)
         # 也排除对手已知已打出的牌
         if hasattr(opp, 'opp_known_cards') and opp.opp_known_cards:
             for kc in opp.opp_known_cards:
                 dbf = getattr(kc, 'dbf_id', None) or (kc.get('dbf_id') if isinstance(kc, dict) else None)
                 if dbf:
-                    seen.add(dbf)
+                    seen_counts[dbf] = seen_counts.get(dbf, 0) + 1
+        
+        # 按已看张数过滤：卡组有 N 张，已见 M 张，剩余 N-M 张
+        filtered = []
+        for dbf in remaining_dbfs:
+            seen = seen_counts.get(dbf, 0)
+            if seen > 0:
+                seen_counts[dbf] = seen - 1  # consume one copy
+            else:
+                filtered.append(dbf)
+        remaining_dbfs = filtered
+        candidates = self._dbfs_to_cards(remaining_dbfs)
 
-        remaining_dbfs = [dbf for dbf in deck["cards"] if dbf not in seen]
-        return self._dbfs_to_cards(remaining_dbfs)
+        # 应用持有回合推断的成本偏好
+        if current_turn > 0 and hasattr(opp, 'hand_count'):
+            cost_bias = self.get_cost_bias_for_hand(opp.hand_count, current_turn)
+            if cost_bias and candidates:
+                # 按偏好加权复制候选牌
+                weighted = []
+                for card in candidates:
+                    cost = getattr(card, 'cost', 0)
+                    bias = cost_bias.get(cost, 1.0)
+                    # 复制 bias 次（整数部分）+ 按小数部分概率额外复制
+                    copies = int(bias)
+                    if bias - copies > 0 and (hash(card.card_id) % 100) / 100.0 < (bias - copies):
+                        copies += 1
+                    copies = max(1, copies)
+                    weighted.extend([card] * copies)
+                candidates = weighted
+
+        return candidates
+
+    def get_known_hand_cards(self, exclude_dbfs: set = None) -> list:
+        """获取已知手牌列表（从窥牌效果确定看到的牌）。
+
+        Args:
+            exclude_dbfs: 需要排除的 dbfId 集合（已打出的牌等）
+
+        Returns:
+            List[Card]: 确定在对手手牌中的卡牌列表
+        """
+        from analysis.models.card import Card
+
+        if not self._known_hand_cards:
+            return []
+
+        exclude = exclude_dbfs or set()
+        result = []
+        seen_dbfs = set()
+
+        for dbf_id, turn in self._known_hand_cards:
+            if dbf_id not in exclude and dbf_id not in seen_dbfs:
+                cards = self._dbfs_to_cards([dbf_id])
+                if cards:
+                    result.extend(cards)
+                    seen_dbfs.add(dbf_id)
+
+        return result
 
     def get_remaining_cards(self, opp) -> list:
         """获取对手剩余牌库（供 Determinizer 采样牌库顺序）。
@@ -392,30 +669,42 @@ class BayesianOpponentModel:
         Returns:
             List[Card]: 对手剩余卡牌列表
         """
-        seen = set(self._seen_cards)
+        # 计数排除
+        seen_counts = dict(self._seen_cards_counter)
         if hasattr(opp, 'opp_known_cards') and opp.opp_known_cards:
             for kc in opp.opp_known_cards:
                 dbf = getattr(kc, 'dbf_id', None) or (kc.get('dbf_id') if isinstance(kc, dict) else None)
                 if dbf:
-                    seen.add(dbf)
+                    seen_counts[dbf] = seen_counts.get(dbf, 0) + 1
 
-        # 收集所有候选卡组剩余卡牌（按后验概率加权）
         if self.locked:
             deck = self._find_deck(self.locked[0])
             if deck:
-                remaining = [dbf for dbf in deck["cards"] if dbf not in seen]
-                return self._dbfs_to_cards(remaining)
+                remaining = list(deck["cards"])
+                filtered = []
+                for dbf in remaining:
+                    seen = seen_counts.get(dbf, 0)
+                    if seen > 0:
+                        seen_counts[dbf] = seen - 1
+                    else:
+                        filtered.append(dbf)
+                return self._dbfs_to_cards(filtered)
             return []
 
-        # 未锁定时，合并 top-3 卡组的剩余卡牌（去重）
+        # 未锁定时，合并 top-3 卡组的剩余卡牌（计数去重）
         all_remaining_dbfs = []
         seen_dbfs = set()
         for aid, _, prob in self.get_top_decks(3):
             deck = self._find_deck(aid)
             if not deck:
                 continue
-            for dbf in deck["cards"]:
-                if dbf not in seen and dbf not in seen_dbfs:
+            deck_remaining = list(deck["cards"])
+            deck_counts = dict(self._seen_cards_counter)
+            for dbf in deck_remaining:
+                seen = deck_counts.get(dbf, 0)
+                if seen > 0:
+                    deck_counts[dbf] = seen - 1
+                elif dbf not in seen_dbfs:
                     all_remaining_dbfs.append(dbf)
                     seen_dbfs.add(dbf)
 

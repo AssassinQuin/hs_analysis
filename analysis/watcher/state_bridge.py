@@ -147,6 +147,9 @@ class StateBridge:
             state.deck_remaining = self._extract_deck_remaining(friendly)
             state.turn_number = self._extract_turn(game)
 
+            # Apply board-based cost modifiers (e.g., 龙群先锋)
+            self._apply_board_cost_modifiers(state)
+
             # Build OpponentState with basic board/hand info
             opp_state = OpponentState(
                 hero=self._extract_hero(opponent),
@@ -197,7 +200,7 @@ class StateBridge:
                     break
 
             # Extract hero class
-            hero_class = hero.tags.get(GameTag.CLASS, "UNKNOWN")
+            hero_class = self._resolve_hero_class(hero, player)
 
             return HeroState(
                 hp=current_health,
@@ -209,6 +212,63 @@ class StateBridge:
         except (AttributeError, KeyError) as e:
             log.warning(f"Error extracting hero state: {e}")
             return HeroState()
+
+    def _resolve_hero_class(self, hero_entity, player) -> str:
+        """Resolve hero class from entity tags, with robust fallbacks.
+
+        Tries:
+        1. GameTag.CLASS on the hero entity (handle int/enum/str)
+        2. GameTag.CLASS on any HERO_POWER entity of the player
+        3. card_id prefix lookup (e.g. "HERO_07" → WARLOCK)
+        """
+        # --- Try 1: hero entity CLASS tag ---
+        cls_val = hero_entity.tags.get(GameTag.CLASS, None)
+        result = self._class_val_to_str(cls_val)
+        if result:
+            return result
+
+        # --- Try 2: hero power entity CLASS tag ---
+        for entity in player.entities:
+            if (entity.tags.get(GameTag.ZONE) == Zone.PLAY and
+                    entity.tags.get(GameTag.CARDTYPE) == CardType.HERO_POWER):
+                cls_val = entity.tags.get(GameTag.CLASS, None)
+                result = self._class_val_to_str(cls_val)
+                if result:
+                    return result
+
+        # --- Try 3: card_id prefix ---
+        card_id = getattr(hero_entity, 'card_id', '') or ''
+        hero_class_map = {
+            "HERO_01": "WARRIOR", "HERO_02": "SHAMAN", "HERO_03": "ROGUE",
+            "HERO_04": "PALADIN", "HERO_05": "HUNTER", "HERO_06": "DRUID",
+            "HERO_07": "WARLOCK", "HERO_08": "MAGE", "HERO_09": "PRIEST",
+            "HERO_10": "DEMONHUNTER", "HERO_11": "DEATHKNIGHT",
+        }
+        for prefix, cls_name in hero_class_map.items():
+            if card_id.startswith(prefix):
+                return cls_name
+
+        return "UNKNOWN"
+
+    @staticmethod
+    def _class_val_to_str(cls_val) -> str:
+        """Convert a CLASS tag value (enum/int/str) to a class name string."""
+        if cls_val is None:
+            return ""
+        # Hearthstone CardClass enum
+        if hasattr(cls_val, 'name'):
+            return cls_val.name
+        # Integer value
+        if isinstance(cls_val, int):
+            try:
+                from hearthstone.enums import CardClass
+                return CardClass(cls_val).name
+            except (ValueError, ImportError):
+                return ""
+        # Already a string
+        if isinstance(cls_val, str) and cls_val not in ("", "UNKNOWN"):
+            return cls_val
+        return ""
 
     def _extract_mana(self, player) -> ManaState:
         """Extract mana state from player tags."""
@@ -316,7 +376,40 @@ class StateBridge:
         # Build KeywordSet from the boolean fields we just set
         minion_data.keywords = KeywordSet.from_minion(minion_data)
 
+        # Auto-attach trigger enchantments from registry
+        if minion_data.name:
+            try:
+                from analysis.search.trigger_registry import get_triggers_for_minion
+                triggers = get_triggers_for_minion(minion_data.name)
+                if triggers:
+                    minion_data.enchantments = getattr(minion_data, 'enchantments', []) + triggers
+            except ImportError:
+                pass
+
         return minion_data
+
+    def _apply_board_cost_modifiers(self, state: GameState) -> None:
+        """Apply cost-modifying auras from board minions to mana state.
+        
+        Checks for known cost-reduction effects on friendly board minions
+        and adds appropriate ManaModifiers.
+        """
+        try:
+            for minion in state.board:
+                name = getattr(minion, 'name', '')
+                
+                # ── 龙群先锋 / Naralex, Dragon Pioneer ──
+                # "你每个回合使用的第一张龙牌法力值消耗为（1）点。"
+                # Add a first_dragon modifier that sets cost to 1
+                if name in ('龙群先锋', 'Naralex, Dragon Pioneer',
+                            'Naralex Dragon Pioneer'):
+                    state.mana.add_modifier(
+                        modifier_type="aura",
+                        value=1,  # cost becomes 1 (not -1)
+                        scope="first_dragon",
+                    )
+        except Exception as e:
+            log.debug(f"Board cost modifier check failed: {e}")
 
     def _extract_hand(self, player) -> List[Card]:
         """Extract hand cards. Uses entity_cache for card_id when hslog doesn't provide it."""

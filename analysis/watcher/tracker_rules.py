@@ -168,9 +168,13 @@ class TrackerRuleDispatcher:
 
 class ShuffleTrackerRule:
     """Tracks cards shuffled into either player's deck.
-
-    Handles transitions where any card enters the DECK zone
-    (e.g., Exploding Sheep, Swamps, Felrager).
+    
+    Distinguishes between:
+    - Known cards (card_id present): specific card shuffled (e.g., 爆牌鱼 effect)
+    - Unknown cards (card_id absent): random/unknown card shuffled
+    
+    Known shuffled cards are tracked as known information for deck inference.
+    When played later, they are marked as GENERATED (not from original deck).
     """
 
     name = "shuffle"
@@ -180,10 +184,23 @@ class ShuffleTrackerRule:
         self._ZONE_DECK = ZONE_DECK
 
     def on_zone_change(self, ctx: TrackingContext) -> None:
-        if ctx.new_zone == self._ZONE_DECK and ctx.card_id:
-            if ctx.is_opp:
+        if ctx.new_zone != self._ZONE_DECK:
+            return
+            
+        if ctx.is_opp:
+            # Always track in the legacy list for backward compat
+            if ctx.card_id:
                 ctx.state.opp_shuffled_into_deck.append(ctx.card_id)
+                # Mark as known card (we know what was shuffled)
+                ctx.state.opp_shuffled_known_cards[ctx.card_id] = True
             else:
+                # Unknown card shuffled (no card_id visible)
+                ctx.state.opp_shuffled_known_cards[f"unknown_{ctx.entity_id}"] = False
+            
+            # Track source if entity has birth info
+            ctx.state.opp_shuffled_card_sources[ctx.entity_id] = ctx.card_id or ""
+        else:
+            if ctx.card_id:
                 ctx.state.player_shuffled_into_deck.append(ctx.card_id)
 
 

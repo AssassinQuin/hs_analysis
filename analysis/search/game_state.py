@@ -210,6 +210,13 @@ class ManaState:
                 base = max(0, base - mod.value)
             elif mod.scope == "this_turn":
                 base = max(0, base - mod.value)
+            elif mod.scope == "first_dragon":
+                # 龙群先锋等效果：本回合第一张龙牌费用变为 N
+                # 检查卡牌种族是否为龙族
+                race = getattr(card, "race", "").upper() if isinstance(card, Card) else ""
+                if race == "DRAGON":
+                    # 费用直接设为 mod.value（而非减去），因为效果是"变为1"
+                    base = mod.value
         return base
 
     def consume_modifiers(self, card) -> None:
@@ -218,6 +225,9 @@ class ManaState:
 
         card_type = (
             getattr(card, "card_type", "").upper() if isinstance(card, Card) else ""
+        )
+        race = (
+            getattr(card, "race", "").upper() if isinstance(card, Card) else ""
         )
         for mod in self.modifiers:
             if mod.used:
@@ -229,6 +239,9 @@ class ManaState:
                 mod.used = True
                 return
             if mod.scope == "this_turn":
+                mod.used = True
+                return
+            if mod.scope == "first_dragon" and race == "DRAGON":
                 mod.used = True
                 return
 
