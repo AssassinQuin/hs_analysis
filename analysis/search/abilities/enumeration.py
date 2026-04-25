@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""enumeration.py — Legal action enumeration for the RHEA search engine."""
+"""enumeration.py — Legal action enumeration for the search engine."""
 
 from __future__ import annotations
 
 import re
 from typing import List, TYPE_CHECKING
 
-from analysis.search.rhea.actions import Action, ActionType
+from analysis.search.abilities.actions import Action, ActionType
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState, Minion
@@ -30,7 +30,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
     for idx, card in enumerate(state.hand):
         tags = _probe_tags_for_card(state, card)
         eff_cost = state.mana.effective_cost(card)
-        from analysis.search.rhea.simulation import _apply_text_cost_reduction
+        from analysis.search.abilities.simulation import _apply_text_cost_reduction
         eff_cost = _apply_text_cost_reduction(card, state.hand, idx, eff_cost)
         if eff_cost > state.mana.available:
             continue

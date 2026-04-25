@@ -130,8 +130,8 @@ def _eval_hybrid(
     config: MCTSConfig,
 ) -> float:
     """Hybrid: short random rollout (1-2 steps) + eval cutoff."""
-    from analysis.search.rhea.enumeration import enumerate_legal_actions
-    from analysis.search.rhea.simulation import apply_action
+    from analysis.search.abilities.enumeration import enumerate_legal_actions
+    from analysis.search.abilities.simulation import apply_action
 
     current = leaf_state
     for _ in range(config.rollout_depth):
@@ -159,8 +159,8 @@ def _eval_random_rollout(
     max_depth: int = 3,
 ) -> float:
     """Full random rollout (baseline)."""
-    from analysis.search.rhea.enumeration import enumerate_legal_actions
-    from analysis.search.rhea.simulation import apply_action
+    from analysis.search.abilities.enumeration import enumerate_legal_actions
+    from analysis.search.abilities.simulation import apply_action
 
     current = state
     for _ in range(max_depth):
@@ -186,7 +186,7 @@ def _eval_random_rollout(
 
 def _filter_rollout_actions(actions: list, state: 'GameState') -> list:
     """Quick filter for rollout: remove obviously bad actions."""
-    from analysis.search.rhea.actions import ActionType
+    from analysis.search.abilities.actions import ActionType
 
     filtered = []
     for action in actions:

@@ -25,9 +25,9 @@ from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
 from analysis.watcher.deck_provider import DeckProvider
 from analysis.search.mcts import MCTSEngine, MCTSConfig
-from analysis.search.rhea.enumeration import enumerate_legal_actions
-from analysis.search.rhea.actions import ActionType
-from analysis.search.rhea.simulation import apply_action as _apply_sim_action
+from analysis.search.abilities.enumeration import enumerate_legal_actions
+from analysis.search.abilities.actions import ActionType
+from analysis.search.abilities.simulation import apply_action as _apply_sim_action
 from analysis.utils.bayesian_opponent import BayesianOpponentModel
 from hearthstone.enums import GameTag, Zone as HZone, CardType as HCardType
 

@@ -38,7 +38,27 @@ class AbilityParser:
         for mech, trigger in MECHANICS_TRIGGER_MAP.items():
             if mech in dynamic_mechanics:
                 effects, condition = cls._parse_effects_for_trigger(text_clean, trigger, card)
-                if effects or trigger in (AbilityTrigger.BATTLECRY, AbilityTrigger.DEATHRATTLE):
+                # Always generate ability for known triggers, even if no effects parsed.
+                # Some triggers (AURA, QUEST, SECRET, TRIGGER_VISUAL) are valid with
+                # empty effects — the text describes behavior too complex for verb parsing.
+                # BATTLECRY/DEATHRATTLE only count if they have effects.
+                if effects:
+                    abilities.append(CardAbility(
+                        trigger=trigger,
+                        condition=condition,
+                        effects=effects,
+                        text_raw=text_clean,
+                    ))
+                elif trigger in (AbilityTrigger.BATTLECRY, AbilityTrigger.DEATHRATTLE):
+                    abilities.append(CardAbility(
+                        trigger=trigger,
+                        condition=condition,
+                        effects=effects,
+                        text_raw=text_clean,
+                    ))
+                elif trigger in (AbilityTrigger.AURA, AbilityTrigger.QUEST,
+                                 AbilityTrigger.SECRET, AbilityTrigger.TRIGGER_VISUAL,
+                                 AbilityTrigger.COMBO, AbilityTrigger.OUTCAST):
                     abilities.append(CardAbility(
                         trigger=trigger,
                         condition=condition,
@@ -161,6 +181,12 @@ class AbilityParser:
             elif "heal" in tl:
                 amt = extract_number_after(tl, "heal")
             effects.append(EffectSpec(kind=EffectKind.HEAL, value=amt))
+
+        # AURA pattern: "have +N/N" or "have +N Attack"
+        if " have +" in tl:
+            atk, hp = extract_plus_stats(tl)
+            if atk > 0 or hp > 0:
+                effects.append(EffectSpec(kind=EffectKind.GIVE, value=atk, value2=hp))
 
         return effects
 

@@ -14,7 +14,7 @@ from hearthstone.enums import GameTag, Zone as HZone
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
 from analysis.search.engine_adapter import UnifiedSearchResult, ActionProb, create_engine
-from analysis.search.rhea.actions import Action, ActionType
+from analysis.search.abilities.actions import Action, ActionType
 from analysis.watcher.decision_loop import DecisionPresenter
 from analysis.utils.score_provider import load_scores_into_hand
 

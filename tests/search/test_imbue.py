@@ -3,7 +3,7 @@
 import pytest
 from analysis.search.game_state import GameState, HeroState, Minion, ManaState, OpponentState
 from analysis.models.card import Card
-from analysis.search.rhea import apply_action, Action
+from analysis.search.abilities import apply_action, Action
 from analysis.search.imbue import apply_imbue, apply_hero_power, IMBUE_HERO_POWERS
 
 

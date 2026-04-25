@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from analysis.search.rhea.actions import ActionType
+from analysis.search.abilities.actions import ActionType
 
 _QUEST_THRESHOLD_EN = re.compile(r'(\d+)\s*(?:cards?|spells?|minions?)')
 _QUEST_TOTAL_CN = re.compile(r'总计(\d+)张')

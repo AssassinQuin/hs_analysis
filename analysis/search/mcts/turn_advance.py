@@ -113,9 +113,9 @@ def _greedy_self_play(state: GameState) -> GameState:
     Strategy: play the most expensive affordable card first, repeat.
     This simulates reasonable turn play in cross-turn rollouts.
     """
-    from analysis.search.rhea.actions import ActionType
-    from analysis.search.rhea.simulation import apply_action
-    from analysis.search.rhea.enumeration import enumerate_legal_actions
+    from analysis.search.abilities.actions import ActionType
+    from analysis.search.abilities.simulation import apply_action
+    from analysis.search.abilities.enumeration import enumerate_legal_actions
 
     s = state
     max_plays = 7
@@ -157,9 +157,9 @@ def _greedy_self_play(state: GameState) -> GameState:
 
 def _greedy_self_attacks(state: GameState) -> GameState:
     """Attack greedily with our minions in cross-turn rollout."""
-    from analysis.search.rhea.actions import ActionType
-    from analysis.search.rhea.simulation import apply_action
-    from analysis.search.rhea.enumeration import enumerate_legal_actions
+    from analysis.search.abilities.actions import ActionType
+    from analysis.search.abilities.simulation import apply_action
+    from analysis.search.abilities.enumeration import enumerate_legal_actions
 
     s = state
 

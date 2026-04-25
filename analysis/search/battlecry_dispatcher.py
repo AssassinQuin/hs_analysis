@@ -2,11 +2,15 @@
 """battlecry_dispatcher.py — Battlecry effect dispatcher for Hearthstone AI.
 
 Parses card text for battlecry (战吼) effects and applies them to GameState.
-Reuses EffectParser and EffectApplier from spell_simulator for regex matching
-and effect application.
+Uses EffectParser from abilities for text parsing and executor primitives
+for damage/heal/silence application.
+
+Orchestration layer (Layer 3): handles battlecry-specific logic like
+Brann doubling, target selection, and weapon equip. Delegates effect
+execution to abilities/executor primitives.
 
 Usage:
-    python3 -m hs_analysis.search.battlecry_dispatcher          # run self-test
+    python3 -m analysis.search.battlecry_dispatcher          # run self-test
 """
 
 from __future__ import annotations
@@ -18,7 +22,13 @@ from typing import List, Optional, Tuple
 from analysis.search.game_state import GameState, Minion, HeroState
 from analysis.models.card import Card
 from analysis.evaluators.composite import target_selection_eval
-from analysis.utils.spell_simulator import EffectParser, EffectApplier
+from analysis.search.abilities.effect_parser import EffectParser
+from analysis.search.abilities.executor import (
+    _apply_damage_to_hero,
+    _apply_damage_to_minion,
+    _silence_minion,
+    _apply_keyword,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +72,7 @@ class BattlecryDispatcher:
     Workflow:
     1. Extract battlecry text from card.text using _BATTLECRY_PATTERN
     2. Parse effects using EffectParser (from spell_simulator)
-    3. Apply each effect using EffectApplier with target selection
+    3. Apply each effect using executor primitives with target selection
     4. For targeted effects, pick the best target via greedy evaluation
     """
 
@@ -147,7 +157,7 @@ class BattlecryDispatcher:
         params,
         source_minion: Minion,
     ) -> GameState:
-        """Apply a single parsed effect to the game state."""
+        """Apply a single parsed effect using executor primitives."""
         s = state
 
         if effect_type == 'direct_damage':
@@ -155,52 +165,80 @@ class BattlecryDispatcher:
             spell_power_bonus = sum(m.spell_power for m in state.board)
             amount += spell_power_bonus
             target = self._pick_damage_target(s, amount=amount)
-            s = EffectApplier.apply_damage(s, target, amount)
+            self._apply_damage_to_target(s, target, amount)
 
         elif effect_type == 'random_damage':
             amount = params
-            # Random damage → enemy hero (simplified)
-            s = EffectApplier.apply_damage(s, 'enemy_hero', amount)
+            _apply_damage_to_hero(s.opponent.hero, amount)
 
         elif effect_type == 'aoe_damage':
             amount = params
-            s = EffectApplier.apply_aoe(s, amount, side='enemy')
+            for m in s.opponent.board:
+                _apply_damage_to_minion(m, amount)
 
         elif effect_type == 'draw':
             count = params
-            s = EffectApplier.apply_draw(s, count)
+            for _ in range(count):
+                if s.deck_remaining > 0:
+                    s.deck_remaining -= 1
 
         elif effect_type == 'summon_stats':
             atk, hp = params
-            s = EffectApplier.apply_summon(s, atk, hp)
+            if len(s.board) < 7:
+                s.board.append(Minion(
+                    attack=atk, health=hp, max_health=hp,
+                    name="Token", can_attack=False,
+                ))
 
         elif effect_type == 'summon':
-            # Generic summon: 1/1 token
-            s = EffectApplier.apply_summon(s, 1, 1)
+            if len(s.board) < 7:
+                s.board.append(Minion(
+                    attack=1, health=1, max_health=1,
+                    name="Token", can_attack=False,
+                ))
 
         elif effect_type == 'heal':
             amount = params
             target = self._pick_heal_target(s)
-            s = EffectApplier.apply_heal(s, target, amount)
+            if target == 'friendly_hero':
+                s.hero.hp = min(s.hero.hp + amount, s.hero.max_hp)
+            elif target.startswith('friendly_minion:'):
+                idx = int(target.split(':')[1])
+                if idx < len(s.board):
+                    m = s.board[idx]
+                    m.health = min(m.health + amount, m.max_health)
 
         elif effect_type == 'armor':
-            amount = params
-            s.hero.armor += amount
+            s.hero.armor += params
 
         elif effect_type == 'buff_atk':
             amount = params
-            # Buff self (the just-played minion)
             idx = self._find_minion_index(s, source_minion)
             if idx >= 0:
-                s = EffectApplier.apply_buff(s, f'friendly_minion:{idx}', amount)
+                s.board[idx].attack += amount
 
         elif effect_type == 'destroy':
-            # Destroy best enemy minion
             target_idx = self._pick_destroy_target(s)
             if target_idx is not None:
                 s.opponent.board.pop(target_idx)
 
         return s
+
+    @staticmethod
+    def _apply_damage_to_target(state: GameState, target: str, amount: int) -> None:
+        """Apply damage to a target resolved as string identifier."""
+        if target == 'enemy_hero':
+            _apply_damage_to_hero(state.opponent.hero, amount)
+        elif target == 'friendly_hero':
+            _apply_damage_to_hero(state.hero, amount)
+        elif target.startswith('enemy_minion:'):
+            idx = int(target.split(':')[1])
+            if idx < len(state.opponent.board):
+                _apply_damage_to_minion(state.opponent.board[idx], amount)
+        elif target.startswith('friendly_minion:'):
+            idx = int(target.split(':')[1])
+            if idx < len(state.board):
+                _apply_damage_to_minion(state.board[idx], amount)
 
     def _apply_extra_effects(
         self,
@@ -208,7 +246,7 @@ class BattlecryDispatcher:
         bc_text: str,
         minion: Minion,
     ) -> GameState:
-        """Apply battlecry-specific effects not covered by spell_simulator."""
+        """Apply battlecry-specific effects using executor primitives."""
         s = state
 
         if _FREEZE_EN.search(bc_text) or '冻结' in bc_text:
@@ -221,31 +259,23 @@ class BattlecryDispatcher:
         if _DIVINE_SHIELD_EN.search(bc_text) or re.search(r'获得?圣盾', bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
-                s.board[idx].has_divine_shield = True
+                _apply_keyword(s.board[idx], 'DIVINE_SHIELD')
 
         if _TAUNT_EN.search(bc_text) or re.search(r'获得?嘲讽', bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
-                s.board[idx].has_taunt = True
+                _apply_keyword(s.board[idx], 'TAUNT')
 
         if _RUSH_EN.search(bc_text) or re.search(r'获得?突袭', bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
-                s.board[idx].has_rush = True
+                _apply_keyword(s.board[idx], 'RUSH')
 
         if _SILENCE_EN.search(bc_text) or '沉默' in bc_text:
             if s.opponent.board:
                 target_idx = self._pick_destroy_target(s)
                 if target_idx is not None:
-                    target = s.opponent.board[target_idx]
-                    target.has_taunt = False
-                    target.has_divine_shield = False
-                    target.has_stealth = False
-                    target.has_windfury = False
-                    target.has_poisonous = False
-                    target.has_rush = False
-                    target.has_charge = False
-                    target.enchantments = []
+                    _silence_minion(s.opponent.board[target_idx])
 
         if _DISCOVER_EN.search(bc_text) or '发现' in bc_text:
             try:
@@ -290,7 +320,7 @@ class BattlecryDispatcher:
 
         cond = self._HOLDING_RACE_CN.search(bc_text)
         if cond:
-            from analysis.search.rhea.simulation import _RACE_CN_TO_EN
+            from analysis.search.abilities.simulation import _RACE_CN_TO_EN
             race_cn = cond.group(1)
             race_en = _RACE_CN_TO_EN.get(race_cn, race_cn.upper())
             has_race = any(

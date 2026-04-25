@@ -31,6 +31,8 @@ MECHANICS_TRIGGER_MAP = {
     "QUEST":          AbilityTrigger.QUEST,
     "AURA":           AbilityTrigger.AURA,
     "TRIGGER_VISUAL": AbilityTrigger.TRIGGER_VISUAL,
+    "DISCOVER":       AbilityTrigger.BATTLECRY,
+    "COLOSSAL":       AbilityTrigger.BATTLECRY,
 }
 
 # Static keyword mechanics — no ability parsing needed, just attach to entity
@@ -39,6 +41,10 @@ STATIC_KEYWORD_MECHANICS = frozenset({
     "CHARGE", "WINDFURY", "POISONOUS", "REBORN", "ELUSIVE",
     "FREEZE", "SPELLPOWER", "OVERLOAD", "TRADEABLE",
     "IMMUNE", "CANT_BE_TARGETED_BY_SPELLS", "CANT_BE_TARGETED_BY_HEROPOWERS",
+    # Passive modifiers (not abilities, just stat/behavior flags)
+    "ImmuneToSpellpower", "ENRAGED", "START_OF_GAME_KEYWORD",
+    "AFFECTED_BY_SPELL_POWER", "ADJACENT_BUFF", "GEARS",
+    "SIDE_QUEST", "InvisibleDeathrattle",
 })
 
 # ──────────────────────────────────────────────────────────────

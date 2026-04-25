@@ -43,7 +43,7 @@ from analysis.search.discover import _parse_discover_constraint
 from analysis.search.engine.models.probability_panel import compute_panel
 from analysis.search.engine.models.discover_model import DiscoverModel
 from analysis.search.engine.models.draw_model import DrawModel
-from analysis.search.rhea import Action, enumerate_legal_actions
+from analysis.search.abilities import Action, enumerate_legal_actions
 from analysis.search.engine_adapter import create_engine
 from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (

@@ -18,8 +18,8 @@ from typing import Optional, Tuple, List, TYPE_CHECKING
 from analysis.search.mcts.config import MCTSConfig, NodeType, ExpansionOrder
 from analysis.search.mcts.node import MCTSNode, ActionEdge
 from analysis.search.mcts.pruning import ActionPruner
-from analysis.search.rhea.actions import Action, ActionType, action_key
-from analysis.search.rhea.simulation import apply_action
+from analysis.search.abilities.actions import Action, ActionType, action_key
+from analysis.search.abilities.simulation import apply_action
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState

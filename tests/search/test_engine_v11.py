@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
 from analysis.models.card import Card
-from analysis.search.rhea import Action, ActionType
+from analysis.search.abilities import Action, ActionType
 from analysis.data.card_roles import RoleTag
 
 

@@ -36,9 +36,9 @@ from analysis.search.mcts.backprop import backpropagate
 from analysis.search.mcts.pruning import ActionPruner
 from analysis.search.mcts.determinization import Determinizer, DeterminizedWorld
 from analysis.search.mcts.transposition import TranspositionTable, compute_state_hash
-from analysis.search.rhea.actions import Action, ActionType, action_key
-from analysis.search.rhea.enumeration import enumerate_legal_actions
-from analysis.search.rhea.simulation import apply_action
+from analysis.search.abilities.actions import Action, ActionType, action_key
+from analysis.search.abilities.enumeration import enumerate_legal_actions
+from analysis.search.abilities.simulation import apply_action
 from analysis.search.game_state import GameState
 
 log = logging.getLogger(__name__)

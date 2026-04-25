@@ -21,7 +21,7 @@ from typing import Callable, Optional, TextIO
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-from analysis.search.rhea.actions import Action
+from analysis.search.abilities.actions import Action
 from analysis.search.engine_adapter import UnifiedSearchResult, create_engine
 from analysis.utils.score_provider import load_scores_into_hand
 

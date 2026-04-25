@@ -118,6 +118,15 @@ def _summon_token(s: "GameState", token_data: dict) -> "GameState":
     """Summon a minion from token data onto the friendly board."""
     from analysis.search.game_state import Minion
 
+    token_mechanics = token_data.get("mechanics", [])
+    from analysis.search.keywords import KeywordSet
+
+    kw = []
+    if "DEATHRATTLE" in token_mechanics:
+        kw.append("DEATHRATTLE")
+    if "TRIGGER_VISUAL" in token_mechanics:
+        kw.append("TRIGGER_VISUAL")
+
     minion = Minion(
         card_id=token_data.get("cardId", ""),
         name=token_data.get("name", ""),
@@ -125,11 +134,7 @@ def _summon_token(s: "GameState", token_data: dict) -> "GameState":
         attack=token_data.get("attack", 0),
         health=token_data.get("health", 1),
         cost=token_data.get("cost", 0),
-        mechanics=token_data.get("mechanics", []),
-        text=token_data.get("text", ""),
-        english_text=token_data.get("ename", ""),
-        has_deathrattle="DEATHRATTLE" in token_data.get("mechanics", []),
-        has_trigger="TRIGGER_VISUAL" in token_data.get("mechanics", []),
+        keywords=KeywordSet(kw),
     )
     if len(s.board) < 7:
         s.board.append(minion)

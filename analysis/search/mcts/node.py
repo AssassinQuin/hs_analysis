@@ -17,7 +17,7 @@ from typing import Optional, List, Dict, TYPE_CHECKING
 from analysis.search.mcts.config import NodeType
 
 if TYPE_CHECKING:
-    from analysis.search.rhea.actions import Action
+    from analysis.search.abilities.actions import Action
     from analysis.search.mcts.pruning import ActionPruner
     from analysis.search.game_state import GameState
 
@@ -114,7 +114,7 @@ class MCTSNode:
     ) -> List['Action']:
         """Lazily compute untried actions on first call, then cache."""
         if self.untried_actions is None:
-            from analysis.search.rhea.enumeration import enumerate_legal_actions
+            from analysis.search.abilities.enumeration import enumerate_legal_actions
             all_actions = enumerate_legal_actions(state)
             if pruner is not None:
                 self.untried_actions = pruner.filter(all_actions, state)

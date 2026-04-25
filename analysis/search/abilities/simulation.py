@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""simulation.py — Action simulation (apply_action) for the RHEA search engine.
+"""simulation.py — Action simulation (apply_action) for the search engine.
 
 Contains the core state transition logic: play card, attack, hero power,
-end turn, and draw mechanics.
-"""
+end turn, and draw mechanics."""
 
 from __future__ import annotations
 
@@ -11,7 +10,7 @@ import dataclasses
 import logging
 from typing import TYPE_CHECKING
 
-from analysis.search.rhea.actions import Action, ActionType
+from analysis.search.abilities.actions import Action, ActionType
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState
@@ -100,11 +99,11 @@ def _trigger_location_spell_react(s, card):
         if not abilities:
             abilities = AbilityParser.parse(loc)
         for ability in abilities:
-            if ability.trigger != AbilityTrigger.WHENEVER:
+            if ability.trigger not in (AbilityTrigger.WHENEVER, AbilityTrigger.AFTER):
                 continue
             etext = ability.text_raw.lower()
             school_lower = spell_school.lower()
-            if school_lower in etext and "refresh" in etext:
+            if school_lower in etext and ("refresh" in etext or "reopen" in etext):
                 if loc.cooldown_current > 0:
                     loc.cooldown_current = 0
 

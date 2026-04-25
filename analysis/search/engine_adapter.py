@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Tuple
 
-from analysis.search.rhea.actions import Action
+from analysis.search.abilities.actions import Action
 
 
 class ActionProb:

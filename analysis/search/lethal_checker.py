@@ -17,7 +17,7 @@ from typing import List, Optional
 
 from analysis.data.card_effects import get_card_damage, _DAMAGE_CN, _DAMAGE_EN
 from analysis.search.game_state import GameState, Minion
-from analysis.search.rhea import (
+from analysis.search.abilities import (
     Action,
     ActionType,
     apply_action,

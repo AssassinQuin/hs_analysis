@@ -22,9 +22,9 @@ from analysis.search.engine.mechanics.spell_target_resolver import (
     TargetEntityType,
     TargetSide,
 )
-from analysis.search.rhea.actions import ActionType
+from analysis.search.abilities.actions import ActionType
 from analysis.models.card import Card
-from analysis.search.rhea.enumeration import enumerate_legal_actions
+from analysis.search.abilities.enumeration import enumerate_legal_actions
 
 
 # ---------------------------------------------------------------------------

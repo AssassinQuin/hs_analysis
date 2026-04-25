@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from analysis.search.game_state import GameState
-from analysis.search.rhea import Action, ActionType, enumerate_legal_actions
+from analysis.search.abilities import Action, ActionType, enumerate_legal_actions
 from analysis.search.engine.strategic import strategic_decision, StrategicMode
 from analysis.search.engine.tactical import TacticalPlanner, TacticalCandidate
 from analysis.search.engine.action_pruner import ActionPruner

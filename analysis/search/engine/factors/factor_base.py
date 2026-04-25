@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from analysis.search.game_state import GameState
-from analysis.search.rhea import Action
+from analysis.search.abilities import Action
 from analysis.models.phase import Phase, detect_phase
 
 

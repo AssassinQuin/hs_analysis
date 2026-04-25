@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional, Set, TYPE_CHECKING
 
-from analysis.search.rhea.actions import Action, ActionType, action_key
+from analysis.search.abilities.actions import Action, ActionType, action_key
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState

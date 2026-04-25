@@ -3,7 +3,7 @@
 import pytest
 from analysis.search.game_state import GameState, HeroState, Minion
 from analysis.models.card import Card
-from analysis.search.rhea import apply_action, Action, ActionType
+from analysis.search.abilities import apply_action, Action, ActionType
 
 
 def _make_card(**kw):

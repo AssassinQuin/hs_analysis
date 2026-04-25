@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""actions.py — Action dataclass and ActionType enum for the RHEA search engine."""
+"""actions.py — Action dataclass and ActionType enum for the search engine."""
 
 from __future__ import annotations
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from analysis.search.game_state import GameState
-from analysis.search.rhea import Action
+from analysis.search.abilities import Action
 from analysis.search.engine.factors.factor_base import (
     EvalContext, EvaluationFactor, Phase,
 )

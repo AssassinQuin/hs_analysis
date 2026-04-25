@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from analysis.search.rhea import Action, ActionType
+from analysis.search.abilities import Action, ActionType
 from analysis.search.game_state import GameState
 
 
