@@ -81,29 +81,30 @@ def get_effects(card: Card) -> CardEffects:
         _fill_spell_effects(text, eff, mechs)
 
     if card_type == "MINION":
-        if "BATTLECRY" in mechs or "COMBO" in mechs:
-            _fill_spell_effects(text, eff, mechs)
+        # Always parse text effects for minions — many have battlecry/discover/draw
+        # text without the BATTLECRY mechanics tag
+        _fill_spell_effects(text, eff, mechs)
         if "CHARGE" in mechs or "RUSH" in mechs:
             pass
 
     return eff
 
 
-_DAMAGE_CN = re.compile(r"造成\s*\$?\s*(\d+)\s*点伤害")
+_DAMAGE_CN = re.compile(r"造成\s*\$?\s*[#＃]?\s*[（(]?\s*(\d+)\s*[）)]?\s*点伤害")
 _DAMAGE_EN = re.compile(r"Deal\s*\$?(\d+)\s*damage", re.IGNORECASE)
-_AOE_CN = re.compile(r"所有.*?\$?\s*(\d+)\s*点伤害")
+_AOE_CN = re.compile(r"所有.*?\$?\s*[#＃]?\s*[（(]?\s*(\d+)\s*[）)]?\s*点伤害")
 _AOE_EN = re.compile(r"Deal\s*(\d+)\s*damage\s*to\s*all\s*enemies", re.IGNORECASE)
-_RANDOM_DMG_CN = re.compile(r"随机.*?\$?\s*(\d+)\s*点伤害")
+_RANDOM_DMG_CN = re.compile(r"随机.*?\$?\s*[#＃]?\s*[（(]?\s*(\d+)\s*[）)]?\s*点伤害")
 _RANDOM_DMG_EN = re.compile(r"Deal\s*(\d+)\s*damage\s*randomly", re.IGNORECASE)
-_HEAL_CN = re.compile(r"恢复\s*(\d+)\s*点")
+_HEAL_CN = re.compile(r"恢复\s*[#＃\$]?\s*[（(]?\s*(\d+)\s*[）)]?\s*点")
 _HEAL_EN = re.compile(r"Restore\s*(\d+)\s*(?:Health|health)", re.IGNORECASE)
-_ARMOR_CN = re.compile(r"获得\s*(\d+)\s*点护甲")
+_ARMOR_CN = re.compile(r"获得\s*[#＃\$]?\s*[（(]?\s*(\d+)\s*[）)]?\s*点?\s*护甲")
 _ARMOR_EN = re.compile(r"Gain\s*(\d+)\s*(?:Armor|armor)", re.IGNORECASE)
-_DRAW_CN = re.compile(r"抽\s*(\d+)\s*张牌")
+_DRAW_CN = re.compile(r"抽\s*(?:[一两二三四五六七八九十]+|\d+)\s*张牌")
 _DRAW_EN = re.compile(r"Draw\s*(\d+)\s*(?:cards?)", re.IGNORECASE)
 _SUMMON_STATS_CN = re.compile(r"召唤.*?(\d+)/(\d+)")
 _SUMMON_STATS_EN = re.compile(r"Summon\s*(?:a\s+)?(\d+)/(\d+)", re.IGNORECASE)
-_BUFF_ATK_CN = re.compile(r"\+\s*(\d+)\s*.*?攻击力")
+_BUFF_ATK_CN = re.compile(r"\+\s*[#＃\$]?\s*[（(]?\s*(\d+)\s*[）)]?\s*攻击力")
 _BUFF_ATK_EN = re.compile(r"\+\s*(\d+)\s*Attack", re.IGNORECASE)
 _HAND_BUFF_CN = re.compile(r"手牌.*?\+(\d+)/\+(\d+)")
 _HAND_BUFF_EN = re.compile(r"")
@@ -114,10 +115,35 @@ _COST_REDUCE_EN = re.compile(r"Costs?\s*\(?\s*(\d+)\s*\)?\s*less", re.IGNORECASE
 _HEALTH_COST_CN = re.compile(r"消耗\s*(\d+)\s*点(?:生命值|血量)|支付\s*(\d+)\s*点生命")
 _HEALTH_COST_EN = re.compile(r"(?:Pay|Cost)\s*(\d+)\s*(?:Health|health)|Lose\s*(\d+)\s*(?:Health|health)", re.IGNORECASE)
 
+# Chinese number → digit mapping
+_CN_DIGITS = {'一': 1, '两': 2, '二': 2, '三': 3, '四': 4, '五': 5,
+              '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
+
 
 def _first_int(pattern: "re.Pattern", text: str, default: int = 0) -> int:
     m = pattern.search(text)
     return int(m.group(1)) if m else default
+
+
+def _extract_draw(text: str) -> int:
+    """Extract draw count, handling both Arabic and Chinese numbers."""
+    # English pattern first
+    m = _DRAW_EN.search(text)
+    if m:
+        return int(m.group(1))
+    # Chinese pattern: 抽X张牌
+    m = _DRAW_CN.search(text)
+    if m:
+        matched = m.group(0)
+        # Try to find Arabic digit
+        dm = re.search(r'(\d+)', matched)
+        if dm:
+            return int(dm.group(1))
+        # Try Chinese number
+        for cn, val in _CN_DIGITS.items():
+            if cn in matched:
+                return val
+    return 0
 
 
 def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
@@ -140,7 +166,7 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
                 eff.damage = int(m.group(1))
 
     eff.heal = max(_first_int(_HEAL_CN, text), _first_int(_HEAL_EN, text))
-    eff.draw = max(_first_int(_DRAW_CN, text), _first_int(_DRAW_EN, text))
+    eff.draw = _extract_draw(text)
 
     m = _SUMMON_STATS_CN.search(text) or _SUMMON_STATS_EN.search(text)
     if m:
@@ -160,6 +186,10 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
     eff.discard = max(_first_int(_DISCARD_CN, text), _first_int(_DISCARD_EN, text))
     eff.cost_reduce = max(_first_int(_COST_REDUCE_CN, text), _first_int(_COST_REDUCE_EN, text))
 
+    # Armor (for spells like 盾牌格挡 "Gain 5 Armor. Draw a card")
+    if eff.armor == 0:
+        eff.armor = max(_first_int(_ARMOR_CN, text), _first_int(_ARMOR_EN, text))
+
     # Health cost detection
     m = _HEALTH_COST_CN.search(text)
     if m:
@@ -173,6 +203,9 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
         eff.has_destroy = True
     if "沉默" in text or "Silence" in text:
         eff.has_silence = True
+    # Text-based DISCOVER detection (when mechanics tag is missing)
+    if "发现" in text or "Discover" in text:
+        eff.has_discover = True
 
 
 def _fill_armor_from_text(text: str, eff: CardEffects) -> None:

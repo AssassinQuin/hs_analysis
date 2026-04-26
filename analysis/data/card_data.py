@@ -1044,17 +1044,37 @@ class CardDB:
         card_class: str,
         *,
         card_type: Optional[str] = None,
+        school: Optional[str] = None,
+        cost_max: Optional[int] = None,
+        card_set: Optional[str] = None,
         format: str = "standard",
         exclude_dbfids: Optional[Set[int]] = None,
     ) -> List[Dict[str, Any]]:
-        """Hearthstone discover pool: class + neutral, excludes hero/location."""
+        """Hearthstone discover pool: class + neutral, excludes hero/location.
+
+        Supports optional filters for spell school, mana cost ceiling, and
+        card set (expansion) — all applied via the efficient frozenset indexes.
+        """
         self._ensure_indexes()
-        class_cards = self.get_pool(card_class=card_class, format=format)
-        neutral_cards = self.get_pool(card_class="NEUTRAL", format=format)
+        # Use get_pool for the core class+format filter (fast frozenset index)
+        get_kwargs: dict = {"card_class": card_class, "format": format}
+        if card_type:
+            get_kwargs["card_type"] = card_type
+        if school:
+            get_kwargs["school"] = school
+        if card_set:
+            get_kwargs["card_set"] = card_set
+
+        class_cards = self.get_pool(**get_kwargs)
+
+        # Neutral cards: same filters but card_class="NEUTRAL"
+        neut_kwargs = dict(get_kwargs, card_class="NEUTRAL")
+        neutral_cards = self.get_pool(**neut_kwargs)
+
         pool = class_cards + neutral_cards
         pool = [c for c in pool if c.get("type", "") not in _EXCLUDED_DISCOVER_TYPES]
-        if card_type:
-            pool = [c for c in pool if c.get("type") == card_type]
+        if cost_max is not None:
+            pool = [c for c in pool if c.get("cost", 0) <= cost_max]
         if exclude_dbfids:
             excl = set(exclude_dbfids)
             pool = [c for c in pool if c.get("dbfId", -1) not in excl]

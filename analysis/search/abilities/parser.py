@@ -195,6 +195,12 @@ class AbilityParser:
 
     @classmethod
     def _parse_action_verbs(cls, text: str) -> List[EffectSpec]:
+        """Parse English action verbs via string.find() only.
+
+        Zero regex. Zero Chinese text. English verbs only.
+        Chinese text is handled by ``card_effects.get_effects()`` via
+        ``_supplement_with_structured``.
+        """
         effects: List[EffectSpec] = []
         tl = text.lower()
 
@@ -203,6 +209,7 @@ class AbilityParser:
             target_str = extract_target_kind(tl)
             effects.append(EffectSpec(
                 kind=EffectKind.SUMMON, value=atk, value2=hp,
+                text_raw=text,
                 target=TargetSpec(kind=TargetKind(target_str)) if target_str else None,
             ))
 
@@ -252,7 +259,7 @@ class AbilityParser:
             effects.append(EffectSpec(kind=EffectKind.DESTROY))
 
         if "discover" in tl:
-            effects.append(EffectSpec(kind=EffectKind.DISCOVER))
+            effects.append(EffectSpec(kind=EffectKind.DISCOVER, text_raw=text))
 
         if "freeze" in tl:
             effects.append(EffectSpec(kind=EffectKind.FREEZE))
@@ -344,78 +351,96 @@ class AbilityParser:
         eff = get_effects(card)
         effects: List[EffectSpec] = []
 
-        # Check if we already have these effects from verb parsing
-        existing_kinds = set()
+        # Build lookup of existing effects from verb parsing.
+        # Key insight: verb parsing may produce zero-value effects (e.g. SUMMON(0,0)
+        # for "Summon random 1-cost minions") that should NOT block the structured
+        # supplement from adding correct effects.
+        existing_by_kind: dict = {}
         for a in abilities:
             for e in a.effects:
-                existing_kinds.add(e.kind)
+                existing_by_kind.setdefault(e.kind, []).append(e)
 
-        # Direct damage (skip if verb parsing already found DAMAGE)
-        if eff.damage > 0 and EffectKind.DAMAGE not in existing_kinds:
+        def _has_meaningful(kind) -> bool:
+            """True if verb parsing found this kind with non-zero values or text_raw."""
+            for e in existing_by_kind.get(kind, []):
+                if e.value > 0 or e.value2 > 0:
+                    return True
+                if e.text_raw:
+                    return True
+            return False
+
+        # Direct damage (skip if verb parsing already found DAMAGE with value)
+        if eff.damage > 0 and not _has_meaningful(EffectKind.DAMAGE):
             effects.append(EffectSpec(
                 kind=EffectKind.DAMAGE, value=eff.damage,
             ))
 
         # Random damage
-        if eff.random_damage > 0 and EffectKind.DAMAGE not in existing_kinds:
+        if eff.random_damage > 0 and not _has_meaningful(EffectKind.DAMAGE):
             effects.append(EffectSpec(
                 kind=EffectKind.DAMAGE, value=eff.random_damage,
                 target=TargetSpec(kind=TargetKind.RANDOM_ENEMY),
             ))
 
         # AOE damage
-        if eff.aoe_damage > 0:
+        if eff.aoe_damage > 0 and not _has_meaningful(EffectKind.DAMAGE):
             effects.append(EffectSpec(
                 kind=EffectKind.DAMAGE, value=eff.aoe_damage,
                 target=TargetSpec(kind=TargetKind.ALL_ENEMY),
             ))
 
         # Heal
-        if eff.heal > 0 and EffectKind.HEAL not in existing_kinds:
+        if eff.heal > 0 and not _has_meaningful(EffectKind.HEAL):
             effects.append(EffectSpec(
                 kind=EffectKind.HEAL, value=eff.heal,
             ))
 
         # Draw
-        if eff.draw > 0 and EffectKind.DRAW not in existing_kinds:
+        if eff.draw > 0 and not _has_meaningful(EffectKind.DRAW):
             effects.append(EffectSpec(kind=EffectKind.DRAW, value=eff.draw))
 
-        # Summon
-        if eff.summon_attack > 0 and eff.summon_health > 0:
-            if EffectKind.SUMMON not in existing_kinds:
-                effects.append(EffectSpec(
-                    kind=EffectKind.SUMMON,
-                    value=eff.summon_attack, value2=eff.summon_health,
-                ))
+        # Summon — also add when has_summon=True but stats are 0 (random summons)
+        if eff.has_summon and not _has_meaningful(EffectKind.SUMMON):
+            card_text = getattr(card, 'text', '') or getattr(card, 'english_text', '') or ''
+            effects.append(EffectSpec(
+                kind=EffectKind.SUMMON,
+                value=eff.summon_attack, value2=eff.summon_health,
+                text_raw=card_text,
+            ))
 
         # Armor
-        if eff.armor > 0 and EffectKind.GAIN not in existing_kinds:
+        if eff.armor > 0 and not _has_meaningful(EffectKind.GAIN):
             effects.append(EffectSpec(
                 kind=EffectKind.GAIN, value=eff.armor, subtype="armor",
             ))
 
         # Buff attack
-        if eff.buff_attack > 0 and EffectKind.GIVE not in existing_kinds:
+        if eff.buff_attack > 0 and not _has_meaningful(EffectKind.GIVE):
             effects.append(EffectSpec(
                 kind=EffectKind.GIVE,
                 value=eff.buff_attack, value2=eff.buff_health,
             ))
 
         # Destroy
-        if eff.has_destroy and EffectKind.DESTROY not in existing_kinds:
+        if eff.has_destroy and EffectKind.DESTROY not in existing_by_kind:
             effects.append(EffectSpec(kind=EffectKind.DESTROY))
 
         # Discard
-        if eff.discard > 0 and EffectKind.DISCARD not in existing_kinds:
+        if eff.discard > 0 and EffectKind.DISCARD not in existing_by_kind:
             effects.append(EffectSpec(kind=EffectKind.DISCARD, value=eff.discard))
 
         # Cost reduce
-        if eff.cost_reduce > 0 and EffectKind.REDUCE_COST not in existing_kinds:
+        if eff.cost_reduce > 0 and EffectKind.REDUCE_COST not in existing_by_kind:
             effects.append(EffectSpec(kind=EffectKind.REDUCE_COST, value=eff.cost_reduce))
 
         # Silence
-        if eff.has_silence and EffectKind.SILENCE not in existing_kinds:
+        if eff.has_silence and EffectKind.SILENCE not in existing_by_kind:
             effects.append(EffectSpec(kind=EffectKind.SILENCE))
+
+        # Discover
+        if eff.has_discover and EffectKind.DISCOVER not in existing_by_kind:
+            card_text = getattr(card, 'text', '') or getattr(card, 'english_text', '') or ''
+            effects.append(EffectSpec(kind=EffectKind.DISCOVER, text_raw=card_text))
 
         if not effects:
             return abilities

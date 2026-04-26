@@ -102,6 +102,21 @@ _RACE_EN_MAP = {
 # Constraint parser
 # ===================================================================
 
+_SCHOOL_MAP_CN = {
+    '火焰': 'FIRE', '冰霜': 'FROST', '暗影': 'SHADOW', '神圣': 'HOLY',
+    '奥术': 'ARCANE', '自然': 'NATURE', '邪能': 'FEL',
+}
+_SCHOOL_MAP_EN = {
+    'fire': 'FIRE', 'frost': 'FROST', 'shadow': 'SHADOW', 'holy': 'HOLY',
+    'arcane': 'ARCANE', 'nature': 'NATURE', 'fel': 'FEL',
+}
+
+_COST_CEIL_CN = re.compile(r'(\d+)费(?:法术|随从|牌)')
+_COST_CEIL_EN = re.compile(r'(\d+)\s*-?\s*cost', re.IGNORECASE)
+_COST_LE_CN = re.compile(r'法力值消耗(?:小于等于?|不超过|≤?|<=?)\s*(\d+)')
+_COST_LE_EN = re.compile(r'costs?\s*(?:at most|<=?|≤)\s*(\d)', re.IGNORECASE)
+
+
 def _parse_discover_constraint(text: str) -> dict:
     if not text:
         return {}
@@ -139,6 +154,36 @@ def _parse_discover_constraint(text: str) -> dict:
                     result['card_type'] = 'MINION'
                 break
 
+    # Spell school filter
+    if 'school' not in result:
+        for cn, school_val in _SCHOOL_MAP_CN.items():
+            if cn in t:
+                result['school'] = school_val
+                break
+    if 'school' not in result:
+        for en, school_val in _SCHOOL_MAP_EN.items():
+            if en in tl:
+                result['school'] = school_val
+                break
+
+    # Cost ceiling filter ("X费法术", "cost ≤ X", etc.)
+    if 'cost_max' not in result:
+        m = _COST_CEIL_CN.search(t)
+        if m:
+            result['cost_max'] = int(m.group(1))
+        else:
+            m = _COST_CEIL_EN.search(tl)
+            if m:
+                result['cost_max'] = int(m.group(1))
+            else:
+                m = _COST_LE_CN.search(t)
+                if m:
+                    result['cost_max'] = int(m.group(1))
+                else:
+                    m = _COST_LE_EN.search(tl)
+                    if m:
+                        result['cost_max'] = int(m.group(1))
+
     return result
 
 
@@ -150,31 +195,38 @@ def generate_discover_pool(
     hero_class: str,
     card_type: Optional[str] = None,
     race: Optional[str] = None,
+    school: Optional[str] = None,
+    cost_max: Optional[int] = None,
+    card_set: Optional[str] = None,
     use_wild_pool: bool = False,
     from_past_only: bool = False,
 ) -> List[dict]:
     """Generate discover pool via CardIndex.discover_pool()."""
     try:
         idx = get_index()
+        pool_kwargs: dict = {}
+        if card_type:
+            pool_kwargs["card_type"] = card_type
+        if school:
+            pool_kwargs["school"] = school
+        if cost_max is not None:
+            pool_kwargs["cost_max"] = cost_max
+        if card_set:
+            pool_kwargs["card_set"] = card_set
+
         if from_past_only:
             wild_pool = idx.discover_pool(
-                hero_class,
-                card_type=card_type,
-                format="wild",
+                hero_class, format="wild", **pool_kwargs,
             )
             std_pool = idx.discover_pool(
-                hero_class,
-                card_type=card_type,
-                format="standard",
+                hero_class, format="standard", **pool_kwargs,
             )
             std_dbf = {c.get("dbfId") for c in std_pool if c.get("dbfId") is not None}
             pool = [c for c in wild_pool if c.get("dbfId") not in std_dbf]
         else:
             fmt = "wild" if use_wild_pool else "standard"
             pool = idx.discover_pool(
-                hero_class,
-                card_type=card_type,
-                format=fmt,
+                hero_class, format=fmt, **pool_kwargs,
             )
         if race:
             pool = [c for c in pool if race in (c.get('race', '') or '')]
@@ -198,6 +250,8 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         constraints = _parse_discover_constraint(card_text)
         ct = constraints.get('card_type')
         race = constraints.get('race')
+        school = constraints.get('school')
+        cost_max = constraints.get('cost_max')
 
         rune_name = None
         try:
@@ -211,6 +265,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
 
         pool = generate_discover_pool(
             hero_class, card_type=ct, race=race,
+            school=school, cost_max=cost_max,
             use_wild_pool=use_wild_pool,
             from_past_only=from_past_only,
         )
@@ -295,12 +350,15 @@ def resolve_discover_top_k(
     constraints = _parse_discover_constraint(card_text)
     ct = constraints.get('card_type')
     race = constraints.get('race')
+    school = constraints.get('school')
+    cost_max = constraints.get('cost_max')
 
     from_past_only = '来自过去' in card_text or 'from the past' in card_text.lower()
     use_wild_pool = from_past_only
 
     pool = generate_discover_pool(
         hero_class, card_type=ct, race=race,
+        school=school, cost_max=cost_max,
         use_wild_pool=use_wild_pool,
         from_past_only=from_past_only,
     )

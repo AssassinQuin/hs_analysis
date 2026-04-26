@@ -166,7 +166,7 @@ def _execute_single(
         return _exec_silence(state, effect, target)
 
     if kind == EffectKind.DISCOVER:
-        return _exec_discover(state, effect)
+        return _exec_discover(state, effect, source)
 
     if kind == EffectKind.COPY:
         return _exec_copy(state, effect, target)
@@ -315,7 +315,7 @@ def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
 
     Handles:
     - Fixed stat tokens (value/value2 > 0)
-    - Random minions from text ("Summon N random X-Cost minions") → placeholder 1/1 tokens
+    - Random minions from text ("Summon N random X-Cost minions") → query CardIndex
     """
     from analysis.search.game_state import Minion as _Minion
 
@@ -349,11 +349,58 @@ def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
                 text_count = max(text_count, int(digit_match.group(1)))
 
             actual_count = max(count, text_count)
-            # Create placeholder minions — cost-based approximation
-            for _ in range(actual_count):
-                if len(state.board) < 7:
-                    m = _Minion(attack=1, health=1, max_health=1, name="Random Minion", can_attack=False)
-                    state.board.append(m)
+
+            # Try to query real cards from the pool
+            cost_match = re.search(r'(\d+)[-]?cost', text_lower)
+            if not cost_match:
+                cost_match = re.search(r'(\d+)费', text_lower)
+
+            summoned_real = False
+            if cost_match:
+                try:
+                    from analysis.data.card_index import get_index
+                    idx = get_index()
+                    hero_class = getattr(state.hero, 'hero_class', '') or ''
+                    pool = idx.random_pool(
+                        actual_count,
+                        card_class=hero_class,
+                        card_type="MINION",
+                        cost=int(cost_match.group(1)),
+                    )
+                    # Also try neutral
+                    if len(pool) < actual_count:
+                        neutrals = idx.random_pool(
+                            actual_count - len(pool),
+                            card_class="NEUTRAL",
+                            card_type="MINION",
+                            cost=int(cost_match.group(1)),
+                        )
+                        pool.extend(neutrals)
+                    for card_dict in pool[:actual_count]:
+                        if len(state.board) >= 7:
+                            break
+                        from analysis.models.card import Card
+                        c = Card.from_hsdb_dict(card_dict)
+                        m = _Minion(
+                            dbf_id=getattr(c, 'dbf_id', 0),
+                            name=getattr(c, 'name', 'Random Minion'),
+                            attack=getattr(c, 'attack', 1),
+                            health=getattr(c, 'health', 1),
+                            max_health=getattr(c, 'health', 1),
+                            cost=getattr(c, 'cost', 1),
+                            can_attack=False,
+                        )
+                        state.board.append(m)
+                    summoned_real = pool and len(state.board) < 7 + actual_count
+                except (ImportError, OSError, ValueError):
+                    pass
+
+            # Fallback: placeholder 1/1 tokens
+            if not summoned_real:
+                for _ in range(actual_count):
+                    if len(state.board) < 7:
+                        m = _Minion(attack=1, health=1, max_health=1, name="Random Minion", can_attack=False)
+                        state.board.append(m)
     return state
 
 
@@ -480,10 +527,25 @@ def _exec_silence(state: GameState, effect: EffectSpec, target) -> GameState:
     return state
 
 
-def _exec_discover(state: GameState, effect: EffectSpec) -> GameState:
-    """DISCOVER: placeholder — full discover needs pool query + branching."""
-    # Discover is handled at the orchestration layer (simulation.py)
-    # because it requires branching the search tree.
+def _exec_discover(state: GameState, effect: EffectSpec, source=None) -> GameState:
+    """DISCOVER: resolve discover by picking the best card from the pool.
+
+    Uses the discover framework to generate a pool, sample 3 cards,
+    and add the highest-scored one to hand.
+    """
+    from analysis.search.discover import resolve_discover
+
+    # Get card text from source card or effect
+    card_text = ''
+    if source is not None:
+        card_text = getattr(source, 'text', '') or ''
+        if not card_text:
+            card_text = getattr(source, 'english_text', '') or ''
+    if not card_text and effect.text_raw:
+        card_text = effect.text_raw
+
+    if card_text:
+        state = resolve_discover(state, card_text)
     return state
 
 

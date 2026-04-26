@@ -91,6 +91,11 @@ class Expander:
             # When opponent ends their turn, we advance a full turn
             if not node.is_player_turn:  # opponent just ended
                 turn_depth += 1
+                # Preserve our overload across opponent's turn.
+                # Opponent's _apply_end_turn incorrectly overwrites our
+                # mana.overloaded with their overload_next (0).
+                our_overloaded = state.mana.overloaded
+                new_state.mana.overloaded = our_overloaded
                 # Advance state to our next turn
                 new_state = self._advance_after_opponent_turn(new_state)
 

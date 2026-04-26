@@ -617,6 +617,7 @@ class StateBridge:
 
         avg = total_cost / n
         low_pct = low / n
+        mid_pct = mid / n
         high_pct = high / n
 
         if avg <= 2.0 and low_pct >= 0.55:
