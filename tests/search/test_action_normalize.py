@@ -4,7 +4,7 @@
 import pytest
 
 from analysis.search.abilities import Action, ActionType
-from analysis.search.game_state import GameState
+from analysis.engine.state import GameState
 from analysis.search.action_normalize import (
     action_hash,
     are_commutative,

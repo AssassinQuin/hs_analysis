@@ -6,12 +6,17 @@ import random
 import re
 from typing import Optional
 
-from analysis.data.card_effects import (
-    _DAMAGE_CN, _DAMAGE_EN, _HEAL_CN, _HEAL_EN,
-    _DRAW_CN, _DRAW_EN, _BUFF_ATK_CN, _BUFF_ATK_EN,
-    _SUMMON_STATS_CN, _SUMMON_STATS_EN,
-)
-from analysis.search.game_state import GameState
+try:
+    from analysis.data.card_effects import (
+        _DAMAGE_CN, _DAMAGE_EN, _HEAL_CN, _HEAL_EN,
+        _DRAW_CN, _DRAW_EN, _BUFF_ATK_CN, _BUFF_ATK_EN,
+        _SUMMON_STATS_CN, _SUMMON_STATS_EN,
+    )
+except ImportError:
+    _DAMAGE_CN = _DAMAGE_EN = _HEAL_CN = _HEAL_EN = None
+    _DRAW_CN = _DRAW_EN = _BUFF_ATK_CN = _BUFF_ATK_EN = None
+    _SUMMON_STATS_CN = _SUMMON_STATS_EN = None
+from analysis.engine.state import GameState
 
 
 class RNGModel:

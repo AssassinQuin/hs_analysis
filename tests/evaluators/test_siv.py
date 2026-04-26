@@ -16,7 +16,7 @@ from analysis.evaluators.siv import (
     progress_modifier,
     counter_modifier,
 )
-from analysis.search.game_state import HeroState, ManaState, Minion, OpponentState
+from analysis.engine.state import HeroState, ManaState, Minion, OpponentState
 
 
 # ──────────────────────────────────────────────

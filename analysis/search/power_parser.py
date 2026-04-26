@@ -72,7 +72,7 @@ def extract_game_state(game, player_index=0):
     Returns:
         (hero_state, mana_state, minions, hand) 四元组
     """
-    from analysis.search.game_state import (
+    from analysis.engine.state import (
         GameState, HeroState, ManaState, Minion, OpponentState
     )
 

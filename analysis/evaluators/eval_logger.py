@@ -19,7 +19,7 @@ import json
 import time
 from typing import TextIO, Optional
 
-from analysis.search.game_state import GameState, Minion
+from analysis.engine.state import GameState, Minion
 from analysis.evaluators.archetype_profile import get_profile
 
 

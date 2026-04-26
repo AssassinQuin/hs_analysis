@@ -7,10 +7,10 @@ from typing import Optional, List, NamedTuple, Callable, Any
 
 from hearthstone.enums import GameTag, Zone, CardType
 
-from analysis.search.game_state import (
+from analysis.engine.state import (
     GameState, HeroState, ManaState, Minion, OpponentState, Weapon,
 )
-from analysis.search.keywords import KeywordSet
+from analysis.abilities.keywords import KeywordSet
 from analysis.models.card import Card
 
 log = logging.getLogger(__name__)
@@ -390,7 +390,7 @@ class StateBridge:
         # Auto-attach trigger enchantments from registry
         if minion_data.name:
             try:
-                from analysis.search.trigger_registry import get_triggers_for_minion
+                from analysis.engine.enchantment import get_triggers_for_minion
                 triggers = get_triggers_for_minion(minion_data.name)
                 if triggers:
                     minion_data.enchantments = getattr(minion_data, 'enchantments', []) + triggers
@@ -661,8 +661,9 @@ class StateBridge:
             self._apply_field_map(self._OPP_FIELD_MAP, opp_state, global_state)
 
             # Player mechanics from GlobalGameState → MechanicsState (special case)
-            from analysis.search.mechanics_state import MechanicsState
-            game_state._mechanics = MechanicsState.from_global_state(global_state)
+            # NOTE: mechanics_state.py removed in Phase 0 — skip
+            # from analysis.search.mechanics_state import MechanicsState
+            # game_state._mechanics = MechanicsState.from_global_state(global_state)
 
             # Apply declarative player field mappings
             self._apply_field_map(self._PLAYER_FIELD_MAP, game_state, global_state)

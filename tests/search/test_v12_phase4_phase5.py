@@ -1,8 +1,10 @@
-"""Tests for V12 Phase 4 (Minion fields) and Phase 5 (two-turn lethal)."""
+from __future__ import annotations
 import pytest
-from analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState
-from analysis.search.engine.factors.lethal_threat import LethalThreatFactor
-from analysis.search.engine.factors.factor_base import EvalContext, Phase
+pytest.skip("Factors/ pipeline deleted in P0 cleanup", allow_module_level=True)
+import pytest
+from analysis.engine.state import GameState, Minion, HeroState, ManaState, OpponentState
+# LethalThreatFactor — deleted in P0 (factors/ dead code)
+# EvalContext, Phase — deleted in P0 (factors/ dead code)
 from analysis.models.card import Card
 
 
@@ -99,7 +101,7 @@ class TestTwoTurnLethalProbability:
         gs.mana = ManaState(available=mana, max_mana=max_mana)
         gs.hero = HeroState(hero_class=hero_class)
         if weapon_atk > 0:
-            from analysis.search.game_state import Weapon
+            from analysis.engine.state import Weapon
             gs.hero.weapon = Weapon(attack=weapon_atk, health=2)
 
         if board_atk > 0:

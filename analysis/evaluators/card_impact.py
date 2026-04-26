@@ -11,7 +11,7 @@ All dimensions are weighted by archetype profile:
 """
 from __future__ import annotations
 
-from analysis.search.game_state import GameState, Minion
+from analysis.engine.state import GameState, Minion
 from analysis.evaluators.archetype_profile import get_profile
 
 

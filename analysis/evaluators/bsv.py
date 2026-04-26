@@ -15,8 +15,8 @@ from __future__ import annotations
 import math
 from typing import List, Tuple
 
-from analysis.search.game_state import GameState, Minion
-from analysis.models.phase import Phase, detect_phase
+from analysis.engine.state import GameState, Minion
+from analysis.models import Phase, detect_phase
 from analysis.evaluators.archetype_profile import get_profile
 from analysis.evaluators.card_impact import (
     _minion_impact,

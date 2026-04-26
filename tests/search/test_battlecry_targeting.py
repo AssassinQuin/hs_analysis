@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from analysis.search.game_state import (
+from analysis.engine.state import (
     GameState,
     HeroState,
     ManaState,
@@ -22,9 +22,9 @@ from analysis.search.engine.mechanics.spell_target_resolver import (
     TargetEntityType,
     TargetSide,
 )
-from analysis.search.abilities.actions import ActionType
+from analysis.abilities.definition import ActionType
 from analysis.models.card import Card
-from analysis.search.abilities.enumeration import enumerate_legal_actions
+from analysis.engine.rules import enumerate_legal as enumerate_legal_actions
 
 
 # ---------------------------------------------------------------------------

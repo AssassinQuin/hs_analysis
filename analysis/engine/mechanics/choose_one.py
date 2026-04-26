@@ -1,0 +1,177 @@
+# [从 analysis/search/choose_one.py 迁移而来]
+# 原文件仍保留，后续 Phase 统一 import 路径后删除原文件。
+from __future__ import annotations
+
+"""choose_one.py — Choose One (抉择) mechanic for Hearthstone AI.
+
+Druid-exclusive mechanic: when playing a Choose One card, pick one of two
+mutually exclusive effects. If Fandral Staghelm is on board, both effects apply.
+"""
+
+import re
+from analysis.engine.state import GameState, Minion
+from analysis.models.card import Card
+from analysis.evaluators.composite import target_selection_eval
+
+
+def is_choose_one(card) -> bool:
+    """Detect Choose One cards via mechanics tag or English text.
+
+    Standard 1: English-Only Logic Layer — no CN text in detection.
+    """
+    mechanics = set(getattr(card, 'mechanics', []) or [])
+    if 'CHOOSE_ONE' in mechanics:
+        return True
+    en_text = (getattr(card, 'english_text', '') or '').lower()
+    return 'choose one' in en_text or 'choose one' in en_text
+
+
+def has_fandral(state: GameState) -> bool:
+    """Check if a friendly minion grants both Choose One effects.
+
+    Detects via card English text containing 'both effects' and 'choose one'.
+    """
+    for m in state.board:
+        card = getattr(m, 'card_ref', None)
+        if card:
+            text = (getattr(card, 'english_text', '') or '').lower()
+            if 'both effects' in text and 'choose one' in text:
+                return True
+    return False
+
+
+def parse_choose_options(card_text: str, english_text: str = '') -> list[dict]:
+    if not card_text:
+        return []
+    # Try EN format first if english_text available
+    if english_text:
+        parts = re.split(r'\s*—\s*or\s*—\s*|\s*;\s*or\s*', english_text)
+        if len(parts) >= 2:
+            options = []
+            for p in parts:
+                p = p.strip()
+                if not p:
+                    continue
+                effects = _parse_option_effects(p)
+                options.append({'text': p, 'effects': effects})
+            if options:
+                return options[:2]
+    # CN fallback
+    parts = re.split(r'[；;]\s*或者\s*|[；;]\s*—or\s*', card_text)
+    if len(parts) < 2:
+        parts = re.split(r'抉择[：:]\s*', card_text)
+        if len(parts) >= 2:
+            parts = parts[1:]
+            sub = re.split(r'[；;]\s*或者?\s*', parts[0]) if parts else []
+            if len(sub) >= 2:
+                parts = sub
+    options = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        effects = _parse_option_effects(p)
+        options.append({'text': p, 'effects': effects})
+    return options[:2]
+
+
+def _parse_option_effects(text: str) -> list[tuple]:
+    effects = []
+    text_lower = text.lower()
+    m = re.search(r'(\d+)/(\d+)', text)
+    if m:
+        effects.append(('transform_stats', int(m.group(1)), int(m.group(2))))
+    m = re.search(r"Gain\s*(\d+)\s*(?:Armor|armor)", text)
+    if not m:
+        m = re.search(r'获得\s*\+?\s*(\d+)\s*点?护甲', text)
+    if m:
+        effects.append(('armor', int(m.group(1))))
+    m = re.search(r"Gain\s*\+?\s*(\d+)\s*(?:Attack|attack)", text)
+    if not m:
+        m = re.search(r'获得\s*\+?\s*(\d+)\s*点?攻击力', text)
+    if m:
+        effects.append(('buff_attack', int(m.group(1))))
+    m = re.search(r"Summon\s*(?:a\s+)?(\d+)/(\d+)", text)
+    if not m:
+        m = re.search(r'召唤\s*(?:一个\s*)?(\d+)/(\d+)', text)
+    if m:
+        effects.append(('summon', int(m.group(1)), int(m.group(2))))
+    m = re.search(r"Draw\s*(\d+)", text)
+    if not m:
+        m = re.search(r'抽\s*(\d+)\s*张', text)
+    if m:
+        effects.append(('draw', int(m.group(1))))
+    if 'Taunt' in text or 'taunt' in text_lower or '嘲讽' in text:
+        effects.append(('give_taunt',))
+    if 'Charge' in text or 'charge' in text_lower or '冲锋' in text:
+        effects.append(('give_charge',))
+    if 'Rush' in text or 'rush' in text_lower or '突袭' in text:
+        effects.append(('give_rush',))
+    if not effects:
+        effects.append(('no_effect',))
+    return effects
+
+
+def resolve_choose_one(state: GameState, card: Card, minion: Minion) -> GameState:
+    en_text = getattr(card, 'english_text', '') or ''
+    if not has_fandral(state):
+        options = parse_choose_options(getattr(card, 'text', '') or '', english_text=en_text)
+        if not options:
+            return state
+        best = _pick_best_option(state, options, minion)
+        return _apply_option(state, best, minion)
+    else:
+        options = parse_choose_options(getattr(card, 'text', '') or '', english_text=en_text)
+        for opt in options:
+            state = _apply_option(state, opt, minion)
+        return state
+
+
+def _pick_best_option(state: GameState, options: list[dict], minion: Minion) -> dict:
+    if len(options) == 1:
+        return options[0]
+    best_score = float('-inf')
+    best_opt = options[0]
+    for opt in options:
+        try:
+            sim = state.copy()
+            sim = _apply_option(sim, opt, minion)
+            score = target_selection_eval(sim)
+            if score > best_score:
+                best_score = score
+                best_opt = opt
+        except Exception:
+            continue
+    return best_opt
+
+
+def _apply_option(state: GameState, option: dict, minion: Minion) -> GameState:
+    s = state
+    for eff in option.get('effects', []):
+        if eff[0] == 'transform_stats':
+            s.board = [m for m in s.board if m is not minion]
+            minion.attack = eff[1]
+            minion.health = eff[2]
+            minion.max_health = eff[2]
+            s.board.append(minion)
+        elif eff[0] == 'armor':
+            s.hero.armor += eff[1]
+        elif eff[0] == 'buff_attack':
+            minion.attack += eff[1]
+        elif eff[0] == 'summon':
+            if len(s.board) < 7:
+                from analysis.engine.state import Minion as _Minion
+                s.board.append(_Minion(attack=eff[1], health=eff[2], max_health=eff[2],
+                                       name="Token", can_attack=False))
+        elif eff[0] == 'draw':
+            for _ in range(eff[1]):
+                if s.deck_remaining > 0:
+                    s.deck_remaining -= 1
+        elif eff[0] == 'give_taunt':
+            minion.has_taunt = True
+        elif eff[0] == 'give_charge':
+            minion.has_charge = True
+            minion.can_attack = True
+        elif eff[0] == 'give_rush':
+            minion.has_rush = True
+    return s

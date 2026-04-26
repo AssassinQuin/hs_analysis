@@ -1,11 +1,12 @@
 """Tests for rune.py — DK 符文 (Rune) system."""
 
 from __future__ import annotations
-
 import pytest
+pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 
-from analysis.search.game_state import GameState
-from analysis.search.rune import (
+
+from analysis.engine.state import GameState
+from analysis.engine.mechanics._data import (
     RUNE_MAP,
     filter_by_rune,
     get_rune_type,

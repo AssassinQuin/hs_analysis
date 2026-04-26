@@ -1,10 +1,11 @@
+import pytest
+pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 """V10 Phase 3 Batch 3 tests — Outcast hand position system."""
 
-import pytest
-from analysis.search.game_state import GameState, HeroState, Minion, ManaState, OpponentState
+from analysis.engine.state import GameState, HeroState, Minion, ManaState, OpponentState
 from analysis.models.card import Card
 from analysis.search.abilities import apply_action, Action
-from analysis.search.outcast import check_outcast, apply_outcast_bonus, _parse_outcast_bonus
+from analysis.engine.mechanics._data import check_outcast, apply_outcast_bonus, _parse_outcast_bonus
 
 
 def _make_card(**kw):

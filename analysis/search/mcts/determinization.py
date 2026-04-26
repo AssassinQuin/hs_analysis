@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional, TYPE_CHECKING
 
-from analysis.search.game_state import GameState, OpponentState
+from analysis.engine.state import GameState, OpponentState
 
 if TYPE_CHECKING:
     from analysis.models.card import Card

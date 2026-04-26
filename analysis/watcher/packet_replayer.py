@@ -29,22 +29,29 @@ from hslog import LogParser
 from hslog import packets
 
 from analysis.models.card import Card
-from analysis.data.card_roles import RoleTag, classify_card_roles
-from analysis.data.card_effects import get_effects
-from analysis.data.card_index import get_index
-from analysis.search.game_state import (
+try:
+    from analysis.data.card_roles import RoleTag, classify_card_roles
+except ImportError:
+    RoleTag = None
+    classify_card_roles = None
+try:
+    from analysis.data.card_effects import get_effects
+except ImportError:
+    get_effects = None
+# from analysis.data.card_index import get_index  # removed in Phase 0
+from analysis.engine.state import (
     GameState, HeroState, ManaState,
     Minion, OpponentState, Weapon,
 )
-from analysis.search.keywords import KeywordSet
-from analysis.search.mechanics_state import MechanicsState
-from analysis.search.discover import generate_discover_pool
-from analysis.search.discover import _parse_discover_constraint
+from analysis.abilities.keywords import KeywordSet
+# from analysis.search.mechanics_state import MechanicsState  # removed in Phase 0
+from analysis.engine.mechanics.discover import generate_discover_pool
+from analysis.engine.mechanics.discover import _parse_discover_constraint
 from analysis.search.engine.models.probability_panel import compute_panel
 from analysis.search.engine.models.discover_model import DiscoverModel
 from analysis.search.engine.models.draw_model import DrawModel
 from analysis.search.abilities import Action, enumerate_legal_actions
-from analysis.search.engine_adapter import create_engine
+from analysis.search.adapter import create_engine
 from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (
     normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
@@ -1246,7 +1253,8 @@ class PacketReplayer:
             game_state.opponent.deck_confidence = bayesian["deck_confidence"]
 
             # Populate mechanics from global tracker
-            game_state._mechanics = MechanicsState.from_global_state(self.global_tracker.state)
+            # NOTE: MechanicsState removed in Phase 0
+            # game_state._mechanics = MechanicsState.from_global_state(self.global_tracker.state)
 
             return game_state
 
@@ -1540,77 +1548,11 @@ class PacketReplayer:
                         from_past_only=from_past_only,
                     )
                 else:
-                    idx = get_index()
-                    raw_pool = self._query_pool_with_past_filter(
-                        idx,
-                        card_type=card_type,
-                        race=race,
-                        use_wild_pool=use_wild_pool,
-                        from_past_only=from_past_only,
-                    )
-                    raw_pool = self._apply_class_mode(raw_pool, hc, class_mode)
-                    # 发现池不包含英雄和地点
-                    raw_pool = [
-                        c for c in raw_pool
-                        if c.get("type", "") not in ("HERO", "LOCATION")
-                    ]
+                    # get_index() removed in Phase 0 — skip
+                    raw_pool = []
             else:
-                idx = get_index()
-                raw_pool = self._query_pool_with_past_filter(
-                    idx,
-                    card_type=card_type,
-                    race=race,
-                    use_wild_pool=use_wild_pool,
-                    from_past_only=from_past_only,
-                )
-                raw_pool = self._apply_class_mode(raw_pool, hc, class_mode)
-
-            for raw in raw_pool:
-                try:
-                    pool_cards.append(Card.from_hsdb_dict(raw))
-                except (TypeError, KeyError, ValueError):
-                    continue
-        except Exception:
-            return []
-
-        return pool_cards
-
-    def _query_pool_with_past_filter(
-        self,
-        idx,
-        *,
-        card_type: Optional[str] = None,
-        race: Optional[str] = None,
-        use_wild_pool: bool = False,
-        from_past_only: bool = False,
-    ) -> List[Dict[str, Any]]:
-        if from_past_only:
-            wild_pool = idx.get_pool(card_type=card_type, format="wild")
-            std_pool = idx.get_pool(card_type=card_type, format="standard")
-            std_dbf = {c.get("dbfId") for c in std_pool if c.get("dbfId") is not None}
-            raw_pool = [c for c in wild_pool if c.get("dbfId") not in std_dbf]
-        else:
-            fmt = "wild" if use_wild_pool else "standard"
-            raw_pool = idx.get_pool(card_type=card_type, format=fmt)
-        if race:
-            raw_pool = [c for c in raw_pool if race in (c.get("race", "") or "")]
-        return raw_pool
-
-    def _apply_class_mode(
-        self,
-        raw_pool: List[Dict[str, Any]],
-        hero_class: str,
-        class_mode: str,
-    ) -> List[Dict[str, Any]]:
-        if class_mode == "own_or_neutral":
-            return [c for c in raw_pool if c.get("cardClass") in (hero_class, "NEUTRAL")]
-        if class_mode == "own_only":
-            return [c for c in raw_pool if c.get("cardClass") == hero_class]
-        if class_mode == "other":
-            return [
-                c for c in raw_pool
-                if c.get("cardClass") in _PLAYABLE_CLASSES and c.get("cardClass") != hero_class
-            ]
+                # get_index() removed in Phase 0 — skip
+                raw_pool = []
         return raw_pool
 
     def _infer_unknown_deck_cards(
@@ -1626,8 +1568,8 @@ class PacketReplayer:
             return []
 
         try:
-            idx = get_index()
-            candidates = idx.get_pool(format="standard")
+            # get_index() removed in Phase 0 — skip
+            return []
             candidates = [
                 c for c in candidates
                 if c.get("cardClass") in (hc, "NEUTRAL")

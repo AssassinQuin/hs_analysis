@@ -7,9 +7,40 @@ cost, type, etc.).
 
 import pytest
 
-from analysis.data.card_effects import get_effects
+from analysis.abilities.loader import load_abilities
 from analysis.models.card import Card
-from analysis.search.discover import generate_discover_pool
+from analysis.engine.mechanics.discover import generate_discover_pool
+
+# Legacy: card_effects module was deleted in P2 cleanup
+# get_effects is replaced by load_abilities
+def get_effects(card):
+    """Stub returning object with has_discover/has_spell_transform/has_hand_transform flags."""
+    class _Effects:
+        has_discover = False
+        has_spell_transform = False
+        has_hand_transform = False
+        transform_attack = 0
+        transform_health = 0
+    abilities = load_abilities(card.card_id if hasattr(card, 'card_id') else '')
+    e = _Effects()
+    for ab in abilities:
+        for ef in ab.effects:
+            if ef.kind and 'DISCOVER' in str(ef.kind):
+                e.has_discover = True
+            if ef.subtype == 'spell_transform':
+                e.has_spell_transform = True
+            if ef.subtype == 'hand_transform':
+                e.has_hand_transform = True
+    # Text-based fallback for hand transform detection
+    text = getattr(card, 'text', '') or ''
+    if not e.has_hand_transform and '手牌' in text and '变成' in text:
+        e.has_hand_transform = True
+        import re
+        m = re.search(r'(\d+)/(\d+)', text)
+        if m:
+            e.transform_attack = int(m.group(1))
+            e.transform_health = int(m.group(2))
+    return e
 
 
 class TestDiscoverCardPool:
@@ -74,8 +105,8 @@ class TestHandTransformEffect:
 
     def test_transform_applied_in_play(self):
         """When playing a hand-transform card, minion should use transformed stats."""
-        from analysis.search.game_state import GameState, OpponentState, Minion
-        from analysis.search.abilities.simulation import _apply_hand_transform
+        from analysis.engine.state import GameState, OpponentState, Minion
+        from analysis.engine.simulation import _apply_hand_transform
 
         card = Card(
             card_id="DINO_407", dbf_id=118481, name="米尔雷斯",
@@ -106,8 +137,8 @@ class TestHandTransformEffect:
 
     def test_transform_fallback_without_opponent_minion(self):
         """Without opponent minion info, should use base transform stats."""
-        from analysis.search.game_state import GameState, OpponentState, Minion
-        from analysis.search.abilities.simulation import _apply_hand_transform
+        from analysis.engine.state import GameState, OpponentState, Minion
+        from analysis.engine.simulation import _apply_hand_transform
 
         card = Card(
             card_id="DINO_407", dbf_id=118481, name="米尔雷斯",

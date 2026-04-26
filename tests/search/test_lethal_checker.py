@@ -4,7 +4,7 @@
 import time
 import pytest
 
-from analysis.search.game_state import (
+from analysis.engine.state import (
     GameState,
     Minion,
     HeroState,
@@ -14,7 +14,7 @@ from analysis.search.game_state import (
 )
 from analysis.models.card import Card
 from analysis.search.abilities import ActionType
-from analysis.search.lethal_checker import check_lethal, max_damage_bound
+from analysis.search.lethal import check_lethal, max_damage_bound
 
 
 def test_no_lethal_possible():

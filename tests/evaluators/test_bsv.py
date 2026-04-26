@@ -14,8 +14,8 @@ from analysis.evaluators.bsv import (
     eval_survival_v10,
     PHASE_WEIGHTS,
 )
-from analysis.models.phase import Phase, detect_phase
-from analysis.search.game_state import HeroState, ManaState, Minion, OpponentState, Weapon
+from analysis.models import Phase, detect_phase
+from analysis.engine.state import HeroState, ManaState, Minion, OpponentState, Weapon
 
 
 # ──────────────────────────────────────────────

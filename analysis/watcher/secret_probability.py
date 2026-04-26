@@ -66,7 +66,7 @@ def _infer_trigger_event(card_id: str, card) -> str:
     # Use GameTag.TRIGGER_SECRETS if available, or infer from mechanics
     # Simplified: use SECRET_DEFS from secret_triggers.py mapping if available
     try:
-        from analysis.search.secret_triggers import SECRET_DEFS
+        from analysis.engine.mechanics.secret import SECRET_DEFS
         if card_id in SECRET_DEFS:
             return SECRET_DEFS[card_id][0]  # trigger_event
     except ImportError:

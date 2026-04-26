@@ -6,8 +6,11 @@ import math
 import random
 from typing import List, Optional, Tuple
 
-from analysis.data.card_roles import RoleTag, classify_card_roles
-from analysis.search.game_state import GameState
+try:
+    from analysis.data.card_roles import RoleTag, classify_card_roles
+except ImportError:
+    RoleTag = classify_card_roles = None
+from analysis.engine.state import GameState
 
 
 class DiscoverModel:

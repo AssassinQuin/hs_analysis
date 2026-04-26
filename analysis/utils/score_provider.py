@@ -120,7 +120,7 @@ def _get_provider(report_path: str, score_field: str) -> "ScoreProvider":
 
 
 def load_scores_into_hand(state_or_hand, report_path: Optional[str] = None):
-    from analysis.search.game_state import GameState
+    from analysis.engine.state import GameState
 
     if isinstance(state_or_hand, GameState):
         hand = state_or_hand.hand

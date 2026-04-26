@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from analysis.data.card_roles import RoleTag
+try:
+    from analysis.data.card_roles import RoleTag
+except ImportError:
+    RoleTag = None
 from analysis.search.engine.models.discover_model import DiscoverModel
 from analysis.search.engine.models.draw_model import DrawModel
-from analysis.search.game_state import GameState
+from analysis.engine.state import GameState
 
 
 @dataclass

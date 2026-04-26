@@ -16,8 +16,21 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import List, Optional, Callable
 
-from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, _AOE_CN, _AOE_EN
-from analysis.search.game_state import GameState, Minion
+try:
+    from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, _AOE_CN, _AOE_EN
+except ImportError:
+    _DAMAGE_CN = _DAMAGE_EN = _AOE_CN = _AOE_EN = None
+
+# Fallback regex patterns when card_effects module is unavailable
+if _DAMAGE_CN is None:
+    _DAMAGE_CN = re.compile(r'造成\s*(\d+)\s*点?伤害')
+if _DAMAGE_EN is None:
+    _DAMAGE_EN = re.compile(r'[Dd]eal\s+(\d+)\s*damage')
+if _AOE_CN is None:
+    _AOE_CN = re.compile(r'所有|全部')
+if _AOE_EN is None:
+    _AOE_EN = re.compile(r'[Aa]ll')
+from analysis.engine.state import GameState, Minion
 from analysis.models.card import Card
 
 
@@ -303,7 +316,11 @@ class SpellTargetResolver:
         target_clause = self._extract_target_clause(text)
 
         # Has damage in target clause → must need a target
-        has_damage = bool(_DAMAGE_EN.search(target_clause) or _DAMAGE_CN.search(target_clause))
+        has_damage = False
+        if _DAMAGE_EN is not None:
+            has_damage = bool(_DAMAGE_EN.search(target_clause))
+        if not has_damage and _DAMAGE_CN is not None:
+            has_damage = bool(_DAMAGE_CN.search(target_clause))
         has_targeting_keyword = any(
             re.search(kw, target_clause, re.IGNORECASE) for kw in _TARGETING_KEYWORDS
         )
@@ -564,7 +581,9 @@ class SpellTargetResolver:
         for p in _AOE_PATTERNS:
             if p.search(text):
                 return True
-        if _AOE_EN.search(text) or _AOE_CN.search(text):
+        if _AOE_EN is not None and _AOE_EN.search(text):
+            return True
+        if _AOE_CN is not None and _AOE_CN.search(text):
             return True
         if re.search(r"对所有.*?造成", text):
             return True

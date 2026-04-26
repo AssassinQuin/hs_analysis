@@ -2,9 +2,9 @@
 
 import pytest
 from types import SimpleNamespace
-from analysis.search.game_state import GameState, HeroState, ManaState, OpponentState
+from analysis.engine.state import GameState, HeroState, ManaState, OpponentState
 from analysis.models.card import Card
-from analysis.search.quest import (
+from analysis.engine.mechanics.quest import (
     QuestState, parse_quest, track_quest_progress,
     _parse_threshold, _parse_constraint, _determine_quest_type,
 )

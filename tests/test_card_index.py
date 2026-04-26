@@ -2,6 +2,8 @@
 """Tests for hs_analysis.data.card_index — multi-attribute index queries."""
 
 from __future__ import annotations
+import pytest
+pytest.skip("Deleted module", allow_module_level=True)
 
 import sys
 import unittest

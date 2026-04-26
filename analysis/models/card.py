@@ -59,8 +59,12 @@ class Card:
     def abilities(self):
         if self._abilities is None:
             try:
-                from analysis.search.abilities.parser import AbilityParser
-                self._abilities = AbilityParser.parse(self)
+                from analysis.abilities.loader import load_abilities
+                loaded = load_abilities(self.card_id)
+                if loaded:
+                    self._abilities = loaded
+                else:
+                    self._abilities = []
             except Exception:
                 self._abilities = []
         return self._abilities
@@ -81,11 +85,8 @@ class Card:
         return get_effects(self)
 
     def compute_mechanics(self) -> list:
-        from analysis.data.card_cleaner import extract_mechanics
-        self.mechanics = extract_mechanics(
-            self.text, self.mechanics, self.card_type,
-        )
-        return self.mechanics
+        # card_cleaner removed in Phase 0 — return existing mechanics
+        return self.mechanics or []
 
     def effective_overload(self) -> int:
         if self.overload > 0:

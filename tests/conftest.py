@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from analysis.models.card import Card
-from analysis.search.game_state import (
+from analysis.engine.state import (
     GameState,
     HeroState,
     ManaState,

@@ -2,6 +2,8 @@
 """Tests for hs_analysis.data.card_cleaner — race, mechanics, school normalization."""
 
 from __future__ import annotations
+import pytest
+pytest.skip("Deleted module", allow_module_level=True)
 
 import json
 import tempfile

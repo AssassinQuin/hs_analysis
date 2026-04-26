@@ -10,9 +10,15 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.engine.state import GameState
 
 log = logging.getLogger(__name__)
+
+# Graceful fallback for deleted module
+try:
+    from analysis.data.card_effects import get_effects
+except ImportError:
+    get_effects = None
 
 
 def _draw_from_deck(state: GameState) -> object | None:
@@ -114,9 +120,9 @@ def _greedy_self_play(state: GameState) -> GameState:
     Evaluates cards by: stats/cost ratio for minions, spell impact from text,
     weapon attack value. Prefers cards with combo/battlecry synergy.
     """
-    from analysis.search.abilities.actions import ActionType
-    from analysis.search.abilities.simulation import apply_action
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
+    from analysis.abilities.definition import ActionType
+    from analysis.engine.simulation import apply_action
+    from analysis.engine.rules import enumerate_legal_actions
 
     s = state
     max_plays = 7
@@ -139,7 +145,7 @@ def _greedy_self_play(state: GameState) -> GameState:
             if 0 <= idx < len(s.hand):
                 card = s.hand[idx]
                 eff_cost = s.mana.effective_cost(card)
-                from analysis.search.abilities.simulation import _apply_text_cost_reduction
+                from analysis.engine.simulation import _apply_text_cost_reduction
                 eff_cost = _apply_text_cost_reduction(card, s.hand, idx, eff_cost)
                 if eff_cost > s.mana.available:
                     return -100
@@ -149,14 +155,14 @@ def _greedy_self_play(state: GameState) -> GameState:
                 text = (getattr(card, 'text', '') or '').lower()
 
                 # Hand-transform: use transformed stats for evaluation
-                try:
-                    from analysis.data.card_effects import get_effects
-                    _eff = get_effects(card)
-                    if _eff.has_hand_transform:
-                        atk = _eff.transform_attack
-                        hp = _eff.transform_health
-                except Exception:
-                    pass
+                if get_effects is not None:
+                    try:
+                        _eff = get_effects(card)
+                        if _eff.has_hand_transform:
+                            atk = _eff.transform_attack
+                            hp = _eff.transform_health
+                    except Exception:
+                        pass
 
                 if ct == 'MINION':
                     # Base: stat total / cost efficiency
@@ -177,39 +183,45 @@ def _greedy_self_play(state: GameState) -> GameState:
                         value += 3
                 elif ct == 'SPELL':
                     # Estimate spell value using structured effects
-                    from analysis.data.card_effects import get_effects as _get_eff
-                    card_eff = _get_eff(card)
-                    value = 0.0
-                    if card_eff.damage > 0:
-                        value += card_eff.damage * 2.0
-                    if card_eff.aoe_damage > 0:
-                        enemy_board_size = len(s.opponent.board)
-                        value += card_eff.aoe_damage * enemy_board_size * 1.5
-                    if card_eff.random_damage > 0:
-                        value += card_eff.random_damage * 1.5
-                    if card_eff.draw > 0:
-                        value += card_eff.draw * 2.5
-                    if card_eff.heal > 0:
-                        hp_missing = (getattr(s.hero, 'max_hp', 30) or 30) - s.hero.hp
-                        value += min(card_eff.heal, hp_missing) * 0.8
-                    if card_eff.armor > 0:
-                        value += card_eff.armor * 1.0
-                    if card_eff.has_summon:
-                        if card_eff.summon_attack > 0:
-                            value += card_eff.summon_attack + card_eff.summon_health
-                        else:
-                            value += 3.0  # random summon EV
-                    if card_eff.buff_attack > 0:
-                        our_board_size = len(s.board)
-                        value += card_eff.buff_attack * our_board_size * 1.0
-                    if card_eff.has_discover:
-                        value += 4.0
-                    if card_eff.has_destroy:
-                        value += 3.0
-                    if card_eff.has_lifesteal and card_eff.damage > 0:
-                        value += card_eff.damage * 0.5
-                    if value <= 0:
-                        value = eff_cost * 1.5  # baseline fallback
+                    if get_effects is not None:
+                        try:
+                            card_eff = get_effects(card)
+                            value = 0.0
+                            if card_eff.damage > 0:
+                                value += card_eff.damage * 2.0
+                            if card_eff.aoe_damage > 0:
+                                enemy_board_size = len(s.opponent.board)
+                                value += card_eff.aoe_damage * enemy_board_size * 1.5
+                            if card_eff.random_damage > 0:
+                                value += card_eff.random_damage * 1.5
+                            if card_eff.draw > 0:
+                                value += card_eff.draw * 2.5
+                            if card_eff.heal > 0:
+                                hp_missing = (getattr(s.hero, 'max_hp', 30) or 30) - s.hero.hp
+                                value += min(card_eff.heal, hp_missing) * 0.8
+                            if card_eff.armor > 0:
+                                value += card_eff.armor * 1.0
+                            if card_eff.has_summon:
+                                if card_eff.summon_attack > 0:
+                                    value += card_eff.summon_attack + card_eff.summon_health
+                                else:
+                                    value += 3.0  # random summon EV
+                            if card_eff.buff_attack > 0:
+                                our_board_size = len(s.board)
+                                value += card_eff.buff_attack * our_board_size * 1.0
+                            if card_eff.has_discover:
+                                value += 4.0
+                            if card_eff.has_destroy:
+                                value += 3.0
+                            if card_eff.has_lifesteal and card_eff.damage > 0:
+                                value += card_eff.damage * 0.5
+                            if value <= 0:
+                                value = eff_cost * 1.5  # baseline fallback
+                        except Exception:
+                            value = eff_cost * 1.5
+                    else:
+                        # Fallback: use text-based heuristic
+                        value = eff_cost * 1.5
                 elif ct == 'WEAPON':
                     value = atk * 2
                 else:
@@ -239,9 +251,9 @@ def _greedy_self_attacks(state: GameState) -> GameState:
     2. Favorable trades (kill high-value enemy minion with low-value attacker)
     3. Face attacks
     """
-    from analysis.search.abilities.actions import ActionType
-    from analysis.search.abilities.simulation import apply_action
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
+    from analysis.abilities.definition import ActionType
+    from analysis.engine.simulation import apply_action
+    from analysis.engine.rules import enumerate_legal_actions
 
     s = state
 
@@ -351,8 +363,6 @@ def _greedy_opponent_play(state: GameState) -> GameState:
     3. Attack taunts if present
     4. Go face otherwise
     """
-    from analysis.data.card_effects import get_effects
-
     s = state
     opp_board = s.opponent.board
     our_board = s.board
@@ -388,7 +398,8 @@ def _greedy_opponent_play(state: GameState) -> GameState:
             opp_mana -= cost
 
             # Apply card effects from opponent's perspective
-            _apply_opp_card_effects(s, card, ct, get_effects)
+            if get_effects is not None:
+                _apply_opp_card_effects(s, card, ct, get_effects)
             played += 1
 
         if hasattr(s.opponent, 'mana_available'):
@@ -440,10 +451,15 @@ def _opp_card_value(card, state: 'GameState') -> float:
 
     Uses get_effects() to evaluate spell/minion/weapon impact.
     """
-    from analysis.data.card_effects import get_effects
-
     cost = getattr(card, 'cost', 0) or 0
     ct = (getattr(card, 'card_type', '') or '').upper()
+
+    if get_effects is None:
+        # Fallback heuristic when card_effects module is unavailable
+        atk = getattr(card, 'attack', 0) or 0
+        hp = getattr(card, 'health', 0) or 0
+        return atk + hp + cost
+
     eff = get_effects(card)
 
     if ct == 'MINION':
@@ -518,7 +534,7 @@ def _apply_opp_card_effects(
 
     Handles: minion summon, weapon equip, spell damage/heal/draw/armor/buff/AOE.
     """
-    from analysis.search.game_state import Minion as _Minion
+    from analysis.engine.state import Minion as _Minion
 
     eff = get_effects_fn(card)
 
@@ -570,7 +586,7 @@ def _apply_opp_card_effects(
         dur = getattr(card, 'health', 0) or getattr(card, 'durability', 0) or 0
         opp_hero = getattr(state.opponent, 'hero', None)
         if opp_hero and hasattr(opp_hero, 'weapon'):
-            from analysis.search.game_state import Weapon as _Weapon
+            from analysis.engine.state import Weapon as _Weapon
             opp_hero.weapon = _Weapon(attack=atk, durability=dur)
 
     elif card_type == 'SPELL':

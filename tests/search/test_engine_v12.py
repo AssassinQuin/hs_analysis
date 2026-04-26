@@ -1,6 +1,6 @@
 import pytest
 
-from analysis.search.game_state import (
+from analysis.engine.state import (
     GameState,
     Minion,
     HeroState,

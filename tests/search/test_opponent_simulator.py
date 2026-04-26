@@ -3,8 +3,8 @@
 
 import pytest
 
-from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
-from analysis.search.opponent_simulator import OpponentSimulator, SimulatedOpponentTurn
+from analysis.engine.state import GameState, Minion, HeroState, OpponentState
+from analysis.search.opponent import OpponentSimulator, SimulatedOpponentTurn
 
 
 def test_no_opponent_actions():

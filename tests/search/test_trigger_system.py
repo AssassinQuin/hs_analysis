@@ -6,18 +6,18 @@ Batch 1: Foundation layer for V10 Phase 2 trigger/enchantment system.
 
 import pytest
 
-from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
-from analysis.search.enchantment import (
+from analysis.engine.state import GameState, Minion, HeroState, OpponentState
+from analysis.engine.enchantment import (
     Enchantment,
     apply_enchantment,
-    remove_enchantment,
-    tick_enchantments,
+    remove_enchantment_legacy as remove_enchantment,
+    _tick_entity_enchantments as tick_enchantments,
     compute_effective_attack,
     compute_effective_health,
     compute_effective_max_health,
     get_effective_keywords,
 )
-from analysis.search.trigger_system import TriggerDispatcher
+from analysis.engine.trigger import TriggerDispatcher
 
 
 # ===================================================================

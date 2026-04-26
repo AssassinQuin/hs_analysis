@@ -1,3 +1,3 @@
-from analysis.search.engine.pipeline import DecisionPipeline, Decision, FactorScores
+"""Search engine subpackage — retained mechanics/ and models/ only."""
 
-__all__ = ["DecisionPipeline", "Decision", "FactorScores"]
+# pipeline.py, strategic.py, tactical.py, etc. removed in Phase 0 cleanup

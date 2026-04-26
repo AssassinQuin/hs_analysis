@@ -3,8 +3,21 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, get_card_armor
-from analysis.search.game_state import GameState, HeroState
+try:
+    from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, get_card_armor
+except ImportError:
+    _DAMAGE_CN = _DAMAGE_EN = None
+
+    def get_card_armor(card) -> int:
+        """Fallback: parse armor from card text."""
+        text = getattr(card, 'text', '') or ''
+        en = getattr(card, 'english_text', '') or ''
+        m = re.search(r'(\d+)\s*(?:点)?(?:护甲|Armor)', text) or \
+            re.search(r'(\d+)\s*(?:点)?(?:护甲|Armor)', en)
+        if m:
+            return int(m.group(1))
+        return 0
+from analysis.engine.state import GameState, HeroState
 from analysis.models.card import Card
 
 
@@ -50,19 +63,20 @@ class HeroCardHandler:
 
         if "Battlecry" in text or "战吼" in text:
             try:
-                from analysis.search.abilities.parser import AbilityParser
-                from analysis.search.abilities.orchestrator import orchestrate
+                from analysis.abilities.loader import load_abilities
+                from analysis.engine.target import orchestrate
 
-                abilities = AbilityParser.parse(card)
+                abilities = load_abilities(card.card_id) if card.card_id else []
                 state = orchestrate(state, card, abilities, {'source_minion': None})
             except Exception:
                 pass
 
         try:
-            from analysis.search.abilities.parser import AbilityParser
-            from analysis.search.abilities.orchestrator import orchestrate
+            from analysis.abilities.loader import load_abilities
+            from analysis.engine.target import orchestrate
 
-            abilities = AbilityParser.parse(card_copy)
+            card_copy_id = getattr(card_copy, 'card_id', '')
+            abilities = load_abilities(card_copy_id) if card_copy_id else []
             state = orchestrate(state, card_copy, abilities, {'source_minion': None})
         except Exception:
             pass

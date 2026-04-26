@@ -13,8 +13,8 @@ from hearthstone.enums import GameTag, Zone as HZone
 
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-from analysis.search.engine_adapter import UnifiedSearchResult, ActionProb, create_engine
-from analysis.search.abilities.actions import Action, ActionType
+from analysis.search.adapter import UnifiedSearchResult, ActionProb, create_engine
+from analysis.abilities.definition import Action, ActionType
 from analysis.watcher.decision_loop import DecisionPresenter
 from analysis.utils.score_provider import load_scores_into_hand
 
@@ -388,7 +388,7 @@ class TestDecisionPresenter:
     @staticmethod
     def _make_mock_state():
         """Create a minimal mock GameState for presenter tests."""
-        from analysis.search.game_state import (
+        from analysis.engine.state import (
             GameState, HeroState, ManaState, Minion, OpponentState,
         )
         from analysis.models.card import Card

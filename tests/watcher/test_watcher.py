@@ -136,8 +136,8 @@ class TestDecisionLoop:
     def test_presenter_format(self, capsys):
         """DecisionPresenter formats output correctly."""
         from analysis.watcher.decision_loop import DecisionPresenter
-        from analysis.search.engine_adapter import UnifiedSearchResult
-        from analysis.search.game_state import GameState
+        from analysis.search.adapter import UnifiedSearchResult
+        from analysis.engine.state import GameState
 
         output = StringIO()
         presenter = DecisionPresenter(output=output, verbose=True)

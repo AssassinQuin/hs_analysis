@@ -14,11 +14,11 @@ from __future__ import annotations
 import logging
 from typing import List, Optional, Set, TYPE_CHECKING
 
-from analysis.search.abilities.actions import Action, ActionType, action_key
+from analysis.abilities.definition import Action, ActionType, action_key
 from analysis.constants.effect_keywords import DAMAGE_TEXT_FRAGMENTS, HEAL_KEYWORDS
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.engine.state import GameState
 
 log = logging.getLogger(__name__)
 

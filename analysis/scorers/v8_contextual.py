@@ -23,10 +23,70 @@ import re
 from typing import Dict, Optional
 
 from analysis.models.card import Card
-from analysis.search.game_state import GameState
-from analysis.models.phase import Phase, detect_phase
+from analysis.engine.state import GameState
+from analysis.models import Phase, detect_phase
 from analysis.config import DATA_DIR
-from analysis.data.card_effects import get_effects
+try:
+    from analysis.data.card_effects import get_effects
+except ImportError:
+    get_effects = None
+
+
+def _fallback_get_effects(card) -> "_Effects":
+    """Fallback effects parser when card_effects module is unavailable."""
+    text = getattr(card, 'text', '') or ''
+    en = getattr(card, 'english_text', '') or ''
+    clean = re.sub(r'<[^>]+>', '', text)
+    en_clean = re.sub(r'<[^>]+>', '', en)
+
+    summon_attack = summon_health = damage = random_damage = draw = 0
+    has_summon = has_hand_transform = False
+
+    # Summon parsing
+    sm = re.search(r'召唤一个?(\d+)/(\d+)', clean)
+    if not sm:
+        sm = re.search(r'[Ss]ummon a[n]? (\d+)/(\d+)', en_clean)
+    if sm:
+        summon_attack, summon_health = int(sm.group(1)), int(sm.group(2))
+        has_summon = True
+
+    # Damage parsing
+    dm = re.search(r'造成\s*(\d+)\s*点?伤害', clean)
+    if not dm:
+        dm = re.search(r'[Dd]eal\s+(\d+)\s*damage', en_clean)
+    if dm:
+        damage = int(dm.group(1))
+
+    # Random damage
+    rdm = re.search(r'随机造成\s*(\d+)\s*点?伤害', clean)
+    if not rdm:
+        rdm = re.search(r'[Dd]eal\s+(\d+)\s*damage.*random', en_clean)
+    if rdm:
+        random_damage = int(rdm.group(1))
+
+    # Draw parsing
+    dr = re.search(r'抽\s*(\d+)\s*张?牌', clean)
+    if not dr:
+        dr = re.search(r'[Dd]raw\s+(\d+)', en_clean)
+    if dr:
+        draw = int(dr.group(1))
+
+    class _Effects:
+        pass
+
+    eff = _Effects()
+    eff.has_summon = has_summon
+    eff.has_hand_transform = has_hand_transform
+    eff.summon_attack = summon_attack
+    eff.summon_health = summon_health
+    eff.damage = damage
+    eff.random_damage = random_damage
+    eff.draw = draw
+    return eff
+
+
+if get_effects is None:
+    get_effects = _fallback_get_effects
 
 logger = logging.getLogger(__name__)
 

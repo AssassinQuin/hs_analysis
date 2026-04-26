@@ -4,12 +4,12 @@ from __future__ import annotations
 import time
 from typing import List
 
-from analysis.search.game_state import GameState, Minion, HeroState, OpponentState, ManaState
+from analysis.engine.state import GameState, Minion, HeroState, OpponentState, ManaState
 from analysis.models.card import Card
 from analysis.scorers.v8_contextual import get_scorer as _get_v8_scorer
 
 try:
-    from analysis.search.risk_assessor import RiskReport
+    from analysis.search.risk import RiskReport
 except ImportError:
     RiskReport = None
 

@@ -119,7 +119,7 @@ def get_phase_overrides(turn_number: int, opp_playstyle: str = "unknown") -> dic
       - combo: moderate-high exploration
       - midrange: neutral
     """
-    from analysis.models.phase import detect_phase, Phase
+    from analysis.models import detect_phase, Phase
     phase = detect_phase(turn_number)
     style_delta = _PLAYSTYLE_UCT.get(opp_playstyle, 0.0)
 

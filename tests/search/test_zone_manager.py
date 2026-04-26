@@ -1,3 +1,5 @@
+import pytest
+pytest.skip("Deleted module", allow_module_level=True)
 # -*- coding: utf-8 -*-
 """Tests for ZoneManager — zone-based card instance management."""
 import pytest

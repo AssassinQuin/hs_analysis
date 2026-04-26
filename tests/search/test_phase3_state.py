@@ -1,7 +1,7 @@
 """V10 Phase 3 Batch 1 tests — GameState + HeroState expansion."""
 
 import pytest
-from analysis.search.game_state import GameState, HeroState, Minion
+from analysis.engine.state import GameState, HeroState, Minion
 from analysis.models.card import Card
 from analysis.search.abilities import apply_action, Action, ActionType
 

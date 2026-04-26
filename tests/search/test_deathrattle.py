@@ -6,9 +6,9 @@ Batch 3: Deathrattle effect resolution with cascade support.
 
 import pytest
 
-from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
-from analysis.search.enchantment import Enchantment, apply_enchantment
-from analysis.search.deathrattle import resolve_deaths
+from analysis.engine.state import GameState, Minion, HeroState, OpponentState
+from analysis.engine.enchantment import Enchantment, apply_enchantment
+from analysis.engine.mechanics.deathrattle import resolve_deaths
 
 
 # ===================================================================

@@ -18,14 +18,20 @@ from typing import Optional, Tuple, List, TYPE_CHECKING
 from analysis.search.mcts.config import MCTSConfig, NodeType, ExpansionOrder
 from analysis.search.mcts.node import MCTSNode, ActionEdge
 from analysis.search.mcts.pruning import ActionPruner
-from analysis.search.abilities.actions import Action, ActionType, action_key
-from analysis.search.abilities.simulation import apply_action
+from analysis.abilities.definition import Action, ActionType, action_key
+from analysis.engine.simulation import apply_action
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.engine.state import GameState
     from analysis.search.mcts.transposition import TranspositionTable
 
 log = logging.getLogger(__name__)
+
+# Graceful fallback for deleted module
+try:
+    from analysis.data.card_effects import get_effects
+except ImportError:
+    get_effects = None
 
 
 class Expander:
@@ -336,18 +342,20 @@ class Expander:
                 # When a 0-cost card is played, boost score of highest-cost
                 # spell in hand that becomes affordable (combo potential).
                 if cost == 0 and len(state.hand) > 1:
-                    from analysis.data.card_effects import get_effects
                     max_boost = 0.0
-                    for other in state.hand:
-                        if other is card:
-                            continue
-                        other_cost = getattr(other, 'cost', 0) or 0
-                        other_type = (getattr(other, 'card_type', '') or '').upper()
-                        if other_type == 'SPELL' and other_cost >= 3:
-                            other_eff = get_effects(other)
-                            if other_eff.damage > 0 or other_eff.draw > 0:
-                                # High-value spell enabled by 0-cost prep
-                                max_boost = max(max_boost, other_cost * 0.15)
+                    if get_effects is not None:
+                        for other in state.hand:
+                            if other is card:
+                                continue
+                            other_cost = getattr(other, 'cost', 0) or 0
+                            other_type = (getattr(other, 'card_type', '') or '').upper()
+                            if other_type == 'SPELL' and other_cost >= 3:
+                                try:
+                                    other_eff = get_effects(other)
+                                    if other_eff.damage > 0 or other_eff.draw > 0:
+                                        max_boost = max(max_boost, other_cost * 0.15)
+                                except Exception:
+                                    pass
                     score += max_boost
 
                 # --- Hold value for low-impact early plays ---

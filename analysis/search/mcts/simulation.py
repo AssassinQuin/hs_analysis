@@ -20,7 +20,7 @@ from typing import Optional, TYPE_CHECKING
 from analysis.search.mcts.config import MCTSConfig
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.engine.state import GameState
     from analysis.search.mcts.node import MCTSNode
 
 log = logging.getLogger(__name__)
@@ -117,9 +117,9 @@ def _eval_random_rollout(
     then evaluates the resulting board state. This matches the Hearthstone
     principle: play all affordable cards unless saving for a better turn.
     """
-    from analysis.search.abilities.actions import ActionType
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
-    from analysis.search.abilities.simulation import apply_action
+    from analysis.abilities.definition import ActionType
+    from analysis.engine.rules import enumerate_legal_actions
+    from analysis.engine.simulation import apply_action
 
     current = state
     for _ in range(max_depth):

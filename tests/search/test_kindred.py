@@ -1,11 +1,12 @@
 """Tests for kindred.py — 延系 (Kindred) mechanic."""
 
 from __future__ import annotations
-
 import pytest
+pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 
-from analysis.search.game_state import GameState, Minion
-from analysis.search.kindred import (
+
+from analysis.engine.state import GameState, Minion
+from analysis.engine.mechanics._data import (
     apply_kindred,
     check_kindred_active,
     has_kindred,

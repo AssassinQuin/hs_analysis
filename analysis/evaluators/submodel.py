@@ -13,7 +13,7 @@ Runnable independently:  python3 -m hs_analysis.evaluators.submodel
 
 from __future__ import annotations
 
-from analysis.search.game_state import GameState, Minion
+from analysis.engine.state import GameState, Minion
 from analysis.constants.effect_keywords import DAMAGE_KEYWORDS
 
 
@@ -269,7 +269,7 @@ def eval_trigger(state: GameState) -> float:
 # __main__ demo / self-test
 # ======================================================================
 if __name__ == "__main__":
-    from analysis.search.game_state import Weapon, HeroState, OpponentState, ManaState
+    from analysis.engine.state import Weapon, HeroState, OpponentState, ManaState
     from analysis.models.card import Card
 
     errors: list[str] = []

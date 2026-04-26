@@ -7,7 +7,7 @@ to explore subsequent possibilities (opponent turns, further plays).
 import pytest
 
 from analysis.search.mcts import MCTSEngine, MCTSConfig
-from analysis.search.abilities.actions import ActionType
+from analysis.abilities.definition import ActionType
 
 
 class TestMCTSContinuation:

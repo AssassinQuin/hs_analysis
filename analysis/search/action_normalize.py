@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from analysis.search.abilities import Action, ActionType
-from analysis.search.game_state import GameState
+from analysis.engine.state import GameState
 
 
 # ===================================================================

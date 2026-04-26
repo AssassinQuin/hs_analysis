@@ -150,7 +150,7 @@ class GlobalTracker:
         """延迟加载HSCardDB，用于卡牌元数据（种族、学派等）"""
         if self._card_db is None:
             try:
-                from analysis.data.hsdb import get_db
+                from analysis.data.card_data import get_db
                 self._card_db = get_db()
             except ImportError:
                 logger.warning("HSCardDB unavailable, race/school tracking disabled")
@@ -726,7 +726,7 @@ class GlobalTracker:
     def _ensure_card_db(self):
         """延迟加载卡牌数据库，用于dbfId查询"""
         if self._card_db is None:
-            from analysis.data.hsdb import get_db
+            from analysis.data.card_data import get_db
             self._card_db = get_db()
         return self._card_db
 

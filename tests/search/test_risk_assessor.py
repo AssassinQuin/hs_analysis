@@ -3,8 +3,8 @@
 
 import pytest
 
-from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
-from analysis.search.risk_assessor import RiskReport, RiskAssessor
+from analysis.engine.state import GameState, Minion, HeroState, OpponentState
+from analysis.search.risk import RiskReport, RiskAssessor
 
 
 def test_no_risk():

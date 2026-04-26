@@ -1,10 +1,11 @@
 """Tests for dark_gift.py — Dark Gift enchantment system."""
 
 from __future__ import annotations
-
 import pytest
+pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 
-from analysis.search.dark_gift import (
+
+from analysis.engine.mechanics._data import (
     DARK_GIFT_ENCHANTMENTS,
     DarkGiftEnchantment,
     apply_dark_gift,

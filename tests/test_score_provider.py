@@ -13,7 +13,7 @@ import tempfile
 
 # migrated to tests/
 
-from analysis.search.game_state import GameState
+from analysis.engine.state import GameState
 from analysis.models.card import Card
 from analysis.utils.score_provider import ScoreProvider, load_scores_into_hand
 

@@ -20,7 +20,7 @@ import re
 from typing import Any, Iterable
 
 from analysis.models.card import Card
-from analysis.search.game_state import GameState, Minion
+from analysis.engine.state import GameState, Minion
 from analysis.scorers.keyword_interactions import get_interaction_multiplier
 
 # ---------------------------------------------------------------------------
@@ -55,15 +55,9 @@ MERGE_BONUS = 0.3
 _FREEZE_CLASSES = frozenset({"MAGE", "SHAMAN"})
 
 # Keywords that indicate damage-dealing capability
-_DAMAGE_TEXT_PATTERNS = re.compile(
-    r"造成|伤害|Deal|damage", re.IGNORECASE
-)
-_SILENCE_TEXT_PATTERNS = re.compile(
-    r"Silence|沉默", re.IGNORECASE
-)
-_DESTROY_TEXT_PATTERNS = re.compile(
-    r"Destroy|消灭", re.IGNORECASE
-)
+_DAMAGE_TEXT_PATTERNS = re.compile(r"造成|伤害|Deal|damage", re.IGNORECASE)
+_SILENCE_TEXT_PATTERNS = re.compile(r"Silence|沉默", re.IGNORECASE)
+_DESTROY_TEXT_PATTERNS = re.compile(r"Destroy|消灭", re.IGNORECASE)
 
 # Trigger mechanic names (uppercase, matching Card.mechanics convention)
 _TRIGGER_MECHANICS = {
@@ -336,7 +330,7 @@ def progress_modifier(card: Card, state: GameState) -> float:
     # Quest check
     if "QUEST" in mechanics or "Quest" in text or "任务" in text:
         completion_pct = getattr(state, "quest_completion_pct", 0.0)
-        return 1.0 + completion_pct ** 2 * 2.0
+        return 1.0 + completion_pct**2 * 2.0
 
     return 1.0
 
@@ -390,6 +384,7 @@ def counter_modifier(card: Card, state: GameState) -> float:
 # ===================================================================
 # Entry point
 # ===================================================================
+
 
 def siv_score(card: Card, state: GameState) -> float:
     """Compute SIV for a card: CIV base × all 8 modifiers, clamped.

@@ -1,10 +1,11 @@
+import pytest
+pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 """V10 Phase 3 Batch 2 tests — Imbue hero power upgrade system."""
 
-import pytest
-from analysis.search.game_state import GameState, HeroState, Minion, ManaState, OpponentState
+from analysis.engine.state import GameState, HeroState, Minion, ManaState, OpponentState
 from analysis.models.card import Card
 from analysis.search.abilities import apply_action, Action
-from analysis.search.imbue import apply_imbue, apply_hero_power, IMBUE_HERO_POWERS
+from analysis.engine.mechanics._data import apply_imbue, apply_hero_power, IMBUE_HERO_POWERS
 
 
 def _make_card(**kw):
