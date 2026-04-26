@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import re
-
+from analysis.data.card_effects import get_effects
 from analysis.search.game_state import GameState
 from analysis.search.engine.factors.factor_base import (
     EvalContext, EvaluationFactor, Phase,
@@ -59,11 +58,14 @@ class LethalThreatFactor(EvaluationFactor):
                 continue
             text = getattr(card, 'text', '') or ''
             dmg = 0
-            m = re.search(r'Deal\s*\$?(\d+)\s*damage', text, re.IGNORECASE)
-            if not m:
-                m = re.search(r'造成\s*\$?\s*(\d+)\s*点伤害', text)
-            if m:
-                dmg = int(m.group(1))
+            eff = get_effects(card)
+            if eff.damage > 0:
+                dmg = eff.damage
+            elif eff.aoe_damage > 0:
+                dmg = eff.aoe_damage
+            elif eff.random_damage > 0:
+                dmg = eff.random_damage
+            if dmg > 0:
                 if 'all enemies' in text.lower() or '所有敌人' in text:
                     dmg = dmg * max(len(state.opponent.board), 1)
                 total += dmg
@@ -120,11 +122,10 @@ class LethalThreatFactor(EvaluationFactor):
             if cost > mana_t1:
                 continue
             text = getattr(card, 'text', '') or ''
-            m = re.search(r'Deal\s*\$?(\d+)\s*damage', text, re.IGNORECASE)
-            if not m:
-                m = re.search(r'造成\s*\$?\s*(\d+)\s*点伤害', text)
-            if m:
-                spell_dmg_t1 += int(m.group(1))
+            eff = get_effects(card)
+            dmg = eff.damage or eff.aoe_damage or eff.random_damage
+            if dmg:
+                spell_dmg_t1 += dmg
                 mana_t1 -= cost
 
         weapon_dmg = state.hero.weapon.attack if state.hero.weapon else 0
@@ -170,11 +171,10 @@ class LethalThreatFactor(EvaluationFactor):
             if cost > next_mana:
                 continue
             text = getattr(card, 'text', '') or ''
-            m = re.search(r'Deal\s*\$?(\d+)\s*damage', text, re.IGNORECASE)
-            if not m:
-                m = re.search(r'造成\s*\$?\s*(\d+)\s*点伤害', text)
-            if m:
-                spell_dmg_t2 += int(m.group(1))
+            eff = get_effects(card)
+            dmg = eff.damage or eff.aoe_damage or eff.random_damage
+            if dmg:
+                spell_dmg_t2 += dmg
 
         t2_total = board_dmg_t2 + estimated_new_minion_atk + spell_dmg_t2 + hp_dmg
 

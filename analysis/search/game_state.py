@@ -298,6 +298,7 @@ class OpponentState:
     opp_corrupted_cards: list = field(default_factory=list)  # 对手已腐蚀升级的牌
     opp_weapon_card_id: str = ""  # 对手当前武器card_id
     opp_cost_modifiers: list = field(default_factory=list)  # 对手费用修正 [(modifier_type, value, scope), ...]
+    opp_last_played_minion: dict = field(default_factory=dict)  # {"name":str, "attack":int, "health":int, "card_id":str} — 对手最后打出的随从
 
     def copy(self) -> "OpponentState":
         """拷贝对手状态，含所有可变容器和嵌套英雄"""
@@ -313,6 +314,7 @@ class OpponentState:
             opp_shuffled_into_deck=list(self.opp_shuffled_into_deck),
             opp_corrupted_cards=list(self.opp_corrupted_cards),
             opp_cost_modifiers=list(self.opp_cost_modifiers),
+            opp_last_played_minion=dict(self.opp_last_played_minion),
         )
 
 
@@ -408,6 +410,12 @@ class GameState:
         - Caches dataclasses.fields() to avoid per-call reflection
         - Skips isinstance() checks for known field types
         - Nested dataclasses use their own .copy() methods
+
+        IMPORTANT: Card objects in `hand` and `deck_list` are shared by
+        reference (NOT deep-copied) for performance.  Card objects MUST be
+        treated as immutable — simulation code must never mutate a Card
+        instance in-place.  If mutation is needed, replace the Card in the
+        list with a new instance.
         """
         # Lazy-init fields cache
         if GameState._FIELDS is None:
@@ -445,7 +453,7 @@ class GameState:
                 continue
 
             # 嵌套 dataclass: HeroState, ManaState, OpponentState
-            if dataclasses.is_dataclass(val):
+            if dataclasses.is_dataclass(val) and not isinstance(val, type):
                 kwargs[name] = val.copy() if hasattr(val, 'copy') else dataclasses.replace(val)
                 continue
 
@@ -459,6 +467,7 @@ class GameState:
                         for item in val
                     ]
                 else:
+                    # Card 对象等非-dataclass: 共享引用（Card 必须是不可变的）
                     kwargs[name] = list(val)
             elif isinstance(val, dict):
                 kwargs[name] = dict(val)
@@ -467,7 +476,6 @@ class GameState:
             elif isinstance(val, tuple):
                 kwargs[name] = val  # tuple 不可变
             else:
-                # 回退：直接引用（如 Card 对象视为不可变）
                 kwargs[name] = val
 
         return GameState(**kwargs)
@@ -520,14 +528,15 @@ class GameState:
         4. 残骸获取
         5. 光环重算
         """
+        # 1. 亡语结算 — expected failures: missing deathrattle module, bad card data
         try:
             from analysis.search.deathrattle import resolve_deaths
-
             self = resolve_deaths(self)
-        except Exception:
-            log.warning("flush_deaths: 亡语结算失败", exc_info=True)
+        except (ImportError, AttributeError, TypeError, IndexError) as e:
+            dead_names = [getattr(m, 'name', '?') for m in self.board if m.health <= 0]
+            log.warning("flush_deaths: 亡语结算失败 (dead=%s): %s", dead_names, e)
 
-        # 友方随从复生
+        # 2. 复生处理
         for m in list(self.board):
             if m.health <= 0 and m.has_reborn:
                 m.has_reborn = False
@@ -539,7 +548,6 @@ class GameState:
                 m.has_stealth = False
                 m.has_taunt = False
 
-        # 敌方随从复生
         for m in list(self.opponent.board):
             if m.health <= 0 and m.has_reborn:
                 m.has_reborn = False
@@ -549,22 +557,21 @@ class GameState:
         self.board = [m for m in self.board if m.health > 0]
         self.opponent.board = [m for m in self.opponent.board if m.health > 0]
 
-        # 残骸获取
+        # 3. 残骸获取 — expected failures: missing corpse module
         try:
             from analysis.search.corpse import gain_corpses, has_double_corpse_gen
-
             amount = 2 if has_double_corpse_gen(self) else 1
             self = gain_corpses(self, amount)
-        except Exception:
-            log.warning("flush_deaths: 残骸获取失败", exc_info=True)
+        except (ImportError, AttributeError, TypeError) as e:
+            log.debug("flush_deaths: 残骸获取跳过: %s", e)
 
-        # 光环重算
+        # 4. 光环重算 — expected failures: missing aura module, invalid minion
         try:
             from analysis.search.aura_engine import recompute_auras
-
             self = recompute_auras(self)
-        except Exception:
-            log.warning("flush_deaths: 光环重算失败", exc_info=True)
+        except (ImportError, AttributeError, TypeError, IndexError) as e:
+            board_names = [getattr(m, 'name', '?') for m in self.board]
+            log.debug("flush_deaths: 光环重算跳过 (board=%s): %s", board_names, e)
 
         self._defer_deaths = False
         return self

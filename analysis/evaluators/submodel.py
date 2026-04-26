@@ -14,6 +14,7 @@ Runnable independently:  python3 -m hs_analysis.evaluators.submodel
 from __future__ import annotations
 
 from analysis.search.game_state import GameState, Minion
+from analysis.constants.effect_keywords import DAMAGE_KEYWORDS
 
 
 # ──────────────────────────────────────────────────────────────
@@ -152,7 +153,7 @@ def _bayesian_spell_threat(state: GameState) -> float:
         text = (getattr(card, 'text', '') or '').lower()
         cost = getattr(card, 'cost', 0) or 0
         # Fast damage detection
-        has_damage = any(kw in text for kw in ('deal $', 'deals $', '造成$', 'lava burst'))
+        has_damage = any(kw in text for kw in DAMAGE_KEYWORDS)
         if has_damage and cost <= 6:
             total_damage_estimate += cost * 1.5  # typical damage/cost ratio
             damage_spell_count += 1

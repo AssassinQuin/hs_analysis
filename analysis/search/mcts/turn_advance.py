@@ -148,6 +148,16 @@ def _greedy_self_play(state: GameState) -> GameState:
                 hp = getattr(card, 'health', 0) or 0
                 text = (getattr(card, 'text', '') or '').lower()
 
+                # Hand-transform: use transformed stats for evaluation
+                try:
+                    from analysis.data.card_effects import get_effects
+                    _eff = get_effects(card)
+                    if _eff.has_hand_transform:
+                        atk = _eff.transform_attack
+                        hp = _eff.transform_health
+                except Exception:
+                    pass
+
                 if ct == 'MINION':
                     # Base: stat total / cost efficiency
                     value = atk + hp
@@ -306,20 +316,22 @@ def _apply_turn_start_triggers(state: GameState) -> None:
     - "At the start of your turn, gain +1/+1"
     """
     import re
-    _TURN_START_BUFF_CN = re.compile(r'回合开始时获得\s*\+(\d+)/\+(\d+)')
     _TURN_START_BUFF_EN = re.compile(
         r'start of your turn.*?gain\s*\+(\d+)/\+(\d+)', re.IGNORECASE
     )
+    _TURN_START_BUFF_CN = re.compile(r'回合开始时获得\s*\+(\d+)/\+(\d+)')
     for m in state.board:
         text = ''
+        en_text = ''
         card_ref = getattr(m, 'card_ref', None)
         if card_ref is not None:
             text = getattr(card_ref, 'text', '') or ''
+            en_text = getattr(card_ref, 'english_text', '') or ''
         if not text:
             text = getattr(m, 'text', '') or ''
-        if not text:
+        if not text and not en_text:
             continue
-        match = _TURN_START_BUFF_CN.search(text) or _TURN_START_BUFF_EN.search(text)
+        match = _TURN_START_BUFF_EN.search(en_text) or _TURN_START_BUFF_CN.search(text)
         if match:
             atk_bonus = int(match.group(1))
             hp_bonus = int(match.group(2))
@@ -522,6 +534,13 @@ def _apply_opp_card_effects(
                 can_attack=True,
             )
             opp_board.append(m)
+        # Track opponent's last played minion for hand-transform cards
+        state.opponent.opp_last_played_minion = {
+            "name": getattr(card, 'name', ''),
+            "attack": getattr(card, 'attack', 0) or 0,
+            "health": getattr(card, 'health', 0) or 0,
+            "card_id": getattr(card, 'card_id', ''),
+        }
         # Apply battlecry effects
         if eff.damage > 0:
             state.hero.hp -= eff.damage

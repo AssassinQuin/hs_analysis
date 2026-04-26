@@ -349,12 +349,8 @@ class AbilityParser:
             return abilities
 
         eff = get_effects(card)
-        effects: List[EffectSpec] = []
 
         # Build lookup of existing effects from verb parsing.
-        # Key insight: verb parsing may produce zero-value effects (e.g. SUMMON(0,0)
-        # for "Summon random 1-cost minions") that should NOT block the structured
-        # supplement from adding correct effects.
         existing_by_kind: dict = {}
         for a in abilities:
             for e in a.effects:
@@ -363,84 +359,58 @@ class AbilityParser:
         def _has_meaningful(kind) -> bool:
             """True if verb parsing found this kind with non-zero values or text_raw."""
             for e in existing_by_kind.get(kind, []):
-                if e.value > 0 or e.value2 > 0:
-                    return True
-                if e.text_raw:
+                if e.value > 0 or e.value2 > 0 or e.text_raw:
                     return True
             return False
 
-        # Direct damage (skip if verb parsing already found DAMAGE with value)
-        if eff.damage > 0 and not _has_meaningful(EffectKind.DAMAGE):
-            effects.append(EffectSpec(
-                kind=EffectKind.DAMAGE, value=eff.damage,
-            ))
+        def _has_any(kind) -> bool:
+            """True if any effect of this kind exists (even zero-valued)."""
+            return kind in existing_by_kind
 
-        # Random damage
-        if eff.random_damage > 0 and not _has_meaningful(EffectKind.DAMAGE):
-            effects.append(EffectSpec(
-                kind=EffectKind.DAMAGE, value=eff.random_damage,
-                target=TargetSpec(kind=TargetKind.RANDOM_ENEMY),
-            ))
+        card_text = getattr(card, 'text', '') or getattr(card, 'english_text', '') or ''
 
-        # AOE damage
-        if eff.aoe_damage > 0 and not _has_meaningful(EffectKind.DAMAGE):
-            effects.append(EffectSpec(
-                kind=EffectKind.DAMAGE, value=eff.aoe_damage,
-                target=TargetSpec(kind=TargetKind.ALL_ENEMY),
-            ))
-
-        # Heal
-        if eff.heal > 0 and not _has_meaningful(EffectKind.HEAL):
-            effects.append(EffectSpec(
-                kind=EffectKind.HEAL, value=eff.heal,
-            ))
-
-        # Draw
-        if eff.draw > 0 and not _has_meaningful(EffectKind.DRAW):
-            effects.append(EffectSpec(kind=EffectKind.DRAW, value=eff.draw))
-
-        # Summon — also add when has_summon=True but stats are 0 (random summons)
-        if eff.has_summon and not _has_meaningful(EffectKind.SUMMON):
-            card_text = getattr(card, 'text', '') or getattr(card, 'english_text', '') or ''
-            effects.append(EffectSpec(
-                kind=EffectKind.SUMMON,
+        # ── Numeric-value supplements (skip if verb parsing found meaningful value) ──
+        _value_specs: List[tuple] = [
+            # (guard, kind, kwargs)
+            (eff.damage > 0, EffectKind.DAMAGE, dict(value=eff.damage)),
+            (eff.random_damage > 0, EffectKind.DAMAGE, dict(
+                value=eff.random_damage,
+                target=TargetSpec(kind=TargetKind.RANDOM_ENEMY))),
+            (eff.aoe_damage > 0, EffectKind.DAMAGE, dict(
+                value=eff.aoe_damage,
+                target=TargetSpec(kind=TargetKind.ALL_ENEMY))),
+            (eff.heal > 0, EffectKind.HEAL, dict(value=eff.heal)),
+            (eff.draw > 0, EffectKind.DRAW, dict(value=eff.draw)),
+            (eff.has_summon, EffectKind.SUMMON, dict(
                 value=eff.summon_attack, value2=eff.summon_health,
-                text_raw=card_text,
-            ))
+                text_raw=card_text)),
+            (eff.armor > 0, EffectKind.GAIN, dict(value=eff.armor, subtype="armor")),
+            (eff.buff_attack > 0, EffectKind.GIVE, dict(
+                value=eff.buff_attack, value2=eff.buff_health)),
+        ]
+        effects: List[EffectSpec] = []
+        for guard, kind, kwargs in _value_specs:
+            if guard and not _has_meaningful(kind):
+                effects.append(EffectSpec(kind=kind, **kwargs))
 
-        # Armor
-        if eff.armor > 0 and not _has_meaningful(EffectKind.GAIN):
-            effects.append(EffectSpec(
-                kind=EffectKind.GAIN, value=eff.armor, subtype="armor",
-            ))
+        # ── Flag-based supplements (skip if any effect of this kind exists) ──
+        _flag_specs: List[tuple] = [
+            (eff.has_destroy, EffectKind.DESTROY, {}),
+            (eff.has_silence, EffectKind.SILENCE, {}),
+            (eff.has_discover, EffectKind.DISCOVER, dict(text_raw=card_text)),
+        ]
+        for guard, kind, kwargs in _flag_specs:
+            if guard and not _has_any(kind):
+                effects.append(EffectSpec(kind=kind, **kwargs))
 
-        # Buff attack
-        if eff.buff_attack > 0 and not _has_meaningful(EffectKind.GIVE):
-            effects.append(EffectSpec(
-                kind=EffectKind.GIVE,
-                value=eff.buff_attack, value2=eff.buff_health,
-            ))
-
-        # Destroy
-        if eff.has_destroy and EffectKind.DESTROY not in existing_by_kind:
-            effects.append(EffectSpec(kind=EffectKind.DESTROY))
-
-        # Discard
-        if eff.discard > 0 and EffectKind.DISCARD not in existing_by_kind:
-            effects.append(EffectSpec(kind=EffectKind.DISCARD, value=eff.discard))
-
-        # Cost reduce
-        if eff.cost_reduce > 0 and EffectKind.REDUCE_COST not in existing_by_kind:
-            effects.append(EffectSpec(kind=EffectKind.REDUCE_COST, value=eff.cost_reduce))
-
-        # Silence
-        if eff.has_silence and EffectKind.SILENCE not in existing_by_kind:
-            effects.append(EffectSpec(kind=EffectKind.SILENCE))
-
-        # Discover
-        if eff.has_discover and EffectKind.DISCOVER not in existing_by_kind:
-            card_text = getattr(card, 'text', '') or getattr(card, 'english_text', '') or ''
-            effects.append(EffectSpec(kind=EffectKind.DISCOVER, text_raw=card_text))
+        # ── Simple numeric supplements (skip if kind already present) ──
+        _simple_specs: List[tuple] = [
+            (eff.discard > 0, EffectKind.DISCARD, dict(value=eff.discard)),
+            (eff.cost_reduce > 0, EffectKind.REDUCE_COST, dict(value=eff.cost_reduce)),
+        ]
+        for guard, kind, kwargs in _simple_specs:
+            if guard and not _has_any(kind):
+                effects.append(EffectSpec(kind=kind, **kwargs))
 
         if not effects:
             return abilities

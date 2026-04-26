@@ -26,6 +26,7 @@ from analysis.models.card import Card
 from analysis.search.game_state import GameState
 from analysis.models.phase import Phase, detect_phase
 from analysis.config import DATA_DIR
+from analysis.data.card_effects import get_effects
 
 logger = logging.getLogger(__name__)
 
@@ -226,21 +227,22 @@ class V8ContextualScorer:
         clean = re.sub(r'<[^>]+>', '', text)
         parsed_value = 0.0
 
-        # Parse deathrattle patterns
-        # Summon stats: 召唤 N/N
-        m = re.search(r'召唤.*?(\d+)/(\d+)', clean)
-        if m:
-            parsed_value += (int(m.group(1)) + int(m.group(2))) * 0.15
+        # Use structured card effects (EN-primary, CN fallback handled internally)
+        eff = get_effects(card)
 
-        # Damage: 造成 N点伤害
-        m = re.search(r'造成.*?(\d+)\s*点伤害', clean)
-        if m:
-            parsed_value += int(m.group(1)) * 0.3
+        # Summon stats
+        if eff.has_summon and eff.summon_attack > 0 and eff.summon_health > 0:
+            parsed_value += (eff.summon_attack + eff.summon_health) * 0.15
 
-        # Draw: 抽 N张牌
-        m = re.search(r'抽.*?(\d+)\s*张牌', clean)
-        if m:
-            parsed_value += int(m.group(1)) * 0.8
+        # Damage (direct + random)
+        if eff.damage > 0:
+            parsed_value += eff.damage * 0.3
+        if eff.random_damage > 0:
+            parsed_value += eff.random_damage * 0.3
+
+        # Draw
+        if eff.draw > 0:
+            parsed_value += eff.draw * 0.8
 
         # Equip
         if "装备" in clean:

@@ -26,8 +26,9 @@ def check_outcast(state: GameState, card_index: int, card) -> bool:
     # Check if card has OUTCAST mechanic
     mechanics = getattr(card, 'mechanics', None) or []
     text = getattr(card, 'text', '') or ''
+    english_text = getattr(card, 'english_text', '') or ''
 
-    has_outcast = 'OUTCAST' in mechanics or '流放' in text
+    has_outcast = 'OUTCAST' in mechanics or 'Outcast' in english_text or '流放' in text
     if not has_outcast:
         return False
 
@@ -48,7 +49,8 @@ def apply_outcast_bonus(state: GameState, card_index: int, card) -> GameState:
     Parses Chinese text patterns to determine bonus type.
     Returns modified state.
     """
-    bonus = _parse_outcast_bonus(getattr(card, 'text', '') or '')
+    english_text = getattr(card, 'english_text', '') or ''
+    bonus = _parse_outcast_bonus(getattr(card, 'text', '') or '', english_text)
     bonus_type = bonus.get('type', 'draw')
 
     if bonus_type == 'draw':
@@ -91,20 +93,21 @@ _OUTCAST_COST_EN = re.compile(r'Outcast[：:]\s*(?:costs?|Cost)\s*\(?(\d+)\)?')
 _OUTCAST_COST_CN = re.compile(r'流放[：:]\s*法力值消耗为[（(]\s*(\d+)\s*[）)]点')
 
 
-def _parse_outcast_bonus(text: str) -> dict:
-    m = _OUTCAST_DRAW_EN.search(text) or _OUTCAST_DRAW_CN.search(text)
+def _parse_outcast_bonus(text: str, english_text: str = '') -> dict:
+    # Try EN first, CN as fallback
+    m = _OUTCAST_DRAW_EN.search(english_text) or _OUTCAST_DRAW_CN.search(text)
     if m:
         return {"type": "draw", "count": int(m.group(1))}
 
-    m = _OUTCAST_BUFF_EN.search(text) or _OUTCAST_BUFF_CN.search(text)
+    m = _OUTCAST_BUFF_EN.search(english_text) or _OUTCAST_BUFF_CN.search(text)
     if m:
         return {"type": "buff", "attack": int(m.group(1)), "health": int(m.group(2))}
 
-    m = _OUTCAST_COST_EN.search(text) or _OUTCAST_COST_CN.search(text)
+    m = _OUTCAST_COST_EN.search(english_text) or _OUTCAST_COST_CN.search(text)
     if m:
         return {"type": "cost", "value": int(m.group(1))}
 
-    if 'Outcast' in text or '流放' in text:
+    if 'Outcast' in english_text or '流放' in text:
         return {"type": "draw", "count": 1}
 
     return {"type": "draw", "count": 1}

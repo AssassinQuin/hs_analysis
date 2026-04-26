@@ -46,15 +46,18 @@ def _card_score(card: dict) -> float:
     return card.get('cost', 0) * 0.8
 
 
-def get_discover_cost_reduction(source_card_text: str) -> int:
+def get_discover_cost_reduction(source_card_text: str, english_text: str = '') -> int:
     """Check if the source card's text indicates discovered cards should cost less.
     
     Example: 宝库闯入者 "在你发现一张卡牌后，使其法力值消耗减少（1）点" → 1
     """
+    # Try EN first
+    if english_text:
+        m = _DISCOVER_COST_RED_EN.search(english_text)
+        if m:
+            return int(m.group(1))
+    # CN fallback
     m = _DISCOVER_COST_RED_CN.search(source_card_text or "")
-    if m:
-        return int(m.group(1))
-    m = _DISCOVER_COST_RED_EN.search(source_card_text or "")
     if m:
         return int(m.group(1))
     return 0
@@ -117,20 +120,23 @@ _COST_LE_CN = re.compile(r'法力值消耗(?:小于等于?|不超过|≤?|<=?)\s
 _COST_LE_EN = re.compile(r'costs?\s*(?:at most|<=?|≤)\s*(\d)', re.IGNORECASE)
 
 
-def _parse_discover_constraint(text: str) -> dict:
-    if not text:
+def _parse_discover_constraint(text: str, english_text: str = '') -> dict:
+    if not text and not english_text:
         return {}
     result = {}
-    t = text
+    t = text or ''
     tl = t.lower()
+    el = (english_text or '').lower()
 
-    if 'spell' in tl:
+    # Card type — EN first
+    if 'spell' in el:
         result['card_type'] = 'SPELL'
-    elif 'minion' in tl:
+    elif 'minion' in el:
         result['card_type'] = 'MINION'
-    elif 'weapon' in tl:
+    elif 'weapon' in el:
         result['card_type'] = 'WEAPON'
 
+    # CN fallback for card type
     if 'card_type' not in result:
         if '法术' in t:
             result['card_type'] = 'SPELL'
@@ -139,8 +145,9 @@ def _parse_discover_constraint(text: str) -> dict:
         elif '武器' in t or '装备' in t:
             result['card_type'] = 'WEAPON'
 
+    # Race — EN first
     for en, race_val in _RACE_EN_MAP.items():
-        if en in tl:
+        if en in el:
             result['race'] = race_val
             if 'card_type' not in result:
                 result['card_type'] = 'MINION'
@@ -154,33 +161,33 @@ def _parse_discover_constraint(text: str) -> dict:
                     result['card_type'] = 'MINION'
                 break
 
-    # Spell school filter
+    # Spell school filter — EN first
+    if 'school' not in result:
+        for en, school_val in _SCHOOL_MAP_EN.items():
+            if en in el:
+                result['school'] = school_val
+                break
     if 'school' not in result:
         for cn, school_val in _SCHOOL_MAP_CN.items():
             if cn in t:
                 result['school'] = school_val
                 break
-    if 'school' not in result:
-        for en, school_val in _SCHOOL_MAP_EN.items():
-            if en in tl:
-                result['school'] = school_val
-                break
 
-    # Cost ceiling filter ("X费法术", "cost ≤ X", etc.)
+    # Cost ceiling filter — EN first
     if 'cost_max' not in result:
-        m = _COST_CEIL_CN.search(t)
+        m = _COST_CEIL_EN.search(el)
         if m:
             result['cost_max'] = int(m.group(1))
         else:
-            m = _COST_CEIL_EN.search(tl)
+            m = _COST_LE_EN.search(el)
             if m:
                 result['cost_max'] = int(m.group(1))
             else:
-                m = _COST_LE_CN.search(t)
+                m = _COST_CEIL_CN.search(t)
                 if m:
                     result['cost_max'] = int(m.group(1))
                 else:
-                    m = _COST_LE_EN.search(tl)
+                    m = _COST_LE_CN.search(t)
                     if m:
                         result['cost_max'] = int(m.group(1))
 
@@ -240,14 +247,14 @@ def generate_discover_pool(
 # Discover resolution
 # ===================================================================
 
-def resolve_discover(state, card_text: str, hero_class: str = ''):
+def resolve_discover(state, card_text: str, hero_class: str = '', english_text: str = ''):
     try:
         if not hero_class:
             hero_class = getattr(state, 'hero', None)
             if hero_class:
                 hero_class = getattr(hero_class, 'hero_class', '') or ''
 
-        constraints = _parse_discover_constraint(card_text)
+        constraints = _parse_discover_constraint(card_text, english_text)
         ct = constraints.get('card_type')
         race = constraints.get('race')
         school = constraints.get('school')
@@ -260,7 +267,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         except ImportError:
             pass
 
-        from_past_only = '来自过去' in card_text or 'from the past' in card_text.lower()
+        from_past_only = '来自过去' in card_text or 'from the past' in (english_text or '').lower()
         use_wild_pool = from_past_only
 
         pool = generate_discover_pool(
@@ -282,9 +289,9 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
                 has_dark_gift_discover, filter_dark_gift_pool,
                 parse_dark_gift_constraint, apply_dark_gift,
             )
-            dark_gift_active = has_dark_gift_discover(card_text)
+            dark_gift_active = has_dark_gift_discover(english_text or '')
             if dark_gift_active and pool:
-                dg_constraint = parse_dark_gift_constraint(card_text)
+                dg_constraint = parse_dark_gift_constraint(english_text or '')
                 if dg_constraint:
                     pool = filter_dark_gift_pool(pool, dg_constraint)
         except ImportError:
@@ -317,7 +324,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
         chosen_card = Card.from_hsdb_dict(chosen_raw)
 
         # Apply discover cost reduction if source card has it
-        cost_red = get_discover_cost_reduction(card_text)
+        cost_red = get_discover_cost_reduction(card_text, english_text)
         if cost_red > 0 and hasattr(chosen_card, 'cost'):
             chosen_card.cost = max(0, chosen_card.cost - cost_red)
 
@@ -336,6 +343,7 @@ def resolve_discover(state, card_text: str, hero_class: str = ''):
 
 def resolve_discover_top_k(
     state, card_text: str, hero_class: str = '', k: int = 3,
+    english_text: str = '',
 ) -> List[tuple]:
     """Return top-k discover choices as (state, probability) pairs.
 
@@ -347,13 +355,13 @@ def resolve_discover_top_k(
         if hero:
             hero_class = getattr(hero, 'hero_class', '') or ''
 
-    constraints = _parse_discover_constraint(card_text)
+    constraints = _parse_discover_constraint(card_text, english_text)
     ct = constraints.get('card_type')
     race = constraints.get('race')
     school = constraints.get('school')
     cost_max = constraints.get('cost_max')
 
-    from_past_only = '来自过去' in card_text or 'from the past' in card_text.lower()
+    from_past_only = '来自过去' in card_text or 'from the past' in (english_text or '').lower()
     use_wild_pool = from_past_only
 
     pool = generate_discover_pool(
@@ -376,7 +384,7 @@ def resolve_discover_top_k(
         chosen_card = Card.from_hsdb_dict(chosen_raw)
 
         # Apply discover cost reduction if source card has it
-        cost_red = get_discover_cost_reduction(card_text)
+        cost_red = get_discover_cost_reduction(card_text, english_text)
         if cost_red > 0 and hasattr(chosen_card, 'cost'):
             chosen_card.cost = max(0, chosen_card.cost - cost_red)
 

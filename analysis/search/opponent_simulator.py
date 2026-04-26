@@ -18,6 +18,9 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
 from analysis.search.game_state import GameState
+from analysis.constants.effect_keywords import (
+    DAMAGE_KEYWORDS, BOARD_CLEAR_KEYWORDS, REMOVAL_KEYWORDS, WEAPON_KEYWORDS,
+)
 
 if TYPE_CHECKING:
     from analysis.utils.bayesian_opponent import BayesianOpponentModel
@@ -49,15 +52,6 @@ class SimulatedOpponentTurn:
 # Card threat classification
 # ===================================================================
 
-# Spell damage keywords for text-based detection
-_DAMAGE_SPELL_KEYWORDS = {'deal $', 'deals $', '造成$', 'lava burst', '火炎'}
-_BOARD_CLEAR_KEYWORDS = {'all minions', 'all enemies', '所有敌方', '全体随从', 'hellfire',
-                         'blizzard', 'flamestrike', 'avalanche', 'brawl', 'twisting nether'}
-_REMOVAL_KEYWORDS = {'destroy', 'destroy a', 'destroy an', 'silence', '消灭', '摧毁', '变形',
-                     'polymorph', 'hex', 'assassinate', 'execute', 'shadow word: death',
-                     '暗言术：灭', '自然平衡', 'soul of the forest'}
-_WEAPON_KEYWORDS = {'weapon', 'equip', '武器'}
-
 # Known damage spell database: (dbfId → estimated damage)
 # Covers the most common meta spells
 _KNOWN_DAMAGE_SPELLS: Dict[int, int] = {}  # populated lazily from card data
@@ -83,26 +77,26 @@ def classify_card_threat(card) -> Dict[str, float]:
     attack = getattr(card, 'attack', 0) or 0
 
     # Check for damage spell
-    for kw in _DAMAGE_SPELL_KEYWORDS:
+    for kw in DAMAGE_KEYWORDS:
         if kw in text:
             # Estimate damage: try to extract number from pattern like "deal $X"
             result['damage'] = min(1.0, (cost + 1) / 5.0)  # rough: higher cost = more damage
             break
 
     # Check for board clear
-    for kw in _BOARD_CLEAR_KEYWORDS:
+    for kw in BOARD_CLEAR_KEYWORDS:
         if kw in text:
             result['aoe'] = 0.8
             break
 
     # Check for single-target removal
-    for kw in _REMOVAL_KEYWORDS:
+    for kw in REMOVAL_KEYWORDS:
         if kw in text:
             result['removal'] = 0.7
             break
 
     # Check for weapon
-    if card_type == 'weapon' or any(kw in text for kw in _WEAPON_KEYWORDS):
+    if card_type == 'weapon' or any(kw in text for kw in WEAPON_KEYWORDS):
         result['weapon'] = min(1.0, attack / 5.0)
 
     return result

@@ -159,7 +159,7 @@ def eval_survival_v10(state: GameState) -> float:
     for card in state.hand:
         text = getattr(card, "text", "") or ""
         etext = getattr(card, "english_text", "") or ""
-        if "恢复" in text or "治疗" in text or "heal" in text.lower() or "Heal" in etext:
+        if "heal" in etext.lower() or "restore" in etext.lower() or "heal" in text.lower() or "恢复" in text or "治疗" in text:
             heal_potential += 1.0 * profile["heal_value"]
 
     taunt_defense = 0.0

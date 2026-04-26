@@ -81,6 +81,12 @@ class EffectKind(Enum):
     SILENCE = "SILENCE"
     CAST_SPELL = "CAST_SPELL"
     ENCHANT = "ENCHANT"
+    # ── Bridged from effects.py (P8 adapter) ──
+    BUFF = "BUFF"                    # Give stats to friendly minions
+    ARMOR = "ARMOR"                  # Gain armor
+    RANDOM_DAMAGE = "RANDOM_DAMAGE"  # Damage random enemy
+    AOE_DAMAGE = "AOE_DAMAGE"        # Damage all enemies
+    MANA = "MANA"                    # Gain/modify mana
     # ── Keyword effects (from standalone modules) ──
     HERALD_SUMMON = "HERALD_SUMMON"         # summon class-specific soldier
     IMBUE_UPGRADE = "IMBUE_UPGRADE"         # hero.imbue_level += 1

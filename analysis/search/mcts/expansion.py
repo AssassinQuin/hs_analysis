@@ -149,57 +149,52 @@ class Expander:
         action: Action,
         tt: 'TranspositionTable',
     ) -> Optional[Tuple[MCTSNode, 'GameState']]:
-        """Expand a stochastic action into a chance node with sampled outcomes.
+        """Expand a stochastic action as a single DECISION node.
 
-        The chance node itself doesn't correspond to a specific state.
-        Its children are the sampled outcomes.
+        Collapses the previous CHANCE→OUTCOME 2-level structure into one node.
+        Each expansion samples a fresh outcome, creating different children
+        for the same stochastic action. This halves the tree depth cost.
         """
         from analysis.search.mcts.transposition import compute_state_hash
 
         ak = action_key(action)
 
-        # Check if chance node already exists for this action
-        chance_node = node.children.get(ak)
-        if chance_node is None:
-            # Create the chance node
-            chance_node = MCTSNode(
-                node_id=self._next_id,
-                state_hash=hash((node.state_hash, ak, "chance")),
-                node_type=NodeType.CHANCE,
-                parent=node,
-                is_player_turn=node.is_player_turn,  # same turn, outcome pending
-                depth=node.depth + 1,
-                stochastic_action=action,
-            )
-            self._next_id += 1
-
-            edge = ActionEdge(action=action, child_node=chance_node)
-            node.children[ak] = chance_node
-            node.action_edges[ak] = edge
-
-        # Sample an outcome and add as child of chance node
+        # Sample an outcome by applying the action
         outcome_state = self._sample_outcome(state, action)
 
-        # Check how many outcomes we've already sampled
-        max_samples = self.config.discover_samples
-        if len(chance_node.children) >= max_samples:
-            # Reuse existing sampled outcomes
-            existing_ak = list(chance_node.children.keys())
-            chosen_ak = random.choice(existing_ak)
-            outcome_node = chance_node.children[chosen_ak]
-            # Reconstruct state for this outcome
-            outcome_state = self._apply_outcome(state, action, outcome_node.chance_outcome)
-            return outcome_node, outcome_state
+        # Determine turn ownership (same logic as deterministic)
+        is_player_turn = node.is_player_turn
+        turn_depth = node.turn_depth
+        if action.action_type == ActionType.END_TURN:
+            is_player_turn = not is_player_turn
+            if not node.is_player_turn:
+                turn_depth += 1
+                our_overloaded = state.mana.overloaded
+                outcome_state.mana.overloaded = our_overloaded
+                outcome_state = self._advance_after_opponent_turn(outcome_state)
 
-        # Create a new outcome node
-        outcome_hash = compute_state_hash(outcome_state, node.is_player_turn)
-        outcome_node = MCTSNode(
+        # Compute hash
+        state_hash = compute_state_hash(outcome_state, is_player_turn)
+
+        # Check transposition table
+        if self.config.enable_transposition:
+            existing = tt.get(state_hash)
+            if existing is not None:
+                # Use unique key per outcome sample to allow multiple children
+                sample_ak = (ak, len(node.children))
+                node.children[sample_ak] = existing
+                node.action_edges[sample_ak] = ActionEdge(action=action, child_node=existing)
+                return existing, outcome_state
+
+        # Create a single DECISION child (not CHANCE)
+        child = MCTSNode(
             node_id=self._next_id,
-            state_hash=outcome_hash,
+            state_hash=state_hash,
             node_type=NodeType.DECISION,
-            parent=chance_node,
-            is_player_turn=node.is_player_turn,
-            depth=chance_node.depth + 1,
+            parent=node,
+            is_player_turn=is_player_turn,
+            depth=node.depth + 1,  # Only +1, not +2!
+            turn_depth=turn_depth,
             chance_outcome=self._last_outcome,
         )
         self._next_id += 1
@@ -207,19 +202,19 @@ class Expander:
         # Check terminal
         terminal = self._check_terminal(outcome_state)
         if terminal is not None:
-            outcome_node.is_terminal = True
-            outcome_node.terminal_reward = terminal
+            child.is_terminal = True
+            child.terminal_reward = terminal
 
-        outcome_ak = ("outcome", len(chance_node.children))
-        chance_node.children[outcome_ak] = outcome_node
-        chance_node.action_edges[outcome_ak] = ActionEdge(
-            action=action, child_node=outcome_node
-        )
+        # Use unique key per sample so multiple outcomes of same action can coexist
+        sample_ak = (ak, len(node.children))
+        edge = ActionEdge(action=action, child_node=child)
+        node.children[sample_ak] = child
+        node.action_edges[sample_ak] = edge
 
         if self.config.enable_transposition:
-            tt.put(outcome_hash, outcome_node)
+            tt.put(state_hash, child)
 
-        return outcome_node, outcome_state
+        return child, outcome_state
 
     # ── Outcome sampling ───────────────────────────────
 
@@ -303,6 +298,7 @@ class Expander:
         """Quick heuristic score for action ordering.
 
         Higher score = expand first.
+        Includes: tempo value, combo detection, hold value for early turns.
         """
         score = 0.0
 
@@ -327,6 +323,7 @@ class Expander:
                 card = state.hand[card_idx]
                 cost = getattr(card, 'cost', 0) or 0
                 card_score = getattr(card, 'score', 0) or 0
+
                 # Use card score as base tempo value; fallback to stat/cost ratio
                 if card_score > 0:
                     score += card_score * 0.2
@@ -335,6 +332,36 @@ class Expander:
                     hp = getattr(card, 'health', 0) or 0
                     score += (atk + hp - cost) * 0.3
 
+                # --- Combo detection for 0-cost spells ---
+                # When a 0-cost card is played, boost score of highest-cost
+                # spell in hand that becomes affordable (combo potential).
+                if cost == 0 and len(state.hand) > 1:
+                    from analysis.data.card_effects import get_effects
+                    max_boost = 0.0
+                    for other in state.hand:
+                        if other is card:
+                            continue
+                        other_cost = getattr(other, 'cost', 0) or 0
+                        other_type = (getattr(other, 'card_type', '') or '').upper()
+                        if other_type == 'SPELL' and other_cost >= 3:
+                            other_eff = get_effects(other)
+                            if other_eff.damage > 0 or other_eff.draw > 0:
+                                # High-value spell enabled by 0-cost prep
+                                max_boost = max(max_boost, other_cost * 0.15)
+                    score += max_boost
+
+                # --- Hold value for low-impact early plays ---
+                # On T1-T2, penalise low-value plays when opponent has no board.
+                # Value: (atk + hp) / cost < 1.5 → not worth playing early.
+                mana = getattr(state.mana, 'available', 0) or 0
+                if mana <= 2:
+                    opp_board = len(state.opponent.board)
+                    if opp_board == 0:
+                        atk = getattr(card, 'attack', 0) or 0
+                        hp = getattr(card, 'health', 0) or 0
+                        value_ratio = (atk + hp) / max(cost, 1)
+                        if value_ratio < 1.5:
+                            score -= 1.5  # hold for better value later
 
         elif action.action_type == ActionType.HERO_POWER:
             score += 0.3  # hero power worth considering but lower priority
@@ -343,7 +370,11 @@ class Expander:
             score += 1.0  # location activations are strong tempo
 
         elif action.action_type == ActionType.END_TURN:
-            score -= 3.0  # strongly deprioritise end turn
+            # Penalise end turn, but less harshly if mana is nearly spent
+            mana = getattr(state.mana, 'available', 0) or 0
+            max_mana = getattr(state.mana, 'max_mana', 0) or 1
+            unspent_ratio = mana / max(max_mana, 1)
+            score -= 3.0 - (1.0 - unspent_ratio) * 2.0  # -3 when all mana unused, -1 when all spent
 
         return score
 

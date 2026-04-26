@@ -887,6 +887,19 @@ class CardDB:
                     continue
             results.append(c)
 
+        # Cascade: if collectible search found nothing, scan full card pool
+        # (includes tokens, hero powers, enchantments, etc.) via linear scan.
+        # Full pool cards are in self._cards but may not be in frozenset indexes.
+        if not results and collectible is True and name:
+            name_lower = name.lower() if name else None
+            for c in self._cards.values():
+                if name_lower:
+                    zh = c.get("name", "").lower()
+                    en = c.get("englishName", "").lower()
+                    if name_lower not in zh and name_lower not in en:
+                        continue
+                results.append(c)
+
         return results
 
     # ── Pool queries (backward compat) ─────────

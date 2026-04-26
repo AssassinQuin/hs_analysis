@@ -13,7 +13,10 @@ from analysis.models.card import Card
 def is_shatter_card(card) -> bool:
     mechanics = set(getattr(card, 'mechanics', []) or [])
     text = getattr(card, 'text', '') or ''
-    return 'SHATTER' in mechanics or '裂变' in text
+    english_text = getattr(card, 'english_text', '') or ''
+    return ('SHATTER' in mechanics
+            or 'Shatter' in english_text
+            or '裂变' in text)
 
 
 def apply_shatter_on_draw(state: GameState, card_index: int) -> GameState:
@@ -30,7 +33,7 @@ def apply_shatter_on_draw(state: GameState, card_index: int) -> GameState:
 
     copy1 = Card(
         dbf_id=getattr(original, 'dbf_id', 0),
-        name=f"{getattr(original, 'name', '')} (裂变1)",
+        name=f"{getattr(original, 'name', '')} (Shatter 1)",
         cost=half_cost,
         original_cost=half_cost,
         card_type=getattr(original, 'card_type', ''),
@@ -45,7 +48,7 @@ def apply_shatter_on_draw(state: GameState, card_index: int) -> GameState:
 
     copy2 = Card(
         dbf_id=getattr(original, 'dbf_id', 0) + 1,
-        name=f"{getattr(original, 'name', '')} (裂变2)",
+        name=f"{getattr(original, 'name', '')} (Shatter 2)",
         cost=half_cost,
         original_cost=half_cost,
         card_type=getattr(original, 'card_type', ''),

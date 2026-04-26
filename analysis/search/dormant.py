@@ -10,16 +10,17 @@ import re
 from analysis.search.game_state import GameState, Minion
 
 
-def parse_dormant_turns(text: str) -> int:
-    if not text:
-        return 0
-    m = re.search(r'Dormant\s*(?:for\s*)?(\d+)', text)
-    if m:
-        return int(m.group(1))
-    m = re.search(r'休眠\s*(\d+)\s*个?回合', text)
-    if m:
-        return int(m.group(1))
-    if 'Dormant' in text or '休眠' in text:
+def parse_dormant_turns(text: str, english_text: str = '') -> int:
+    # Try English text first (more reliable), then Chinese fallback
+    if english_text:
+        m = re.search(r'Dormant\s*(?:for\s*)?(\d+)', english_text)
+        if m:
+            return int(m.group(1))
+    if text:
+        m = re.search(r'休眠\s*(\d+)\s*个?回合', text)
+        if m:
+            return int(m.group(1))
+    if 'Dormant' in english_text or '休眠' in text:
         return 2
     return 0
 
@@ -27,12 +28,14 @@ def parse_dormant_turns(text: str) -> int:
 def is_dormant_card(card) -> bool:
     mechanics = set(getattr(card, 'mechanics', []) or [])
     text = getattr(card, 'text', '') or ''
-    return 'DORMANT' in mechanics or '休眠' in text
+    english_text = getattr(card, 'english_text', '') or ''
+    return 'DORMANT' in mechanics or 'Dormant' in english_text or '休眠' in text
 
 
 def apply_dormant(minion: Minion, card) -> Minion:
     text = getattr(card, 'text', '') or ''
-    turns = parse_dormant_turns(text)
+    english_text = getattr(card, 'english_text', '') or ''
+    turns = parse_dormant_turns(text, english_text)
     if turns > 0:
         minion.is_dormant = True
         minion.dormant_turns_remaining = turns

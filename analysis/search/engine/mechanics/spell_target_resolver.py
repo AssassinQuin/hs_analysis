@@ -571,16 +571,24 @@ class SpellTargetResolver:
         return False
 
     @staticmethod
+    def has_targeting_keyword(text: str) -> bool:
+        """Check if card text contains targeting keywords (public API).
+
+        Returns True if the text mentions specific target types like
+        'enemy minion', 'a character', '友方', etc. This indicates the
+        card requires a player-chosen target.
+        """
+        return any(re.search(kw, text, re.IGNORECASE) for kw in _TARGETING_KEYWORDS)
+
+    @staticmethod
     def _is_no_target(text: str) -> bool:
         """Check if spell text indicates no player-chosen target is needed.
 
         Returns False (i.e., spell DOES need a target) if any targeting keyword
         is present in the text, regardless of other no-target keywords.
         """
-        # If text contains targeting keywords, it definitely needs a target
-        for kw in _TARGETING_KEYWORDS:
-            if re.search(kw, text, re.IGNORECASE):
-                return False
+        if SpellTargetResolver.has_targeting_keyword(text):
+            return False
 
         # Otherwise, check for no-target keywords
         tl = text.lower()

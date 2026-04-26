@@ -16,18 +16,18 @@ if TYPE_CHECKING:
 
 # Per-class soldier minion definitions
 HERALD_SOLDIERS = {
-    "DEMONHUNTER": {"name": "伊利达雷士兵", "attack": 2, "health": 2},
-    "ROGUE": {"name": "暗影刺客", "attack": 2, "health": 1},
-    "HUNTER": {"name": "猎手", "attack": 3, "health": 1},
-    "MAGE": {"name": "奥术学徒", "attack": 1, "health": 2},
-    "PALADIN": {"name": "白银之手新兵", "attack": 2, "health": 2},
-    "PRIEST": {"name": "暗影祭司", "attack": 1, "health": 3},
-    "WARRIOR": {"name": "战歌士兵", "attack": 3, "health": 1},
-    "WARLOCK": {"name": "小鬼军团", "attack": 2, "health": 2},
-    "SHAMAN": {"name": "图腾战士", "attack": 2, "health": 2},
-    "DRUID": {"name": "树人战士", "attack": 2, "health": 3},
-    "DEATHKNIGHT": {"name": "亡灵士兵", "attack": 2, "health": 2},
-    "NEUTRAL": {"name": "雇佣兵", "attack": 2, "health": 2},
+    "DEMONHUNTER": {"name": "伊利达雷士兵", "english_name": "Illidari Soldier", "attack": 2, "health": 2},
+    "ROGUE": {"name": "暗影刺客", "english_name": "Shadow Assassin", "attack": 2, "health": 1},
+    "HUNTER": {"name": "猎手", "english_name": "Huntsman", "attack": 3, "health": 1},
+    "MAGE": {"name": "奥术学徒", "english_name": "Arcane Apprentice", "attack": 1, "health": 2},
+    "PALADIN": {"name": "白银之手新兵", "english_name": "Silver Hand Recruit", "attack": 2, "health": 2},
+    "PRIEST": {"name": "暗影祭司", "english_name": "Shadow Priest", "attack": 1, "health": 3},
+    "WARRIOR": {"name": "战歌士兵", "english_name": "Warsong Soldier", "attack": 3, "health": 1},
+    "WARLOCK": {"name": "小鬼军团", "english_name": "Imp Legionnaire", "attack": 2, "health": 2},
+    "SHAMAN": {"name": "图腾战士", "english_name": "Totem Warrior", "attack": 2, "health": 2},
+    "DRUID": {"name": "树人战士", "english_name": "Treant Warrior", "attack": 2, "health": 3},
+    "DEATHKNIGHT": {"name": "亡灵士兵", "english_name": "Undead Soldier", "attack": 2, "health": 2},
+    "NEUTRAL": {"name": "雇佣兵", "english_name": "Mercenary", "attack": 2, "health": 2},
 }
 
 

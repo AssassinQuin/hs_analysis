@@ -120,8 +120,15 @@ _FALRIC_NAME = "法瑞克"
 
 
 def has_double_corpse_gen(state: GameState) -> bool:
-    """Check if 法瑞克 is on the friendly board for double corpse generation."""
+    """Check if 法瑞克 (Falric) is on the friendly board for double corpse generation."""
     for m in state.board:
+        # Primary: check english_text for "corpse" + "twice"
+        card_ref = getattr(m, 'card_ref', None)
+        if card_ref:
+            en_text = getattr(card_ref, 'english_text', '') or ''
+            if 'corpse' in en_text.lower() and 'twice' in en_text.lower():
+                return True
+        # Fallback: CN card name
         if _FALRIC_NAME in (m.name or ""):
             return True
     return False
@@ -185,6 +192,7 @@ def _apply_corpse_bonus(state: GameState, effect_text: str, card: dict) -> GameS
     """
     s = state
     text = effect_text.strip()
+    text_lower = text.lower()
 
     # Pattern: stat buff "+1/+1" or "+N/+N"
     stat_match = re.search(r'[+＋](\d+)/[+＋](\d+)', text)
@@ -192,14 +200,14 @@ def _apply_corpse_bonus(state: GameState, effect_text: str, card: dict) -> GameS
         atk = int(stat_match.group(1))
         hp = int(stat_match.group(2))
         # Apply to hand minions (common: "使手牌所有随从牌获得+1/+1")
-        if '手牌' in text or '随从' in text:
+        if '手牌' in text or '随从' in text or 'hand' in text_lower or 'minion' in text_lower:
             for h_card in s.hand:
                 if hasattr(h_card, 'attack') and hasattr(h_card, 'health'):
                     h_card.attack = getattr(h_card, 'attack', 0) + atk
                     h_card.health = getattr(h_card, 'health', 0) + hp
         return s
 
-    # Pattern: damage "造成N点伤害"
+    # Pattern: damage "Deal N damage" / "造成N点伤害"
     dmg_match = re.search(r"Deal\s*(\d+)\s*damage", text, re.IGNORECASE)
     if not dmg_match:
         dmg_match = re.search(r'造成\s*[$(（]\s*(\d+)\s*[)）]?\s*点?\s*伤害', text)
@@ -211,8 +219,8 @@ def _apply_corpse_bonus(state: GameState, effect_text: str, card: dict) -> GameS
         s.opponent.hero.hp -= amount
         return s
 
-    # Pattern: summon "召唤"
-    if '召唤' in text:
+    # Pattern: summon "Summon" / "召唤"
+    if 'summon' in text_lower or '召唤' in text:
         # Simplified: skip detailed summon parsing
         logger.debug("Corpse summon effect: %s", text[:50])
         return s

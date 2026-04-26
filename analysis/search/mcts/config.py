@@ -48,7 +48,7 @@ class MCTSConfig:
     eval_normalization_scale: float = 15.0   # tanh(raw/scale) normalization factor
 
     # === Chance node sampling ===
-    discover_samples: int = 3                # number of discover outcome samples
+    discover_samples: int = 5                # number of discover outcome samples
     rng_samples: int = 5                     # number of random-effect outcome samples
 
     # === Time budget ===

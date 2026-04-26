@@ -70,12 +70,22 @@ _SPELL_SCHOOL_MAP = {
 }
 
 
-def _parse_constraint(text: str) -> str:
+def _parse_constraint(text: str, english_text: str = '') -> str:
     """Extract quest constraint (race or spell school) from card text.
 
     Returns comma-separated uppercase constraint string, e.g. 'UNDEAD,BEAST'.
+    Checks English text first, then CN text as fallback.
     """
     constraints = []
+    # Check EN text directly
+    en_lower = english_text.lower()
+    for eng_name in _RACE_MAP.values():
+        if eng_name.lower() in en_lower:
+            constraints.append(eng_name)
+    for eng_name in _SPELL_SCHOOL_MAP.values():
+        if eng_name.lower() in en_lower:
+            constraints.append(eng_name)
+    # CN fallback
     for cn_name, eng_name in _RACE_MAP.items():
         if cn_name in text:
             constraints.append(eng_name)
@@ -103,8 +113,21 @@ def _parse_threshold(text: str, structured_value: Optional[int] = None) -> int:
     return 3
 
 
-def _determine_quest_type(text: str) -> str:
-    """Determine quest type from card text patterns."""
+def _determine_quest_type(text: str, english_text: str = '') -> str:
+    """Determine quest type from card text patterns.
+
+    Checks English text first, then CN text as fallback.
+    """
+    en = english_text.lower()
+    if 'draw' in en and 'discard' in en:
+        return "draw_discard"
+    if 'cast' in en and 'spell' in en:
+        return "cast_spells"
+    if 'summon' in en:
+        return "summon_minions"
+    if 'play' in en:
+        return "play_cards"
+    # CN fallback
     if "填满" in text and "清空" in text:
         return "draw_discard"
     if "施放" in text and "法术" in text:
@@ -134,7 +157,7 @@ def _parse_reward_name(text: str, structured_reward: Optional[str] = None) -> st
         name = m.group(1).strip().rstrip('。')
         if name:
             return name
-    return "奖励卡牌"
+    return "Quest Reward"
 
 
 # ===================================================================
@@ -153,12 +176,13 @@ def parse_quest(card) -> Optional[QuestState]:
         return None
 
     text = getattr(card, 'text', '') or ''
+    english_text = getattr(card, 'english_text', '') or ''
     name = getattr(card, 'name', '') or ''
     dbf_id = getattr(card, 'dbf_id', 0) or getattr(card, 'dbfId', 0)
     quest_progress_total = getattr(card, 'quest_progress_total', None)
     quest_reward = getattr(card, 'quest_reward', None)
 
-    quest_type = _determine_quest_type(text) if not mechanics else _determine_quest_type(text)
+    quest_type = _determine_quest_type(text, english_text=english_text) if not mechanics else _determine_quest_type(text, english_text=english_text)
 
     return QuestState(
         quest_name=name,
@@ -167,7 +191,7 @@ def parse_quest(card) -> Optional[QuestState]:
         threshold=_parse_threshold(text, structured_value=quest_progress_total),
         reward_name=_parse_reward_name(text, structured_reward=quest_reward),
         is_side_quest="SIDEBQUEST" in mechanics or "SIDE_QUEST" in mechanics,
-        quest_constraint=_parse_constraint(text),
+        quest_constraint=_parse_constraint(text, english_text=english_text),
     )
 
 
@@ -251,7 +275,7 @@ def track_quest_progress(state, action_type, card=None):
             if len(state.hand) < 10:
                 from types import SimpleNamespace
                 reward = SimpleNamespace(
-                    name=quest.reward_name or "奖励卡牌",
+                    name=quest.reward_name or "Quest Reward",
                     cost=0,
                     card_type="SPELL",
                     dbf_id=quest.reward_dbf_id,

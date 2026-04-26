@@ -36,16 +36,18 @@ COLOSSAL_APPENDAGES = {
 def parse_colossal_value(card) -> int:
     """Parse the colossal appendage count from a card.
 
-    Checks mechanics for 'COLOSSAL' and parses '巨型+N' from card text.
+    Checks mechanics for 'COLOSSAL' and parses 'Colossal +N' from English
+    card text, falling back to Chinese '巨型+N' for backward compatibility.
     Returns N, or 0 if the card is not colossal.
     """
     mechanics = getattr(card, 'mechanics', []) or []
+    english_text = getattr(card, 'english_text', '') or ''
     text = getattr(card, 'text', '') or ''
 
-    if 'COLOSSAL' not in mechanics and '巨型' not in text and 'Colossal' not in text:
+    if 'COLOSSAL' not in mechanics and 'Colossal' not in english_text and '巨型' not in text:
         return 0
 
-    match = re.search(r'Colossal\s*\+\s*(\d+)', text)
+    match = re.search(r'Colossal\s*\+\s*(\d+)', english_text)
     if match:
         return int(match.group(1))
 

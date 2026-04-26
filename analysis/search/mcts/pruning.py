@@ -15,6 +15,7 @@ import logging
 from typing import List, Optional, Set, TYPE_CHECKING
 
 from analysis.search.abilities.actions import Action, ActionType, action_key
+from analysis.constants.effect_keywords import DAMAGE_TEXT_FRAGMENTS, HEAL_KEYWORDS
 
 if TYPE_CHECKING:
     from analysis.search.game_state import GameState
@@ -156,13 +157,13 @@ class ActionPruner:
         if action.action_type == ActionType.PLAY_WITH_TARGET:
             if action.target_index == TARGET_MY_HERO:
                 # Damage spell to own hero
-                if any(kw in card_text for kw in ('造成', '伤害', 'damage')):
+                if any(kw in card_text for kw in DAMAGE_TEXT_FRAGMENTS):
                     return True
 
             # Heal full-health target
             target = self._resolve_target(action, state)
             if target is not None:
-                if any(kw in card_text for kw in ('恢复', '治疗', 'heal', 'restore')):
+                if any(kw in card_text for kw in HEAL_KEYWORDS):
                     target_health = getattr(target, 'health', 0)
                     target_max = getattr(target, 'max_health', target_health)
                     if target_health >= target_max:

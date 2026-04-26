@@ -45,6 +45,10 @@ class CardEffects:
     has_discover: bool = False
     target_side: str = ""
     has_lifesteal: bool = False
+    has_hand_transform: bool = False
+    transform_attack: int = 0
+    transform_health: int = 0
+    has_spell_transform: bool = False  # "transform into copy of cast spell"
 
 
 def _mechanics_set(card: Card) -> set:
@@ -80,12 +84,19 @@ def get_effects(card: Card) -> CardEffects:
     if card_type == "SPELL" or card_type == "HERO_POWER" or card_type == "LOCATION":
         _fill_spell_effects(text, eff, mechs)
 
+    # Spell-transform: "Each time you cast a spell, transform this into a copy of it."
+    # Zero card-id hardcoding — pure effect text pattern.
+    if card_type == "SPELL":
+        _detect_spell_transform(card, eff)
+
     if card_type == "MINION":
         # Always parse text effects for minions — many have battlecry/discover/draw
         # text without the BATTLECRY mechanics tag
         _fill_spell_effects(text, eff, mechs)
         if "CHARGE" in mechs or "RUSH" in mechs:
             pass
+        # Hand-transform: "while in your hand, becomes a X/Y copy of ..."
+        _detect_hand_transform(card, eff)
 
     return eff
 
@@ -239,3 +250,60 @@ def get_card_health_cost(card: Card) -> int:
     """Quick accessor: health cost — 0 means no health cost."""
     eff = get_effects(card)
     return eff.health_cost
+
+
+# ── Hand-transform detection (zero card-id hardcoding) ──────────────
+
+# Pattern: "while in hand, becomes a X/Y copy of [opponent's last minion]"
+_HAND_TRANSFORM_CN = re.compile(
+    r"手牌中.*?变成.*?(\d+)/(\d+)\s*(?:的)?复制"
+)
+_HAND_TRANSFORM_EN = re.compile(
+    r"(?:while|whilst).*?(?:in )?(?:your )?hand.*?"
+    r"(?:becomes?|turns? into).*?"
+    r"(\d+)/(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _detect_hand_transform(card: Card, eff: CardEffects) -> None:
+    """Detect hand-transform effects via text patterns.
+
+    Triggers on: "此牌在你的手牌中时，会变成...的3/4复制" (CN)
+                 "While in your hand, becomes a 3/4 copy of ..." (EN)
+    Sets has_hand_transform=True and transform_attack/health.
+    """
+    text = card.text or ""
+    eng = getattr(card, "english_text", "") or card.text or ""
+
+    m = _HAND_TRANSFORM_CN.search(text)
+    if not m:
+        m = _HAND_TRANSFORM_EN.search(eng)
+    if m:
+        eff.has_hand_transform = True
+        eff.transform_attack = int(m.group(1))
+        eff.transform_health = int(m.group(2))
+
+
+# ── Spell-transform detection (zero card-id hardcoding) ─────────────
+
+_SPELL_TRANSFORM_PATTERNS = [
+    re.compile(r"变形成为该法术的复制", re.IGNORECASE),  # CN
+    re.compile(r"transform\s+this\s+into\s+a\s+copy", re.IGNORECASE),  # EN
+]
+
+
+def _detect_spell_transform(card: Card, eff: CardEffects) -> None:
+    """Detect spell-transform effects via text patterns.
+
+    Triggers on: "每当你施放一个法术，变形成为该法术的复制" (CN)
+                 "Each time you cast a spell, transform this into a copy of it" (EN)
+    Sets has_spell_transform=True.
+    """
+    text = card.text or ""
+    eng = getattr(card, "english_text", "") or ""
+
+    for pat in _SPELL_TRANSFORM_PATTERNS:
+        if pat.search(text) or pat.search(eng):
+            eff.has_spell_transform = True
+            return

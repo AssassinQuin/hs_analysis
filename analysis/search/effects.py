@@ -33,6 +33,7 @@ __all__ = [
     "register",
     "dispatch",
     "dispatch_batch",
+    "dispatch_via_abilities",
     "parse_effect",
 ]
 
@@ -103,8 +104,20 @@ def register(kind: EffectKind):
 def dispatch(state: "GameState", spec: EffectSpec, source: Any = None, **ctx) -> "GameState":
     """Execute a single EffectSpec against game state.
 
+    Tries the abilities pipeline first (via dispatch_via_abilities) for
+    supported kinds; falls back to the legacy registry handler if the
+    abilities bridge returns the state unchanged or the kind is unknown.
+
     Returns the (possibly modified) state.  Unknown kinds are no-ops.
     """
+    # Try abilities bridge first for supported kinds
+    if spec.kind in _ABILITIES_BRIDGE_MAP:
+        try:
+            return dispatch_via_abilities(state, spec, source, **ctx)
+        except Exception as exc:
+            logger.debug("Abilities bridge failed for %s: %s, falling back", spec.kind, exc)
+
+    # Legacy registry fallback
     handler = _REGISTRY.get(spec.kind)
     if handler is None:
         logger.debug("No handler registered for effect kind: %s", spec.kind)
@@ -114,6 +127,84 @@ def dispatch(state: "GameState", spec: EffectSpec, source: Any = None, **ctx) ->
     except Exception as exc:
         logger.warning("Effect dispatch failed for %s: %s", spec, exc)
         return state
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Abilities bridge — convert effects.EffectSpec → abilities EffectSpec
+# ═══════════════════════════════════════════════════════════════════
+
+_ABILITIES_BRIDGE_MAP: Dict[EffectKind, str] = {
+    EffectKind.DAMAGE: "DAMAGE",
+    EffectKind.HEAL: "HEAL",
+    EffectKind.SUMMON: "SUMMON",
+    EffectKind.DRAW: "DRAW",
+    EffectKind.BUFF: "BUFF",
+    EffectKind.ARMOR: "ARMOR",
+    EffectKind.DESTROY: "DESTROY",
+    EffectKind.RANDOM_DAMAGE: "RANDOM_DAMAGE",
+    EffectKind.AOE_DAMAGE: "AOE_DAMAGE",
+    EffectKind.DISCARD: "DISCARD",
+    EffectKind.MANA: "MANA",
+    EffectKind.COPY: "COPY",
+    EffectKind.TRANSFORM: "TRANSFORM",
+    EffectKind.ENCHANT: "ENCHANT",
+}
+
+
+def dispatch_via_abilities(state: "GameState", spec: EffectSpec, source: Any = None, **ctx) -> "GameState":
+    """Bridge: convert effects.EffectSpec → abilities EffectSpec and dispatch.
+
+    Returns the modified state, or the original state if the kind is not
+    bridgeable.
+    """
+    from analysis.search.abilities.definition import (
+        EffectKind as AbEffectKind,
+        EffectSpec as AbEffectSpec,
+        TargetKind,
+        TargetSpec,
+    )
+    from analysis.search.abilities.executor import execute_effects
+
+    kind_str = _ABILITIES_BRIDGE_MAP.get(spec.kind)
+    if kind_str is None:
+        return state
+
+    ab_kind = AbEffectKind(kind_str)
+
+    # Convert target_filter → TargetSpec
+    target_spec = _convert_target(spec.target_filter)
+    if target_spec is None and spec.target_filter:
+        # target_filter present but not mappable — fall back to legacy
+        return state
+
+    ab_spec = AbEffectSpec(
+        kind=ab_kind,
+        value=spec.value,
+        value2=spec.value2,
+        target=target_spec,
+    )
+    return execute_effects(state, source, [ab_spec])
+
+
+def _convert_target(target_filter: str) -> Optional["Any"]:
+    """Convert a effects.py target_filter string to a TargetSpec or None."""
+    if not target_filter:
+        return None
+    from analysis.search.abilities.definition import TargetKind, TargetSpec
+    mapping = {
+        "enemy_hero": TargetKind.ENEMY,
+        "enemy": TargetKind.ENEMY,
+        "random_enemy": TargetKind.RANDOM_ENEMY,
+        "all_enemy": TargetKind.ALL_ENEMY,
+        "all_enemies": TargetKind.ALL_ENEMY,
+        "friendly": TargetKind.ALL_FRIENDLY,
+        "hero": TargetKind.FRIENDLY_HERO,
+        "self_hero": TargetKind.FRIENDLY_HERO,
+    }
+    kind = mapping.get(target_filter.lower())
+    if kind is None:
+        return None
+    return TargetSpec(kind=kind)
 
 
 def dispatch_batch(state: "GameState", specs: List[EffectSpec], source: Any = None, **ctx) -> "GameState":

@@ -198,6 +198,22 @@ def _execute_single(
     if kind == EffectKind.ENCHANT:
         return _exec_enchant(state, effect, target)
 
+    # ── Bridged from effects.py (P8 adapter) ──
+    if kind == EffectKind.BUFF:
+        return _exec_buff(state, effect, target)
+
+    if kind == EffectKind.ARMOR:
+        return _exec_armor(state, effect)
+
+    if kind == EffectKind.RANDOM_DAMAGE:
+        return _exec_random_damage(state, effect)
+
+    if kind == EffectKind.AOE_DAMAGE:
+        return _exec_aoe_damage(state, effect)
+
+    if kind == EffectKind.MANA:
+        return _exec_mana(state, effect)
+
     # ── Keyword effects (from standalone modules) ──
     if kind == EffectKind.HERALD_SUMMON:
         return _exec_herald_summon(state, effect, source)
@@ -325,38 +341,55 @@ def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
 
     if atk > 0 or hp > 0:
         # Fixed stat token (e.g. "Summon a 3/3")
+        alive_count = sum(1 for m in state.board if m.health > 0)
         for _ in range(count):
-            if len(state.board) < 7:
-                m = _Minion(attack=atk, health=hp, max_health=hp, name="Token", can_attack=False)
-                state.board.append(m)
+            if alive_count >= 7:
+                break
+            m = _Minion(attack=atk, health=hp, max_health=hp, name="Token", can_attack=False)
+            state.board.append(m)
+            alive_count += 1
     elif effect.text_raw:
         # Random minion summon (e.g. "Summon two random 1-Cost minions")
         text_lower = effect.text_raw.lower()
-        if "random" in text_lower or "随机" in text_lower:
+        if "random" in text_lower:
             # Extract count from text ("two" → 2, "three" → 3, "2" → 2)
-            num_words = {"two": 2, "three": 3, "four": 4, "二": 2, "三": 3, "四": 4}
+            num_words = {"two": 2, "three": 3, "four": 4}
             text_count = 1
             for word, num in num_words.items():
                 if word in text_lower:
                     text_count = num
                     break
-            # Also check for digit patterns
-            import re
-            digit_match = re.search(r'summon\s+(\d+)', text_lower)
-            if not digit_match:
-                digit_match = re.search(r'召唤\s*(\d+)', text_lower)
-            if digit_match:
-                text_count = max(text_count, int(digit_match.group(1)))
+            # Also check for digit patterns (no regex — Standard 5)
+            summon_idx = text_lower.find("summon")
+            if summon_idx >= 0:
+                after = text_lower[summon_idx + 6:].lstrip()
+                for ci, ch in enumerate(after):
+                    if ch.isdigit():
+                        j = ci
+                        while j < len(after) and after[j].isdigit():
+                            j += 1
+                        text_count = max(text_count, int(after[ci:j]))
+                        break
 
             actual_count = max(count, text_count)
 
-            # Try to query real cards from the pool
-            cost_match = re.search(r'(\d+)[-]?cost', text_lower)
-            if not cost_match:
-                cost_match = re.search(r'(\d+)费', text_lower)
+            # Try to query real cards from the pool (no regex — Standard 5)
+            cost_val = None
+            cost_idx = text_lower.find("-cost")
+            if cost_idx < 0:
+                cost_idx = text_lower.find("cost")
+            if cost_idx > 0:
+                before = text_lower[:cost_idx].rstrip()
+                for ci in range(len(before) - 1, -1, -1):
+                    if before[ci].isdigit():
+                        j = ci
+                        while j > 0 and before[j - 1].isdigit():
+                            j -= 1
+                        cost_val = int(before[j:ci + 1])
+                        break
 
             summoned_real = False
-            if cost_match:
+            if cost_val is not None:
                 try:
                     from analysis.data.card_index import get_index
                     idx = get_index()
@@ -365,7 +398,7 @@ def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
                         actual_count,
                         card_class=hero_class,
                         card_type="MINION",
-                        cost=int(cost_match.group(1)),
+                        cost=cost_val,
                     )
                     # Also try neutral
                     if len(pool) < actual_count:
@@ -373,11 +406,12 @@ def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
                             actual_count - len(pool),
                             card_class="NEUTRAL",
                             card_type="MINION",
-                            cost=int(cost_match.group(1)),
+                            cost=cost_val,
                         )
                         pool.extend(neutrals)
+                    alive_count = sum(1 for m in state.board if m.health > 0)
                     for card_dict in pool[:actual_count]:
-                        if len(state.board) >= 7:
+                        if alive_count >= 7:
                             break
                         from analysis.models.card import Card
                         c = Card.from_hsdb_dict(card_dict)
@@ -391,16 +425,20 @@ def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
                             can_attack=False,
                         )
                         state.board.append(m)
+                        alive_count += 1
                     summoned_real = pool and len(state.board) < 7 + actual_count
                 except (ImportError, OSError, ValueError):
                     pass
 
             # Fallback: placeholder 1/1 tokens
             if not summoned_real:
+                alive_count = sum(1 for m in state.board if m.health > 0)
                 for _ in range(actual_count):
-                    if len(state.board) < 7:
-                        m = _Minion(attack=1, health=1, max_health=1, name="Random Minion", can_attack=False)
-                        state.board.append(m)
+                    if alive_count >= 7:
+                        break
+                    m = _Minion(attack=1, health=1, max_health=1, name="Random Minion", can_attack=False)
+                    state.board.append(m)
+                    alive_count += 1
     return state
 
 
@@ -537,15 +575,15 @@ def _exec_discover(state: GameState, effect: EffectSpec, source=None) -> GameSta
 
     # Get card text from source card or effect
     card_text = ''
+    english_text = ''
     if source is not None:
         card_text = getattr(source, 'text', '') or ''
-        if not card_text:
-            card_text = getattr(source, 'english_text', '') or ''
+        english_text = getattr(source, 'english_text', '') or ''
     if not card_text and effect.text_raw:
         card_text = effect.text_raw
 
     if card_text:
-        state = resolve_discover(state, card_text)
+        state = resolve_discover(state, card_text, english_text=english_text)
     return state
 
 
@@ -587,6 +625,71 @@ def _exec_enchant(state: GameState, effect: EffectSpec, target) -> GameState:
                 'attack': effect.value,
                 'health': effect.value2,
             })
+    return state
+
+
+def _exec_buff(state: GameState, effect: EffectSpec, target) -> GameState:
+    """BUFF: give +value/+value2 stats to friendly minions."""
+    atk = effect.value
+    hp = effect.value2
+    if atk <= 0 and hp <= 0:
+        return state
+    tgt = _resolve_target(state, effect.target, target)
+    if tgt is None or tgt == "all_friendly":
+        for m in state.board:
+            if atk > 0:
+                m.attack += atk
+            if hp > 0:
+                m.health += hp
+                m.max_health += hp
+    elif isinstance(tgt, int) and tgt >= 0:
+        board = state.board
+        if tgt < len(board):
+            m = board[tgt]
+            if atk > 0:
+                m.attack += atk
+            if hp > 0:
+                m.health += hp
+                m.max_health += hp
+    return state
+
+
+def _exec_armor(state: GameState, effect: EffectSpec) -> GameState:
+    """ARMOR: gain armor on friendly hero."""
+    amount = effect.value
+    if amount > 0:
+        state.hero.armor += amount
+    return state
+
+
+def _exec_random_damage(state: GameState, effect: EffectSpec) -> GameState:
+    """RANDOM_DAMAGE: deal damage to a random enemy minion."""
+    amount = effect.value
+    if amount <= 0:
+        return state
+    opp_board = state.opponent.board
+    if not opp_board:
+        return state
+    target = random.choice(opp_board)
+    _apply_damage_to_minion(target, amount)
+    return state
+
+
+def _exec_aoe_damage(state: GameState, effect: EffectSpec) -> GameState:
+    """AOE_DAMAGE: deal damage to all enemy minions."""
+    amount = effect.value
+    if amount <= 0:
+        return state
+    for m in list(state.opponent.board):
+        _apply_damage_to_minion(m, amount)
+    return state
+
+
+def _exec_mana(state: GameState, effect: EffectSpec) -> GameState:
+    """MANA: gain temporary mana."""
+    amount = effect.value
+    if amount > 0:
+        state.mana.available += amount
     return state
 
 

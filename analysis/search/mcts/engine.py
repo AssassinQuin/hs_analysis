@@ -229,7 +229,10 @@ class MCTSEngine:
                 reverse=True,
             )
             for ak, child in candidates:
-                if child.visit_count < 3:
+                # Lower threshold for deep nodes — they naturally get fewer visits,
+                # especially after discover/chance nodes which consume extra depth.
+                min_visits = 1 if node.depth > 3 else 3
+                if child.visit_count < min_visits:
                     continue
                 if ak in legal_keys:
                     best_ak = ak
@@ -499,23 +502,6 @@ class MCTSEngine:
                 break
 
             ak, child = result
-
-            from analysis.search.mcts.config import NodeType
-            if child.node_type == NodeType.CHANCE:
-                edge = node.action_edges.get(ak)
-                if edge:
-                    state = apply_action(state, edge.action)
-                path.append(node)
-                node = child
-
-                outcome_result = select_child(node, state, ctx.config)
-                if outcome_result is None:
-                    break
-                _, outcome_child = outcome_result
-                path.append(node)
-                node = outcome_child
-                steps += 2
-                continue
 
             edge = node.action_edges.get(ak)
             if edge:

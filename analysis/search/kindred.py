@@ -44,17 +44,19 @@ def has_kindred(card_text: str) -> bool:
     return bool(_KINDRED_PRESENT_RE.search(card_text or ""))
 
 
-def parse_kindred_bonus(card_text: str) -> str | None:
-    """Extract the bonus effect text after 延系：or 延系.
+def parse_kindred_bonus(card_text: str, english_text: str = '') -> str | None:
+    """Extract the bonus effect text after Kindred: or 延系：.
 
-    Returns the plain-text bonus description, or None if not found.
+    Tries EN extraction first (from *english_text*), then CN fallback on
+    *card_text*.  Returns the plain-text bonus description, or None.
     """
     # Strip HTML-like tags for cleaner extraction
-    clean = re.sub(r'<[^>]+>', ' ', card_text or "")
-    # Find 延系 followed by optional colon, then capture until end or next keyword
-    m = re.search(r'Kindred[：:]?\s*(.+?)(?:\n|$)', clean, re.IGNORECASE)
+    en_clean = re.sub(r'<[^>]+>', ' ', english_text or "")
+    cn_clean = re.sub(r'<[^>]+>', ' ', card_text or "")
+    # Try EN first, then CN fallback
+    m = re.search(r'Kindred[：:]?\s*(.+?)(?:\n|$)', en_clean, re.IGNORECASE)
     if not m:
-        m = re.search(r'延系[：:]?\s*(.+?)(?:\n|$)', clean)
+        m = re.search(r'延系[：:]?\s*(.+?)(?:\n|$)', cn_clean)
     if m:
         return m.group(1).strip()
     return None
@@ -101,20 +103,20 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
     s = state
     text = bonus_text.strip()
 
-    # Pattern: "使你的其他随从获得突袭" → give rush to other friendly minions
-    if '突袭' in text:
+    # Pattern: "使你的其他随从获得突袭" / "Give your other minions Rush"
+    if '突袭' in text or 'Rush' in text:
         for m in s.board:
             m.has_rush = True
         return s
 
-    # Pattern: "使你的其他随从获得圣盾" → divine shield
-    if '圣盾' in text and '其他' in text:
+    # Pattern: "使你的其他随从获得圣盾" / "Give your other minions Divine Shield"
+    if ('圣盾' in text and '其他' in text) or 'Divine Shield' in text:
         for m in s.board:
             m.has_divine_shield = True
         return s
 
-    # Pattern: "召唤一个本随从的复制" → summon copy
-    if '复制' in text:
+    # Pattern: "召唤一个本随从的复制" / "Summon a copy of this"
+    if '复制' in text or 'copy' in text.lower():
         if not s.board_full():
             # Find the card's minion on board (last played)
             for m in reversed(s.board):
@@ -130,10 +132,8 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
                     break
         return s
 
-    # Pattern: "重复一次" → this is a meta-effect that would need
-    # to re-trigger the card's main effect. Simplified: do nothing extra
-    # (the main effect already fired once, which is the common case)
-    if '重复' in text:
+    # Pattern: "重复一次" / "repeat" — meta-effect, simplified as no-op
+    if '重复' in text or 'repeat' in text.lower():
         logger.debug("Kindred 'repeat' bonus — already applied once")
         return s
 
@@ -142,7 +142,7 @@ def _apply_bonus_effect(state: GameState, bonus_text: str, card: dict) -> GameSt
     if stat_match:
         atk_bonus = int(stat_match.group(1))
         hp_bonus = int(stat_match.group(2))
-        if '其他' in text or '友方' in text:
+        if '其他' in text or '友方' in text or 'other' in text.lower() or 'friendly' in text.lower():
             for m in s.board:
                 m.attack += atk_bonus
                 m.health += hp_bonus
@@ -188,17 +188,19 @@ def apply_kindred(state: GameState, card) -> GameState:
     Integrates with kindred_double_next flag (蛮鱼挑战者).
     """
     card_text = _card_attr(card, "text", "") or ""
+    english_text = _card_attr(card, "english_text", "") or ""
     if not isinstance(card_text, str):
         card_text = str(card_text)
 
-    if not has_kindred(card_text):
+    detect_text = english_text if english_text else card_text
+    if not has_kindred(detect_text):
         return state
 
     try:
         if not check_kindred_active(state, card):
             return state
 
-        bonus = parse_kindred_bonus(card_text)
+        bonus = parse_kindred_bonus(card_text, english_text)
         if not bonus:
             return state
 

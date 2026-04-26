@@ -24,22 +24,12 @@ from analysis.data.card_effects import (
 )
 from analysis.search.aura_engine import recompute_auras
 from analysis.search.choose_one import is_choose_one, resolve_choose_one
-from analysis.search.colossal import parse_colossal_value, summon_colossal_appendages
-from analysis.search.corpse import (
-    gain_corpses,
-    has_double_corpse_gen,
-    parse_corpse_effects,
-    resolve_corpse_effects,
-)
-from analysis.search.corrupt import check_corrupt_upgrade
+from analysis.search.corpse import gain_corpses, has_double_corpse_gen, parse_corpse_effects
 from analysis.search.deathrattle import resolve_deaths
 from analysis.search.dormant import is_dormant_card, apply_dormant, tick_dormant
-from analysis.search.herald import check_herald, apply_herald
-from analysis.search.imbue import apply_imbue, apply_hero_power
-from analysis.search.kindred import apply_kindred, set_kindred_double
+from analysis.search.imbue import apply_hero_power
 from analysis.search.location import activate_location, tick_location_cooldowns
-from analysis.search.outcast import check_outcast, apply_outcast_bonus
-from analysis.search.quest import parse_quest, track_quest_progress
+from analysis.search.quest import parse_quest
 from analysis.search.shatter import check_shatter_on_draw
 from analysis.search.trigger_system import TriggerDispatcher
 from analysis.search.secret_triggers import check_secrets
@@ -214,42 +204,46 @@ def apply_action(state, action: Action):
 # ------------------------------------------------------------------
 
 
-def _apply_play_card(s, action: Action):
-    """Handle PLAY and PLAY_WITH_TARGET actions."""
-    card_idx = action.card_index
-    if card_idx < 0 or card_idx >= len(s.hand):
-        return s
-    card = s.hand[card_idx]
+def _validate_and_pay_cost(s, card, card_idx: int):
+    """Validate card play feasibility and pay all costs (mana, overload, HP, corpses).
 
+    Returns the modified state, or None if the play should be skipped.
+    """
+    card_text = getattr(card, "text", "") or ""
+
+    # Mana cost
     eff_cost = s.mana.effective_cost(card)
     eff_cost = _apply_text_cost_reduction(card, s.hand, card_idx, eff_cost)
     s.mana.available -= eff_cost
     s.mana.consume_modifiers(card)
 
-    card_text = getattr(card, "text", "") or ""
+    # Overload
     overload_val = getattr(card, "overload", 0) or 0
     if overload_val == 0 and hasattr(card, "effective_overload"):
         overload_val = card.effective_overload()
     if overload_val > 0:
         s.mana.overload_next += overload_val
 
-    # Detect "Gain N Mana Crystal this turn" effect (Coin, Innervate, etc.)
-    # Effect-based detection from card text — NOT name/card_id matching
+    # Temporary mana (Coin, Innervate, etc.)
     etext_lower = (getattr(card, "english_text", "") or card_text).lower()
     if _is_temporary_mana_effect(etext_lower):
-        # Extract count: default 1, check for "gain 2" / "获得2个"
-        import re
+        # Extract mana count without regex (Standard 5: zero regex in simulation layer)
         count = 1
-        m = re.search(r'gain\s+(\d+)\s+mana', etext_lower)
-        if not m:
-            m = re.search(r'获得\s*(\d+)\s*个', etext_lower)
-        if m:
-            count = int(m.group(1))
+        idx = etext_lower.find("gain")
+        if idx >= 0:
+            after = etext_lower[idx + 4:].lstrip()
+            for i, ch in enumerate(after):
+                if ch.isdigit():
+                    # Found start of number
+                    j = i
+                    while j < len(after) and after[j].isdigit():
+                        j += 1
+                    count = int(after[i:j])
+                    break
         s.mana.available += count
         s.mana.add_modifier("temporary_crystal", count, "this_turn")
 
-    # "Your next spell costs N less" — handled by generic cost_reduce detection below
-
+    # "Your next spell costs N less"
     from analysis.data.card_effects import get_effects as _get_effects
     card_effects_data = _get_effects(card)
     if card_effects_data and card_effects_data.cost_reduce > 0:
@@ -259,24 +253,20 @@ def _apply_play_card(s, action: Action):
                 "reduce_next_spell", card_effects_data.cost_reduce, "next_spell"
             )
 
-    # --- Health cost ---
+    # Health cost (e.g. Warlock self-damage cards)
     hp_cost = get_card_health_cost(card)
     if hp_cost > 0:
-        # Guard: hero must have enough HP to pay the cost (min 1 HP remaining)
         if s.hero.hp <= hp_cost:
-            # Can't pay health cost — skip this card play
-            return s
+            return None
         s.hero.hp -= hp_cost
 
-    # --- Corpse-only guard: cards that require corpses to be playable ---
+    # Corpse cost guard
     corpse_effects = parse_corpse_effects(card_text)
     for ce in corpse_effects:
         if not ce.is_optional and s.corpses < ce.cost:
-            # Mandatory corpse cost but can't afford — skip this play
-            return s
+            return None
 
-    # --- Opponent cost modifiers (e.g. Hysteria, Mutanus-type effects) ---
-    etext_lower = (getattr(card, 'english_text', '') or card_text).lower()
+    # Opponent cost modifiers
     if "opponent" in etext_lower and "cost" in etext_lower and "more" in etext_lower:
         from analysis.search.abilities.extractors import extract_number_after
         amt = extract_number_after(etext_lower, "more")
@@ -286,62 +276,75 @@ def _apply_play_card(s, action: Action):
             elif "hero power" in etext_lower:
                 s.opponent.opp_cost_modifiers.append(("opp_hero_power_increase", amt, "hero_power"))
 
-    # --- Death Shadow transformation tracking ---
-    # Detect by effect text, not card_id
-    _ds_text = (getattr(card, "english_text", "") or "").lower()
-    if "death shadow" in _ds_text or "死亡之影" in _ds_text:
-        pass  # tracked in _play_spell for transform logic
+    return s
 
-    # Check outcast bonus (before card is removed from hand)
-    outcast_active = check_outcast(s, card_idx, card)
-    s.hand.pop(card_idx)
 
-    # Track cards played this turn for combo
-    s.cards_played_this_turn.append(card)
-
-    if card.card_type.upper() == "MINION":
-        s = _play_minion(s, card, action, outcast_active, card_idx)
-    elif card.card_type.upper() == "WEAPON":
+def _dispatch_card_type(s, card, action, card_idx: int):
+    """Dispatch card play to the appropriate type-specific handler."""
+    ctype = card.card_type.upper()
+    if ctype == "MINION":
+        return _play_minion(s, card, action, card_idx)
+    elif ctype == "WEAPON":
         s.hero.weapon = Weapon(
             attack=card.attack,
             health=card.health,
             name=card.name,
         )
-    elif card.card_type.upper() == "LOCATION":
-        s = _play_location(s, card)
-    elif card.card_type.upper() == "SPELL":
-        s = _play_spell(s, card, action)
-    elif card.card_type.upper() == "HERO":
-        try:
-            from analysis.search.engine.mechanics.hero_card_handler import (
-                HeroCardHandler,
-            )
-            s = HeroCardHandler().apply_hero_card(s, card)
-        except (ImportError, AttributeError):
-            armor = card.effective_armor() if hasattr(card, "effective_armor") else 0
-            if armor == 0:
-                armor = get_card_armor(card)
-            s.hero.armor += armor
-            hero_class = getattr(card, "card_class", "") or ""
-            if hero_class:
-                s.hero.hero_class = hero_class
-            s.hero.hero_power_used = False
-            s.hero.imbue_level = 0
+        return s
+    elif ctype == "LOCATION":
+        return _play_location(s, card)
+    elif ctype == "SPELL":
+        return _play_spell(s, card, action)
+    elif ctype == "HERO":
+        return _play_hero_card(s, card)
+    return s
 
-    # Post-play mechanics
-    s = apply_imbue(s, card)
-    s = track_quest_progress(s, ActionType.PLAY, card)
-    if outcast_active:
-        s = apply_outcast_bonus(s, card_idx, card)
-    card_class = getattr(card, "card_class", "") or ""
-    if card_class.upper() == "DEATHKNIGHT":
-        s = resolve_corpse_effects(s, card)
+
+def _play_hero_card(s, card):
+    """Handle HERO card replacement."""
+    try:
+        from analysis.search.engine.mechanics.hero_card_handler import HeroCardHandler
+        return HeroCardHandler().apply_hero_card(s, card)
+    except (ImportError, AttributeError):
+        armor = card.effective_armor() if hasattr(card, "effective_armor") else 0
+        if armor == 0:
+            armor = get_card_armor(card)
+        s.hero.armor += armor
+        hero_class = getattr(card, "card_class", "") or ""
+        if hero_class:
+            s.hero.hero_class = hero_class
+        s.hero.hero_power_used = False
+        s.hero.imbue_level = 0
+        return s
+
+
+def _apply_play_card(s, action: Action):
+    """Handle PLAY and PLAY_WITH_TARGET actions."""
+    card_idx = action.card_index
+    if card_idx < 0 or card_idx >= len(s.hand):
+        return s
+    card = s.hand[card_idx]
+
+    # Phase 1: Validate and pay all costs
+    result = _validate_and_pay_cost(s, card, card_idx)
+    if result is None:
+        return s
+    s = result
+
+    # Phase 2: Remove from hand and dispatch by card type
+    s.hand.pop(card_idx)
+    s.cards_played_this_turn.append(card)
+    s = _dispatch_card_type(s, card, action, card_idx)
+
+    # Phase 3: Post-play effects
     try:
         s = dataclasses.replace(s, last_played_card=card)
     except (TypeError, AttributeError):
         log.debug("apply_action: optional mechanic failed", exc_info=True)
-    s = check_corrupt_upgrade(s, card)
     _handle_overdraw(s)
+
+    from analysis.search.corrupt import check_corrupt_upgrade
+    s = check_corrupt_upgrade(s, card)
 
     return s
 
@@ -366,7 +369,36 @@ def _play_location(s, card):
     return s
 
 
-def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
+def _apply_hand_transform(s, card, minion) -> None:
+    """Check if card has a hand-transform effect and apply it to the minion.
+
+    Hand-transform: "while in your hand, becomes a X/Y copy of opponent's
+    last played minion".  Replaces the minion's attack/health/name with
+    the opponent's last played minion, capped to transform_attack/health.
+    """
+    try:
+        from analysis.data.card_effects import get_effects
+        eff = get_effects(card)
+        if not eff.has_hand_transform:
+            return
+        opp_last = getattr(s.opponent, 'opp_last_played_minion', {})
+        if not opp_last or not opp_last.get("name"):
+            # No opponent minion tracked — use transform base stats
+            minion.attack = eff.transform_attack
+            minion.health = eff.transform_health
+            minion.max_health = eff.transform_health
+            return
+        # Use opponent's last minion identity with transform stats
+        minion.name = opp_last["name"]
+        minion.card_id = opp_last.get("card_id", "")
+        minion.attack = eff.transform_attack
+        minion.health = eff.transform_health
+        minion.max_health = eff.transform_health
+    except Exception:
+        pass  # Graceful degradation
+
+
+def _play_minion(s, card, action: Action, card_idx: int):
     """Handle minion card play — summon, battlecry, triggers.
 
     Uses the unified orchestrator for ability dispatch instead of
@@ -376,6 +408,12 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
     from analysis.search.abilities.orchestrator import orchestrate
 
     new_minion = Minion.from_card(card)
+
+    # Hand-transform: replace stats with opponent's last played minion
+    # if the card has a hand-transform effect (e.g. "becomes a 3/4 copy
+    # of the last minion your opponent played").
+    _apply_hand_transform(s, card, new_minion)
+
     pos = min(action.position, len(s.board))
     s.board.insert(pos, new_minion)
 
@@ -390,11 +428,6 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
         'source_minion': new_minion,
     }
     s = orchestrate(s, card, abilities, ctx)
-
-    # Legacy: kindred double-check (orchestrator handles kindred, but double flag needs setting)
-    card_text_en = getattr(card, 'english_text', '') or ''
-    if "kindred" in card_text_en.lower() and "twice" in card_text_en.lower():
-        s = set_kindred_double(s)
 
     # Legacy: choose one (separate concern, not part of ability parsing)
     if is_choose_one(card):
@@ -425,11 +458,12 @@ def _play_spell(s, card, action: Action):
     ctx = {'target_index': action.target_index, 'is_minion': False}
     s = orchestrate(s, card, abilities, ctx)
 
-    # --- Death Shadow transform: replaces self with copy of cast spell ---
-    # Detect by effect text, not card_id
+    # --- Spell-transform: replace hand cards that copy cast spells ---
+    # Zero card-id hardcoding — detect via card_effects.has_spell_transform.
+    # e.g. "transform this into a copy of it" / "变形成为该法术的复制"
+    from analysis.data.card_effects import get_effects
     for i, hc in enumerate(s.hand):
-        hc_etext = (getattr(hc, "english_text", "") or "").lower()
-        if "death shadow" in hc_etext or "死亡之影" in hc_etext:
+        if get_effects(hc).has_spell_transform:
             try:
                 import dataclasses
                 new_card = dataclasses.replace(card) if dataclasses.is_dataclass(card) else card
@@ -437,7 +471,7 @@ def _play_spell(s, card, action: Action):
                     new_card.card_id = getattr(card, 'card_id', '')
                 s.hand[i] = new_card
             except (TypeError, AttributeError):
-                log.debug("Death Shadow transform failed", exc_info=True)
+                log.debug("Spell-transform failed", exc_info=True)
             break
 
     # Activate quest if quest card
@@ -469,101 +503,127 @@ def _play_spell(s, card, action: Action):
 
 
 def _apply_attack(s, action: Action):
-    """Handle ATTACK action — minion or hero weapon attack."""
+    """Handle ATTACK action — dispatch to hero-weapon or minion attack."""
+    if action.source_index == -1:
+        return _apply_hero_weapon_attack(s, action)
+    return _apply_minion_attack(s, action)
+
+
+def _apply_deal_damage_to_hero(hero, damage: int):
+    """Apply damage to a hero, absorbing through armor first."""
+    if hero.armor > 0:
+        absorbed = min(hero.armor, damage)
+        hero.armor -= absorbed
+        damage -= absorbed
+    if not hero.is_immune:
+        hero.hp -= damage
+
+
+def _apply_hero_weapon_attack(s, action: Action):
+    """Handle hero weapon attack (source_index == -1)."""
+    weapon = s.hero.weapon
+    if weapon is None or weapon.attack <= 0:
+        return s
+
+    tgt_idx = action.target_index
+    if tgt_idx == 0:
+        _apply_deal_damage_to_hero(s.opponent.hero, weapon.attack)
+        s = check_secrets(s, "on_attack_hero", {"attacker": None})
+    else:
+        enemy_idx = tgt_idx - 1
+        if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
+            return s
+        target = s.opponent.board[enemy_idx]
+        if target.has_divine_shield:
+            target.has_divine_shield = False
+        else:
+            target.health -= weapon.attack
+        _apply_deal_damage_to_hero(s.hero, target.attack)
+        s.opponent.board = [m for m in s.opponent.board if m.health > 0]
+
+    weapon.health -= 1
+    if weapon.health <= 0:
+        s.hero.weapon = None
+    return s
+
+
+def _minion_attack_hero(s, source: Minion):
+    """Minion attacks enemy hero."""
+    if s.opponent.hero.is_immune:
+        return
+    _apply_deal_damage_to_hero(s.opponent.hero, source.attack)
+    if source.has_lifesteal:
+        s.hero.hp = min(s.hero.max_hp, s.hero.hp + source.attack)
+
+
+def _minion_attack_minion(s, source: Minion, target: Minion):
+    """Minion attacks enemy minion — damage, poisonous, counter, lifesteal."""
+    target_had_divine_shield = target.has_divine_shield
+
+    # Target takes damage
+    if target.has_divine_shield:
+        target.has_divine_shield = False
+    elif target.has_immune:
+        pass
+    else:
+        target.health -= source.attack
+
+    # Poisonous: instant kill
+    if source.has_poisonous and not target_had_divine_shield and not target.has_immune:
+        target.health = 0
+
+    # Counter-attack from target
+    if source.has_divine_shield:
+        source.has_divine_shield = False
+    elif source.has_immune:
+        pass
+    else:
+        source.health -= target.attack
+
+    # Lifesteal
+    if source.has_lifesteal:
+        actual_damage = source.attack if not target_had_divine_shield else 0
+        if actual_damage > 0:
+            s.hero.hp = min(30, s.hero.hp + actual_damage)
+
+    s.opponent.board = [m for m in s.opponent.board if m.health > 0]
+
+
+def _resolve_reborn(board: list):
+    """Process reborn for dead minions on a board."""
+    for m in list(board):
+        if m.health <= 0 and m.has_reborn:
+            m.has_reborn = False
+            m.health = 1
+            m.max_health = 1
+            m.has_attacked_once = False
+            m.can_attack = False
+            m.has_divine_shield = False
+            m.has_stealth = False
+            m.has_taunt = False
+
+
+def _apply_minion_attack(s, action: Action):
+    """Handle minion attack + combat aftermath (deaths, reborn, windfury)."""
     src_idx = action.source_index
     tgt_idx = action.target_index
-
-    # Hero weapon attack (source_index == -1)
-    if src_idx == -1:
-        weapon = s.hero.weapon
-        if weapon is None or weapon.attack <= 0:
-            return s
-        if tgt_idx == 0:
-            # Attack enemy hero
-            damage = weapon.attack
-            if s.opponent.hero.armor > 0:
-                absorbed = min(s.opponent.hero.armor, damage)
-                s.opponent.hero.armor -= absorbed
-                damage -= absorbed
-            if not s.opponent.hero.is_immune:
-                s.opponent.hero.hp -= damage
-            s = check_secrets(s, "on_attack_hero", {"attacker": None})
-        else:
-            enemy_idx = tgt_idx - 1
-            if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
-                return s
-            target = s.opponent.board[enemy_idx]
-            if target.has_divine_shield:
-                target.has_divine_shield = False
-            else:
-                target.health -= weapon.attack
-            # Hero takes counter-damage from minion
-            damage = target.attack
-            if s.hero.armor > 0:
-                absorbed = min(s.hero.armor, damage)
-                s.hero.armor -= absorbed
-                damage -= absorbed
-            s.hero.hp -= damage
-            s.opponent.board = [m for m in s.opponent.board if m.health > 0]
-
-        weapon.health -= 1
-        if weapon.health <= 0:
-            s.hero.weapon = None
-        return s
 
     if src_idx < 0 or src_idx >= len(s.board):
         return s
     source = s.board[src_idx]
 
+    # Resolve combat
     if tgt_idx == 0:
-        # Attack enemy hero
-        if s.opponent.hero.is_immune:
-            pass
-        else:
-            damage = source.attack
-            if s.opponent.hero.armor > 0:
-                absorbed = min(s.opponent.hero.armor, damage)
-                s.opponent.hero.armor -= absorbed
-                damage -= absorbed
-            s.opponent.hero.hp -= damage
-            if source.has_lifesteal:
-                s.hero.hp = min(s.hero.max_hp, s.hero.hp + source.attack)
+        _minion_attack_hero(s, source)
         s = check_secrets(s, "on_attack_hero", {"attacker": source})
     else:
         enemy_idx = tgt_idx - 1
         if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
             return s
         target = s.opponent.board[enemy_idx]
+        _minion_attack_minion(s, source, target)
 
-        target_had_divine_shield = target.has_divine_shield
-        if target.has_divine_shield:
-            target.has_divine_shield = False
-        elif target.has_immune:
-            pass
-        else:
-            target.health -= source.attack
-
-        # Poisonous: instant kill
-        if source.has_poisonous and not target_had_divine_shield and not target.has_immune:
-            target.health = 0
-
-        # Counter-attack
-        if source.has_divine_shield:
-            source.has_divine_shield = False
-        elif source.has_immune:
-            pass
-        else:
-            source.health -= target.attack
-
-        # Lifesteal
-        if source.has_lifesteal:
-            actual_damage = source.attack if not target_had_divine_shield else 0
-            if actual_damage > 0:
-                s.hero.hp = min(30, s.hero.hp + actual_damage)
-
-        s.opponent.board = [m for m in s.opponent.board if m.health > 0]
-
-    # Stealth breaks when minion attacks
+    # Break stealth
     for m in s.board:
         if m is source and m.has_stealth:
             m.has_stealth = False
@@ -576,32 +636,19 @@ def _apply_attack(s, action: Action):
     s = resolve_deaths(s)
 
     # Reborn: friendly minions
-    if src_idx != -1:
-        for m in list(s.board):
-            if m.health <= 0 and m.has_reborn:
-                m.has_reborn = False
-                m.health = 1
-                m.max_health = 1
-                m.has_attacked_once = False
-                m.can_attack = False
-                m.has_divine_shield = False
-                m.has_stealth = False
-                m.has_taunt = False
-        s.board = [m for m in s.board if m.health > 0]
+    _resolve_reborn(s.board)
+    s.board = [m for m in s.board if m.health > 0]
 
-    # Reborn for enemy minions
-    for m in list(s.opponent.board):
-        if m.health <= 0 and m.has_reborn:
-            m.has_reborn = False
-            m.health = 1
-            m.max_health = 1
+    # Reborn: enemy minions
+    _resolve_reborn(s.opponent.board)
     s.opponent.board = [m for m in s.opponent.board if m.health > 0]
 
+    # Corpse generation
     amount = 2 if has_double_corpse_gen(s) else 1
     s = gain_corpses(s, amount)
     s = recompute_auras(s)
 
-    # Mark source as having attacked (windfury tracking)
+    # Windfury tracking
     if src_idx < len(s.board):
         for m in s.board:
             if m is source:

@@ -1,9 +1,9 @@
-"""dark_gift.py — 黑暗之赐 (Dark Gift) enchantment system.
+"""dark_gift.py — Dark Gift enchantment system.
 
-Dark Gift is a discover modifier: when discovering a card "具有黑暗之赐",
+Dark Gift is a discover modifier: when discovering a card with Dark Gift,
 a random enchantment from a fixed pool is applied to the discovered card.
 
-20 cards in standard pool reference 黑暗之赐.
+~20 cards in standard pool reference Dark Gift.
 """
 
 from __future__ import annotations
@@ -33,16 +33,16 @@ class DarkGiftEnchantment:
 
 # ~10 predefined Dark Gift enchantments (based on game data)
 DARK_GIFT_ENCHANTMENTS: list[DarkGiftEnchantment] = [
-    DarkGiftEnchantment(name="混沌之力", attack_bonus=2, health_bonus=2),
-    DarkGiftEnchantment(name="暗影之拥", attack_bonus=1, health_bonus=3),
-    DarkGiftEnchantment(name="狂乱之赐", attack_bonus=3, health_bonus=1),
-    DarkGiftEnchantment(name="风行之赐", keyword="WINDFURY"),
-    DarkGiftEnchantment(name="吸血之赐", keyword="LIFESTEAL"),
-    DarkGiftEnchantment(name="圣盾之赐", keyword="DIVINE_SHIELD"),
-    DarkGiftEnchantment(name="嘲讽之赐", keyword="TAUNT"),
-    DarkGiftEnchantment(name="突袭之赐", keyword="RUSH"),
-    DarkGiftEnchantment(name="亡语伤害", effect="deathrattle_damage:2"),
-    DarkGiftEnchantment(name="战吼抽牌", effect="battlecry_draw:1"),
+    DarkGiftEnchantment(name="Chaos Power", attack_bonus=2, health_bonus=2),
+    DarkGiftEnchantment(name="Shadow Embrace", attack_bonus=1, health_bonus=3),
+    DarkGiftEnchantment(name="Frenzy Gift", attack_bonus=3, health_bonus=1),
+    DarkGiftEnchantment(name="Wind Gift", keyword="WINDFURY"),
+    DarkGiftEnchantment(name="Lifesteal Gift", keyword="LIFESTEAL"),
+    DarkGiftEnchantment(name="Divine Shield Gift", keyword="DIVINE_SHIELD"),
+    DarkGiftEnchantment(name="Taunt Gift", keyword="TAUNT"),
+    DarkGiftEnchantment(name="Rush Gift", keyword="RUSH"),
+    DarkGiftEnchantment(name="Deathrattle Damage", effect="deathrattle_damage:2"),
+    DarkGiftEnchantment(name="Battlecry Draw", effect="battlecry_draw:1"),
 ]
 
 
@@ -85,26 +85,28 @@ def has_dark_gift_in_hand(hand: list) -> bool:
     """Check if any card in hand has been granted Dark Gift.
 
     Cards with dark_gift field set are considered Dark Gift cards.
-    Also checks for "黑暗之赐" in card text as a fallback.
+    Also checks english_text as a fallback (Standard 1: English-Only Logic Layer).
     """
     for card in hand:
         if isinstance(card, dict):
             if card.get("dark_gift"):
                 return True
-            text = card.get("text", "") or ""
-            if "黑暗之赐" in text:
+            en_text = card.get("english_text", "") or ""
+            if "dark gift" in en_text.lower():
                 return True
         elif hasattr(card, 'dark_gift') and card.dark_gift:
             return True
-        elif hasattr(card, 'text') and "黑暗之赐" in (getattr(card, 'text', '') or ''):
-            return True
+        elif hasattr(card, 'english_text'):
+            en_text = getattr(card, 'english_text', '') or ''
+            if "dark gift" in en_text.lower():
+                return True
     return False
 
 
 def filter_dark_gift_pool(pool: list[dict], constraint: str = "") -> list[dict]:
     """Filter a discover pool for cards eligible for Dark Gift.
 
-    constraint: type filter like "亡语" (deathrattle), "龙" (dragon), etc.
+    constraint: type filter like "DEATHRATTLE", "DRAGON", etc.
     Returns cards matching the constraint (all cards if constraint is empty).
     """
     if not constraint:
@@ -112,19 +114,17 @@ def filter_dark_gift_pool(pool: list[dict], constraint: str = "") -> list[dict]:
 
     result = []
     for card in pool:
-        text = card.get("text", "") or ""
-        card_type = card.get("type", "") or card.get("card_type", "") or ""
-        race = card.get("race", "") or ""
         mechanics = card.get("mechanics", []) or []
+        race = card.get("race", "") or ""
+        card_type = card.get("type", "") or card.get("card_type", "") or ""
 
-        # Check constraint match
-        if constraint == "亡语":
-            if "亡语" in text or "DEATHRATTLE" in mechanics:
+        if constraint == "DEATHRATTLE":
+            if "DEATHRATTLE" in mechanics:
                 result.append(card)
-        elif constraint == "龙":
-            if "龙" in text or "DRAGON" in race.upper():
+        elif constraint == "DRAGON":
+            if "DRAGON" in race.upper():
                 result.append(card)
-        elif constraint in text:
+        elif constraint in mechanics:
             result.append(card)
         elif constraint.upper() in race.upper():
             result.append(card)
@@ -132,24 +132,42 @@ def filter_dark_gift_pool(pool: list[dict], constraint: str = "") -> list[dict]:
     return result
 
 
-def parse_dark_gift_constraint(card_text: str) -> str:
+# Declarative constraint map — English keyword → mechanics constraint.
+# Extensible: add new races/types here without touching logic.
+_DARK_GIFT_CONSTRAINT_MAP: list[tuple[str, str]] = [
+    ("deathrattle", "DEATHRATTLE"),
+    ("dragon",      "DRAGON"),
+    ("demon",       "DEMON"),
+    ("undead",      "UNDEAD"),
+    ("elemental",   "ELEMENTAL"),
+    ("beast",       "BEAST"),
+    ("murloc",      "MURLOC"),
+    ("pirate",      "PIRATE"),
+    ("mech",        "MECH"),
+    ("naga",        "NAGA"),
+]
+
+
+def parse_dark_gift_constraint(english_text: str) -> str:
     """Parse the type constraint from a Dark Gift discover card.
 
-    E.g., "发现一张具有黑暗之赐的亡语随从牌" → "亡语"
-    E.g., "发现一张具有黑暗之赐的龙牌" → "龙"
+    Uses English text keyword matching only — no regex, no Chinese text.
+    Design standard: Standard 4 (Constraint Parsing via Structured Data).
+
+    E.g., "Discover a Dark Gift Deathrattle minion" -> "DEATHRATTLE"
     """
-    if not card_text:
+    en = (english_text or "").lower()
+    if "dark gift" not in en:
         return ""
-
-    # Look for pattern: "具有黑暗之赐的XX牌"
-    import re
-    m = re.search(r'具有.*?黑暗之赐.*?的\s*(\S+?)\s*牌', card_text)
-    if m:
-        return m.group(1)
-
+    for keyword, constraint in _DARK_GIFT_CONSTRAINT_MAP:
+        if keyword in en:
+            return constraint
     return ""
 
 
-def has_dark_gift_discover(card_text: str) -> bool:
-    """Check if card text triggers a Dark Gift discover."""
-    return "黑暗之赐" in (card_text or "")
+def has_dark_gift_discover(english_text: str) -> bool:
+    """Check if card text triggers a Dark Gift discover.
+
+    Uses English text only — Standard 1 (English-Only Logic Layer).
+    """
+    return "dark gift" in (english_text or "").lower()

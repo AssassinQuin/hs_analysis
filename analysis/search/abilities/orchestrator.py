@@ -18,7 +18,7 @@ Architecture:
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, TYPE_CHECKING
+from typing import Callable, List, Optional, TYPE_CHECKING
 
 from analysis.search.abilities.definition import (
     CardAbility, AbilityTrigger, EffectKind, EffectSpec,
@@ -30,6 +30,19 @@ if TYPE_CHECKING:
     from analysis.models.card import Card
 
 log = logging.getLogger(__name__)
+
+# Default target selector — can be overridden for testing or MCTS integration.
+# This lazy import avoids coupling simulation → evaluation at module level.
+_default_target_selector: Optional[Callable] = None
+
+
+def _get_default_target_selector():
+    """Lazy-load the greedy target evaluator (avoids sim→eval import coupling)."""
+    global _default_target_selector
+    if _default_target_selector is None:
+        from analysis.evaluators.composite import target_selection_eval
+        _default_target_selector = target_selection_eval
+    return _default_target_selector
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -81,16 +94,16 @@ def orchestrate(
 
         # Handle each trigger type
         if trigger == AbilityTrigger.BATTLECRY:
-            state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
+            state = _apply_effects_with_modifiers(state, card, ability, target_index, spell_power, has_lifesteal)
             # Brann doubling: re-execute battlecry if a doubler is present
             if _has_battlecry_doubler(state, source_minion):
-                state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
+                state = _apply_effects_with_modifiers(state, card, ability, target_index, spell_power, has_lifesteal)
 
         elif trigger == AbilityTrigger.COMBO:
             if len(state.cards_played_this_turn) > 0:
-                state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
+                state = _apply_effects_with_modifiers(state, card, ability, target_index, spell_power, has_lifesteal)
                 if _has_battlecry_doubler(state, source_minion):
-                    state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
+                    state = _apply_effects_with_modifiers(state, card, ability, target_index, spell_power, has_lifesteal)
 
         elif trigger == AbilityTrigger.OUTCAST:
             if _is_outcast_position(state, card, card_index):
@@ -115,7 +128,7 @@ def orchestrate(
             state = execute_effects(state, card, ability.effects)
 
         elif trigger == AbilityTrigger.ACTIVATE:
-            state = _handle_spell_effects(state, card, ability, target_index, spell_power, has_lifesteal)
+            state = _apply_effects_with_modifiers(state, card, ability, target_index, spell_power, has_lifesteal)
 
         elif trigger == AbilityTrigger.DEATHRATTLE:
             state = execute_effects(state, card, ability.effects)
@@ -130,7 +143,7 @@ def orchestrate(
 # Trigger-specific handlers
 # ═══════════════════════════════════════════════════════════════
 
-def _handle_battlecry(
+def _apply_effects_with_modifiers(
     state: "GameState",
     card: "Card",
     ability: CardAbility,
@@ -138,56 +151,9 @@ def _handle_battlecry(
     spell_power: int,
     has_lifesteal: bool,
 ) -> "GameState":
-    """Apply battlecry/combo effects with target selection and spell power."""
-    from analysis.evaluators.composite import target_selection_eval
+    """Apply ability effects with spell power, target selection, and lifesteal.
 
-    for effect in ability.effects:
-        # Add spell power to damage effects
-        if effect.kind == EffectKind.DAMAGE and spell_power > 0:
-            base_val = effect.value if isinstance(effect.value, int) else 0
-            effect = EffectSpec(
-                kind=effect.kind,
-                value=base_val + spell_power,
-                value2=effect.value2,
-                subtype=effect.subtype,
-                keyword=effect.keyword,
-                target=effect.target,
-                selector=effect.selector,
-                condition=effect.condition,
-                text_raw=effect.text_raw,
-            )
-
-        # Resolve target for targeted effects
-        target = None
-        if effect.kind in (EffectKind.DAMAGE, EffectKind.HEAL):
-            target = _pick_target(state, target_index, effect)
-
-        state = execute_effects(state, card, [effect], target)
-
-        # Lifesteal: heal hero for damage dealt
-        if has_lifesteal and effect.kind == EffectKind.DAMAGE:
-            dmg = effect.value if isinstance(effect.value, int) else 0
-            if dmg > 0:
-                state.hero.hp = min(
-                    getattr(state.hero, 'max_hp', 30),
-                    state.hero.hp + dmg,
-                )
-
-    return state
-
-
-def _handle_spell_effects(
-    state: "GameState",
-    card: "Card",
-    ability: CardAbility,
-    target_index: int,
-    spell_power: int,
-    has_lifesteal: bool,
-) -> "GameState":
-    """Apply spell card effects with spell power, target selection, and lifesteal.
-
-    Identical to _handle_battlecry but used for ACTIVATE trigger
-    (spell effects that fire on play).
+    Unified handler for BATTLECRY, COMBO, and ACTIVATE (spell) triggers.
     """
     for effect in ability.effects:
         # Add spell power to damage effects
@@ -264,20 +230,28 @@ def _pick_target(
     state: "GameState",
     target_index: int,
     effect: EffectSpec,
+    target_selector: Optional[Callable] = None,
 ) -> Optional[str]:
     """Resolve target for targeted effects.
 
     If target_index >= 0, use it directly.
     Otherwise, use greedy evaluation to pick the best target.
-    """
-    from analysis.evaluators.composite import target_selection_eval
 
+    Args:
+        target_selector: Optional callable(state) → float for greedy evaluation.
+            Defaults to lazy-loaded target_selection_eval from composite module.
+            Pass None to use the default, or a custom function for testing/MCTS.
+    """
     if target_index >= 0:
         if target_index == 0:
             return 'enemy_hero'
         elif target_index > 0 and target_index <= len(state.opponent.board):
             return f'enemy_minion:{target_index - 1}'
         return 'enemy_hero'
+
+    # Lazy-load the default selector only when actually needed
+    if target_selector is None:
+        target_selector = _get_default_target_selector()
 
     # Greedy target selection
     amount = effect.value if isinstance(effect.value, int) else 1
@@ -300,7 +274,7 @@ def _pick_target(
                 idx = int(target_id.split(':')[1])
                 if idx < len(sim.opponent.board):
                     sim.opponent.board[idx].health -= amount
-            score = target_selection_eval(sim)
+            score = target_selector(sim)
             tiebreaker = 0.0
             if target_id.startswith('enemy_minion:'):
                 idx = int(target_id.split(':')[1])
@@ -316,17 +290,26 @@ def _pick_target(
 
 
 def _has_battlecry_doubler(state: "GameState", played_minion) -> bool:
-    """Check if a friendly minion doubles battlecry triggers (e.g. Brann)."""
+    """Check if a friendly minion doubles battlecry triggers (e.g. Brann).
+
+    Detects via:
+    1. Enchantment with 'double_battlecry' trigger_effect (set by aura engine)
+    2. Card English text containing both 'battlecry' and 'trigger twice'
+    """
     if played_minion is None:
         return False
     for m in state.board:
         if m is played_minion:
             continue
-        name = (getattr(m, 'name', '') or '').lower()
-        if 'brann' in name or '布莱恩' in name:
-            return True
+        # Check enchantment for battlecry doubling (set by aura engine)
         for ench in getattr(m, 'enchantments', []) or []:
             etype = getattr(ench, 'trigger_effect', '') or ''
             if 'double_battlecry' in etype:
+                return True
+        # Generic: detect from card English text
+        card = getattr(m, 'card_ref', None)
+        if card:
+            text = (getattr(card, 'english_text', '') or '').lower()
+            if 'battlecry' in text and 'trigger twice' in text:
                 return True
     return False

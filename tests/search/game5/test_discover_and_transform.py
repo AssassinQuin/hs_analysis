@@ -1,0 +1,127 @@
+"""Test 4: Discover/random effects — correct card pool generation.
+
+Validates that when discover/random effects occur, the generated card
+pool contains only valid cards within the allowed constraints (class,
+cost, type, etc.).
+"""
+
+import pytest
+
+from analysis.data.card_effects import get_effects
+from analysis.models.card import Card
+from analysis.search.discover import generate_discover_pool
+
+
+class TestDiscoverCardPool:
+    """Verify discover pool generation produces valid cards."""
+
+    def test_discover_pool_respects_class(self):
+        """Discover pool for ROGUE should contain ROGUE or NEUTRAL cards."""
+        pool = generate_discover_pool(hero_class="ROGUE")
+        assert len(pool) >= 3, f"Expected ≥3 cards, got {len(pool)}"
+        for card in pool:
+            cls = card.get("cardClass", "").upper()
+            assert cls in ("ROGUE", "NEUTRAL"), (
+                f"Card {card.get('name')} has class {cls}, "
+                f"expected ROGUE or NEUTRAL"
+            )
+
+    def test_discover_pool_respects_cost_max(self):
+        """Discover pool with cost_max=3 should only contain ≤3 cost cards."""
+        pool = generate_discover_pool(hero_class="ROGUE", cost_max=3)
+        assert len(pool) >= 3
+        for card in pool:
+            cost = card.get("cost", 0)
+            assert cost <= 3, (
+                f"Card {card.get('name')} costs {cost}, expected ≤3"
+            )
+
+    def test_discover_pool_excludes_non_collectible(self):
+        """Discover pool should only contain collectible cards."""
+        pool = generate_discover_pool(hero_class="ROGUE")
+        for card in pool:
+            assert card.get("collectible", True), (
+                f"Card {card.get('name')} is not collectible"
+            )
+
+
+class TestHandTransformEffect:
+    """Verify hand-transform detection and simulation."""
+
+    def test_detect_mirrex_transform(self):
+        """米尔雷斯 should be detected as hand-transform card."""
+        card = Card(
+            card_id="DINO_407", dbf_id=118481, name="米尔雷斯",
+            cost=3, card_type="MINION", attack=3, health=4,
+            card_class="ROGUE", mechanics=[],
+            text="此牌在你的手牌中时，会变成你的对手使用的上一张随从牌的3/4的复制",
+        )
+        eff = get_effects(card)
+        assert eff.has_hand_transform is True
+        assert eff.transform_attack == 3
+        assert eff.transform_health == 4
+
+    def test_normal_minion_no_transform(self):
+        """Normal minion should NOT be detected as hand-transform."""
+        card = Card(
+            card_id="CS2_189", dbf_id=0, name="Elven Archer",
+            cost=1, card_type="MINION", attack=1, health=1,
+            card_class="NEUTRAL", mechanics=["BATTLECRY"],
+            text="Battlecry: Deal 1 damage.",
+        )
+        eff = get_effects(card)
+        assert eff.has_hand_transform is False
+
+    def test_transform_applied_in_play(self):
+        """When playing a hand-transform card, minion should use transformed stats."""
+        from analysis.search.game_state import GameState, OpponentState, Minion
+        from analysis.search.abilities.simulation import _apply_hand_transform
+
+        card = Card(
+            card_id="DINO_407", dbf_id=118481, name="米尔雷斯",
+            cost=3, card_type="MINION", attack=3, health=4,
+            card_class="ROGUE", mechanics=[],
+            text="此牌在你的手牌中时，会变成你的对手使用的上一张随从牌的3/4的复制",
+        )
+
+        # Create a state with opponent's last played minion tracked
+        state = GameState()
+        state.opponent = OpponentState(
+            opp_last_played_minion={
+                "name": "海盗掠夺者",
+                "attack": 5,
+                "health": 4,
+                "card_id": "CS2_146",
+            }
+        )
+
+        minion = Minion(attack=3, health=4, max_health=4, name="米尔雷斯")
+        _apply_hand_transform(state, card, minion)
+
+        # Should use transform stats (3/4) but opponent's minion name
+        assert minion.attack == 3
+        assert minion.health == 4
+        assert minion.name == "海盗掠夺者"
+        print(f"✓ Hand-transform applied: {minion.name} {minion.attack}/{minion.health}")
+
+    def test_transform_fallback_without_opponent_minion(self):
+        """Without opponent minion info, should use base transform stats."""
+        from analysis.search.game_state import GameState, OpponentState, Minion
+        from analysis.search.abilities.simulation import _apply_hand_transform
+
+        card = Card(
+            card_id="DINO_407", dbf_id=118481, name="米尔雷斯",
+            cost=3, card_type="MINION", attack=3, health=4,
+            card_class="ROGUE", mechanics=[],
+            text="此牌在你的手牌中时，会变成你的对手使用的上一张随从牌的3/4的复制",
+        )
+
+        state = GameState()
+        state.opponent = OpponentState(opp_last_played_minion={})
+
+        minion = Minion(attack=3, health=4, max_health=4, name="米尔雷斯")
+        _apply_hand_transform(state, card, minion)
+
+        # Should fallback to transform base stats
+        assert minion.attack == 3
+        assert minion.health == 4

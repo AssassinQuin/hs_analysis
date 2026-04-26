@@ -16,8 +16,9 @@ from analysis.search.game_state import GameState
 
 class RNGModel:
 
-    _DMG_RANGE = re.compile(r'damage.*?(\d+)\s*[-~]\s*(\d+)', re.IGNORECASE)
-    _DMG_RANGE_CN = re.compile(r'damage.*?(\d+)\s*[到至]\s*(\d+)', re.IGNORECASE)
+    _DMG_RANGE_EN = re.compile(r'(\d+)\s*(?:to|-)\s*(\d+)\s*damage', re.IGNORECASE)
+    _DMG_RANGE_CN = re.compile(r'(\d+)\s*[到至]\s*(\d+)\s*点?伤害')
+    _DMG_RANGE_FALLBACK = re.compile(r'damage.*?(\d+)\s*[-~]\s*(\d+)', re.IGNORECASE)
     _DMG_SIMPLE = re.compile(r'damage.*?(\d+)', re.IGNORECASE)
 
     def expected_value(self, effect: str, state: GameState,
@@ -34,9 +35,14 @@ class RNGModel:
     def _resolve_random(self, effect: str, state: GameState) -> float:
         effect_lower = effect.lower()
 
-        dmg_match = self._DMG_RANGE.search(effect_lower)
+        # EN-first: "3 to 5 damage" or "3-5 damage"
+        dmg_match = self._DMG_RANGE_EN.search(effect_lower)
+        # CN fallback: "3到5点伤害" or "3至5伤害"
         if not dmg_match:
-            dmg_match = self._DMG_RANGE_CN.search(effect_lower)
+            dmg_match = self._DMG_RANGE_CN.search(effect)
+        # Generic fallback: "damage 3-5"
+        if not dmg_match:
+            dmg_match = self._DMG_RANGE_FALLBACK.search(effect_lower)
         if dmg_match:
             lo, hi = int(dmg_match.group(1)), int(dmg_match.group(2))
             return random.randint(lo, hi)

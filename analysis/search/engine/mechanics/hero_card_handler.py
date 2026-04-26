@@ -9,11 +9,6 @@ from analysis.models.card import Card
 
 
 class HeroCardHandler:
-    _HERO_POWER_PATTERN_CN = re.compile(r"英雄技能[：:]\s*(.+?)(?:，|$)")
-    _HERO_POWER_PATTERN_EN = re.compile(
-        r"Hero\s+Power[：:]\s*(.+?)(?:[,.]|$)", re.IGNORECASE
-    )
-
     def apply_hero_card(self, state: GameState, card: Card) -> GameState:
         s = state
 
