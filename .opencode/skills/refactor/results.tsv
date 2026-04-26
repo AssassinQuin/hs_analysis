@@ -1,0 +1,2 @@
+timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
+2026-04-26T12:00	72f8fba	refactor	-	82.0	baseline	-	初始评估（通用化重写版）	dry_run
