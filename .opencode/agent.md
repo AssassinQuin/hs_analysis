@@ -61,67 +61,73 @@
 
 ## 技术栈
 
-- **语言**: Python 3.11+
+- **语言**: Python 3.10+
 - **包管理**: pyproject.toml, `pip install -e .`
 - **依赖**: numpy, scipy, requests, dataclasses
-- **数据存储**: JSON 文件（hs_cards/）, SQLite（hsreplay_cache.db）
+- **数据存储**: JSON 文件（card_data/）, SQLite（hsreplay_cache.db）
 - **数据源**: HearthstoneJSON, HSReplay, iyingdi
-- **测试**: pytest（163+ 测试用例）
+- **测试**: pytest（810 测试用例，809 passed）
 
 ## 核心包结构
 
 ```
-hs_analysis/                    # 核心包
-├── config.py                   # 全局配置（路径、常量）
-├── data/                       # 数据获取与处理
-│   ├── card_index.py           # CardIndex — O(1) 卡牌查询
-│   ├── card_cleaner.py         # 数据清洗（种族/机制/法术派系）
-│   ├── fetch_hsjson.py         # HearthstoneJSON API
-│   ├── fetch_hsreplay.py       # HSReplay 数据获取
-│   ├── fetch_iyingdi.py        # iyingdi 数据获取
-│   ├── fetch_wild.py           # 狂野卡牌获取
-│   ├── build_unified_db.py     # 统一数据库构建
-│   └── build_wild_db.py        # 狂野去重构建
+analysis/                          # 核心包 (135 files, ~31K lines)
+├── config.py                     # 全局配置（路径、常量）
+├── data/                         # 数据获取与处理
+│   ├── card_index.py             # CardIndex + get_index() — O(1) frozenset 查询
+│   ├── card_data.py              # CardDB — get_pool/discover_pool/random_pool
+│   ├── card_effects.py           # CardEffects 结构化效果提取（唯一允许 regex+中文）
+│   └── ...
 ├── models/
-│   └── card.py                 # Card 数据模型（dataclass）
-├── scorers/                    # 评分引擎（多版本演进）
-│   ├── vanilla_curve.py        # 白板曲线基准
-│   ├── v2_engine.py            # V2 基础评分
-│   ├── v7_engine.py            # V7 数据驱动评分
-│   ├── v8_contextual.py        # V8 上下文感知评分
-│   ├── l6_real_world.py        # L6 真实世界评分
-│   └── constants.py            # 评分常量
-├── evaluators/                 # 评估器
-│   ├── composite.py            # 复合评估器
-│   ├── submodel.py             # 子模型评估器
-│   └── multi_objective.py      # 多目标评估器
-├── search/                     # 搜索引擎
-│   ├── rhea_engine.py          # RHEA 滚动水平线进化
-│   ├── game_state.py           # 游戏状态管理（GameState, HeroState 等）
-│   ├── lethal_checker.py       # 致命检测
-│   ├── opponent_simulator.py   # 对手模拟
-│   ├── risk_assessor.py        # 风险评估
-│   └── action_normalize.py     # 动作归一化
-├── watcher/                    # 实时决策（Phase 5, 规划中）
-│   ├── log_watcher.py          # Power.log 文件轮询
-│   ├── game_tracker.py         # python-hslog 封装
-│   ├── state_bridge.py         # Entity→GameState 映射
-│   └── decision_loop.py        # 实时决策主循环
-└── utils/                      # 工具模块
-    ├── score_provider.py       # 评分数据提供（懒加载 + 缓存）
-    ├── bayesian_opponent.py    # 贝叶斯对手建模
-    └── spell_simulator.py      # 法术模拟
+│   └── card.py                   # Card dataclass（text/cost/mechanics/english_text）
+├── scorers/                      # 评分引擎（V2→V7→V8→L6）
+│   ├── vanilla_curve.py          # 白板曲线基准
+│   ├── constants.py              # 评分常量 + 机制识别正则
+│   └── mechanic_base_values.py   # 机制价值公式（灌注/兆示/任务）
+├── evaluators/                   # 评估器
+│   ├── composite.py              # 复合评估器（board/hand/hero/fatigue/progress）
+│   ├── submodel.py               # 子模型（board tempo/opponent threat/discover EV）
+│   └── siv.py                    # SIV 卡牌评分 + progress_modifier
+├── search/                       # 搜索引擎
+│   ├── abilities/                # 三层能力系统（parser→executor→orchestrator）
+│   │   ├── definition.py         # 数据类型：EffectKind/AbilityTrigger/CardAbility/EffectSpec
+│   │   ├── tokens.py             # 静态映射表（mechanics→trigger/verbs→effect）
+│   │   ├── extractors.py         # 纯字符串提取器（zero regex, English only）
+│   │   ├── parser.py             # AbilityParser（zero regex, mechanics+EN verbs）
+│   │   ├── executor.py           # 效果执行器（31 EffectKind handlers）
+│   │   ├── orchestrator.py       # 编排器（trigger dispatch/spell power/Brann/lifesteal）
+│   │   ├── simulation.py         # apply_action（顶层动作应用）
+│   │   ├── enumeration.py        # enumerate_legal_actions（PLAY/ATTACK/HERO_POWER/END_TURN）
+│   │   └── actions.py            # Action dataclass + ActionType enum
+│   ├── mcts/                     # MCTS 蒙特卡洛搜索
+│   │   ├── expansion.py          # 节点展开（stochastic action sampling）
+│   │   ├── turn_advance.py       # 跨回合推进（贪心出牌+攻击+对手模拟）
+│   │   └── ...
+│   ├── engine/                   # RHEA 滚动水平线进化
+│   ├── game_state.py             # GameState/HeroState/Minion/ManaState dataclasses
+│   ├── discover.py               # 发现框架（pool生成+约束解析+resolve_discover）
+│   ├── imbue.py                  # 灌注（hero power升级，11职业差异化）
+│   ├── herald.py                 # 兆示（职业士兵召唤）
+│   ├── colossal.py               # 巨型（职业附属物）
+│   ├── lethal_checker.py         # 致命检测
+│   ├── opponent_simulator.py     # 对手模拟器
+│   └── ...
+├── watcher/                      # 实时决策系统
+│   ├── global_tracker.py         # 全局追踪（15+ 关注点）
+│   ├── state_bridge.py           # Entity→GameState 映射
+│   └── ...
+└── utils/
+    ├── score_provider.py         # 评分数据提供（懒加载+缓存）
+    └── bayesian_opponent.py      # 贝叶斯对手建模
 ```
 
 ## 数据文件
 
 | 文件 | 用途 |
 |------|------|
-| `hs_cards/unified_standard.json` | 清洗后的标准池卡牌数据（主数据源） |
+| `card_data/` | 清洗后的标准池/狂野卡牌数据（多语言） |
 | `hs_cards/hsjson_standard.json` | HearthstoneJSON 原始数据 |
 | `hs_cards/hsreplay_cache.db` | HSReplay 缓存数据库 |
-| `hs_cards/v7_scoring_report.json` | V7 评分报告 |
-| `hs_cards/l6_scoring_report.json` | L6 评分报告 |
 
 ## 运行入口
 
@@ -131,16 +137,31 @@ hs_analysis/                    # 核心包
 | `scripts/run_rhea.py` | RHEA 引擎运行 |
 | `scripts/run_score_v2.py` | V2 评分 |
 | `scripts/run_score_v7.py` | V7 评分 |
-| `scripts/analyze_meta_decks.py` | 环境套牌分析 |
-| `scripts/deep_analysis.py` | 深度分析 |
 
 ## 测试
 
 ```bash
-pytest                          # 全量测试（233+ 用例）
+pytest                          # 全量测试（810 用例）
 pytest tests/                   # 仅 tests/ 目录
-pytest hs_analysis/search/      # search 模块内嵌测试
 ```
+
+## 能力系统架构原则（强制）
+
+### 三层分离
+
+| 层 | 文件 | 职责 | 规则 |
+|----|------|------|------|
+| Layer 1 | parser.py | 卡牌→List[CardAbility] | **零正则，零中文**，仅英文string.find()/split() |
+| Layer 2 | executor.py | EffectSpec→GameState | 纯状态变更，不解析文本 |
+| Layer 3 | orchestrator.py | 编排(trigger dispatch/Brann/spell power) | 不解析文本，委托executor |
+
+### 中文卡片处理路径
+中文文本 → `_supplement_with_structured()` → `card_effects.get_effects()`（唯一允许regex+中文）
+
+### 零卡牌特殊化
+- 禁止 card_id/card_name/dbf_id 硬编码匹配
+- 所有卡牌效果通过 AbilityParser + card_effects 统一解析
+- 只在 display/log 层使用人类可读名称
 
 ## 评分体系演进
 
@@ -148,19 +169,18 @@ pytest hs_analysis/search/      # search 模块内嵌测试
 - **V7** — 基于 HSReplay 数据驱动的实绩评分
 - **V8** — 上下文感知（回合数、场面饱和度、种族协同、发现池期望）
 - **L6** — 真实世界综合评分
-- **V9** — RHEA 层叠决策管线（致命检测 → 进化搜索 → 对手模拟 → 风险评估）
-- **V10** — 2026 机制覆盖大修（附魔框架 + 触发系统 + 现代关键词）✅
-- **Phase 5** — HDT 实时辅助决策（Power.log + python-hslog + 实时 RHEA）← 当前规划
+- **Phase 5** — HDT 实时辅助决策（Power.log + python-hslog + 实时搜索）← 当前规划
+- **Phase 8** — MCTS 蒙特卡洛搜索 + 贝叶斯对手威胁评估 ✅
+- **Phase 9** — 模拟覆盖升级（parser 94%覆盖率 + 对手法术模拟 + 随机召唤真实卡牌）✅
 
 ## 开发约定
 
-- 所有核心逻辑在 `hs_analysis/` 包内，不在 `scripts/`
+- 所有核心逻辑在 `analysis/` 包内，不在 `scripts/`
 - `scripts/` 只放运行入口和独立工具脚本
 - 数据文件通过脚本生成，不手动修改
-- 测试文件放在 `tests/` 或模块内（`hs_analysis/search/test_*.py`）
-- import 路径使用 `from hs_analysis.xxx import yyy`
-- 设计文档在 `thoughts/shared/designs/`，归档在 `thoughts/archive/`
-- commit 格式: `feat: / fix: / cleanup: 简述`
+- 测试文件放在 `tests/`
+- import 路径使用 `from analysis.xxx import yyy`
+- commit 格式: `feat: / fix: / docs: / cleanup: 简述`
 
 ## V10 设计生产规范
 
