@@ -566,18 +566,27 @@ Turn 23 示例：
 
 **测试: 756 pass, 0 regressions**
 
-### 剩余提案 (未开始)
+### 剩余提案
 
-| 编号 | 内容 | 工作量 | 优先级 |
-|------|------|--------|--------|
-| **P4** | opponent_simulator接入贝叶斯手牌预测 | 5-7天 | HIGH — 最高ROI |
-| P5 | 学习先验 (Policy Network) | 7-10天 | MEDIUM |
-| P6 | XGBoost/NN rollout | 10-15天 | LOW |
+| 编号 | 内容 | 工作量 | 优先级 | 状态 |
+|------|------|--------|--------|------|
+| **P4** | opponent_simulator接入贝叶斯手牌预测 | ~1天 | HIGH | ✅ 完成 (`064cab7`) |
+| P5 | 学习先验 (Policy Network) | 7-10天 | MEDIUM | ❌ |
+| P6 | XGBoost/NN rollout | 10-15天 | LOW | ❌ |
+
+### P4: Bayesian 对手威胁集成
+
+**Commit:** `064cab7`
+**变更:**
+- `opponent_simulator.py` (180→330行): 接收 `BayesianOpponentModel`，扫描预测手牌中伤害法术/解场/AOE/武器，按手牌比例缩放
+- `submodel.py`: `eval_threat()` 调用 `_bayesian_spell_threat()` 估算贝叶斯法术威胁
+- `engine.py`: evaluate_leaf 前将 `_bayesian_model` 附加到 leaf_state
+- 新增 `classify_card_threat()`: 基于卡牌文本分类 threat 类型
+- 完全向后兼容: 无模型 = 原有启发式行为
 
 ### 对手建模现状
 
-**已成熟:** 贝叶斯原型推断 (844行)、DUCT世界采样、秘密概率、HSReplay元数据热重载
-**主要缺口:** opponent_simulator.py (180行) 为纯启发式，未接入贝叶斯预测的手牌/牌库
+**已成熟:** 贝叶斯原型推断 (844行)、DUCT世界采样、秘密概率、HSReplay元数据热重载、**贝叶斯威胁集成**
 
 ### 架构决策
 
@@ -587,3 +596,4 @@ Turn 23 示例：
 | D018 | β/(1+visits) 衰减混合 | 早期信任启发，后期信任蒙特卡洛 |
 | D019 | IS hash + full hash 双哈希 | DUCT跨世界共享 + 碰撞检测 |
 | D020 | P1简化为outcome dedup | 完整CNB需枚举discover池，当前架构不支持预枚举 |
+| D021 | 贝叶斯威胁通过state属性传递 | 避免修改evaluate()签名，利用Python动态属性注入 |
