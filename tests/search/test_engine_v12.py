@@ -109,8 +109,12 @@ class TestManaModifier:
 
     def test_coin_gives_temporary_mana(self):
         state = _simple_state(mana=5, max_mana=5)
-        coin = _make_card(name="The Coin", cost=0, card_type="SPELL", ename="The Coin")
-        coin.card_id = "GAME_005"
+        coin = _make_card(
+            name="The Coin", cost=0, card_type="SPELL",
+            text="Gain 1 Mana Crystal this turn.",
+            ename="The Coin",
+        )
+        coin.english_text = "Gain 1 Mana Crystal this turn."
         state.hand.append(coin)
 
         result = apply_action(state, Action(action_type=ActionType.PLAY, card_index=0))
@@ -121,9 +125,11 @@ class TestManaModifier:
     def test_preparation_reduces_next_spell(self):
         state = _simple_state(mana=5, max_mana=5)
         prep = _make_card(
-            name="Preparation", cost=0, card_type="SPELL", ename="Preparation"
+            name="Preparation", cost=0, card_type="SPELL",
+            text="Your next spell costs (3) less.",
+            ename="Preparation",
         )
-        prep.card_id = "CS2_033"
+        prep.english_text = "Your next spell costs (3) less."
         spell = _make_card(name="Remove Existence", cost=3, card_type="SPELL")
         state.hand.extend([prep, spell])
 

@@ -209,16 +209,16 @@ class ActionPruner:
     def _deduplicate_cards(
         self, actions: List[Action], state: 'GameState'
     ) -> List[Action]:
-        """Merge PLAY/PLAY_WITH_TARGET actions for identical cards.
+        """Deduplicate PLAY actions that are truly identical.
 
-        When the hand contains multiple copies of the same card (same
-        card_id, cost, type), only the first index is kept.  This prevents
-        the MCTS tree from spawning N identical branches and wasting
-        iterations exploring all permutations.
+        Only merges actions that point to the SAME card index with the
+        SAME play context (position, target).  Does NOT collapse
+        different copies of the same card — each card index is a
+        distinct game action because playing card[0] vs card[1] leads
+        to different subsequent states (different hand composition).
 
-        For example, 5 identical Fel spells at indices 0-4 produce 5
-        separate PLAY actions.  After dedup, only one remains — the tree
-        explores 5× deeper instead of 5× wider.
+        Previously, identical cards at different indices were collapsed,
+        which prevented MCTS from discovering "play all 5 copies" sequences.
         """
         seen: Set[tuple] = set()
         deduped: List[Action] = []
@@ -233,14 +233,8 @@ class ActionPruner:
                 deduped.append(action)
                 continue
 
-            card = state.hand[card_idx]
-            card_id = getattr(card, 'card_id', '') or ''
-            card_type = getattr(card, 'card_type', '') or ''
-            cost = getattr(card, 'cost', -1)
-
-            # Dedup key: card identity + play context (position, target)
-            # NOT card_index — that's the variable we're collapsing
-            key = (card_id, card_type, cost, action.position, action.target_index)
+            # Dedup key: include card_index to keep each copy distinct
+            key = (action.action_type, card_idx, action.position, action.target_index)
 
             if key not in seen:
                 seen.add(key)

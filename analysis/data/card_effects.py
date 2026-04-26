@@ -110,7 +110,7 @@ _HAND_BUFF_EN = re.compile(r"")
 _DISCARD_CN = re.compile(r"弃掉?\s*(\d+)\s*张")
 _DISCARD_EN = re.compile(r"Discard\s*(\d+)", re.IGNORECASE)
 _COST_REDUCE_CN = re.compile(r"法力值消耗.*?减少\s*(\d+)")
-_COST_REDUCE_EN = re.compile(r"Costs?\s*(\d+)\s*less", re.IGNORECASE)
+_COST_REDUCE_EN = re.compile(r"Costs?\s*\(?\s*(\d+)\s*\)?\s*less", re.IGNORECASE)
 _HEALTH_COST_CN = re.compile(r"消耗\s*(\d+)\s*点(?:生命值|血量)|支付\s*(\d+)\s*点生命")
 _HEALTH_COST_EN = re.compile(r"(?:Pay|Cost)\s*(\d+)\s*(?:Health|health)|Lose\s*(\d+)\s*(?:Health|health)", re.IGNORECASE)
 

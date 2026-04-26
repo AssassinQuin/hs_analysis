@@ -222,6 +222,7 @@ class TestCoinComboChainScenario:
         return _make_card(
             name="幸运币", cost=0, card_type="SPELL",
             ename="The Coin", card_id="GAME_005",
+            english_text="Gain 1 Mana Crystal this turn.",
         )
 
     def _foxy_fraud(self) -> Card:

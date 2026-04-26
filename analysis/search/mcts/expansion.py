@@ -321,10 +321,14 @@ class Expander:
             if 0 <= card_idx < len(state.hand):
                 card = state.hand[card_idx]
                 cost = getattr(card, 'cost', 0) or 0
-                atk = getattr(card, 'attack', 0) or 0
-                hp = getattr(card, 'health', 0) or 0
-                # Prefer high tempo plays
-                score += (atk + hp - cost) * 0.3
+                card_score = getattr(card, 'score', 0) or 0
+                # Use card score as base tempo value; fallback to stat/cost ratio
+                if card_score > 0:
+                    score += card_score * 0.2
+                else:
+                    atk = getattr(card, 'attack', 0) or 0
+                    hp = getattr(card, 'health', 0) or 0
+                    score += (atk + hp - cost) * 0.3
 
 
         elif action.action_type == ActionType.HERO_POWER:

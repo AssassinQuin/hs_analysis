@@ -47,9 +47,29 @@ from analysis.search.secret_triggers import check_secrets
 log = logging.getLogger(__name__)
 
 
-_COIN_CARD_IDS = frozenset({"GAME_005"})
-_PREP_CARD_IDS = frozenset({"CS2_033"})
-_DEATH_SHADOW_CARD_IDS = frozenset({"CORE_RLK_567", "RLK_567"})
+# ── Effect detection helpers (text-based, no card_id/name matching) ──
+
+
+def _is_temporary_mana_effect(text_lower: str) -> bool:
+    """Detect 'Gain N Mana Crystal(s) this turn' effect from card text.
+
+    Matches patterns:
+    - "gain 1 mana crystal this turn" / "gain 2 mana crystals"
+    - "获得1个法力水晶" / "获得 2 个法力水晶"
+    - "gain an empty mana crystal" (Innervate-style)
+    Does NOT match:
+    - "Gain 1 Mana Crystal" (permanent, like Wild Growth on full mana)
+    """
+    # English patterns
+    if "gain" in text_lower and "mana crystal" in text_lower and "this turn" in text_lower:
+        return True
+    # "Gain an empty mana crystal" (temporary)
+    if "gain" in text_lower and "empty mana crystal" in text_lower:
+        return True
+    # Chinese patterns: 获得 N 个法力水晶 + 本回合
+    if "获得" in text_lower and "法力水晶" in text_lower and "本回合" in text_lower:
+        return True
+    return False
 
 
 def _trigger_minion_on_spell_cast(s, card=None):
@@ -130,7 +150,11 @@ def _trigger_location_spell_react(s, card):
                 continue
             etext = ability.text_raw.lower()
             school_lower = spell_school.lower()
-            if school_lower in etext and ("refresh" in etext or "reopen" in etext):
+            if school_lower in etext and (
+                "refresh" in etext
+                or "reopen" in etext
+                or "reduce" in etext and "cooldown" in etext
+            ):
                 if loc.cooldown_current > 0:
                     loc.cooldown_current = 0
 
@@ -209,13 +233,22 @@ def _apply_play_card(s, action: Action):
     if overload_val > 0:
         s.mana.overload_next += overload_val
 
-    card_id = getattr(card, "card_id", "") or ""
-    if card_id in _COIN_CARD_IDS:
-        s.mana.available += 1
-        s.mana.add_modifier("temporary_crystal", 1, "this_turn")
+    # Detect "Gain N Mana Crystal this turn" effect (Coin, Innervate, etc.)
+    # Effect-based detection from card text — NOT name/card_id matching
+    etext_lower = (getattr(card, "english_text", "") or card_text).lower()
+    if _is_temporary_mana_effect(etext_lower):
+        # Extract count: default 1, check for "gain 2" / "获得2个"
+        import re
+        count = 1
+        m = re.search(r'gain\s+(\d+)\s+mana', etext_lower)
+        if not m:
+            m = re.search(r'获得\s*(\d+)\s*个', etext_lower)
+        if m:
+            count = int(m.group(1))
+        s.mana.available += count
+        s.mana.add_modifier("temporary_crystal", count, "this_turn")
 
-    if card_id in _PREP_CARD_IDS:
-        s.mana.add_modifier("reduce_next_spell", 3, "next_spell")
+    # "Your next spell costs N less" — handled by generic cost_reduce detection below
 
     from analysis.data.card_effects import get_effects as _get_effects
     card_effects_data = _get_effects(card)
@@ -254,8 +287,10 @@ def _apply_play_card(s, action: Action):
                 s.opponent.opp_cost_modifiers.append(("opp_hero_power_increase", amt, "hero_power"))
 
     # --- Death Shadow transformation tracking ---
-    if card_id in _DEATH_SHADOW_CARD_IDS:
-        pass
+    # Detect by effect text, not card_id
+    _ds_text = (getattr(card, "english_text", "") or "").lower()
+    if "death shadow" in _ds_text or "死亡之影" in _ds_text:
+        pass  # tracked in _play_spell for transform logic
 
     # Check outcast bonus (before card is removed from hand)
     outcast_active = check_outcast(s, card_idx, card)
@@ -391,9 +426,10 @@ def _play_spell(s, card, action: Action):
     s = orchestrate(s, card, abilities, ctx)
 
     # --- Death Shadow transform: replaces self with copy of cast spell ---
+    # Detect by effect text, not card_id
     for i, hc in enumerate(s.hand):
-        hc_card_id = getattr(hc, "card_id", "") or ""
-        if hc_card_id in _DEATH_SHADOW_CARD_IDS:
+        hc_etext = (getattr(hc, "english_text", "") or "").lower()
+        if "death shadow" in hc_etext or "死亡之影" in hc_etext:
             try:
                 import dataclasses
                 new_card = dataclasses.replace(card) if dataclasses.is_dataclass(card) else card

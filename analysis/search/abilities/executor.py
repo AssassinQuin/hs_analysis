@@ -311,14 +311,49 @@ def _exec_damage(state: GameState, effect: EffectSpec, target) -> GameState:
 
 
 def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
-    """SUMMON: create a token minion on the friendly board."""
+    """SUMMON: create a token minion on the friendly board.
+
+    Handles:
+    - Fixed stat tokens (value/value2 > 0)
+    - Random minions from text ("Summon N random X-Cost minions") → placeholder 1/1 tokens
+    """
     from analysis.search.game_state import Minion as _Minion
+
     atk = effect.value
     hp = effect.value2
+    count = max(effect.target.count if effect.target else 1, 1)
+
     if atk > 0 or hp > 0:
-        m = _Minion(attack=atk, health=hp, max_health=hp, name="Token", can_attack=False)
-        if len(state.board) < 7:
-            state.board.append(m)
+        # Fixed stat token (e.g. "Summon a 3/3")
+        for _ in range(count):
+            if len(state.board) < 7:
+                m = _Minion(attack=atk, health=hp, max_health=hp, name="Token", can_attack=False)
+                state.board.append(m)
+    elif effect.text_raw:
+        # Random minion summon (e.g. "Summon two random 1-Cost minions")
+        text_lower = effect.text_raw.lower()
+        if "random" in text_lower or "随机" in text_lower:
+            # Extract count from text ("two" → 2, "three" → 3, "2" → 2)
+            num_words = {"two": 2, "three": 3, "four": 4, "二": 2, "三": 3, "四": 4}
+            text_count = 1
+            for word, num in num_words.items():
+                if word in text_lower:
+                    text_count = num
+                    break
+            # Also check for digit patterns
+            import re
+            digit_match = re.search(r'summon\s+(\d+)', text_lower)
+            if not digit_match:
+                digit_match = re.search(r'召唤\s*(\d+)', text_lower)
+            if digit_match:
+                text_count = max(text_count, int(digit_match.group(1)))
+
+            actual_count = max(count, text_count)
+            # Create placeholder minions — cost-based approximation
+            for _ in range(actual_count):
+                if len(state.board) < 7:
+                    m = _Minion(attack=1, health=1, max_health=1, name="Random Minion", can_attack=False)
+                    state.board.append(m)
     return state
 
 
