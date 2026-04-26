@@ -98,6 +98,11 @@ class AbilityParser:
         # ── Keyword detection (herald, imbue, kindred, etc.) ──
         abilities.extend(cls._parse_keywords(text_clean, card, abilities))
 
+        # ── Structured effects from card_effects (reliable CN+EN coverage) ──
+        # When verb parsing produced no effects, fall back to structured data
+        # from card_effects.get_effects() which uses regex on both CN and EN text.
+        abilities = cls._supplement_with_structured(card, abilities)
+
         return abilities
 
     # ──────────────────────────────────────────────────────────
@@ -305,3 +310,145 @@ class AbilityParser:
             return ConditionSpec(ConditionKind.PLAYED_THIS_TURN, {"card_type": card_type})
 
         return None
+
+    # ──────────────────────────────────────────────────────────
+    # Structured data supplement (from card_effects)
+    # ──────────────────────────────────────────────────────────
+
+    @classmethod
+    def _supplement_with_structured(
+        cls, card, abilities: List[CardAbility]
+    ) -> List[CardAbility]:
+        """Supplement verb-parsed abilities with structured card_effects data.
+
+        When verb parsing (english text verbs) produced no DAMAGE/DRAW/SUMMON/etc.
+        effects, fall back to ``card_effects.get_effects()`` which parses both
+        CN and EN text via regex.  This ensures complete coverage for all cards.
+
+        The structured data is attached as a new BATTLECRY-like ability with
+        trigger PLAY_EFFECT (a virtual trigger for spell/minion card effects
+        that fire on play, separate from BATTLECRY keyword).
+        """
+        from analysis.data.card_effects import get_effects
+        from analysis.search.abilities.definition import TargetSpec, TargetKind
+
+        # Only works for Card objects (has mechanics/cost/text fields)
+        if not hasattr(card, 'mechanics'):
+            return abilities
+
+        # Skip Location — handled by _resolve_location_effect directly
+        card_type = (getattr(card, 'card_type', '') or '').upper()
+        if card_type == "LOCATION":
+            return abilities
+
+        eff = get_effects(card)
+        effects: List[EffectSpec] = []
+
+        # Check if we already have these effects from verb parsing
+        existing_kinds = set()
+        for a in abilities:
+            for e in a.effects:
+                existing_kinds.add(e.kind)
+
+        # Direct damage (skip if verb parsing already found DAMAGE)
+        if eff.damage > 0 and EffectKind.DAMAGE not in existing_kinds:
+            effects.append(EffectSpec(
+                kind=EffectKind.DAMAGE, value=eff.damage,
+            ))
+
+        # Random damage
+        if eff.random_damage > 0 and EffectKind.DAMAGE not in existing_kinds:
+            effects.append(EffectSpec(
+                kind=EffectKind.DAMAGE, value=eff.random_damage,
+                target=TargetSpec(kind=TargetKind.RANDOM_ENEMY),
+            ))
+
+        # AOE damage
+        if eff.aoe_damage > 0:
+            effects.append(EffectSpec(
+                kind=EffectKind.DAMAGE, value=eff.aoe_damage,
+                target=TargetSpec(kind=TargetKind.ALL_ENEMY),
+            ))
+
+        # Heal
+        if eff.heal > 0 and EffectKind.HEAL not in existing_kinds:
+            effects.append(EffectSpec(
+                kind=EffectKind.HEAL, value=eff.heal,
+            ))
+
+        # Draw
+        if eff.draw > 0 and EffectKind.DRAW not in existing_kinds:
+            effects.append(EffectSpec(kind=EffectKind.DRAW, value=eff.draw))
+
+        # Summon
+        if eff.summon_attack > 0 and eff.summon_health > 0:
+            if EffectKind.SUMMON not in existing_kinds:
+                effects.append(EffectSpec(
+                    kind=EffectKind.SUMMON,
+                    value=eff.summon_attack, value2=eff.summon_health,
+                ))
+
+        # Armor
+        if eff.armor > 0 and EffectKind.GAIN not in existing_kinds:
+            effects.append(EffectSpec(
+                kind=EffectKind.GAIN, value=eff.armor, subtype="armor",
+            ))
+
+        # Buff attack
+        if eff.buff_attack > 0 and EffectKind.GIVE not in existing_kinds:
+            effects.append(EffectSpec(
+                kind=EffectKind.GIVE,
+                value=eff.buff_attack, value2=eff.buff_health,
+            ))
+
+        # Destroy
+        if eff.has_destroy and EffectKind.DESTROY not in existing_kinds:
+            effects.append(EffectSpec(kind=EffectKind.DESTROY))
+
+        # Discard
+        if eff.discard > 0 and EffectKind.DISCARD not in existing_kinds:
+            effects.append(EffectSpec(kind=EffectKind.DISCARD, value=eff.discard))
+
+        # Cost reduce
+        if eff.cost_reduce > 0 and EffectKind.REDUCE_COST not in existing_kinds:
+            effects.append(EffectSpec(kind=EffectKind.REDUCE_COST, value=eff.cost_reduce))
+
+        # Silence
+        if eff.has_silence and EffectKind.SILENCE not in existing_kinds:
+            effects.append(EffectSpec(kind=EffectKind.SILENCE))
+
+        if not effects:
+            return abilities
+
+        # Attach as PLAY_EFFECT trigger — a virtual trigger for
+        # "effects that happen when you play this card" (spell effects,
+        # minion battlecries without BATTLECRY tag, etc.)
+        card_type = (getattr(card, 'card_type', '') or '').upper()
+        if card_type == "SPELL":
+            trigger = AbilityTrigger.ACTIVATE  # spell effects fire on play
+        else:
+            trigger = AbilityTrigger.BATTLECRY  # minion effects fire on play
+
+        # Don't duplicate if we already have a BATTLECRY with effects
+        if trigger == AbilityTrigger.BATTLECRY:
+            has_bc_with_effects = any(
+                a.trigger == AbilityTrigger.BATTLECRY and a.effects for a in abilities
+            )
+            if has_bc_with_effects:
+                # Append to existing BATTLECRY ability instead of creating new
+                for a in abilities:
+                    if a.trigger == AbilityTrigger.BATTLECRY and a.effects:
+                        # Add only effects not already present
+                        existing_vals = {(e.kind, e.value) for e in a.effects}
+                        for e in effects:
+                            if (e.kind, e.value) not in existing_vals:
+                                a.effects.append(e)
+                        break
+                return abilities
+
+        abilities.append(CardAbility(
+            trigger=trigger,
+            effects=effects,
+            text_raw=getattr(card, 'english_text', '') or '',
+        ))
+        return abilities

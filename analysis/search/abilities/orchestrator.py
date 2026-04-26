@@ -115,7 +115,7 @@ def orchestrate(
             state = execute_effects(state, card, ability.effects)
 
         elif trigger == AbilityTrigger.ACTIVATE:
-            state = execute_effects(state, card, ability.effects)
+            state = _handle_spell_effects(state, card, ability, target_index, spell_power, has_lifesteal)
 
         elif trigger == AbilityTrigger.DEATHRATTLE:
             state = execute_effects(state, card, ability.effects)
@@ -141,6 +141,54 @@ def _handle_battlecry(
     """Apply battlecry/combo effects with target selection and spell power."""
     from analysis.evaluators.composite import target_selection_eval
 
+    for effect in ability.effects:
+        # Add spell power to damage effects
+        if effect.kind == EffectKind.DAMAGE and spell_power > 0:
+            base_val = effect.value if isinstance(effect.value, int) else 0
+            effect = EffectSpec(
+                kind=effect.kind,
+                value=base_val + spell_power,
+                value2=effect.value2,
+                subtype=effect.subtype,
+                keyword=effect.keyword,
+                target=effect.target,
+                selector=effect.selector,
+                condition=effect.condition,
+                text_raw=effect.text_raw,
+            )
+
+        # Resolve target for targeted effects
+        target = None
+        if effect.kind in (EffectKind.DAMAGE, EffectKind.HEAL):
+            target = _pick_target(state, target_index, effect)
+
+        state = execute_effects(state, card, [effect], target)
+
+        # Lifesteal: heal hero for damage dealt
+        if has_lifesteal and effect.kind == EffectKind.DAMAGE:
+            dmg = effect.value if isinstance(effect.value, int) else 0
+            if dmg > 0:
+                state.hero.hp = min(
+                    getattr(state.hero, 'max_hp', 30),
+                    state.hero.hp + dmg,
+                )
+
+    return state
+
+
+def _handle_spell_effects(
+    state: "GameState",
+    card: "Card",
+    ability: CardAbility,
+    target_index: int,
+    spell_power: int,
+    has_lifesteal: bool,
+) -> "GameState":
+    """Apply spell card effects with spell power, target selection, and lifesteal.
+
+    Identical to _handle_battlecry but used for ACTIVATE trigger
+    (spell effects that fire on play).
+    """
     for effect in ability.effects:
         # Add spell power to damage effects
         if effect.kind == EffectKind.DAMAGE and spell_power > 0:

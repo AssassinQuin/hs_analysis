@@ -43,7 +43,6 @@ from analysis.search.quest import parse_quest, track_quest_progress
 from analysis.search.shatter import check_shatter_on_draw
 from analysis.search.trigger_system import TriggerDispatcher
 from analysis.search.secret_triggers import check_secrets
-from analysis.utils.spell_simulator import resolve_effects
 
 log = logging.getLogger(__name__)
 
@@ -379,26 +378,17 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
 def _play_spell(s, card, action: Action):
     """Handle spell card play.
 
-    Uses the unified orchestrator for keyword abilities (herald, imbue, etc.)
-    and falls back to resolve_effects() for spell damage/effects parsing,
-    since AbilityParser may not parse effects from Chinese-only card text.
+    Unified path: AbilityParser.parse() → orchestrate().
+    Parser supplements verb parsing with structured card_effects data,
+    ensuring complete coverage for both EN and CN text.
     """
     from analysis.search.abilities.parser import AbilityParser
     from analysis.search.abilities.orchestrator import orchestrate
-    from analysis.search.abilities.definition import AbilityTrigger
 
-    # Resolve spell effects via legacy parser (handles CN text + structured data)
-    s = resolve_effects(s, card, target_index=action.target_index)
-
-    # Parse keyword abilities (herald, imbue, etc.) via unified parser
+    # Parse all abilities (verb parsing + structured data fallback)
     abilities = AbilityParser.parse(card)
-    keyword_abilities = [a for a in abilities
-                         if a.trigger in (AbilityTrigger.HERALD, AbilityTrigger.IMBUE,
-                                          AbilityTrigger.KINDRED, AbilityTrigger.COLOSSAL,
-                                          AbilityTrigger.DORMANT, AbilityTrigger.CORPSE_SPEND)]
-    if keyword_abilities:
-        ctx = {'target_index': action.target_index, 'is_minion': False}
-        s = orchestrate(s, card, keyword_abilities, ctx)
+    ctx = {'target_index': action.target_index, 'is_minion': False}
+    s = orchestrate(s, card, abilities, ctx)
 
     # --- Death Shadow transform: replaces self with copy of cast spell ---
     for i, hc in enumerate(s.hand):

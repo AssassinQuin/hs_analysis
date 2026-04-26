@@ -2,13 +2,13 @@
 """executor.py — Unified ability execution engine.
 
 Layer 2 in the ability system architecture:
-  Layer 1: Parsing (parser.py, effect_parser.py)
+  Layer 1: Parsing (parser.py) — card → List[CardAbility]
   Layer 2: Execution (this file) — THE single source of truth for effect application
-  Layer 3: Orchestration (spell_simulator.resolve_effects, battlecry_dispatcher.dispatch)
+  Layer 3: Orchestration (orchestrator.py) — spell power, target selection, lifesteal
 
 Handles all effect kinds with proper armor/shield/immune/stealth mechanics.
-Called by AbilityExecutor.trigger(), resolve_effects(), dispatch_battlecry(),
-and directly by deathrattle/location/trigger modules.
+Called by orchestrator.orchestrate(), AbilityExecutor.trigger(), and directly
+by deathrattle/location/trigger modules.
 """
 from __future__ import annotations
 
