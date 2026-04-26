@@ -538,3 +538,52 @@ Turn 23 示例：
 | D016 | 规则推导关键词交互 | 确定性交互逻辑，非经验常数 |
 
 完整决策记录: `thoughts/DECISIONS.md`
+
+---
+
+## Phase 8: MCTS 算法升级 + IMCTS 调研 (2026-04-26)
+
+### 调研: IMCTS 与 Hearthstone AI 全景
+
+深度调研报告生成于 `docs/imcts-hearthstone-ai-research/总结报告.md`（含信息源索引、外部研究资料、项目知识总结）。
+
+**关键发现:**
+- 三种不同的"IMCTS"算法: Implicit Minimax (Lanctot 2014)、Informed MCTS (Ontañón 2016)、ISMCTS (Cowling 2012)
+- Silverfish (C#): 最强规则AI，Chance Node Bucketing + Opponent Modeling Module
+- ByteRL (字节2023): 端到端策略网络，打败中国前十选手，但LOCM中被exploit
+- peter1591/hearthstone-ai: AlphaGo式MCTS+NN，325 stars
+
+### MCTS 重构 (P0-P3 + P1-lite)
+
+基于调研报告 §六 优先级排序，完成4项重构：
+
+| # | 重构 | Commit | 文件 | 行数变化 | 效果 |
+|---|------|--------|------|----------|------|
+| P2 | Obliged Actions | `7a33ff1` | expansion.py | +8 | 自动选择强制/唯一动作，减少MCTS预算浪费 |
+| P0 | Implicit Minimax Backup | `deb1361` | node, backprop, uct, config | +48 | Q+h双路径评估，minimax backup提高决策质量 |
+| P3 | 2D Hash Transposition | `1207de2` | transposition, expansion, engine | +79/-17 | 双哈希碰撞检测，修复手牌不在hash中的bug |
+| P1-lite | Chance Node Dedup | `b8aa317` | expansion.py | +6 | 随机结果去重，减少有效分支因子 |
+
+**测试: 756 pass, 0 regressions**
+
+### 剩余提案 (未开始)
+
+| 编号 | 内容 | 工作量 | 优先级 |
+|------|------|--------|--------|
+| **P4** | opponent_simulator接入贝叶斯手牌预测 | 5-7天 | HIGH — 最高ROI |
+| P5 | 学习先验 (Policy Network) | 7-10天 | MEDIUM |
+| P6 | XGBoost/NN rollout | 10-15天 | LOW |
+
+### 对手建模现状
+
+**已成熟:** 贝叶斯原型推断 (844行)、DUCT世界采样、秘密概率、HSReplay元数据热重载
+**主要缺口:** opponent_simulator.py (180行) 为纯启发式，未接入贝叶斯预测的手牌/牌库
+
+### 架构决策
+
+| # | 决策 | 理由 |
+|---|------|------|
+| D017 | IMCTS h_value 与 Q 双路径 | Lanctot 2014验证，Kalah/Breakthrough显著增强 |
+| D018 | β/(1+visits) 衰减混合 | 早期信任启发，后期信任蒙特卡洛 |
+| D019 | IS hash + full hash 双哈希 | DUCT跨世界共享 + 碰撞检测 |
+| D020 | P1简化为outcome dedup | 完整CNB需枚举discover池，当前架构不支持预枚举 |
