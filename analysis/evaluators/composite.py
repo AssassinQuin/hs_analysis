@@ -42,7 +42,28 @@ except ImportError:
         return 0.0
 
     def eval_trigger(state) -> float:
-        return 0.0
+        total = 0.0
+        for m in state.board:
+            ench = m.enchantments or []
+            if ench:
+                total += 2.0
+                if any("deathrattle" in str(e).lower() for e in ench):
+                    total += 1.5
+            if getattr(m, 'trigger_type', None):
+                total += 1.5
+        herald_count = getattr(state, 'herald_count', 0)
+        if herald_count > 0:
+            total += herald_count * 2.0
+        imbue_level = getattr(state.hero, 'imbue_level', 0)
+        if imbue_level > 0:
+            total += 1.0 + imbue_level * 0.5
+        for card in state.hand:
+            ct = getattr(card, "card_type", "").upper()
+            if ct == "SPELL":
+                total += 0.5
+            elif ct == "WEAPON":
+                total += 0.3
+        return total
 
     def eval_mana_efficiency(state) -> float:
         wasted = state.mana.available

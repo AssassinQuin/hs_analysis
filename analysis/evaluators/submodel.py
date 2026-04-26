@@ -172,6 +172,9 @@ def eval_trigger(state: GameState) -> float:
 
     • Minions with enchantments:  battlecry_EV = 2.0,  deathrattle_EV = 1.5
     • Hand cards:  spell = +0.5,  weapon = +0.3
+    • Herald count: each accumulated herald provides value
+    • Imbue level: hero power upgrade provides progressive value
+    • Board minions with dynamic triggers (ON_FEL_SPELL_CAST, etc.)
     """
     total = 0.0
 
@@ -182,6 +185,22 @@ def eval_trigger(state: GameState) -> float:
             total += 2.0   # battlecry EV — any mechanics present
             if any("deathrattle" in str(e).lower() for e in ench):
                 total += 1.5
+
+        # Dynamic trigger value — minions with trigger_type have ongoing effects
+        trigger_type = getattr(m, 'trigger_type', None)
+        if trigger_type:
+            total += 1.5  # active trigger on board is worth ~1.5
+
+    # Herald (兆示): accumulated count represents summon investment
+    herald_count = getattr(state, 'herald_count', 0)
+    if herald_count > 0:
+        total += herald_count * 2.0  # each herald summon is ~2 pts
+
+    # Imbue (灌注): hero power upgrade provides progressive value
+    imbue_level = getattr(state.hero, 'imbue_level', 0)
+    if imbue_level > 0:
+        # Imbue scales: level 1 = 1.5, level 2 = 2.5, etc.
+        total += 1.0 + imbue_level * 0.5
 
     # Hand card EV (rough estimate)
     for card in state.hand:

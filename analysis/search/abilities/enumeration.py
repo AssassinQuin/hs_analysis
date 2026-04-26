@@ -268,6 +268,14 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
 
     actions.append(Action(action_type=ActionType.END_TURN))
 
+    # Stamp each PLAY action with card name for action_key uniqueness.
+    # Without this, playing Coin (idx=0) and then Foxy (also idx=0 after pop)
+    # produce identical action_keys, causing MCTS to skip the second action.
+    for a in actions:
+        if a.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
+            if 0 <= a.card_index < len(state.hand):
+                a._card_name = state.hand[a.card_index].name or ''
+
     return actions
 
 

@@ -83,14 +83,20 @@ class Action:
 def action_key(action: Action) -> tuple:
     """Return a hashable key for action comparison.
 
+    Includes card_name for PLAY actions so that different cards at the same
+    hand index produce distinct keys (e.g., Coin at idx 0 vs Foxy at idx 0
+    after Coin is played).
+
     meta_tags are intentionally excluded to keep legality checks compatible.
     """
+    card_name = getattr(action, '_card_name', '') or ''
     return (
         action.action_type,
         action.card_index,
         action.position,
         action.source_index,
         action.target_index,
+        card_name,
     )
 
 

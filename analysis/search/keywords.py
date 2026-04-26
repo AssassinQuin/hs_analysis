@@ -163,7 +163,7 @@ def keyword_to_cn(keyword: str) -> str:
 # KeywordSet
 # ═══════════════════════════════════════════════════════════════════
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class KeywordSet:
     """Immutable keyword container backed by a ``frozenset``.
 
