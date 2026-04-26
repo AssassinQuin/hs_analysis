@@ -27,8 +27,8 @@ from analysis.models.card import Card
 from analysis.data.card_effects import get_effects, CardEffects
 from analysis.evaluators.composite import target_selection_eval
 
-# Parser — delegated to abilities/effect_parser.py
-from analysis.search.abilities.effect_parser import EffectParser  # noqa: F401
+# Parser — uses structured card_effects data directly
+# (EffectParser removed — effect_parser.py deleted in abilities unification)
 
 # Executor — the unified effect application engine
 from analysis.search.abilities.definition import (
@@ -252,6 +252,47 @@ class EffectApplier:
         return s
 
 
+def _get_effect_tuples(card: Card) -> list:
+    """Extract effect tuples from structured card_effects data.
+
+    Replaces EffectParser._from_card() which was in the deleted effect_parser.py.
+    """
+    eff = get_effects(card)
+    effects = []
+
+    if eff.aoe_damage > 0:
+        effects.append(('aoe_damage', eff.aoe_damage))
+    if eff.random_damage > 0:
+        effects.append(('random_damage', eff.random_damage))
+    elif eff.damage > 0:
+        effects.append(('direct_damage', eff.damage))
+
+    if eff.summon_attack > 0 and eff.summon_health > 0:
+        effects.append(('summon_stats', (eff.summon_attack, eff.summon_health)))
+    elif eff.has_summon:
+        effects.append(('summon', True))
+
+    if eff.draw > 0:
+        effects.append(('draw', eff.draw))
+    if eff.has_destroy:
+        effects.append(('destroy', True))
+    if eff.heal > 0:
+        effects.append(('heal', eff.heal))
+    if eff.armor > 0:
+        effects.append(('armor', eff.armor))
+    if eff.buff_attack > 0:
+        if eff.buff_health > 0:
+            effects.append(('hand_buff', (eff.buff_attack, eff.buff_health)))
+        else:
+            effects.append(('buff_atk', eff.buff_attack))
+    if eff.discard > 0:
+        effects.append(('discard', eff.discard))
+    if eff.cost_reduce > 0:
+        effects.append(('cost_reduce', eff.cost_reduce))
+
+    return effects
+
+
 # ===================================================================
 # resolve_effects — Main entry point (orchestrator)
 # ===================================================================
@@ -276,7 +317,7 @@ def resolve_effects(state: GameState, card: Card, target_index: int = -1) -> Gam
     """
     s = state.copy()
 
-    effects = EffectParser.parse(card.text or "", card=card)
+    effects = _get_effect_tuples(card)
 
     if not effects:
         return s

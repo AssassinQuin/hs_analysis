@@ -23,7 +23,6 @@ from analysis.data.card_effects import (
     get_card_health_cost,
 )
 from analysis.search.aura_engine import recompute_auras
-from analysis.search.battlecry_dispatcher import dispatch_battlecry
 from analysis.search.choose_one import is_choose_one, resolve_choose_one
 from analysis.search.colossal import parse_colossal_value, summon_colossal_appendages
 from analysis.search.corpse import (
@@ -354,6 +353,7 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
         'target_index': action.target_index,
         'card_index': card_idx,
         'is_minion': True,
+        'source_minion': new_minion,
     }
     s = orchestrate(s, card, abilities, ctx)
 

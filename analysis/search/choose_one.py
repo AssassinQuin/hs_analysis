@@ -129,11 +129,14 @@ def _apply_option(state: GameState, option: dict, minion: Minion) -> GameState:
         elif eff[0] == 'buff_attack':
             minion.attack += eff[1]
         elif eff[0] == 'summon':
-            from analysis.utils.spell_simulator import EffectApplier
-            s = EffectApplier.apply_summon(s, eff[1], eff[2])
+            if len(s.board) < 7:
+                from analysis.search.game_state import Minion as _Minion
+                s.board.append(_Minion(attack=eff[1], health=eff[2], max_health=eff[2],
+                                       name="Token", can_attack=False))
         elif eff[0] == 'draw':
-            from analysis.utils.spell_simulator import EffectApplier
-            s = EffectApplier.apply_draw(s, eff[1])
+            for _ in range(eff[1]):
+                if s.deck_remaining > 0:
+                    s.deck_remaining -= 1
         elif eff[0] == 'give_taunt':
             minion.has_taunt = True
         elif eff[0] == 'give_charge':

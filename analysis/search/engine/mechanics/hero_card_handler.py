@@ -55,27 +55,19 @@ class HeroCardHandler:
 
         if "Battlecry" in text or "战吼" in text:
             try:
-                from analysis.search.battlecry_dispatcher import dispatch_battlecry
+                from analysis.search.abilities.parser import AbilityParser
+                from analysis.search.abilities.orchestrator import orchestrate
 
-                dummy_minion = None
-                state = dispatch_battlecry(state, card, dummy_minion)
+                abilities = AbilityParser.parse(card)
+                state = orchestrate(state, card, abilities, {'source_minion': None})
             except Exception:
                 pass
 
         try:
-            from analysis.utils.spell_simulator import resolve_effects
+            from analysis.search.abilities.parser import AbilityParser
+            from analysis.search.abilities.orchestrator import orchestrate
 
-            card_copy = Card(
-                dbf_id=card.dbf_id,
-                name=card.name,
-                cost=card.cost,
-                card_type=card.card_type,
-                text="",
-                mechanics=card.mechanics,
-                card_class=card.card_class,
-                rarity=card.rarity,
-                race=card.race,
-            )
-            state = resolve_effects(state, card_copy)
+            abilities = AbilityParser.parse(card_copy)
+            state = orchestrate(state, card_copy, abilities, {'source_minion': None})
         except Exception:
             pass

@@ -60,6 +60,7 @@ def orchestrate(
     target_index = ctx.get('target_index', -1)
     card_index = ctx.get('card_index', -1)
     is_minion = ctx.get('is_minion', False)
+    source_minion = ctx.get('source_minion', None)
 
     # Calculate spell power bonus from friendly board
     spell_power = sum(getattr(m, 'spell_power', 0) for m in state.board)
@@ -76,16 +77,20 @@ def orchestrate(
                        AbilityTrigger.ON_DEATH, AbilityTrigger.SECRET,
                        AbilityTrigger.QUEST, AbilityTrigger.AURA,
                        AbilityTrigger.INFUSE, AbilityTrigger.CORRUPT):
-            # These triggers fire at specific game events, not on play
             continue
 
         # Handle each trigger type
         if trigger == AbilityTrigger.BATTLECRY:
             state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
+            # Brann doubling: re-execute battlecry if a doubler is present
+            if _has_battlecry_doubler(state, source_minion):
+                state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
 
         elif trigger == AbilityTrigger.COMBO:
             if len(state.cards_played_this_turn) > 0:
                 state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
+                if _has_battlecry_doubler(state, source_minion):
+                    state = _handle_battlecry(state, card, ability, target_index, spell_power, has_lifesteal)
 
         elif trigger == AbilityTrigger.OUTCAST:
             if _is_outcast_position(state, card, card_index):
@@ -185,12 +190,11 @@ def _handle_dormant(
     card: "Card",
 ) -> "GameState":
     """Mark minion as dormant for N turns."""
+    from analysis.search.abilities.extractors import extract_number_after
     text = (getattr(card, 'english_text', '') or getattr(card, 'text', '') or '').lower()
-    turns = 2  # default
-    import re
-    m = re.search(r'dormant\s*(?:for\s*)?(\d+)', text)
-    if m:
-        turns = int(m.group(1))
+    turns = extract_number_after(text, 'dormant')
+    if turns <= 0:
+        turns = 2  # default
 
     if state.board:
         last = state.board[-1]
@@ -261,3 +265,20 @@ def _pick_target(
             continue
 
     return best_target
+
+
+def _has_battlecry_doubler(state: "GameState", played_minion) -> bool:
+    """Check if a friendly minion doubles battlecry triggers (e.g. Brann)."""
+    if played_minion is None:
+        return False
+    for m in state.board:
+        if m is played_minion:
+            continue
+        name = (getattr(m, 'name', '') or '').lower()
+        if 'brann' in name or '布莱恩' in name:
+            return True
+        for ench in getattr(m, 'enchantments', []) or []:
+            etype = getattr(ench, 'trigger_effect', '') or ''
+            if 'double_battlecry' in etype:
+                return True
+    return False
