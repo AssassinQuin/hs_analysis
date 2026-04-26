@@ -419,6 +419,11 @@ class MCTSEngine:
 
             path, leaf, leaf_state = self._traverse(ctx, world_state)
 
+            # Attach Bayesian model for threat-aware evaluation
+            bayesian = getattr(self, '_bayesian_model', None)
+            if bayesian is not None:
+                leaf_state._bayesian_model = bayesian
+
             reward = evaluate_leaf(
                 leaf_state, ctx.root_state, config,
                 turn_depth=leaf.turn_depth,

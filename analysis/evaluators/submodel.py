@@ -83,6 +83,7 @@ def eval_threat(state: GameState) -> float:
     """Evaluate danger from the opponent's board.  Range: [-50, 0].
 
     Returns -50.0 immediately when lethal damage is detected.
+    Enhanced with Bayesian spell/removal threat when model is available.
     """
     enemy_board = state.opponent.board
     opp_hero = state.opponent.hero
@@ -110,10 +111,60 @@ def eval_threat(state: GameState) -> float:
     # Extra threat from charge minions (surprise burst)
     charge_threat = sum(m.attack * 0.5 for m in enemy_board if m.has_charge)
 
-    threat_score = -danger - (opponent_board_damage * 0.3) - charge_threat
+    # Bayesian spell threat enhancement
+    bayesian_spell_threat = _bayesian_spell_threat(state)
+
+    threat_score = -danger - (opponent_board_damage * 0.3) - charge_threat - bayesian_spell_threat
 
     # Clamp to [-50, 0]
     return max(-50.0, min(0.0, threat_score))
+
+
+def _bayesian_spell_threat(state: GameState) -> float:
+    """Estimate spell damage threat from Bayesian opponent hand prediction.
+
+    Returns a threat score (0.0-5.0) based on predicted damage spells
+    in the opponent's hand. Uses the BayesianOpponentModel attached to
+    the state's _bayesian_model attribute if available.
+
+    This is a lightweight check — the heavy lifting (card classification)
+    happens in OpponentSimulator._enrich_with_bayesian().
+    """
+    bayesian = getattr(state, '_bayesian_model', None)
+    if bayesian is None:
+        return 0.0
+
+    try:
+        opp = state.opponent
+        current_turn = getattr(state, 'turn_number', 0)
+        predicted = bayesian.predict_hand(opp, state, current_turn)
+    except Exception:
+        return 0.0
+
+    if not predicted:
+        return 0.0
+
+    # Quick scan: count damage spells and estimate total burst
+    total_damage_estimate = 0.0
+    damage_spell_count = 0
+
+    for card in predicted:
+        text = (getattr(card, 'text', '') or '').lower()
+        cost = getattr(card, 'cost', 0) or 0
+        # Fast damage detection
+        has_damage = any(kw in text for kw in ('deal $', 'deals $', '造成$', 'lava burst'))
+        if has_damage and cost <= 6:
+            total_damage_estimate += cost * 1.5  # typical damage/cost ratio
+            damage_spell_count += 1
+
+    # Scale by hand ratio — predicted pool > actual hand
+    hand_count = getattr(state.opponent, 'hand_count', 0)
+    if hand_count > 0 and len(predicted) > 0:
+        ratio = hand_count / max(len(predicted), 1)
+        total_damage_estimate *= ratio
+
+    # Cap at 5.0 (represents ~5 damage worth of spell threat)
+    return min(5.0, total_damage_estimate)
 
 
 # ──────────────────────────────────────────────────────────────
