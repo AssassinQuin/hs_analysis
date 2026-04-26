@@ -198,6 +198,37 @@ def _execute_single(
     if kind == EffectKind.ENCHANT:
         return _exec_enchant(state, effect, target)
 
+    # ── Keyword effects (from standalone modules) ──
+    if kind == EffectKind.HERALD_SUMMON:
+        return _exec_herald_summon(state, effect, source)
+
+    if kind == EffectKind.IMBUE_UPGRADE:
+        return _exec_imbue_upgrade(state, effect)
+
+    if kind == EffectKind.COMBO_DISCOUNT:
+        return _exec_combo_discount(state, effect)
+
+    if kind == EffectKind.OUTCAST_DRAW:
+        return _exec_outcast_draw(state, effect)
+
+    if kind == EffectKind.OUTCAST_BUFF:
+        return _exec_outcast_buff(state, effect, source)
+
+    if kind == EffectKind.OUTCAST_COST:
+        return _exec_outcast_cost(state, effect, source)
+
+    if kind == EffectKind.COLOSSAL_SUMMON:
+        return _exec_colossal_summon(state, effect, source)
+
+    if kind == EffectKind.KINDRED_BUFF:
+        return _exec_kindred_buff(state, effect, source)
+
+    if kind == EffectKind.CORRUPT_UPGRADE:
+        return _exec_corrupt_upgrade(state, effect, source)
+
+    if kind == EffectKind.CORPSE_EFFECT:
+        return _exec_corpse_effect(state, effect, source)
+
     return state
 
 
@@ -579,3 +610,223 @@ def _collect_entities(state: GameState, source=None):
     if source is not None and source not in entities:
         entities.append(source)
     return entities
+
+
+# ═══════════════════════════════════════════════════════════════
+# Section 5: Keyword effect handlers (from standalone modules)
+# ═══════════════════════════════════════════════════════════════
+
+def _exec_herald_summon(state: GameState, effect: EffectSpec, source) -> GameState:
+    """HERALD_SUMMON: increment herald_count, summon class-specific soldier.
+
+    Data: HERALD_SOLDIERS table keyed by card_class.
+    Source: migrated from herald.py apply_herald().
+    """
+    from analysis.search.herald import HERALD_SOLDIERS
+
+    state.herald_count += 1
+    card_class = (getattr(source, 'card_class', '') or '').upper()
+    soldier_def = HERALD_SOLDIERS.get(card_class, HERALD_SOLDIERS["NEUTRAL"])
+
+    if len(state.board) < 7:
+        from analysis.search.game_state import Minion as _Minion
+        soldier = _Minion(
+            dbf_id=0, name=soldier_def["name"],
+            attack=soldier_def["attack"], health=soldier_def["health"],
+            max_health=soldier_def["health"], cost=0,
+            can_attack=False, owner="friendly",
+        )
+        state.board.append(soldier)
+    return state
+
+
+def _exec_imbue_upgrade(state: GameState, effect: EffectSpec) -> GameState:
+    """IMBUE_UPGRADE: increment hero.imbue_level by 1.
+
+    The actual hero power upgrade resolution is handled by imbue.apply_hero_power()
+    at hero power use time — this only increments the counter.
+
+    Source: migrated from imbue.py apply_imbue().
+    """
+    state.hero.imbue_level += 1
+    return state
+
+
+def _exec_combo_discount(state: GameState, effect: EffectSpec) -> GameState:
+    """COMBO_DISCOUNT: add 'next_combo_card' mana modifier with N discount.
+
+    Source: migrated from battlecry_dispatcher._apply_extra_effects().
+    """
+    discount = effect.value if isinstance(effect.value, int) else 2
+    state.mana.add_modifier('combo_discount', discount, 'next_combo_card')
+    return state
+
+
+def _exec_outcast_draw(state: GameState, effect: EffectSpec) -> GameState:
+    """OUTCAST_DRAW: draw N cards (outcast position bonus).
+
+    Source: migrated from outcast.py apply_outcast_bonus().
+    """
+    count = effect.value if isinstance(effect.value, int) else 1
+    for _ in range(count):
+        if state.deck_remaining > 0:
+            state.deck_remaining -= 1
+        else:
+            state.fatigue_damage += 1
+            state.hero.hp -= state.fatigue_damage
+    return state
+
+
+def _exec_outcast_buff(state: GameState, effect: EffectSpec, source) -> GameState:
+    """OUTCAST_BUFF: buff last played minion +N/+N (outcast position bonus).
+
+    Source: migrated from outcast.py apply_outcast_bonus().
+    """
+    atk = effect.value if isinstance(effect.value, int) else 0
+    hp = effect.value2 if isinstance(effect.value2, int) else 0
+    if state.board:
+        last = state.board[-1]
+        last.attack += atk
+        last.health += hp
+        last.max_health += hp
+    return state
+
+
+def _exec_outcast_cost(state: GameState, effect: EffectSpec, source) -> GameState:
+    """OUTCAST_COST: refund mana to target cost (outcast position bonus).
+
+    Source: migrated from outcast.py apply_outcast_bonus().
+    """
+    target_cost = effect.value if isinstance(effect.value, int) else 0
+    original_cost = getattr(source, 'cost', 0)
+    refund = max(0, original_cost - target_cost)
+    state.mana.available += refund
+    return state
+
+
+def _exec_colossal_summon(state: GameState, effect: EffectSpec, source) -> GameState:
+    """COLOSSAL_SUMMON: summon N class-specific appendage minions with herald buffs.
+
+    Source: migrated from colossal.py summon_colossal_appendages().
+    """
+    from analysis.search.colossal import COLOSSAL_APPENDAGES, parse_colossal_value
+
+    appendage_count = effect.value if isinstance(effect.value, int) else parse_colossal_value(source)
+    if appendage_count <= 0:
+        return state
+
+    card_class = (getattr(source, 'card_class', '') or '').upper()
+    appendage_def = COLOSSAL_APPENDAGES.get(card_class, COLOSSAL_APPENDAGES["NEUTRAL"])
+
+    # Herald upgrade bonuses
+    bonus_atk = 2 if state.herald_count >= 4 else (1 if state.herald_count >= 2 else 0)
+    bonus_hp = bonus_atk
+
+    # Find main minion position (last played)
+    insert_pos = len(state.board)  # default end
+    for i in range(len(state.board) - 1, -1, -1):
+        if getattr(state.board[i], 'name', '') == getattr(source, 'name', ''):
+            insert_pos = i + 1
+            break
+
+    from analysis.search.game_state import Minion as _Minion
+    for i in range(appendage_count):
+        if len(state.board) >= 7:
+            break
+        appendage = _Minion(
+            dbf_id=0, name=appendage_def["name"],
+            attack=appendage_def["attack"] + bonus_atk,
+            health=appendage_def["health"] + bonus_hp,
+            max_health=appendage_def["health"] + bonus_hp,
+            cost=0, can_attack=False, owner="friendly",
+        )
+        insert_at = min(insert_pos + i, len(state.board))
+        state.board.insert(insert_at, appendage)
+
+    return state
+
+
+def _exec_kindred_buff(state: GameState, effect: EffectSpec, source) -> GameState:
+    """KINDRED_BUFF: apply bonus if card's race/school matches last turn plays.
+
+    Source: migrated from kindred.py apply_kindred().
+    """
+    from analysis.search.kindred import (
+        check_kindred_active, parse_kindred_bonus, _apply_bonus_effect,
+    )
+
+    card_text = getattr(source, 'text', '') or getattr(source, 'english_text', '') or ''
+    if not check_kindred_active(state, source):
+        return state
+
+    bonus = parse_kindred_bonus(card_text)
+    if bonus:
+        trigger_count = 2 if getattr(state, 'kindred_double_next', False) else 1
+        if trigger_count == 2:
+            state.kindred_double_next = False
+        for _ in range(trigger_count):
+            state = _apply_bonus_effect(state, bonus, source)
+
+    return state
+
+
+def _exec_corrupt_upgrade(state: GameState, effect: EffectSpec, source) -> GameState:
+    """CORRUPT_UPGRADE: upgrade corrupt cards in hand when a higher-cost card is played.
+
+    Source: migrated from corrupt.py check_corrupt_upgrade().
+    """
+    from analysis.search.corrupt import has_corrupt
+    from analysis.models.card import Card
+
+    played_cost = getattr(source, 'cost', 0)
+    for i, card in enumerate(state.hand):
+        if not has_corrupt(card):
+            continue
+        card_cost = getattr(card, 'cost', 0)
+        if played_cost > card_cost:
+            old_cost = getattr(card, 'cost', 0)
+            state.hand[i] = Card(
+                dbf_id=getattr(card, 'dbf_id', 0),
+                name=getattr(card, 'name', ''),
+                cost=old_cost + 1, original_cost=old_cost + 1,
+                card_type=getattr(card, 'card_type', ''),
+                attack=getattr(card, 'attack', 0) + 1,
+                health=getattr(card, 'health', 0) + 1,
+                text=getattr(card, 'text', ''),
+                rarity=getattr(card, 'rarity', ''),
+                card_class=getattr(card, 'card_class', ''),
+                race=getattr(card, 'race', ''),
+                mechanics=[m for m in (getattr(card, 'mechanics', []) or []) if m != 'CORRUPT'],
+            )
+    return state
+
+
+def _exec_corpse_effect(state: GameState, effect: EffectSpec, source) -> GameState:
+    """CORPSE_EFFECT: spend/gain corpse resource and apply bonus.
+
+    Source: migrated from corpse.py resolve_corpse_effects().
+    """
+    from analysis.search.corpse import (
+        parse_corpse_effects, parse_corpse_gain, gain_corpses,
+        has_double_corpse_gen, _apply_corpse_bonus,
+    )
+
+    card_text = getattr(source, 'text', '') or ''
+    effects_list = parse_corpse_effects(card_text)
+
+    for eff in effects_list:
+        if state.corpses < eff.cost:
+            if eff.is_optional:
+                continue
+            continue
+        state.corpses -= eff.cost
+        state = _apply_corpse_bonus(state, eff.effect_text, source)
+
+    # Check for gain effects
+    gain = parse_corpse_gain(card_text)
+    if gain > 0:
+        if has_double_corpse_gen(state):
+            gain *= 2
+        state.corpses += gain
+
+    return state

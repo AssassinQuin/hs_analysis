@@ -32,7 +32,7 @@ MECHANICS_TRIGGER_MAP = {
     "AURA":           AbilityTrigger.AURA,
     "TRIGGER_VISUAL": AbilityTrigger.TRIGGER_VISUAL,
     "DISCOVER":       AbilityTrigger.BATTLECRY,
-    "COLOSSAL":       AbilityTrigger.BATTLECRY,
+    "COLOSSAL":       AbilityTrigger.COLOSSAL,
 }
 
 # Static keyword mechanics — no ability parsing needed, just attach to entity
@@ -147,4 +147,36 @@ TEXT_TRIGGER_MAP = {
     "after an":                   AbilityTrigger.AFTER,
     "costs less":                 AbilityTrigger.PASSIVE_COST,
     "cost less":                  AbilityTrigger.PASSIVE_COST,
+}
+
+# ──────────────────────────────────────────────────────────────
+# Keyword detection — text patterns for mechanics without tags
+# ──────────────────────────────────────────────────────────────
+
+# Maps lowercase text fragment → (AbilityTrigger, description)
+# Used by parser to detect keywords from english_text when mechanics tag is absent.
+KEYWORD_TEXT_MAP = {
+    # Herald (兆示) — appears in card text but NOT always in mechanics/referencedTags
+    "herald":          AbilityTrigger.HERALD,
+    # Imbue (灌注) — appears in referencedTags but NOT always in mechanics
+    "imbue":           AbilityTrigger.IMBUE,
+    # Kindred (延系) — no mechanics tag at all, text-only detection
+    "kindred":         AbilityTrigger.KINDRED,
+    # Dormant (休眠) — enters play unable to attack for N turns
+    "dormant":         AbilityTrigger.DORMANT,
+    # Corpse (残骸) — DK resource system
+    "spend":           AbilityTrigger.CORPSE_SPEND,     # "Spend N Corpses"
+    "corpse":          AbilityTrigger.CORPSE_SPEND,     # fallback
+}
+
+# English text fragments → EffectKind for keyword-specific effects
+# Used by parser to identify which EffectKind to assign.
+KEYWORD_EFFECT_MAP = {
+    "combo card costs":  EffectKind.COMBO_DISCOUNT,
+    "your next combo":   EffectKind.COMBO_DISCOUNT,
+    "colossal":          EffectKind.COLOSSAL_SUMMON,
+    "spend":             EffectKind.CORPSE_EFFECT,
+    "corpse":            EffectKind.CORPSE_EFFECT,
+    "gain a corpse":     EffectKind.CORPSE_EFFECT,
+    "gain":              None,  # ambiguous, resolved by context
 }

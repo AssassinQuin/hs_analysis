@@ -45,6 +45,14 @@ class AbilityTrigger(Enum):
     PASSIVE_COST = "PASSIVE_COST"
     ACTIVATE = "ACTIVATE"
     TRIGGER_VISUAL = "TRIGGER_VISUAL"
+    # ── Keyword triggers (detected from card text) ──
+    HERALD = "HERALD"           # 兆示: increment herald counter, summon soldier
+    IMBUE = "IMBUE"             # 灌注: upgrade hero power
+    KINDRED = "KINDRED"         # 延系: conditional bonus if race/school matches
+    COLOSSAL = "COLOSSAL"       # 巨型: summon appendage minions
+    CORPSE_SPEND = "CORPSE_SPEND"  # 残骸: spend corpse resource for bonus
+    CORPSE_GAIN = "CORPSE_GAIN"    # 获得残骸
+    DORMANT = "DORMANT"         # 休眠: enter dormant for N turns
 
 
 # ──────────────────────────────────────────────────────────────
@@ -73,6 +81,17 @@ class EffectKind(Enum):
     SILENCE = "SILENCE"
     CAST_SPELL = "CAST_SPELL"
     ENCHANT = "ENCHANT"
+    # ── Keyword effects (from standalone modules) ──
+    HERALD_SUMMON = "HERALD_SUMMON"         # summon class-specific soldier
+    IMBUE_UPGRADE = "IMBUE_UPGRADE"         # hero.imbue_level += 1
+    COMBO_DISCOUNT = "COMBO_DISCOUNT"       # next combo card costs N less
+    OUTCAST_DRAW = "OUTCAST_DRAW"           # draw N (outcast position bonus)
+    OUTCAST_BUFF = "OUTCAST_BUFF"           # buff +N/+N (outcast position bonus)
+    OUTCAST_COST = "OUTCAST_COST"           # cost override (outcast position bonus)
+    COLOSSAL_SUMMON = "COLOSSAL_SUMMON"     # summon N appendage minions
+    KINDRED_BUFF = "KINDRED_BUFF"           # conditional race-matched bonus
+    CORRUPT_UPGRADE = "CORRUPT_UPGRADE"     # upgrade card in hand if higher-cost played
+    CORPSE_EFFECT = "CORPSE_EFFECT"         # spend/gain corpse resource + bonus
 
 
 # ──────────────────────────────────────────────────────────────
@@ -88,6 +107,9 @@ class ConditionKind(Enum):
     COST_COMPARISON = "COST_COMPARISON"
     HEALTH_THRESHOLD = "HEALTH_THRESHOLD"
     BOARD_STATE = "BOARD_STATE"
+    HAND_POSITION = "HAND_POSITION"   # card at leftmost/rightmost in hand (Outcast)
+    RACE_MATCH = "RACE_MATCH"         # card race/school matches last turn plays (Kindred)
+    RESOURCE_SUFFICIENT = "RESOURCE_SUFFICIENT"  # enough corpses/etc for effect
 
 
 # ──────────────────────────────────────────────────────────────

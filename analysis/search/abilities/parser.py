@@ -15,6 +15,7 @@ from analysis.search.abilities.definition import (
 from analysis.search.abilities.tokens import (
     MECHANICS_TRIGGER_MAP, STATIC_KEYWORD_MECHANICS,
     TEXT_TRIGGER_MAP, CONDITION_PHRASES,
+    KEYWORD_TEXT_MAP, KEYWORD_EFFECT_MAP,
 )
 from analysis.search.abilities.extractors import (
     clean_text, extract_number_after, extract_number_before,
@@ -94,7 +95,90 @@ class AbilityParser:
                         text_raw=text_clean,
                     ))
 
+        # ── Keyword detection (herald, imbue, kindred, etc.) ──
+        abilities.extend(cls._parse_keywords(text_clean, card, abilities))
+
         return abilities
+
+    # ──────────────────────────────────────────────────────────
+    # Keyword detection (herald, imbue, kindred, etc.)
+    # ──────────────────────────────────────────────────────────
+
+    @classmethod
+    def _parse_keywords(
+        cls, text: str, card, existing: list
+    ) -> List[CardAbility]:
+        """Detect keyword abilities from card text.
+
+        Keywords like Herald, Imbue, Kindred may not appear in mechanics
+        array, so we detect them from english_text. Returns a list of
+        CardAbility with the appropriate trigger and effect specs.
+        """
+        tl = text.lower()
+        mechanics = set(getattr(card, 'mechanics', []) or [])
+        results: List[CardAbility] = []
+        existing_triggers = {a.trigger for a in existing}
+
+        # ── Herald (兆示) ──
+        if (AbilityTrigger.HERALD not in existing_triggers
+                and ('herald' in tl or 'HERALD' in mechanics)):
+            results.append(CardAbility(
+                trigger=AbilityTrigger.HERALD,
+                effects=[EffectSpec(kind=EffectKind.HERALD_SUMMON)],
+                text_raw=text,
+            ))
+
+        # ── Imbue (灌注) ──
+        if (AbilityTrigger.IMBUE not in existing_triggers
+                and ('imbue' in tl or 'IMBUE' in mechanics)):
+            results.append(CardAbility(
+                trigger=AbilityTrigger.IMBUE,
+                effects=[EffectSpec(kind=EffectKind.IMBUE_UPGRADE)],
+                text_raw=text,
+            ))
+
+        # ── Colossal (巨型) ──
+        if (AbilityTrigger.COLOSSAL not in existing_triggers
+                and 'COLOSSAL' in mechanics):
+            from analysis.search.colossal import parse_colossal_value
+            n = parse_colossal_value(card)
+            results.append(CardAbility(
+                trigger=AbilityTrigger.COLOSSAL,
+                effects=[EffectSpec(kind=EffectKind.COLOSSAL_SUMMON, value=n)],
+                text_raw=text,
+            ))
+
+        # ── Kindred (延系) ──
+        if (AbilityTrigger.KINDRED not in existing_triggers
+                and 'kindred' in tl):
+            results.append(CardAbility(
+                trigger=AbilityTrigger.KINDRED,
+                effects=[EffectSpec(kind=EffectKind.KINDRED_BUFF)],
+                text_raw=text,
+            ))
+
+        # ── Combo discount (连击减费) ──
+        if 'combo card costs' in tl or 'your next combo' in tl:
+            discount = extract_number_after(tl, 'costs')
+            if discount <= 0:
+                discount = extract_number_after(tl, 'less')
+            if discount <= 0:
+                discount = 2  # default for Foxy Fraud
+            results.append(CardAbility(
+                trigger=AbilityTrigger.BATTLECRY,
+                effects=[EffectSpec(kind=EffectKind.COMBO_DISCOUNT, value=discount)],
+                text_raw=text,
+            ))
+
+        # ── Corpse effects (残骸) ──
+        if 'spend' in tl and 'corpse' in tl:
+            results.append(CardAbility(
+                trigger=AbilityTrigger.CORPSE_SPEND,
+                effects=[EffectSpec(kind=EffectKind.CORPSE_EFFECT)],
+                text_raw=text,
+            ))
+
+        return results
 
     @classmethod
     def _parse_effects_for_trigger(

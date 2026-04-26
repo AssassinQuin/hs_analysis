@@ -334,31 +334,41 @@ def _play_location(s, card):
 
 
 def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
-    """Handle minion card play — summon, battlecry, triggers."""
+    """Handle minion card play — summon, battlecry, triggers.
+
+    Uses the unified orchestrator for ability dispatch instead of
+    calling herald/imbue/battlecry/colossal/kindred directly.
+    """
+    from analysis.search.abilities.parser import AbilityParser
+    from analysis.search.abilities.orchestrator import orchestrate
+
     new_minion = Minion.from_card(card)
     pos = min(action.position, len(s.board))
     s.board.insert(pos, new_minion)
 
-    # Colossal appendage summoning
-    if parse_colossal_value(card) > 0:
-        s = summon_colossal_appendages(s, new_minion, card, pos, s.herald_count)
+    # Parse all abilities from the card (herald, imbue, battlecry, colossal, kindred, etc.)
+    abilities = AbilityParser.parse(card)
 
-    s = apply_kindred(s, card)
-    card_text = getattr(card, "text", "") or ""
+    # Dispatch via unified orchestrator
+    ctx = {
+        'target_index': action.target_index,
+        'card_index': card_idx,
+        'is_minion': True,
+    }
+    s = orchestrate(s, card, abilities, ctx)
+
+    # Legacy: kindred double-check (orchestrator handles kindred, but double flag needs setting)
     card_text_en = getattr(card, 'english_text', '') or ''
     if "kindred" in card_text_en.lower() and "twice" in card_text_en.lower():
         s = set_kindred_double(s)
 
-    s = dispatch_battlecry(s, card, new_minion)
-
+    # Legacy: choose one (separate concern, not part of ability parsing)
     if is_choose_one(card):
         s = resolve_choose_one(s, card, new_minion)
 
+    # Legacy: dormant (minion state, not an ability effect)
     if is_dormant_card(card):
         new_minion = apply_dormant(new_minion, card)
-
-    if check_herald(card):
-        s = apply_herald(s, card)
 
     s = TriggerDispatcher().on_minion_played(s, new_minion, card)
 
@@ -367,12 +377,28 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
 
 
 def _play_spell(s, card, action: Action):
-    """Handle spell card play."""
+    """Handle spell card play.
+
+    Uses the unified orchestrator for keyword abilities (herald, imbue, etc.)
+    and falls back to resolve_effects() for spell damage/effects parsing,
+    since AbilityParser may not parse effects from Chinese-only card text.
+    """
+    from analysis.search.abilities.parser import AbilityParser
+    from analysis.search.abilities.orchestrator import orchestrate
+    from analysis.search.abilities.definition import AbilityTrigger
+
+    # Resolve spell effects via legacy parser (handles CN text + structured data)
     s = resolve_effects(s, card, target_index=action.target_index)
 
-    # Herald (兆示) can appear on spells too (e.g. Rite of Twilight)
-    if check_herald(card):
-        s = apply_herald(s, card)
+    # Parse keyword abilities (herald, imbue, etc.) via unified parser
+    abilities = AbilityParser.parse(card)
+    keyword_abilities = [a for a in abilities
+                         if a.trigger in (AbilityTrigger.HERALD, AbilityTrigger.IMBUE,
+                                          AbilityTrigger.KINDRED, AbilityTrigger.COLOSSAL,
+                                          AbilityTrigger.DORMANT, AbilityTrigger.CORPSE_SPEND)]
+    if keyword_abilities:
+        ctx = {'target_index': action.target_index, 'is_minion': False}
+        s = orchestrate(s, card, keyword_abilities, ctx)
 
     # --- Death Shadow transform: replaces self with copy of cast spell ---
     for i, hc in enumerate(s.hand):
