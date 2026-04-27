@@ -9,13 +9,13 @@ and pool size differences.
 
 import pytest
 
-from analysis.data.card_index import get_index
-from analysis.engine.mechanics.discover import (
+from analysis.card.data.card_index import get_index
+from analysis.card.engine.mechanics.discover import (
     generate_discover_pool,
     resolve_discover,
     _TYPE_NORMALIZE,
 )
-from analysis.engine.state import GameState, HeroState, OpponentState
+from analysis.card.engine.state import GameState, HeroState, OpponentState
 
 
 class TestWildPoolGeneration:

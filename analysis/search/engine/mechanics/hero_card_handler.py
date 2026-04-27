@@ -4,7 +4,7 @@ import re
 from typing import Optional
 
 try:
-    from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, get_card_armor
+    from analysis.card.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, get_card_armor
 except ImportError:
     _DAMAGE_CN = _DAMAGE_EN = None
 
@@ -17,8 +17,8 @@ except ImportError:
         if m:
             return int(m.group(1))
         return 0
-from analysis.engine.state import GameState, HeroState
-from analysis.models.card import Card
+from analysis.card.engine.state import GameState, HeroState
+from analysis.card.models.card import Card
 
 
 class HeroCardHandler:
@@ -63,8 +63,8 @@ class HeroCardHandler:
 
         if "Battlecry" in text or "战吼" in text:
             try:
-                from analysis.abilities.loader import load_abilities
-                from analysis.engine.target import orchestrate
+                from analysis.card.abilities.loader import load_abilities
+                from analysis.card.engine.target import orchestrate
 
                 abilities = load_abilities(card.card_id) if card.card_id else []
                 state = orchestrate(state, card, abilities, {'source_minion': None})
@@ -72,8 +72,8 @@ class HeroCardHandler:
                 pass
 
         try:
-            from analysis.abilities.loader import load_abilities
-            from analysis.engine.target import orchestrate
+            from analysis.card.abilities.loader import load_abilities
+            from analysis.card.engine.target import orchestrate
 
             card_copy_id = getattr(card_copy, 'card_id', '')
             abilities = load_abilities(card_copy_id) if card_copy_id else []

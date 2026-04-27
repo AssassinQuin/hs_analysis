@@ -6,10 +6,10 @@ import math
 from typing import List, Optional
 
 try:
-    from analysis.data.card_roles import RoleTag, classify_card_roles
+    from analysis.card.data.card_roles import RoleTag, classify_card_roles
 except ImportError:
     RoleTag = classify_card_roles = None
-from analysis.engine.state import GameState
+from analysis.card.engine.state import GameState
 
 
 class DrawModel:

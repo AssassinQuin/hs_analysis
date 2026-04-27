@@ -180,7 +180,7 @@ class ShuffleTrackerRule:
     name = "shuffle"
 
     def __init__(self) -> None:
-        from analysis.constants.hs_enums import ZONE_DECK
+        from analysis.card.constants.hs_enums import ZONE_DECK
         self._ZONE_DECK = ZONE_DECK
 
     def on_zone_change(self, ctx: TrackingContext) -> None:
@@ -215,7 +215,7 @@ class CorruptTrackerRule:
     name = "corrupt"
 
     def __init__(self) -> None:
-        from analysis.constants.hs_enums import ZONE_HAND
+        from analysis.card.constants.hs_enums import ZONE_HAND
         self._ZONE_HAND = ZONE_HAND
 
     def on_show_entity(self, entity_id: int, card_id: str,

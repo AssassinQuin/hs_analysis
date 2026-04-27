@@ -28,30 +28,29 @@ from hearthstone.enums import (
 from hslog import LogParser
 from hslog import packets
 
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 try:
-    from analysis.data.card_roles import RoleTag, classify_card_roles
+    from analysis.card.data.card_roles import RoleTag, classify_card_roles
 except ImportError:
     RoleTag = None
     classify_card_roles = None
 try:
-    from analysis.data.card_effects import get_effects
+    from analysis.card.data.card_effects import get_effects
 except ImportError:
     get_effects = None
-# from analysis.data.card_index import get_index  # removed in Phase 0
-from analysis.engine.state import (
+# from analysis.card.data.card_index import get_index  # removed in Phase 0
+from analysis.card.engine.state import (
     GameState, HeroState, ManaState,
     Minion, OpponentState, Weapon,
 )
-from analysis.abilities.keywords import KeywordSet
+from analysis.card.abilities.keywords import KeywordSet
 # from analysis.search.mechanics_state import MechanicsState  # removed in Phase 0
-from analysis.engine.mechanics.discover import generate_discover_pool
-from analysis.engine.mechanics.discover import _parse_discover_constraint
+from analysis.card.engine.mechanics.discover import generate_discover_pool
+from analysis.card.engine.mechanics.discover import _parse_discover_constraint
 from analysis.search.engine.models.probability_panel import compute_panel
 from analysis.search.engine.models.discover_model import DiscoverModel
 from analysis.search.engine.models.draw_model import DrawModel
 from analysis.search.abilities import Action, enumerate_legal_actions
-from analysis.search.adapter import create_engine
 from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (
     normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
@@ -826,8 +825,11 @@ class PacketReplayer:
             t0 = time.perf_counter()
 
             try:
-                mcts_factory = create_engine("mcts", self.engine_params)
-                mcts_engine = mcts_factory()
+                from analysis.search.mcts.engine import MCTSEngine
+                from analysis.search.mcts.config import MCTSConfig
+
+                mcts_config = MCTSConfig(**self.engine_params)
+                mcts_engine = MCTSEngine(mcts_config)
                 search_result = mcts_engine.search(game_state)
 
                 t1 = time.perf_counter()
@@ -875,12 +877,12 @@ class PacketReplayer:
                     self._decision_logger.info(desc)
 
                 self._decision_logger.info("")
-                self._decision_logger.info(f"RHEA 搜索: {rhea_time_ms:.1f}ms, {search_result.generations_run} 代")
-                self._decision_logger.info(f"最佳适应度: {search_result.best_fitness:+.2f}")
+                self._decision_logger.info(f"MCTS 搜索: {rhea_time_ms:.1f}ms")
+                self._decision_logger.info(f"最佳适应度: {search_result.fitness:+.2f}")
 
                 self._decision_logger.info("")
                 self._decision_logger.info("最佳序列:")
-                for i, action in enumerate(search_result.best_chromosome):
+                for i, action in enumerate(search_result.best_sequence):
                     self._decision_logger.info(f"  {i+1}. {action.describe(game_state)}")
 
                 self._decision_logger.info("")
@@ -944,9 +946,9 @@ class PacketReplayer:
                     player_global_stats=self.global_tracker.player_summary_str(self._card_name),
                     legal_action_count=len(legal_actions),
                     legal_actions=[a.describe(game_state) for a in legal_actions[:15]],
-                    rhea_best_score=search_result.best_fitness,
-                    rhea_best_actions=[action.describe(game_state) for action in search_result.best_chromosome],
-                    rhea_generations=search_result.generations_run,
+                    rhea_best_score=search_result.fitness,
+                    rhea_best_actions=[action.describe(game_state) for action in search_result.best_sequence],
+                    rhea_generations=0,
                     rhea_elapsed_ms=rhea_time_ms,
                     decision_quality=decision_quality,
                     decision_score=decision_score,
@@ -1043,23 +1045,29 @@ class PacketReplayer:
 
             board: List[Minion] = []
             for entity in board_minions:
+                # 构建 tags dict
+                _tags = {}
+                if entity.taunt: _tags[GameTag.TAUNT] = 1
+                if entity.stealth: _tags[GameTag.STEALTH] = 1
+                if entity.windfury: _tags[GameTag.WINDFURY] = 1
+                if entity.rush: _tags[GameTag.RUSH] = 1
+                if entity.charge: _tags[GameTag.CHARGE] = 1
+                if entity.poisonous: _tags[GameTag.POISONOUS] = 1
+                if entity.lifesteal: _tags[GameTag.LIFESTEAL] = 1
+                if entity.reborn: _tags[GameTag.REBORN] = 1
+                if entity.immune: _tags[GameTag.IMMUNE] = 1
+                if entity.frozen: _tags[GameTag.FROZEN] = 1
+                if entity.divine_shield: _tags[GameTag.DIVINE_SHIELD] = 1
+
+                _cant_attack = entity.cant_attack or entity.exhausted
+                if _cant_attack: _tags[GameTag.CANT_ATTACK] = 1
+
                 minion = Minion(
                     attack=entity.atk,
                     health=entity.health,
                     max_health=entity.health,
                     cost=entity.cost,
-                    has_taunt=entity.taunt,
-                    has_stealth=entity.stealth,
-                    has_windfury=entity.windfury,
-                    has_rush=entity.rush,
-                    has_charge=entity.charge,
-                    has_poisonous=entity.poisonous,
-                    has_lifesteal=entity.lifesteal,
-                    has_reborn=entity.reborn,
-                    has_immune=entity.immune,
-                    frozen_until_next_turn=entity.frozen,
-                    has_divine_shield=entity.divine_shield,
-                    cant_attack=entity.cant_attack or entity.exhausted,
+                    tags=_tags,
                     name=self._card_name(entity.card_id) or "",
                     can_attack=not entity.exhausted and not entity.cant_attack,
                 )
@@ -1078,7 +1086,7 @@ class PacketReplayer:
 
             hand: List[Card] = []
             try:
-                from analysis.data.hsdb import get_db
+                from analysis.card.data.card_data import get_db
                 card_db = get_db()
             except ImportError:
                 card_db = None
@@ -1144,23 +1152,29 @@ class PacketReplayer:
 
             opp_board: List[Minion] = []
             for entity in opp_board_minions:
+                # 构建 tags dict
+                _tags = {}
+                if entity.taunt: _tags[GameTag.TAUNT] = 1
+                if entity.stealth: _tags[GameTag.STEALTH] = 1
+                if entity.windfury: _tags[GameTag.WINDFURY] = 1
+                if entity.rush: _tags[GameTag.RUSH] = 1
+                if entity.charge: _tags[GameTag.CHARGE] = 1
+                if entity.poisonous: _tags[GameTag.POISONOUS] = 1
+                if entity.lifesteal: _tags[GameTag.LIFESTEAL] = 1
+                if entity.reborn: _tags[GameTag.REBORN] = 1
+                if entity.immune: _tags[GameTag.IMMUNE] = 1
+                if entity.frozen: _tags[GameTag.FROZEN] = 1
+                if entity.divine_shield: _tags[GameTag.DIVINE_SHIELD] = 1
+
+                _cant_attack = entity.cant_attack or entity.exhausted
+                if _cant_attack: _tags[GameTag.CANT_ATTACK] = 1
+
                 minion = Minion(
                     attack=entity.atk,
                     health=entity.health,
                     max_health=entity.health,
                     cost=entity.cost,
-                    has_taunt=entity.taunt,
-                    has_stealth=entity.stealth,
-                    has_windfury=entity.windfury,
-                    has_rush=entity.rush,
-                    has_charge=entity.charge,
-                    has_poisonous=entity.poisonous,
-                    has_lifesteal=entity.lifesteal,
-                    has_reborn=entity.reborn,
-                    has_immune=entity.immune,
-                    frozen_until_next_turn=entity.frozen,
-                    has_divine_shield=entity.divine_shield,
-                    cant_attack=entity.cant_attack or entity.exhausted,
+                    tags=_tags,
                     name=self._card_name(entity.card_id) or "",
                     can_attack=not entity.exhausted and not entity.cant_attack,
                 )
@@ -1553,6 +1567,8 @@ class PacketReplayer:
             else:
                 # get_index() removed in Phase 0 — skip
                 raw_pool = []
+        except Exception:
+            raw_pool = []
         return raw_pool
 
     def _infer_unknown_deck_cards(
@@ -1660,7 +1676,7 @@ class PacketReplayer:
         weights: Dict[str, float] = {}
         total_weight = 0.0
         try:
-            from analysis.data.hsdb import get_db
+            from analysis.card.data.card_data import get_db
             db = get_db()
         except ImportError:
             db = None
@@ -2003,14 +2019,12 @@ class PacketReplayer:
         return self._card_name_cache.get(card_id, card_id)
 
     def _load_card_names(self) -> Dict[str, str]:
-        """加载卡牌名称映射 (zhCN + standard + wild + HSCardDB)"""
+        """加载卡牌名称映射 (zhCN + HSCardDB)"""
         name_map: Dict[str, str] = {}
 
         for path in [
             Path("card_data/240397/zhCN/cards.json"),
             Path("card_data/240397/zhCN/cards.collectible.json"),
-            Path("card_data/240397/unified_standard.json"),
-            Path("card_data/240397/unified_wild.json"),
         ]:
             if path.exists():
                 try:
@@ -2022,15 +2036,12 @@ class PacketReplayer:
                             name = card.get("name", "") or card.get("zhName", "")
                             if cid and name:
                                 name_map[cid] = name
-                    elif isinstance(data, dict):
-                        # unified format might be different
-                        pass
                 except (OSError, json.JSONDecodeError):
                     pass
 
         # Also try HSCardDB for non-collectible (token) cards
         try:
-            from analysis.data.hsdb import get_db
+            from analysis.card.data.card_data import get_db
             db = get_db()
             for cid, card_data in db._cards.items():
                 if cid and cid not in name_map:

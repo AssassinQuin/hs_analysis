@@ -12,12 +12,8 @@ Mathematical foundation:
   Posterior:  P(deck_i | seen_X) ∝ P(seen_X | deck_i) × P(deck_i)
 
 Data sources:
-   - card_data/hsreplay_cache.db → meta_decks table (archetype signatures)
-   - card_data/unified_standard.json → card name lookups
+   - CardDB (analysis.data.card_data) → card name lookups
 """
-import sys
-import os
-import json
 import logging
 
 from collections import Counter, defaultdict
@@ -26,24 +22,8 @@ from typing import List, Optional
 
 log = logging.getLogger(__name__)
 
-# ── Paths (from centralized config) ────────────────
-from analysis.config import PROJECT_ROOT, HSREPLAY_CACHE_DB, UNIFIED_DB_PATH
-
-DB_PATH = str(HSREPLAY_CACHE_DB)
-UNIFIED_PATH = str(UNIFIED_DB_PATH)
-
-# Ensure UTF-8 stdout for Chinese output — save original before import
-# (fetch_hsreplay.py wraps stdout at import time; avoid double-wrap)
-try:
-    from analysis.data.fetch_hsreplay import init_db, get_meta_decks
-except ImportError:
-    # Fallback for before data layer migration
-    sys.path.insert(0, os.path.join(str(PROJECT_ROOT), "scripts"))
-    from fetch_hsreplay import init_db, get_meta_decks
-
-# After import, fetch_hsreplay has already wrapped stdout with UTF-8.
-# No further action needed — the encoding is already set.
-
+# ── CardDB ──────────────────────────────────────────
+from analysis.card.data.card_data import get_db
 
 # ── Constants ──────────────────────────────────────
 SIGNATURE_LIKELIHOOD = 0.8   # P(seen_X | deck_i) when X is a signature card
@@ -145,30 +125,16 @@ class BayesianOpponentModel:
         self.posteriors = self.build_prior(player_class)
 
     def _load_card_data(self):
-        """Load unified card data for name lookups."""
-        if not os.path.exists(UNIFIED_PATH):
-            return
-        with open(UNIFIED_PATH, "r", encoding="utf-8") as f:
-            cards = json.load(f)
-        for c in cards:
-            dbf = c.get("dbfId")
-            if dbf is not None:
-                self.cards_by_dbf[dbf] = c
+        """Load card data from CardDB for dbfId lookups."""
+        try:
+            db = get_db()
+            self.cards_by_dbf = dict(db.dbf_lookup)
+        except Exception:
+            self.cards_by_dbf = {}
 
     def _load_decks(self, player_class=None):
         """Load meta decks from SQLite cache, optionally filtering by class."""
-        if not os.path.exists(DB_PATH):
-            return
-        conn = init_db(DB_PATH)
-        try:
-            all_decks = get_meta_decks(conn)
-        finally:
-            conn.close()
-
-        if player_class:
-            self.decks = [d for d in all_decks if d["class"] == player_class]
-        else:
-            self.decks = list(all_decks)
+        pass  # HSReplay data source removed; decks remain empty
 
     def build_prior(self, player_class=None):
         """Build prior probability distribution over archetypes.
@@ -574,7 +540,7 @@ class BayesianOpponentModel:
         Returns:
             List[Card]: 对手可能持有的卡牌候选池
         """
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         # 确定目标卡组
         if self.locked:
@@ -642,7 +608,7 @@ class BayesianOpponentModel:
         Returns:
             List[Card]: 确定在对手手牌中的卡牌列表
         """
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         if not self._known_hand_cards:
             return []
@@ -723,7 +689,7 @@ class BayesianOpponentModel:
         Returns:
             List[Card]: Card 对象列表
         """
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         cards = []
         for dbf in dbf_ids:

@@ -20,7 +20,7 @@ import os
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from analysis.config import PROJECT_ROOT, SCORING_REPORT_PATH
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 
 if TYPE_CHECKING:
     pass
@@ -120,7 +120,7 @@ def _get_provider(report_path: str, score_field: str) -> "ScoreProvider":
 
 
 def load_scores_into_hand(state_or_hand, report_path: Optional[str] = None):
-    from analysis.engine.state import GameState
+    from analysis.card.engine.state import GameState
 
     if isinstance(state_or_hand, GameState):
         hand = state_or_hand.hand

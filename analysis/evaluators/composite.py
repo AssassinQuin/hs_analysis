@@ -4,14 +4,8 @@ from __future__ import annotations
 import time
 from typing import List
 
-from analysis.engine.state import GameState, Minion, HeroState, OpponentState, ManaState
-from analysis.models.card import Card
-from analysis.scorers.v8_contextual import get_scorer as _get_v8_scorer
-
-try:
-    from analysis.search.risk import RiskReport
-except ImportError:
-    RiskReport = None
+from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState, ManaState
+from analysis.card.models.card import Card
 
 try:
     from analysis.evaluators.bsv import bsv_fusion
@@ -126,8 +120,7 @@ def evaluate(state: GameState, weights: dict | None = None) -> float:
 
     w = {**DEFAULT_WEIGHTS, **(weights or {})}
 
-    v8_scorer = _get_v8_scorer()
-    hand_score = v8_scorer.hand_contextual_value(state)
+    hand_score = sum(getattr(c, "score", 0.0) for c in state.hand)
 
     board_score     = eval_board(state)
     threat_score    = eval_threat(state)
@@ -152,8 +145,7 @@ def evaluate_delta(state_before: GameState, state_after: GameState,
 
 
 def quick_eval(state: GameState) -> float:
-    v8_scorer = _get_v8_scorer()
-    v7_adj = v8_scorer.hand_contextual_value(state)
+    v7_adj = sum(getattr(c, "score", 0.0) for c in state.hand)
     threat = -(max(0, 30 - state.hero.hp - state.hero.armor) * 0.5)
     return v7_adj + 1.5 * threat
 

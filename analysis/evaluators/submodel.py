@@ -13,8 +13,9 @@ Runnable independently:  python3 -m hs_analysis.evaluators.submodel
 
 from __future__ import annotations
 
-from analysis.engine.state import GameState, Minion
-from analysis.constants.effect_keywords import DAMAGE_KEYWORDS
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.engine.tags import GameTag
+from analysis.card.constants.effect_keywords import DAMAGE_KEYWORDS
 
 
 # ──────────────────────────────────────────────────────────────
@@ -269,8 +270,8 @@ def eval_trigger(state: GameState) -> float:
 # __main__ demo / self-test
 # ======================================================================
 if __name__ == "__main__":
-    from analysis.engine.state import Weapon, HeroState, OpponentState, ManaState
-    from analysis.models.card import Card
+    from analysis.card.engine.state import Weapon, HeroState, OpponentState, ManaState
+    from analysis.card.models.card import Card
 
     errors: list[str] = []
 
@@ -299,9 +300,9 @@ if __name__ == "__main__":
     full = GameState(
         hero=HeroState(hp=30, armor=0),
         board=[
-            Minion(attack=5, health=5, has_taunt=True, name="Tank"),
-            Minion(attack=3, health=3, has_divine_shield=True, name="Shielded"),
-            Minion(attack=7, health=2, has_charge=True, name="Charger"),
+            Minion(attack=5, health=5, tags={GameTag.TAUNT: 1}, name="Tank"),
+            Minion(attack=3, health=3, tags={GameTag.DIVINE_SHIELD: 1}, name="Shielded"),
+            Minion(attack=7, health=2, tags={GameTag.CHARGE: 1}, name="Charger"),
         ],
         opponent=OpponentState(
             hero=HeroState(hp=30),

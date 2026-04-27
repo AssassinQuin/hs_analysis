@@ -13,8 +13,8 @@ from __future__ import annotations
 from typing import Any, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.engine.state import GameState, Minion
-    from analysis.abilities.definition import Action
+    from analysis.card.engine.state import GameState, Minion
+    from analysis.card.abilities.definition import Action
 
 # ──────────────────────────────────────────────────────────────
 # Helpers

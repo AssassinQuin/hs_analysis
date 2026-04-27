@@ -10,13 +10,13 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.engine.state import GameState
+    from analysis.card.engine.state import GameState
 
 log = logging.getLogger(__name__)
 
 # Graceful fallback for deleted module
 try:
-    from analysis.data.card_effects import get_effects
+    from analysis.card.data.card_effects import get_effects
 except ImportError:
     get_effects = None
 
@@ -120,9 +120,9 @@ def _greedy_self_play(state: GameState) -> GameState:
     Evaluates cards by: stats/cost ratio for minions, spell impact from text,
     weapon attack value. Prefers cards with combo/battlecry synergy.
     """
-    from analysis.abilities.definition import ActionType
-    from analysis.engine.simulation import apply_action
-    from analysis.engine.rules import enumerate_legal_actions
+    from analysis.card.abilities.definition import ActionType
+    from analysis.card.engine.simulation import apply_action
+    from analysis.card.engine.rules import enumerate_legal_actions
 
     s = state
     max_plays = 7
@@ -145,8 +145,6 @@ def _greedy_self_play(state: GameState) -> GameState:
             if 0 <= idx < len(s.hand):
                 card = s.hand[idx]
                 eff_cost = s.mana.effective_cost(card)
-                from analysis.engine.simulation import _apply_text_cost_reduction
-                eff_cost = _apply_text_cost_reduction(card, s.hand, idx, eff_cost)
                 if eff_cost > s.mana.available:
                     return -100
                 ct = (getattr(card, 'card_type', '') or '').upper()
@@ -251,9 +249,9 @@ def _greedy_self_attacks(state: GameState) -> GameState:
     2. Favorable trades (kill high-value enemy minion with low-value attacker)
     3. Face attacks
     """
-    from analysis.abilities.definition import ActionType
-    from analysis.engine.simulation import apply_action
-    from analysis.engine.rules import enumerate_legal_actions
+    from analysis.card.abilities.definition import ActionType
+    from analysis.card.engine.simulation import apply_action
+    from analysis.card.engine.rules import enumerate_legal_actions
 
     s = state
 
@@ -534,7 +532,7 @@ def _apply_opp_card_effects(
 
     Handles: minion summon, weapon equip, spell damage/heal/draw/armor/buff/AOE.
     """
-    from analysis.engine.state import Minion as _Minion
+    from analysis.card.engine.state import Minion as _Minion
 
     eff = get_effects_fn(card)
 
@@ -586,7 +584,7 @@ def _apply_opp_card_effects(
         dur = getattr(card, 'health', 0) or getattr(card, 'durability', 0) or 0
         opp_hero = getattr(state.opponent, 'hero', None)
         if opp_hero and hasattr(opp_hero, 'weapon'):
-            from analysis.engine.state import Weapon as _Weapon
+            from analysis.card.engine.state import Weapon as _Weapon
             opp_hero.weapon = _Weapon(attack=atk, durability=dur)
 
     elif card_type == 'SPELL':

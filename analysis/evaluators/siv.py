@@ -19,30 +19,12 @@ import math
 import re
 from typing import Any, Iterable
 
-from analysis.models.card import Card
-from analysis.engine.state import GameState, Minion
-from analysis.scorers.keyword_interactions import get_interaction_multiplier
+from analysis.card.models.card import Card
+from analysis.card.engine.state import GameState, Minion
 
-# ---------------------------------------------------------------------------
-# V8 fallback — use contextual_score if available, else card.score
-# ---------------------------------------------------------------------------
-try:
-    from analysis.scorers.v8_contextual import get_scorer as _get_v8_scorer
 
-    def _civ_base(card: Card, state: GameState) -> float:
-        try:
-            scorer = _get_v8_scorer()
-            score = scorer.contextual_score(card, state)
-            if score != 0.0:
-                return score
-        except Exception:
-            pass
-        return getattr(card, "score", 0.0)
-
-except ImportError:
-
-    def _civ_base(card: Card, state: GameState) -> float:
-        return getattr(card, "score", 0.0)
+def _civ_base(card: Card, state: GameState) -> float:
+    return getattr(card, "score", 0.0)
 
 
 # ===================================================================

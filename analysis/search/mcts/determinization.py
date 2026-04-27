@@ -16,10 +16,10 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional, TYPE_CHECKING
 
-from analysis.engine.state import GameState, OpponentState
+from analysis.card.engine.state import GameState, OpponentState
 
 if TYPE_CHECKING:
-    from analysis.models.card import Card
+    from analysis.card.models.card import Card
     from analysis.search.mcts.config import MCTSConfig
 
 log = logging.getLogger(__name__)
@@ -203,7 +203,7 @@ class Determinizer:
         Args:
             deck_cards: If provided, sample from this specific card pool.
         """
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         result = []
         remaining_count = count
@@ -302,7 +302,7 @@ class Determinizer:
         Args:
             deck_cards: If provided, sample from this specific card pool.
         """
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         # Try specific archetype cards first
         if deck_cards is not None and self._bayesian is not None:

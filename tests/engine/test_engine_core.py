@@ -1,7 +1,6 @@
-"""Tests for the unified engine core (P0-P4 changes).
+"""Tests for the unified engine core.
 
 Covers:
-- engine/dispatch.py: effect handlers (36 total, 7 newly implemented)
 - engine/deterministic.py: DeterministicRNG
 - engine/target.py: target resolution and taunt validation
 - engine/state.py: GameState with new fields
@@ -9,136 +8,30 @@ Covers:
 """
 import pytest
 import dataclasses
-from analysis.engine.state import (
+from analysis.card.engine.state import (
     GameState, Minion, HeroState, ManaState, OpponentState,
 )
-from analysis.abilities.definition import (
+from analysis.card.engine.tags import GameTag
+from analysis.card.abilities.definition import (
     EffectKind, EffectSpec, TargetSpec, TargetKind,
     Action, ActionType,
 )
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 
 
 # ==================================================================
-# 1. dispatch.py — Effect handler tests
-# ==================================================================
-
-class TestDispatchRegistry:
-    def test_all_36_handlers_registered(self):
-        from analysis.engine.dispatch import EFFECT_HANDLERS
-        assert len(EFFECT_HANDLERS) == 36
-
-    def test_every_effect_kind_has_handler(self):
-        from analysis.engine.dispatch import EFFECT_HANDLERS
-        for kind in EffectKind:
-            assert kind in EFFECT_HANDLERS, f"Missing handler for {kind}"
-
-
-class TestDispatchEffects:
-    def _make_state(self):
-        """Create a minimal GameState with one minion on each board."""
-        s = GameState()
-        s.hero = HeroState()
-        s.mana = ManaState()
-        s.opponent = OpponentState(hero=HeroState())
-        s.opponent.board = [Minion(name="Enemy", attack=3, health=3, max_health=3)]
-        s.board = [Minion(name="Friendly", attack=2, health=5, max_health=5, cost=3)]
-        s.hand = []
-        return s
-
-    def test_damage_to_enemy_minion(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.DAMAGE, value=2, target=TargetSpec(kind=TargetKind.ENEMY))
-        s = dispatch(s, effect, target=0)
-        assert s.opponent.board[0].health == 1
-
-    def test_destroy_enemy_minion(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.DESTROY, value=1, target=TargetSpec(kind=TargetKind.ENEMY))
-        s = dispatch(s, effect, target=0)
-        assert len(s.opponent.board) == 0
-
-    def test_transform_enemy(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.TRANSFORM, value=1, value2=1, target=TargetSpec(kind=TargetKind.ENEMY))
-        s = dispatch(s, effect, target=0)
-        m = s.opponent.board[0]
-        assert m.attack == 1
-        assert m.health == 1
-
-    def test_return_to_hand(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.RETURN, value=1, target=TargetSpec(kind=TargetKind.FRIENDLY_MINION))
-        s = dispatch(s, effect, target=0)
-        assert len(s.board) == 0
-        assert len(s.hand) == 1
-        assert s.hand[0].name == "Friendly"
-
-    def test_take_control(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        assert len(s.opponent.board) == 1
-        effect = EffectSpec(kind=EffectKind.TAKE_CONTROL, value=1, target=TargetSpec(kind=TargetKind.ENEMY))
-        s = dispatch(s, effect, target=0)
-        assert len(s.opponent.board) == 0
-        assert len(s.board) == 2  # original + taken
-
-    def test_swap_stats(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.SWAP, value=1, target=TargetSpec(kind=TargetKind.ENEMY))
-        s = dispatch(s, effect, target=0)
-        m = s.opponent.board[0]
-        assert m.attack == 3  # was health
-        assert m.health == 3  # was attack
-
-    def test_copy_minion(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.COPY, value=1, target=TargetSpec(kind=TargetKind.ENEMY))
-        s = dispatch(s, effect, target=0)
-        assert len(s.board) == 2  # original + copy
-
-    def test_shuffle_adds_to_deck(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        s.deck_remaining = 10
-        effect = EffectSpec(kind=EffectKind.SHUFFLE, value=2)
-        s = dispatch(s, effect, target=None)
-        assert s.deck_remaining == 12
-
-    def test_armor_gain(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.ARMOR, value=5)
-        s = dispatch(s, effect, target=None)
-        assert s.hero.armor == 5
-
-    def test_freeze_minion(self):
-        from analysis.engine.dispatch import dispatch
-        s = self._make_state()
-        effect = EffectSpec(kind=EffectKind.FREEZE, value=1, target=TargetSpec(kind=TargetKind.ENEMY))
-        s = dispatch(s, effect, target=0)
-        assert s.opponent.board[0].frozen_until_next_turn == True
-
-
-# ==================================================================
-# 2. deterministic.py tests
+# 1. deterministic.py tests
 # ==================================================================
 
 class TestDeterministicRNG:
     def test_same_seed_same_result(self):
-        from analysis.engine.deterministic import DeterministicRNG
+        from analysis.card.engine.deterministic import DeterministicRNG
         rng1 = DeterministicRNG(42)
         rng2 = DeterministicRNG(42)
         assert rng1.choice([1, 2, 3]) == rng2.choice([1, 2, 3])
 
     def test_different_seed_different_result(self):
-        from analysis.engine.deterministic import DeterministicRNG
+        from analysis.card.engine.deterministic import DeterministicRNG
         rng1 = DeterministicRNG(42)
         rng2 = DeterministicRNG(99)
         results1 = [rng1.choice([1, 2, 3, 4, 5]) for _ in range(10)]
@@ -146,14 +39,14 @@ class TestDeterministicRNG:
         assert results1 != results2
 
     def test_sample_correct_count(self):
-        from analysis.engine.deterministic import DeterministicRNG
+        from analysis.card.engine.deterministic import DeterministicRNG
         rng = DeterministicRNG(42)
         result = rng.sample([1, 2, 3, 4, 5], 3)
         assert len(result) == 3
         assert len(set(result)) == 3  # all unique
 
     def test_from_state_consistency(self):
-        from analysis.engine.deterministic import DeterministicRNG
+        from analysis.card.engine.deterministic import DeterministicRNG
         s1 = GameState()
         s2 = GameState()
         rng1 = DeterministicRNG.from_state(s1)
@@ -161,7 +54,7 @@ class TestDeterministicRNG:
         assert rng1.choice([1, 2, 3]) == rng2.choice([1, 2, 3])
 
     def test_det_top_k(self):
-        from analysis.engine.deterministic import det_top_k
+        from analysis.card.engine.deterministic import det_top_k
         items = [5, 3, 8, 1, 9, 2, 7]
         result = det_top_k(items, 3, score_fn=lambda x: x)
         assert len(result) == 3
@@ -177,13 +70,13 @@ class TestDeterministicRNG:
 class TestTargetResolution:
     def test_validate_taunt_enforcement(self):
         """Attacking a non-taunt minion should be invalid when taunt exists."""
-        from analysis.engine.target import validate_target
+        from analysis.card.engine.target import validate_target
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()
         s.opponent = OpponentState(hero=HeroState())
         s.opponent.board = [
-            Minion(name="Taunt", has_taunt=True, attack=1, health=3, max_health=3),
+            Minion(name="Taunt", tags={GameTag.TAUNT: 1}, attack=1, health=3, max_health=3),
             Minion(name="NonTaunt", attack=2, health=2, max_health=2),
         ]
         # validate_target checks action.target attribute
@@ -197,13 +90,13 @@ class TestTargetResolution:
 
     def test_validate_taunt_allows_attacking_taunt(self):
         """Attacking the taunt minion directly should be valid."""
-        from analysis.engine.target import validate_target
+        from analysis.card.engine.target import validate_target
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()
         s.opponent = OpponentState(hero=HeroState())
         s.opponent.board = [
-            Minion(name="Taunt", has_taunt=True, attack=1, health=3, max_health=3),
+            Minion(name="Taunt", tags={GameTag.TAUNT: 1}, attack=1, health=3, max_health=3),
             Minion(name="NonTaunt", attack=2, health=2, max_health=2),
         ]
         action = type('Action', (), {
@@ -215,7 +108,7 @@ class TestTargetResolution:
 
     def test_validate_no_taunt_allows_face(self):
         """Attacking face when no taunt exists should be valid."""
-        from analysis.engine.target import validate_target
+        from analysis.card.engine.target import validate_target
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()
@@ -232,13 +125,13 @@ class TestTargetResolution:
 
     def test_validate_stealth_blocks_target(self):
         """Stealthed minions cannot be targeted."""
-        from analysis.engine.target import validate_target
+        from analysis.card.engine.target import validate_target
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()
         s.opponent = OpponentState(hero=HeroState())
         s.opponent.board = [
-            Minion(name="Stealthed", has_stealth=True, attack=2, health=2, max_health=2),
+            Minion(name="Stealthed", tags={GameTag.STEALTH: 1}, attack=2, health=2, max_health=2),
         ]
         action = type('Action', (), {
             'action_type': 'ATTACK',
@@ -285,7 +178,7 @@ class TestGameState:
 class TestDeathPhase:
     def test_simultaneous_death_collection(self):
         """Dead minions should be collected before deathrattles resolve."""
-        from analysis.engine.simulation import apply_action
+        from analysis.card.engine.simulation import apply_action
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()
@@ -314,14 +207,14 @@ class TestDeathPhase:
         s.board = [
             Minion(
                 name="TauntReborn", attack=2, health=1, max_health=3,
-                has_taunt=True, has_reborn=True, can_attack=True,
+                tags={GameTag.TAUNT: 1, GameTag.REBORN: 1}, can_attack=True,
             ),
         ]
         s.opponent.board = [
             Minion(name="Killer", attack=5, health=5, max_health=5),
         ]
         action = Action(action_type=ActionType.ATTACK, source_index=0, target_index=1)
-        from analysis.engine.simulation import apply_action
+        from analysis.card.engine.simulation import apply_action
         s2 = apply_action(s.copy(), action)
         # Minion should be reborn at 1 HP with taunt preserved
         if len(s2.board) > 0:
@@ -333,7 +226,7 @@ class TestDeathPhase:
 class TestDrawWithDeckList:
     def test_draw_from_deck_list(self):
         """Drawing from a deck_list should pop cards in order."""
-        from analysis.engine.simulation import apply_draw
+        from analysis.card.engine.simulation import apply_draw
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()
@@ -353,7 +246,7 @@ class TestDrawWithDeckList:
 
     def test_draw_fatigue(self):
         """Drawing with empty deck should cause fatigue damage."""
-        from analysis.engine.simulation import apply_draw
+        from analysis.card.engine.simulation import apply_draw
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()
@@ -368,7 +261,7 @@ class TestDrawWithDeckList:
 
     def test_draw_stub_when_no_deck_list(self):
         """Drawing with no deck_list should produce stub cards."""
-        from analysis.engine.simulation import apply_draw
+        from analysis.card.engine.simulation import apply_draw
         s = GameState()
         s.hero = HeroState()
         s.mana = ManaState()

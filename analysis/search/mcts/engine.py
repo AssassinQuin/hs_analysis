@@ -36,10 +36,10 @@ from analysis.search.mcts.backprop import backpropagate
 from analysis.search.mcts.pruning import ActionPruner
 from analysis.search.mcts.determinization import Determinizer, DeterminizedWorld
 from analysis.search.mcts.transposition import TranspositionTable, compute_state_hash
-from analysis.abilities.definition import Action, ActionType, action_key
-from analysis.engine.rules import enumerate_legal_actions
-from analysis.engine.simulation import apply_action
-from analysis.engine.state import GameState
+from analysis.card.abilities.definition import Action, ActionType, action_key
+from analysis.card.engine.rules import enumerate_legal_actions
+from analysis.card.engine.simulation import apply_action
+from analysis.card.engine.state import GameState
 
 log = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ class MCTSEngine:
         At each step, validates the chosen action is still legal in the
         current state (tree may cache children from earlier game states).
         """
-        from analysis.engine.rules import enumerate_legal_actions
+        from analysis.card.engine.rules import enumerate_legal_actions
 
         actions: List[Action] = []
         node = root
@@ -252,7 +252,7 @@ class MCTSEngine:
                 break
 
             # Advance state to validate next step
-            from analysis.engine.simulation import apply_action
+            from analysis.card.engine.simulation import apply_action
             state = apply_action(state, action)
 
             child = node.children.get(best_ak)

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from analysis.data.card_cleaner import (
+from analysis.card.data.card_cleaner import (
     RACE_ZH_MAP,
     SCHOOL_ZH_MAP,
     extract_mechanics,

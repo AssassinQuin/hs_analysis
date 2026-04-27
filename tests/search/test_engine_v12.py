@@ -1,6 +1,7 @@
 import pytest
 
-from analysis.engine.state import (
+from analysis.card.engine.tags import GameTag
+from analysis.card.engine.state import (
     GameState,
     Minion,
     HeroState,
@@ -8,7 +9,7 @@ from analysis.engine.state import (
     OpponentState,
     ManaModifier,
 )
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 from analysis.search.abilities import (
     Action,
     ActionType,
@@ -254,8 +255,7 @@ class TestNewActionTypes:
                     attack=8,
                     health=8,
                     max_health=8,
-                    has_taunt=True,
-                    has_divine_shield=True,
+                    tags={GameTag.TAUNT: 1, GameTag.DIVINE_SHIELD: 1},
                     owner="enemy",
                 ),
             ]
@@ -270,9 +270,18 @@ class TestNewActionTypes:
         assert result.opponent.board[0].has_divine_shield is False
 
     def test_play_with_target_spell(self):
+        """测试带目标的法术牌: 通过 CardPower DamageSpell 造成伤害。"""
+        from analysis.card.abilities.power import CardPower
+        from analysis.card.abilities.spells import DamageSpell
+
         state = _simple_state(mana=5, max_mana=5, opp_hp=10)
         spell = _make_card(
             name="Fireball", cost=4, card_type="SPELL", text="造成 6 点伤害"
+        )
+        # 手动注入 CardPower（数据驱动路径）
+        spell.power = CardPower(
+            card_id="",
+            on_play=[DamageSpell(value=6, target="ENEMY_HERO")],
         )
         state.hand.append(spell)
 

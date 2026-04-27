@@ -4,7 +4,7 @@ pytest.skip("Deleted module", allow_module_level=True)
 """Tests for ZoneManager — zone-based card instance management."""
 import pytest
 
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 from analysis.search.entity import Zone, CardInstance, EntityId, next_entity_id
 from analysis.search.zone_manager import ZoneManager
 

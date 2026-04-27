@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
 from analysis.search.mcts import MCTSEngine, MCTSConfig
-from analysis.abilities.definition import ActionType
+from analysis.card.abilities.definition import ActionType
 
 # ---------------------------------------------------------------------------
 #  Configuration

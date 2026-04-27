@@ -6,9 +6,9 @@ and hand-transform detection work correctly on Game 7 states.
 
 import pytest
 
-from analysis.abilities.loader import load_abilities
+from analysis.card.abilities.loader import load_abilities
 from analysis.search.mcts import MCTSEngine, MCTSConfig
-from analysis.abilities.definition import ActionType
+from analysis.card.abilities.definition import ActionType
 
 # Legacy: card_effects module was deleted in P2 cleanup
 def get_effects(card):
@@ -36,7 +36,7 @@ class TestSpellTransform:
 
     def test_spell_transform_detected_by_text(self):
         """Card with transform text should have has_spell_transform=True."""
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         # CN text
         c = Card(
@@ -54,7 +54,7 @@ class TestSpellTransform:
 
     def test_normal_spell_not_detected(self):
         """Normal spell should NOT have has_spell_transform."""
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         c = Card(name='fireball', card_type='SPELL', cost=4, text='Deal 6 damage.')
         assert not get_effects(c).has_spell_transform

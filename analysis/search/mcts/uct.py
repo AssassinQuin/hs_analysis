@@ -19,11 +19,11 @@ from typing import Optional, Tuple, List, TYPE_CHECKING
 
 from analysis.search.mcts.config import MCTSConfig, NodeType
 from analysis.search.mcts.node import MCTSNode, ActionEdge
-from analysis.abilities.definition import action_key, ActionType
+from analysis.card.abilities.definition import action_key, ActionType
 
 if TYPE_CHECKING:
-    from analysis.abilities.definition import Action
-    from analysis.engine.state import GameState
+    from analysis.card.abilities.definition import Action
+    from analysis.card.engine.state import GameState
 
 log = logging.getLogger(__name__)
 

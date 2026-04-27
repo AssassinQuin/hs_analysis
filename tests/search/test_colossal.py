@@ -3,9 +3,9 @@ pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", all
 """Tests for colossal appendage summoning."""
 
 
-from analysis.models.card import Card
-from analysis.engine.state import GameState, Minion
-from analysis.engine.mechanics._data import (
+from analysis.card.models.card import Card
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.engine.mechanics._data import (
     parse_colossal_value,
     summon_colossal_appendages,
     COLOSSAL_APPENDAGES,

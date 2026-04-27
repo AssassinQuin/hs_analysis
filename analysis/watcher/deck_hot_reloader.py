@@ -104,42 +104,7 @@ class DeckHotReloader:
         bayesian_model: Optional[BayesianOpponentModel] = None,
     ) -> bool:
         """Execute the actual reload: rebuild DB + refresh model."""
-        from analysis.data.fetch_hsreplay import init_db, build_archetype_db_from_deck_codes, DB_PATH
-        
-        # 1. Rebuild archetype DB
-        try:
-            conn = init_db(DB_PATH)
-            try:
-                # Clear old custom archetypes (IDs >= 9000)
-                conn.execute("DELETE FROM meta_decks WHERE archetype_id >= 9000")
-                conn.commit()
-                
-                stored = build_archetype_db_from_deck_codes(conn, str(self.path))
-            finally:
-                conn.close()
-            
-            log.info(f"DeckHotReloader: rebuilt DB with {stored} decks")
-        except Exception as e:
-            log.error(f"DeckHotReloader: failed to rebuild DB: {e}")
-            return False
-        
-        # 2. Refresh BayesianModel if provided
-        if bayesian_model is not None:
-            try:
-                self._refresh_model(bayesian_model)
-                log.info("DeckHotReloader: BayesianModel refreshed")
-            except Exception as e:
-                log.error(f"DeckHotReloader: failed to refresh BayesianModel: {e}")
-                return False
-        
-        # 3. Callback
-        if self.on_reload:
-            try:
-                self.on_reload(stored)
-            except Exception as e:
-                log.error(f"DeckHotReloader: on_reload callback error: {e}")
-        
-        return True
+        pass  # HSReplay data source removed; reload no longer functional
 
     def _refresh_model(self, model: BayesianOpponentModel) -> None:
         """Refresh a BayesianOpponentModel's deck data from the updated DB.
@@ -147,31 +112,4 @@ class DeckHotReloader:
         Re-loads decks, rebuilds inverted index, and recomputes posteriors
         while preserving the seen-card history for re-application of updates.
         """
-        # Save seen cards for re-play
-        seen = list(model._seen_cards)
-        player_class = model.player_class
-        
-        # Reload deck data
-        model.decks = []
-        model.card_to_decks.clear()
-        model._load_decks(player_class)
-        
-        # Rebuild inverted index
-        for deck in model.decks:
-            aid = deck["archetype_id"]
-            for dbf in deck["cards"]:
-                model.card_to_decks[dbf].add(aid)
-        
-        # Rebuild prior
-        model.posteriors = model.build_prior(player_class)
-        model.locked = None
-        model._seen_cards = []
-        
-        # Re-apply all seen card updates
-        for dbf_id in seen:
-            model.update(dbf_id)
-        
-        log.info(
-            f"DeckHotReloader: model refreshed — {len(model.decks)} decks, "
-            f"{len(seen)} updates re-applied"
-        )
+        pass  # HSReplay data source removed; refresh no longer functional

@@ -5,8 +5,8 @@ import pytest
 pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 
 
-from analysis.engine.state import GameState
-from analysis.engine.mechanics._data import (
+from analysis.card.engine.state import GameState
+from analysis.card.engine.mechanics._data import (
     RUNE_MAP,
     filter_by_rune,
     get_rune_type,

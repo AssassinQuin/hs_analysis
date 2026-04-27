@@ -28,7 +28,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
-from analysis.constants.hs_enums import (
+from analysis.card.constants.hs_enums import (
     ZONE_PLAY, ZONE_DECK, ZONE_HAND, ZONE_GRAVEYARD,
     ZONE_SETASIDE, ZONE_SECRET,
     CT_HERO, CT_MINION, CT_SPELL, CT_ENCHANTMENT,
@@ -150,7 +150,7 @@ class GlobalTracker:
         """延迟加载HSCardDB，用于卡牌元数据（种族、学派等）"""
         if self._card_db is None:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except ImportError:
                 logger.warning("HSCardDB unavailable, race/school tracking disabled")
@@ -726,7 +726,7 @@ class GlobalTracker:
     def _ensure_card_db(self):
         """延迟加载卡牌数据库，用于dbfId查询"""
         if self._card_db is None:
-            from analysis.data.card_data import get_db
+            from analysis.card.data.card_data import get_db
             self._card_db = get_db()
         return self._card_db
 
@@ -750,28 +750,6 @@ class GlobalTracker:
 
         try:
             from analysis.utils.bayesian_opponent import BayesianOpponentModel
-            from analysis.data.fetch_hsreplay import init_db, build_archetype_db_from_deck_codes
-            from analysis.config import HSREPLAY_CACHE_DB
-            import os
-
-            # 尝试从已有缓存加载
-            if os.path.exists(str(HSREPLAY_CACHE_DB)):
-                conn = init_db(str(HSREPLAY_CACHE_DB))
-                try:
-                    from analysis.data.fetch_hsreplay import get_meta_decks
-                    decks = get_meta_decks(conn)
-                    if not decks:
-                        # 缓存存在但为空——从卡组代码构建
-                        build_archetype_db_from_deck_codes(conn)
-                finally:
-                    conn.close()
-            else:
-                # 无缓存——从卡组代码构建
-                conn = init_db(str(HSREPLAY_CACHE_DB))
-                try:
-                    build_archetype_db_from_deck_codes(conn)
-                finally:
-                    conn.close()
 
             self._bayesian_model = BayesianOpponentModel(player_class=opponent_class)
             if not self._bayesian_model.decks:

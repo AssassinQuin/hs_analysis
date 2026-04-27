@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from analysis.models.card import Card
-from analysis.engine.state import (
+from analysis.card.models.card import Card
+from analysis.card.engine.state import (
     GameState,
     HeroState,
     ManaState,
@@ -35,17 +35,6 @@ def power_log_path():
     if not _POWER_LOG.exists():
         pytest.skip("Power.log not found in project root", allow_module_level=True)
     return str(_POWER_LOG)
-
-
-@pytest.fixture(scope="session")
-def parsed_power_log(power_log_path):
-    """Parse Power.log once per test session via power_parser."""
-    from analysis.search.power_parser import parse_power_log
-
-    game = parse_power_log(power_log_path)
-    if not game:
-        pytest.skip("Power.log parse returned None", allow_module_level=True)
-    return game
 
 
 @pytest.fixture(scope="session")

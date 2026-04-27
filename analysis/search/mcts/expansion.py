@@ -18,18 +18,18 @@ from typing import Optional, Tuple, List, TYPE_CHECKING
 from analysis.search.mcts.config import MCTSConfig, NodeType, ExpansionOrder
 from analysis.search.mcts.node import MCTSNode, ActionEdge
 from analysis.search.mcts.pruning import ActionPruner
-from analysis.abilities.definition import Action, ActionType, action_key
-from analysis.engine.simulation import apply_action
+from analysis.card.abilities.definition import Action, ActionType, action_key
+from analysis.card.engine.simulation import apply_action
 
 if TYPE_CHECKING:
-    from analysis.engine.state import GameState
+    from analysis.card.engine.state import GameState
     from analysis.search.mcts.transposition import TranspositionTable
 
 log = logging.getLogger(__name__)
 
 # Graceful fallback for deleted module
 try:
-    from analysis.data.card_effects import get_effects
+    from analysis.card.data.card_effects import get_effects
 except ImportError:
     get_effects = None
 

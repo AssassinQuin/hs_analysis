@@ -2,8 +2,8 @@
 
 import pytest
 
-from analysis.engine.state import GameState, HeroState, ManaState, Minion, OpponentState
-from analysis.engine.mechanics.location import Location, activate_location, tick_location_cooldowns
+from analysis.card.engine.state import GameState, HeroState, ManaState, Minion, OpponentState
+from analysis.card.engine.mechanics.location import Location, activate_location, tick_location_cooldowns
 from analysis.search.abilities import (
     Action,
     ActionType,

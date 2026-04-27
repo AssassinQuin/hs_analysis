@@ -8,7 +8,7 @@ import pytest
 
 from analysis.evaluators.siv import siv_score
 from analysis.evaluators.bsv import bsv_fusion
-from analysis.engine.state import HeroState, Minion, OpponentState
+from analysis.card.engine.state import HeroState, Minion, OpponentState
 
 
 class TestV10Performance:

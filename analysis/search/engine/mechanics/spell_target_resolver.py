@@ -17,7 +17,7 @@ from enum import Enum, auto
 from typing import List, Optional, Callable
 
 try:
-    from analysis.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, _AOE_CN, _AOE_EN
+    from analysis.card.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, _AOE_CN, _AOE_EN
 except ImportError:
     _DAMAGE_CN = _DAMAGE_EN = _AOE_CN = _AOE_EN = None
 
@@ -30,8 +30,8 @@ if _AOE_CN is None:
     _AOE_CN = re.compile(r'所有|全部')
 if _AOE_EN is None:
     _AOE_EN = re.compile(r'[Aa]ll')
-from analysis.engine.state import GameState, Minion
-from analysis.models.card import Card
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.models.card import Card
 
 
 # ── Enums ──────────────────────────────────────────────────────────
@@ -567,7 +567,7 @@ class SpellTargetResolver:
         card_id = getattr(minion, 'card_id', '')
         if card_id:
             try:
-                from analysis.data.hsdb import get_db
+                from analysis.card.data.hsdb import get_db
                 db = get_db()
                 card_data = db.get_card(card_id)
                 if card_data and card_data.get('rarity') == 'LEGENDARY':

@@ -3,9 +3,9 @@ Tests for the aura engine — continuous board buff recomputation.
 """
 import pytest
 
-from analysis.engine.aura import recompute_auras, AURA_REGISTRY
-from analysis.engine.enchantment import apply_enchantment, Enchantment
-from analysis.engine.state import (
+from analysis.card.engine.aura import recompute_auras, AURA_REGISTRY
+from analysis.card.engine.enchantment import apply_enchantment, Enchantment
+from analysis.card.engine.state import (
     GameState,
     Minion,
     HeroState,

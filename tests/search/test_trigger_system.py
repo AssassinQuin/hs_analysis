@@ -6,8 +6,9 @@ Batch 1: Foundation layer for V10 Phase 2 trigger/enchantment system.
 
 import pytest
 
-from analysis.engine.state import GameState, Minion, HeroState, OpponentState
-from analysis.engine.enchantment import (
+from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
+from analysis.card.engine.tags import GameTag
+from analysis.card.engine.enchantment import (
     Enchantment,
     apply_enchantment,
     remove_enchantment_legacy as remove_enchantment,
@@ -17,7 +18,7 @@ from analysis.engine.enchantment import (
     compute_effective_max_health,
     get_effective_keywords,
 )
-from analysis.engine.trigger import TriggerDispatcher
+from analysis.card.engine.trigger import TriggerDispatcher
 
 
 # ===================================================================
@@ -170,13 +171,13 @@ class TestEnchantmentModel:
         assert compute_effective_max_health(m) == 7
 
     def test_get_effective_keywords(self):
-        m = Minion(has_taunt=True)
+        m = Minion(tags={GameTag.TAUNT: 1})
         kw = get_effective_keywords(m)
         assert 'TAUNT' in kw
         assert 'DIVINE_SHIELD' not in kw
 
     def test_get_effective_keywords_added_removed(self):
-        m = Minion(has_taunt=True)
+        m = Minion(tags={GameTag.TAUNT: 1})
         ench = Enchantment(
             keywords_added=['DIVINE_SHIELD'],
             keywords_removed=['TAUNT'],
@@ -419,7 +420,7 @@ class TestTriggerDispatcher:
         state.board.append(m)
 
         shielded = Minion(name="Shielded", attack=1, health=3, max_health=3,
-                          has_divine_shield=True, owner="enemy")
+                          tags={GameTag.DIVINE_SHIELD: 1}, owner="enemy")
         state.opponent.board.append(shielded)
 
         state = TriggerDispatcher().on_turn_end(state)

@@ -3,9 +3,9 @@ pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", all
 """Tests for herald mechanic."""
 
 
-from analysis.models.card import Card
-from analysis.engine.state import GameState, Minion
-from analysis.engine.mechanics._data import (
+from analysis.card.models.card import Card
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.engine.mechanics._data import (
     check_herald,
     apply_herald,
     HERALD_SOLDIERS,

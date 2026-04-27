@@ -4,9 +4,10 @@ import os
 import tempfile
 import pytest
 
-from analysis.engine.state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
-from analysis.abilities.definition import Action, ActionType
-from analysis.models.card import Card
+from analysis.card.engine.state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
+from analysis.card.engine.tags import GameTag
+from analysis.card.abilities.definition import Action, ActionType
+from analysis.card.models.card import Card
 from analysis.training.ability_tags import (
     encode_ability_tag, pool_ability_tags, effect_to_tag, ABILITY_TAG_DIM
 )
@@ -54,7 +55,7 @@ class TestStateEncoder:
     def test_populated_state(self):
         state = GameState(
             hero=HeroState(hp=25, armor=5),
-            board=[Minion(attack=5, health=3, has_taunt=True)],
+            board=[Minion(attack=5, health=3, tags={GameTag.TAUNT: 1})],
             deck_remaining=20,
         )
         vec = self.enc.encode(state)
@@ -65,7 +66,7 @@ class TestStateEncoder:
         assert abs(vec[1] - 5/30) < 0.01
 
     def test_minion_encoding(self):
-        m = Minion(attack=7, health=5, has_divine_shield=True, has_rush=True)
+        m = Minion(attack=7, health=5, tags={GameTag.DIVINE_SHIELD: 1, GameTag.RUSH: 1})
         vec = self.enc._encode_minion(m)
         assert len(vec) == 15
         assert abs(vec[0] - 0.7) < 0.01  # attack/10

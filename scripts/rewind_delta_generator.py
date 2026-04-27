@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rewind Delta Generator — Computes score delta between rewind and original cards.
 
-Reads unified_standard.json + scoring_report.json.
+Reads standard cards from CardDB + scoring_report.json.
 Outputs card_data/rewind_delta_report.json.
 
 Usage: python scripts/rewind_delta_generator.py
@@ -11,14 +11,15 @@ import json, os, re, sys
 from difflib import SequenceMatcher
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CARDS_PATH = os.path.join(BASE_DIR, "card_data", "240397", "unified_standard.json")
 V7_PATH = os.path.join(BASE_DIR, "card_data", "240397", "scoring_report.json")
 OUT_PATH = os.path.join(BASE_DIR, "card_data", "240397", "rewind_delta_report.json")
 
 
 def load_cards():
-    with open(CARDS_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    """Load standard cards from CardDB."""
+    from analysis.card.data.card_data import get_db
+    db = get_db()
+    return db.get_collectible_cards(fmt="standard")
 
 
 def load_scores():

@@ -2,10 +2,11 @@ from __future__ import annotations
 import pytest
 pytest.skip("Factors/ pipeline deleted in P0 cleanup", allow_module_level=True)
 import pytest
-from analysis.engine.state import GameState, Minion, HeroState, ManaState, OpponentState
+from analysis.card.engine.tags import GameTag
+from analysis.card.engine.state import GameState, Minion, HeroState, ManaState, OpponentState
 # LethalThreatFactor — deleted in P0 (factors/ dead code)
 # EvalContext, Phase — deleted in P0 (factors/ dead code)
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 
 
 # ===================================================================
@@ -48,11 +49,7 @@ class TestMinionNewFields:
             name="Zilliax",
             attack=3,
             health=2,
-            has_magnetic=True,
-            has_divine_shield=True,
-            has_taunt=True,
-            has_lifesteal=True,
-            has_rush=True,
+            tags={GameTag.MAGNETIC: 1, GameTag.DIVINE_SHIELD: 1, GameTag.TAUNT: 1, GameTag.LIFESTEAL: 1, GameTag.RUSH: 1},
             race="Mech",
         )
         assert m.has_magnetic is True
@@ -64,8 +61,7 @@ class TestMinionNewFields:
         import copy
         m = Minion(
             name="Test",
-            has_invoke=True,
-            has_corrupt=True,
+            tags={GameTag.INVOKE: 1, GameTag.CORRUPT: 1},
             race="Demon",
             spell_school="Fire",
         )
@@ -78,7 +74,7 @@ class TestMinionNewFields:
     def test_gamestate_copy_with_new_minion_fields(self):
         gs = GameState()
         gs.board = [
-            Minion(name="Mech", has_magnetic=True, race="Mech"),
+            Minion(name="Mech", tags={GameTag.MAGNETIC: 1}, race="Mech"),
             Minion(name="Dragon", race="Dragon", spell_school="Fire"),
         ]
         gs2 = gs.copy()
@@ -101,7 +97,7 @@ class TestTwoTurnLethalProbability:
         gs.mana = ManaState(available=mana, max_mana=max_mana)
         gs.hero = HeroState(hero_class=hero_class)
         if weapon_atk > 0:
-            from analysis.engine.state import Weapon
+            from analysis.card.engine.state import Weapon
             gs.hero.weapon = Weapon(attack=weapon_atk, health=2)
 
         if board_atk > 0:
@@ -168,7 +164,7 @@ class TestTwoTurnLethalProbability:
         """Windfury minions contribute double damage."""
         factor = LethalThreatFactor()
         gs = self._make_state(opp_hp=10)
-        gs.board = [Minion(attack=5, health=5, can_attack=True, has_windfury=True)]
+        gs.board = [Minion(attack=5, health=5, can_attack=True, tags={GameTag.WINDFURY: 1})]
         prob = factor._two_turn_lethal_probability(gs)
         # 10 windfury damage = 10 hp opponent
         assert prob == 1.0

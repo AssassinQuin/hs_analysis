@@ -7,30 +7,16 @@ from typing import Optional, List, NamedTuple, Callable, Any
 
 from hearthstone.enums import GameTag, Zone, CardType
 
-from analysis.engine.state import (
+from analysis.card.engine.state import (
     GameState, HeroState, ManaState, Minion, OpponentState, Weapon,
 )
-from analysis.abilities.keywords import KeywordSet
-from analysis.models.card import Card
+from analysis.card.abilities.keywords import KeywordSet
+from analysis.card.models.card import Card
 
 log = logging.getLogger(__name__)
 
 
-# GameTag → Minion field mapping for boolean flags
-_BOOL_TAG_MAP = {
-    GameTag.TAUNT: "has_taunt",
-    GameTag.STEALTH: "has_stealth",
-    GameTag.WINDFURY: "has_windfury",
-    GameTag.RUSH: "has_rush",
-    GameTag.CHARGE: "has_charge",
-    GameTag.POISONOUS: "has_poisonous",
-    GameTag.LIFESTEAL: "has_lifesteal",
-    GameTag.REBORN: "has_reborn",
-    GameTag.IMMUNE: "has_immune",
-    GameTag.FROZEN: "frozen_until_next_turn",
-    GameTag.DIVINE_SHIELD: "has_divine_shield",
-    GameTag.CANT_ATTACK: "cant_attack",
-}
+
 
 
 class FieldMapping(NamedTuple):
@@ -100,8 +86,8 @@ class StateBridge:
     def _default_card_lookup():
         """Create a default card_lookup using HSCardDB."""
         try:
-            from analysis.data.hsdb import get_db
-            from analysis.models.card import Card
+            from analysis.card.data.hsdb import get_db
+            from analysis.card.models.card import Card
             _db = get_db()
 
             def _lookup(card_id: str):
@@ -342,30 +328,33 @@ class StateBridge:
         cost = tags.get(GameTag.COST, 0)
         card_id = entity.card_id
 
-        # Extract boolean flags
+        # 从 entity.tags 构建 Minion tags dict
+        minion_tags = {}
+        _TAG_COPY_MAP = {
+            GameTag.TAUNT: GameTag.TAUNT,
+            GameTag.STEALTH: GameTag.STEALTH,
+            GameTag.WINDFURY: GameTag.WINDFURY,
+            GameTag.RUSH: GameTag.RUSH,
+            GameTag.CHARGE: GameTag.CHARGE,
+            GameTag.POISONOUS: GameTag.POISONOUS,
+            GameTag.LIFESTEAL: GameTag.LIFESTEAL,
+            GameTag.REBORN: GameTag.REBORN,
+            GameTag.IMMUNE: GameTag.IMMUNE,
+            GameTag.FROZEN: GameTag.FROZEN,
+            GameTag.DIVINE_SHIELD: GameTag.DIVINE_SHIELD,
+            GameTag.CANT_ATTACK: GameTag.CANT_ATTACK,
+        }
+        for src_tag, dst_tag in _TAG_COPY_MAP.items():
+            if tags.get(src_tag, 0) != 0:
+                minion_tags[dst_tag] = 1
+
         minion_data = Minion(
             attack=attack,
             health=health,
             max_health=max_health,
             cost=cost,
-            has_taunt=False,
-            has_stealth=False,
-            has_windfury=False,
-            has_rush=False,
-            has_charge=False,
-            has_poisonous=False,
-            has_lifesteal=False,
-            has_reborn=False,
-            has_immune=False,
-            frozen_until_next_turn=False,
-            has_divine_shield=False,
-            cant_attack=False,
+            tags=minion_tags,
         )
-
-        # Apply boolean flag mappings
-        for tag, attr in _BOOL_TAG_MAP.items():
-            if tags.get(tag, 0) != 0:
-                setattr(minion_data, attr, True)
 
         # Check if minion can attack
         exhausted = tags.get(GameTag.EXHAUSTED, 0) != 0
@@ -390,7 +379,7 @@ class StateBridge:
         # Auto-attach trigger enchantments from registry
         if minion_data.name:
             try:
-                from analysis.engine.enchantment import get_triggers_for_minion
+                from analysis.card.engine.enchantment import get_triggers_for_minion
                 triggers = get_triggers_for_minion(minion_data.name)
                 if triggers:
                     minion_data.enchantments = getattr(minion_data, 'enchantments', []) + triggers

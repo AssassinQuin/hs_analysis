@@ -6,9 +6,10 @@ pytest.skip("DecisionPipeline deleted in engine refactor", allow_module_level=Tr
 import math
 from dataclasses import dataclass
 
-from analysis.engine.state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
-from analysis.models.card import Card
-from analysis.abilities.definition import Action, ActionType
+from analysis.card.engine.tags import GameTag
+from analysis.card.engine.state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
+from analysis.card.models.card import Card
+from analysis.card.abilities.definition import Action, ActionType
 
 # card_roles.py was deleted in P2 — provide minimal shim for tests
 import enum
@@ -151,7 +152,7 @@ class TestActionPruner:
         state = _simple_state(
             board=[Minion(name="Wisp", attack=1, health=1, max_health=1, can_attack=True)],
             opp_board=[Minion(name="Shielded", attack=3, health=3, max_health=3,
-                              has_divine_shield=True)],
+                              tags={GameTag.DIVINE_SHIELD: 1})],
         )
         actions = [
             Action(action_type=ActionType.ATTACK, source_index=0, target_index=1),
@@ -207,7 +208,7 @@ class TestAttackPlanner:
         state = _simple_state(
             opp_hp=3,
             board=[Minion(name="Charger", attack=3, health=1, max_health=1,
-                          can_attack=True, has_charge=True)],
+                          can_attack=True, tags={GameTag.CHARGE: 1})],
         )
         planner = AttackPlanner()
         plan = planner.plan(state)
@@ -457,7 +458,7 @@ class TestDecisionPipeline:
         state = _simple_state(
             opp_hp=2,
             board=[Minion(name="Charger", attack=3, health=1, max_health=1,
-                          can_attack=True, has_charge=True)],
+                          can_attack=True, tags={GameTag.CHARGE: 1})],
             mana=3, max_mana=5,
         )
         pipeline = DecisionPipeline()

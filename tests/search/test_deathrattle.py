@@ -6,9 +6,10 @@ Batch 3: Deathrattle effect resolution with cascade support.
 
 import pytest
 
-from analysis.engine.state import GameState, Minion, HeroState, OpponentState
-from analysis.engine.enchantment import Enchantment, apply_enchantment
-from analysis.engine.mechanics.deathrattle import resolve_deaths
+from analysis.card.engine.tags import GameTag
+from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
+from analysis.card.engine.enchantment import Enchantment, apply_enchantment
+from analysis.card.engine.mechanics.deathrattle import resolve_deaths
 
 
 # ===================================================================
@@ -208,7 +209,7 @@ class TestDeathrattleDivineShield:
 
     def test_damage_pops_shield_not_kill(self, fresh_state):
         shielded = Minion(name="Shielded", attack=1, health=3, max_health=3,
-                          has_divine_shield=True, owner="enemy")
+                          tags={GameTag.DIVINE_SHIELD: 1}, owner="enemy")
         fresh_state.opponent.board.append(shielded)
 
         dying = Minion(name="DR", attack=1, health=0, max_health=1)

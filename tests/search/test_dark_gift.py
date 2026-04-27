@@ -5,7 +5,7 @@ import pytest
 pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 
 
-from analysis.engine.mechanics._data import (
+from analysis.card.engine.mechanics._data import (
     DARK_GIFT_ENCHANTMENTS,
     DarkGiftEnchantment,
     apply_dark_gift,

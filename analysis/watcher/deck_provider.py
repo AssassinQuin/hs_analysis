@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 from analysis.models.game_record import DeckInfo
 
 log = logging.getLogger(__name__)
@@ -195,7 +195,7 @@ class DeckProvider:
         if deck_info is None:
             return []
 
-        from analysis.data.hsdb import get_db
+        from analysis.card.data.hsdb import get_db
         db = get_db(load_xml=False, build_indexes=False)
 
         cards: List[Card] = []
@@ -237,7 +237,7 @@ class DeckProvider:
             game_start_timestamp: HH:MM:SS to match deck for current game.
                 If None, only HSCardDB lookup is used.
         """
-        from analysis.data.hsdb import get_db
+        from analysis.card.data.hsdb import get_db
         _db = get_db(load_xml=False, build_indexes=False)
 
         # Build deck card map: card_id → Card for fast lookup

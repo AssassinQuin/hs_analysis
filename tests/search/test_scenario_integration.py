@@ -7,15 +7,15 @@ Scenario 2: Coin → Foxy Fraud combo discount → Flashback combo summon
 
 import pytest
 
-from analysis.engine.state import (
+from analysis.card.engine.state import (
     GameState,
     HeroState,
     ManaState,
     Minion,
     OpponentState,
 )
-from analysis.models.card import Card
-from analysis.engine.mechanics.location import Location, activate_location, tick_location_cooldowns
+from analysis.card.models.card import Card
+from analysis.card.engine.mechanics.location import Location, activate_location, tick_location_cooldowns
 from analysis.search.abilities import (
     Action,
     ActionType,

@@ -9,19 +9,13 @@ DATA_BUILD = os.environ.get("HS_DATA_BUILD", "240397")
 DATA_DIR = PROJECT_ROOT / "card_data" / DATA_BUILD
 
 COLLECTIBLE_JSON = DATA_DIR / "zhCN" / "cards.collectible.json"
-UNIFIED_DB_PATH = DATA_DIR / "unified_standard.json"
 ENUMS_PATH = PROJECT_ROOT / "hearthstone_enums.json"
-RANKINGS_PATH = PROJECT_ROOT / "HSReplay_Card_Rankings.xlsx"
 
 CURVE_PARAMS_PATH = DATA_DIR / "curve_params.json"
 SCORING_REPORT_PATH = DATA_DIR / "scoring_report.json"
-HSREPLAY_CACHE_DB = DATA_DIR / "hsreplay_cache.db"
 CARD_LIST_PATH = DATA_DIR / "card_list.json"
 
 # ── External APIs ────────────────────────────────────────────────────────
-HSREPLAY_API_KEY = os.environ.get("HSREPLAY_API_KEY", "")
-HSREPLAY_CARDS_URL = "https://hsreplay.net/api/v1/cards/?game_type=RANKED_STANDARD"
-HSREPLAY_ARCHETYPES_URL = "https://hsreplay.net/api/v1/archetypes/"
 HSJSON_API_BASE = "https://api.hearthstonejson.com/v1/latest/zhCN/"
 CACHE_DAYS = 30
 
@@ -70,9 +64,3 @@ def ensure_data_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def get_api_headers() -> dict:
-    return {
-        "X-Api-Key": HSREPLAY_API_KEY,
-        "User-Agent": "HSAnalysis/1.0 (educational research)",
-        "Accept": "application/json",
-    }

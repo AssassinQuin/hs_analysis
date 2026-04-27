@@ -251,7 +251,7 @@ def run_mcts_analysis(
                         if cid:
                             card_id_to_dbf[cid] = dbf
                     try:
-                        from analysis.data.hsdb import get_db as _get_hsdb
+                        from analysis.card.data.hsdb import get_db as _get_hsdb
                         _hsdb = _get_hsdb()
                         _hsdb_lookup = _hsdb.card_id_to_dbf
                     except Exception:

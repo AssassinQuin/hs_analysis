@@ -14,11 +14,11 @@ from __future__ import annotations
 import logging
 from typing import List, Optional, Set, TYPE_CHECKING
 
-from analysis.abilities.definition import Action, ActionType, action_key
-from analysis.constants.effect_keywords import DAMAGE_TEXT_FRAGMENTS, HEAL_KEYWORDS
+from analysis.card.abilities.definition import Action, ActionType, action_key
+from analysis.card.constants.effect_keywords import DAMAGE_TEXT_FRAGMENTS, HEAL_KEYWORDS
 
 if TYPE_CHECKING:
-    from analysis.engine.state import GameState
+    from analysis.card.engine.state import GameState
 
 log = logging.getLogger(__name__)
 

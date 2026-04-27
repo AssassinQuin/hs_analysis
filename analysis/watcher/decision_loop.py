@@ -21,8 +21,10 @@ from typing import Callable, Optional, TextIO
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-from analysis.abilities.definition import Action
-from analysis.search.adapter import UnifiedSearchResult, create_engine
+from analysis.card.abilities.definition import Action
+from analysis.search.mcts.engine import MCTSEngine
+from analysis.search.mcts.config import MCTSConfig
+from analysis.search.mcts.engine import SearchResult
 from analysis.utils.score_provider import load_scores_into_hand
 
 log = logging.getLogger(__name__)
@@ -114,7 +116,7 @@ class TerminalDisplay:
             self._file_log.write(text)
             self._file_log.flush()
 
-    def present(self, result: UnifiedSearchResult, state, elapsed_ms: float, *,
+    def present(self, result: SearchResult, state, elapsed_ms: float, *,
                 show_board: bool = True, show_probabilities: bool = True,
                 show_mcts_detail: bool = True) -> None:
         term_lines: list[str] = []
@@ -129,46 +131,45 @@ class TerminalDisplay:
 
         file_lines.append("│")
 
-        conf_str = f"  conf={result.confidence:.2f}" if result.confidence > 0 else ""
-        decision_text = f"★ 最优操作 (Score: {result.best_fitness:+.2f} | {elapsed_ms:.0f}ms):{conf_str}"
+        decision_text = f"★ 最优操作 (Score: {result.fitness:+.2f} | {elapsed_ms:.0f}ms)"
         term_lines.append(decision_text)
         file_lines.append(f"│ {decision_text}")
 
-        if result.best_chromosome:
-            action_desc = result.best_chromosome[0].describe(state)
+        if result.best_sequence:
+            action_desc = result.best_sequence[0].describe(state)
             term_lines.append(f">>> {action_desc}")
             file_lines.append(f"│ >>> {action_desc}")
 
         if result.alternatives:
             file_lines.append("│")
             file_lines.append("│ ○ 次优操作:")
-            for rank, (chromo, fitness) in enumerate(result.alternatives, 1):
-                if chromo:
-                    gap = result.best_fitness - fitness
-                    alt_desc = chromo[0].describe(state)
+            for rank, (alt_seq, fitness) in enumerate(result.alternatives, 1):
+                if alt_seq:
+                    gap = result.fitness - fitness
+                    alt_desc = alt_seq[0].describe(state)
                     file_lines.append(f"│    {rank}. {alt_desc}  (score: {fitness:+.2f} | 差距: {gap:.2f})")
                     if rank <= 2:
                         term_lines.append(f"  {rank}. {alt_desc[:40]}")
 
-        if show_probabilities and getattr(result, 'action_probs', None):
+        if show_probabilities and getattr(result, 'action_stats', None):
             file_lines.append("│")
-            file_lines.append("│ [概率分布]")
-            for ap in result.action_probs:
-                desc = ap.action.describe(state)
+            file_lines.append("│ [动作统计]")
+            for stat in result.action_stats:
+                desc = stat.action.describe(state)
                 if len(desc) > 20:
                     desc = desc[:20]
-                bar = self._progress_bar(ap.probability, 20)
+                bar = self._progress_bar(stat.visit_probability, 20)
                 file_lines.append(
-                    f"│ {desc:<20s} {bar} {ap.probability * 100:5.1f}%  "
-                    f"胜率: {ap.win_rate * 100:.1f}%  (visits: {ap.visit_count})"
+                    f"│ {desc:<20s} {bar} {stat.visit_probability * 100:5.1f}%  "
+                    f"胜率: {stat.win_rate * 100:.1f}%  (visits: {stat.visit_count})"
                 )
 
-            probs = getattr(result, 'action_probs', None)
-            if probs:
-                top3 = probs[:3]
+            stats = result.action_stats
+            if stats:
+                top3 = stats[:3]
                 prob_parts = " | ".join(
-                    f"{ap.action.describe(state)[:15]}:{ap.probability * 100:.0f}%"
-                    for ap in top3
+                    f"{s.action.describe(state)[:15]}:{s.visit_probability * 100:.0f}%"
+                    for s in top3
                 )
                 term_lines.append(f"[概率] {prob_parts}")
 
@@ -176,7 +177,7 @@ class TerminalDisplay:
             ms = result.mcts_stats
             iters = getattr(ms, "iterations", 0)
             nodes = getattr(ms, "nodes_created", 0)
-            evals = getattr(ms, "evaluations", iters)
+            evals = getattr(ms, "evaluations_done", iters)
             worlds = getattr(ms, "world_count", 0)
             time_ms = getattr(ms, "time_used_ms", elapsed_ms)
             iter_per_s = int(iters / (time_ms / 1000.0)) if time_ms > 0 else 0
@@ -186,7 +187,7 @@ class TerminalDisplay:
             file_lines.append("│")
             file_lines.append(f"│ {mcts_summary}")
 
-            detailed_log = result.mcts_detailed_log
+            detailed_log = result.detailed_log
             if detailed_log and detailed_log.entries:
                 entries = detailed_log.entries
                 n = len(entries)
@@ -318,7 +319,7 @@ class DecisionPresenter:
         self.show_mcts_detail = show_mcts_detail
         self._display = TerminalDisplay(terminal=output, file_log=file_log)
 
-    def present(self, result: UnifiedSearchResult, state, elapsed_ms: float) -> None:
+    def present(self, result: SearchResult, state, elapsed_ms: float) -> None:
         self._display.present(
             result, state, elapsed_ms,
             show_board=self.show_board,
@@ -356,14 +357,13 @@ class DecisionLoop:
         file_log: Optional[TextIO] = None,
     ):
         self.log_path = Path(log_path)
-        self.engine_params = engine_params or {
-            "time_budget_ms": 8000.0,
-            "num_worlds": 7,
-            "uct_constant": 0.5,
-            "time_decay_gamma": 0.6,
-            "max_actions_per_turn": 10,
-        }
-        self._engine_factory = create_engine("mcts", self.engine_params)
+        self._engine_config = MCTSConfig(
+            time_budget_ms=self.engine_params.get("time_budget_ms", 8000.0),
+            num_worlds=self.engine_params.get("num_worlds", 7),
+            uct_constant=self.engine_params.get("uct_constant", 0.5),
+            time_decay_gamma=self.engine_params.get("time_decay_gamma", 0.6),
+            max_actions_per_turn=self.engine_params.get("max_actions_per_turn", 10),
+        )
         self.poll_interval = poll_interval
         self.on_decision = on_decision
         self.presenter = DecisionPresenter(
@@ -613,13 +613,12 @@ class DecisionLoop:
         opp_playstyle = _infer_opp_playstyle(state)
         state.opp_playstyle = opp_playstyle
 
-        engine = self._engine_factory()
+        engine = MCTSEngine(self._engine_config)
 
         start_time = time.perf_counter()
-        raw_result = engine.search(state, opp_playstyle=opp_playstyle)
+        result = engine.search(state, opp_playstyle=opp_playstyle)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
-        result = UnifiedSearchResult(raw_result)
         self.presenter.present(result, state, elapsed_ms)
         if signature is not None:
             self._last_decision_signature = signature
@@ -648,11 +647,11 @@ class DecisionLoop:
             value = eval_value_v10(state)
             survival = eval_survival_v10(state)
             weights = _get_weights(state)
-            final_score = result.best_fitness
+            final_score = result.fitness
 
             action_desc = ""
-            if result.best_chromosome:
-                action_desc = result.best_chromosome[0].describe(state)
+            if result.best_sequence:
+                action_desc = result.best_sequence[0].describe(state)
 
             log_evaluation(
                 file_log,
@@ -669,7 +668,7 @@ class DecisionLoop:
             log.debug(f"Eval logging failed: {e}")
 
     @staticmethod
-    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "mcts", **engine_kwargs) -> None:
+    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, time_budget_ms: float = 8000.0, num_worlds: int = 7, **engine_kwargs) -> None:
         """One-shot: analyze an entire Power.log file and output decisions for each turn."""
         log_path = Path(path)
         if not log_path.exists():
@@ -680,7 +679,14 @@ class DecisionLoop:
 
         tracker = GameTracker()
         bridge = StateBridge()
-        engine_factory = create_engine(engine, engine_kwargs)
+        config = MCTSConfig(
+            time_budget_ms=engine_kwargs.get("time_budget_ms", time_budget_ms),
+            num_worlds=engine_kwargs.get("num_worlds", num_worlds),
+            uct_constant=engine_kwargs.get("uct_constant", 0.5),
+            time_decay_gamma=engine_kwargs.get("time_decay_gamma", 0.6),
+            max_actions_per_turn=engine_kwargs.get("max_actions_per_turn", 10),
+        )
+        mcts_engine = MCTSEngine(config)
 
         events = tracker.load_file(log_path)
         log.info(f"Parsed {len(events)} events")
@@ -706,11 +712,9 @@ class DecisionLoop:
 
                     load_scores_into_hand(state)
 
-                    eng = engine_factory()
                     start_time = time.perf_counter()
-                    raw_result = eng.search(state)
+                    result = mcts_engine.search(state)
                     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-                    result = UnifiedSearchResult(raw_result)
                     presenter = DecisionPresenter(output=output)
                     presenter.present(result, state, elapsed_ms)
 

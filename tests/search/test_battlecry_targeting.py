@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from analysis.engine.state import (
+from analysis.card.engine.tags import GameTag
+from analysis.card.engine.state import (
     GameState,
     HeroState,
     ManaState,
@@ -22,9 +23,9 @@ from analysis.search.engine.mechanics.spell_target_resolver import (
     TargetEntityType,
     TargetSide,
 )
-from analysis.abilities.definition import ActionType
-from analysis.models.card import Card
-from analysis.engine.rules import enumerate_legal as enumerate_legal_actions
+from analysis.card.abilities.definition import ActionType
+from analysis.card.models.card import Card
+from analysis.card.engine.rules import enumerate_legal as enumerate_legal_actions
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +90,7 @@ class TestMinionBattlecryTargets:
             mana=ManaState(available=10),
             opponent=OpponentState(
                 board=[
-                    Minion(attack=2, health=5, max_health=5, has_taunt=True),
+                    Minion(attack=2, health=5, max_health=5, tags={GameTag.TAUNT: 1}),
                     Minion(attack=3, health=3, max_health=3),
                 ],
             ),

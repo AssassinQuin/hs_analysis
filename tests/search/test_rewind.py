@@ -3,9 +3,9 @@ pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", all
 """V10 Phase 3 Batch 5 tests — Rewind card detection and branch evaluation."""
 
 from types import SimpleNamespace
-from analysis.engine.state import GameState, HeroState, ManaState, OpponentState
-from analysis.models.card import Card
-from analysis.engine.mechanics._data import is_rewind_card, evaluate_with_rewind, REWIND_SCORING_BONUS
+from analysis.card.engine.state import GameState, HeroState, ManaState, OpponentState
+from analysis.card.models.card import Card
+from analysis.card.engine.mechanics._data import is_rewind_card, evaluate_with_rewind, REWIND_SCORING_BONUS
 
 
 def _make_card(**kw):

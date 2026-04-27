@@ -13,17 +13,17 @@ import time
 
 import pytest
 
-from analysis.engine.state import (
+from analysis.card.engine.state import (
     GameState,
     HeroState,
     ManaState,
     Minion,
     OpponentState,
 )
-from analysis.models.card import Card
-from analysis.engine.mechanics.location import Location
+from analysis.card.models.card import Card
+from analysis.card.engine.mechanics.location import Location
 from analysis.search.mcts import MCTSEngine, MCTSConfig
-from analysis.abilities.definition import ActionType
+from analysis.card.abilities.definition import ActionType
 
 
 # ------------------------------------------------------------------

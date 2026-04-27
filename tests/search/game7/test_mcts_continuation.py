@@ -7,7 +7,7 @@ and that tree has proper depth and opponent nodes.
 import pytest
 
 from analysis.search.mcts import MCTSEngine, MCTSConfig
-from analysis.abilities.definition import ActionType
+from analysis.card.abilities.definition import ActionType
 
 
 # Test on even turns (our turns) with reasonable hand size

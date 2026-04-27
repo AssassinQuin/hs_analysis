@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from analysis.models.card import Card
-from analysis.engine.state import (
+from analysis.card.models.card import Card
+from analysis.card.engine.state import (
     GameState,
     HeroState,
     ManaState,

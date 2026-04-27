@@ -7,9 +7,9 @@ cost, type, etc.).
 
 import pytest
 
-from analysis.abilities.loader import load_abilities
-from analysis.models.card import Card
-from analysis.engine.mechanics.discover import generate_discover_pool
+from analysis.card.abilities.loader import load_abilities
+from analysis.card.models.card import Card
+from analysis.card.engine.mechanics.discover import generate_discover_pool
 
 # Legacy: card_effects module was deleted in P2 cleanup
 # get_effects is replaced by load_abilities
@@ -105,8 +105,8 @@ class TestHandTransformEffect:
 
     def test_transform_applied_in_play(self):
         """When playing a hand-transform card, minion should use transformed stats."""
-        from analysis.engine.state import GameState, OpponentState, Minion
-        from analysis.engine.simulation import _apply_hand_transform
+        from analysis.card.engine.state import GameState, OpponentState, Minion
+        from analysis.card.engine.simulation import _apply_hand_transform
 
         card = Card(
             card_id="DINO_407", dbf_id=118481, name="米尔雷斯",
@@ -137,8 +137,8 @@ class TestHandTransformEffect:
 
     def test_transform_fallback_without_opponent_minion(self):
         """Without opponent minion info, should use base transform stats."""
-        from analysis.engine.state import GameState, OpponentState, Minion
-        from analysis.engine.simulation import _apply_hand_transform
+        from analysis.card.engine.state import GameState, OpponentState, Minion
+        from analysis.card.engine.simulation import _apply_hand_transform
 
         card = Card(
             card_id="DINO_407", dbf_id=118481, name="米尔雷斯",

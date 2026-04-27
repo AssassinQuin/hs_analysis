@@ -1,1 +1,1 @@
-from analysis.constants.hs_enums import *
+from analysis.card.constants.hs_enums import *

@@ -34,7 +34,7 @@ def analyze_mana_curve(cards: List[Tuple[int, int]]) -> ManaCurve:
         ManaCurve 完整分析结果
     """
     # 延迟导入，避免循环依赖和启动开销
-    from analysis.data.hsdb import get_db
+    from analysis.card.data.hsdb import get_db
 
     try:
         db = get_db()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from analysis.card.engine.tags import GameTag
 from analysis.evaluators.siv import (
     siv_score,
     hand_siv_sum,
@@ -16,7 +17,7 @@ from analysis.evaluators.siv import (
     progress_modifier,
     counter_modifier,
 )
-from analysis.engine.state import HeroState, ManaState, Minion, OpponentState
+from analysis.card.engine.state import HeroState, ManaState, Minion, OpponentState
 
 
 # ──────────────────────────────────────────────
@@ -63,8 +64,8 @@ class TestTauntModifier:
         state = make_state(opponent=OpponentState(
             hero=HeroState(hp=30),
             board=[
-                Minion(name="Taunt1", attack=2, health=3, has_taunt=True),
-                Minion(name="Taunt2", attack=1, health=5, has_taunt=True),
+                Minion(name="Taunt1", attack=2, health=3, tags={GameTag.TAUNT: 1}),
+                Minion(name="Taunt2", attack=1, health=5, tags={GameTag.TAUNT: 1}),
             ],
         ))
         assert taunt_modifier(make_card(), state) == pytest.approx(1.6, abs=0.01)
@@ -74,8 +75,8 @@ class TestTauntModifier:
         state = make_state(opponent=OpponentState(
             hero=HeroState(hp=30),
             board=[
-                Minion(name="Taunt1", attack=2, health=3, has_taunt=True),
-                Minion(name="Taunt2", attack=1, health=5, has_taunt=True),
+                Minion(name="Taunt1", attack=2, health=3, tags={GameTag.TAUNT: 1}),
+                Minion(name="Taunt2", attack=1, health=5, tags={GameTag.TAUNT: 1}),
             ],
         ))
         assert taunt_modifier(card, state) == pytest.approx(2.1, abs=0.01)
@@ -84,7 +85,7 @@ class TestTauntModifier:
         card = make_card(mechanics=["POISONOUS"])
         state = make_state(opponent=OpponentState(
             hero=HeroState(hp=30),
-            board=[Minion(name="Taunt1", attack=2, health=3, has_taunt=True)],
+            board=[Minion(name="Taunt1", attack=2, health=3, tags={GameTag.TAUNT: 1})],
         ))
         assert taunt_modifier(card, state) == pytest.approx(1.6, abs=0.01)
 
@@ -92,7 +93,7 @@ class TestTauntModifier:
         card = make_card(text="消灭一个随从")
         state = make_state(opponent=OpponentState(
             hero=HeroState(hp=30),
-            board=[Minion(name="Taunt1", attack=2, health=3, has_taunt=True)],
+            board=[Minion(name="Taunt1", attack=2, health=3, tags={GameTag.TAUNT: 1})],
         ))
         assert taunt_modifier(card, state) == pytest.approx(1.8, abs=0.01)
 

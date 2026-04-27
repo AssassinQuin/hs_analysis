@@ -1,6 +1,6 @@
 """Data models for card analysis."""
 
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 from analysis.models.game_record import GameRecord
 
 from enum import Enum

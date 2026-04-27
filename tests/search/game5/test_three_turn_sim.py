@@ -7,7 +7,7 @@ including opponent turns between our turns.
 import pytest
 
 from analysis.search.mcts import MCTSEngine, MCTSConfig
-from analysis.abilities.definition import ActionType
+from analysis.card.abilities.definition import ActionType
 
 
 def _collect_turn_depths(root, max_nodes=50000):

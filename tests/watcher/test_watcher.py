@@ -136,21 +136,20 @@ class TestDecisionLoop:
     def test_presenter_format(self, capsys):
         """DecisionPresenter formats output correctly."""
         from analysis.watcher.decision_loop import DecisionPresenter
-        from analysis.search.adapter import UnifiedSearchResult
-        from analysis.engine.state import GameState
+        from analysis.search.mcts.engine import SearchResult
+        from analysis.card.engine.state import GameState
 
         output = StringIO()
         presenter = DecisionPresenter(output=output, verbose=True)
 
-        class MockRaw:
-            best_sequence = []
-            fitness = 0.0
-            alternatives = []
-            action_stats = []
-            mcts_stats = None
-            detailed_log = None
-
-        result = UnifiedSearchResult(MockRaw())
+        result = SearchResult(
+            best_sequence=[],
+            fitness=0.0,
+            alternatives=[],
+            action_stats=[],
+            mcts_stats=None,
+            detailed_log=None,
+        )
 
         state = GameState()
         presenter.present(result, state, 50.0)

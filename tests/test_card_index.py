@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from analysis.data.card_index import CardIndex
+from analysis.card.data.card_index import CardIndex
 
 
 # ---------------------------------------------------------------------------

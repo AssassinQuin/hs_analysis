@@ -6,9 +6,9 @@ Batch 5: Discover pool generation, resolution, and battlecry delegation.
 
 import pytest
 
-from analysis.engine.state import GameState, HeroState, OpponentState
-from analysis.models.card import Card
-from analysis.engine.mechanics.discover import (
+from analysis.card.engine.state import GameState, HeroState, OpponentState
+from analysis.card.models.card import Card
+from analysis.card.engine.mechanics.discover import (
     generate_discover_pool,
     resolve_discover,
     _parse_discover_constraint,

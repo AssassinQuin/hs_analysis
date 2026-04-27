@@ -5,8 +5,8 @@ import pytest
 pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 
 
-from analysis.engine.state import GameState, Minion
-from analysis.engine.mechanics._data import (
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.engine.mechanics._data import (
     apply_kindred,
     check_kindred_active,
     has_kindred,
