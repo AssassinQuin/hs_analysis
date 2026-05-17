@@ -181,6 +181,7 @@ class CompleteGameState:
     # 对手手牌预测
     hand_predictions: List[Dict] = field(default_factory=list)
     deck_predictions: List[Dict] = field(default_factory=list)
+    multi_deck_predictions: List[Dict] = field(default_factory=list)
     conditional_evidence: List[Dict] = field(default_factory=list)
 
 
@@ -288,6 +289,31 @@ class GameStateManager:
                 for dp in prediction_result.deck_predictions
             ]
             gs.conditional_evidence = prediction_result.conditional_evidence
+
+            # 多卡组预测
+            multi = getattr(prediction_result, 'multi_deck_predictions', [])
+            gs.multi_deck_predictions = [
+                {
+                    "archetype_name": name,
+                    "probability": prob,
+                    "cards": [
+                        {
+                            "card_id": dp.card_id,
+                            "name": dp.name,
+                            "cost": dp.cost,
+                            "quantity": dp.quantity,
+                            "remaining": dp.remaining,
+                            "source": dp.source,
+                            "in_hand": dp.in_hand,
+                            "played": dp.played,
+                            "card_type": dp.card_type,
+                            "hand_probability": dp.hand_probability,
+                        }
+                        for dp in cards
+                    ],
+                }
+                for name, prob, cards in multi
+            ]
 
     def _update_opponent(self, gs: CompleteGameState, state_dict: dict):
         """更新对手状态。"""

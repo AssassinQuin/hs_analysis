@@ -46,6 +46,7 @@ class InferenceResult:
     turn: int = 0
     source_description: str = ""  # 人类可读的推断描述
     evidence_cards: List[str] = field(default_factory=list)
+    derive_type: str = ""  # "discover" | "generate" | "shuffle" | "transform" | "corrupt"
 
 
 @dataclass

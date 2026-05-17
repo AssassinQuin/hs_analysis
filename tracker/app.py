@@ -189,8 +189,7 @@ class TrackerApp:
         state_dict = self._log_monitor.build_state_dict()
         prediction = self._hand_predictor.predict(state_dict)
         self._game_state_manager.update(state_dict, prediction)
-        self._overlay.update_state(self._game_state_manager.state)
-        self._overlay._do_refresh()
+        self._overlay._refresh()
 
         logger.info("离线分析完成")
 
@@ -216,6 +215,7 @@ class TrackerApp:
             prediction = self._hand_predictor.predict(state_dict)
             self._game_state_manager.update(state_dict, prediction)
             self._overlay.update_state(self._game_state_manager.state)
+            self._overlay._refresh()
         except Exception as e:
             logger.exception("状态更新失败: %s", e)
 

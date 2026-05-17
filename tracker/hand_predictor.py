@@ -80,6 +80,7 @@ class PredictionResult:
     revealed_cards: List[HandPrediction] = field(default_factory=list)
     conditional_evidence: List[Dict] = field(default_factory=list)
     derived_cards: List[Dict] = field(default_factory=list)
+    multi_deck_predictions: List[Tuple[str, float, List[DeckPrediction]]] = field(default_factory=list)
 
 
 # ── 条件效果规则 ──────────────────────────────────────────────
@@ -255,6 +256,7 @@ class HandPredictor:
 
         # ── 卡组预测 ──
         result.deck_predictions = self._predict_deck(state_dict, bayesian)
+        result.multi_deck_predictions = self._predict_multi_deck(state_dict, bayesian)
 
         # ── 排序 ──
         result.hand_predictions.sort(
@@ -322,90 +324,91 @@ class HandPredictor:
         return hp
 
     def _predict_deck(self, state_dict: dict, bayesian: dict) -> List[DeckPrediction]:
-        """预测对手卡组构成，包含手牌概率。"""
-        deck_preds = []
+        """预测对手卡组构成，取最可能的卡组。"""
+        multi = self._predict_multi_deck(state_dict, bayesian)
+        if multi:
+            return multi[0][2]
+        return []
 
+    def _predict_multi_deck(self, state_dict: dict, bayesian: dict) -> List[Tuple[str, float, List[DeckPrediction]]]:
+        """预测 Top 3 卡组，每套含完整卡牌列表与概率。"""
         top_decks = bayesian.get("top_decks", [])
         if not top_decks:
-            return deck_preds
+            return []
 
-        target_id = top_decks[0][0]
+        known_cards = state_dict.get("known_cards", [])
+        played_count = Counter()
+        for kc in known_cards:
+            cid = kc.get("card_id", "")
+            if cid and kc.get("source") == "deck":
+                played_count[cid] += 1
+        known_hand_ids = {cid for _, cid in state_dict.get("known_hand", [])}
+        opp_hand_count = state_dict.get("opp_hand_count", 0)
+        opp_deck_count = state_dict.get("opp_deck_count", 0)
+        pool = opp_hand_count + opp_deck_count
 
+        from analysis.engine.dynamic_probability import hypergeometric_at_least_one
+
+        result = []
         try:
             from analysis.data.fetch_hsreplay import init_db, get_meta_decks
             from analysis.config import HSREPLAY_CACHE_DB
-
             conn = init_db(str(HSREPLAY_CACHE_DB))
-            try:
-                decks = get_meta_decks(conn)
-                target_deck = None
-                for d in decks:
-                    if d["archetype_id"] == target_id:
-                        target_deck = d
-                        break
-
-                if target_deck and target_deck.get("cards"):
-                    known_cards = state_dict.get("known_cards", [])
-                    played_count = Counter()
-                    for kc in known_cards:
-                        cid = kc.get("card_id", "")
-                        if cid and kc.get("source") == "deck":
-                            played_count[cid] += 1
-
-                    known_hand_ids = {cid for _, cid in state_dict.get("known_hand", [])}
-
-                    card_counts = Counter(target_deck["cards"])
-                    opp_hand_count = state_dict.get("opp_hand_count", 0)
-                    opp_deck_count = state_dict.get("opp_deck_count", 0)
-                    pool = opp_hand_count + opp_deck_count
-
-                    for dbf_id, count in card_counts.items():
-                        card_data = None
-                        if self._card_db is not None:
-                            card_data = self._card_db.get_by_dbf(dbf_id)
-
-                        if card_data:
-                            cid = card_data.get("cardId", card_data.get("id", ""))
-                            remaining = max(0, count - played_count.get(cid, 0))
-
-                            # 使用超几何分布计算手牌概率
-                            hand_prob = 0.0
-                            if pool > 0 and opp_hand_count > 0 and remaining > 0:
-                                from analysis.engine.dynamic_probability import hypergeometric_at_least_one
-                                hand_prob = hypergeometric_at_least_one(
-                                    K=remaining,
-                                    n=opp_hand_count,
-                                    N=pool,
-                                )
-
-                            dp = DeckPrediction(
-                                card_id=cid,
-                                name=card_data.get("name", ""),
-                                cost=card_data.get("cost", 0),
-                                quantity=count,
-                                remaining=remaining,
-                                source="deck",
-                                card_type=card_data.get("type", ""),
-                                race=card_data.get("race", ""),
-                                in_hand=cid in known_hand_ids,
-                                played=played_count.get(cid, 0) > 0,
-                                hand_probability=hand_prob,
-                            )
-                            deck_preds.append(dp)
-                        else:
-                            dp = DeckPrediction(
-                                card_id=f"dbf_{dbf_id}",
-                                name=f"卡牌#{dbf_id}",
-                                cost=0,
-                                quantity=count,
-                                remaining=count,
-                                source="deck",
-                            )
-                            deck_preds.append(dp)
-            finally:
-                conn.close()
         except Exception as e:
-            logger.debug("从贝叶斯构建卡组失败: %s", e)
+            logger.debug("无法连接 HSReplay 数据库: %s", e)
+            return result
 
-        deck_preds.sort(key=lambda dp: (dp.cost, dp.name))
-        return deck_preds
+        try:
+            meta_decks = get_meta_decks(conn)
+            deck_map = {d["archetype_id"]: d for d in meta_decks}
+
+            for arch_id, arch_name, prob in top_decks[:3]:
+                target = deck_map.get(arch_id)
+                if not target or not target.get("cards"):
+                    continue
+
+                card_counts = Counter(target["cards"])
+                deck_preds = []
+                for dbf_id, count in card_counts.items():
+                    card_data = None
+                    if self._card_db is not None:
+                        card_data = self._card_db.get_by_dbf(dbf_id)
+                    if card_data:
+                        cid = card_data.get("cardId", card_data.get("id", ""))
+                        remaining = max(0, count - played_count.get(cid, 0))
+                        hand_prob = 0.0
+                        if pool > 0 and opp_hand_count > 0 and remaining > 0:
+                            hand_prob = hypergeometric_at_least_one(
+                                K=remaining, n=opp_hand_count, N=pool,
+                            )
+                        deck_preds.append(DeckPrediction(
+                            card_id=cid,
+                            name=card_data.get("name", ""),
+                            cost=card_data.get("cost", 0),
+                            quantity=count,
+                            remaining=remaining,
+                            source="deck",
+                            card_type=card_data.get("type", ""),
+                            race=card_data.get("race", ""),
+                            in_hand=cid in known_hand_ids,
+                            played=played_count.get(cid, 0) > 0,
+                            hand_probability=hand_prob,
+                        ))
+                    else:
+                        deck_preds.append(DeckPrediction(
+                            card_id=f"dbf_{dbf_id}",
+                            name=f"卡牌#{dbf_id}",
+                            cost=0,
+                            quantity=count,
+                            remaining=count,
+                            source="deck",
+                        ))
+
+                deck_preds.sort(key=lambda dp: (dp.cost, dp.name))
+                result.append((arch_name, prob, deck_preds))
+        except Exception as e:
+            logger.debug("构建多卡组预测失败: %s", e)
+        finally:
+            conn.close()
+
+        return result
