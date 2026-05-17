@@ -812,7 +812,7 @@ class OverlayWindow(QWidget):
             "QPushButton{background:transparent;color:#955;border:none;font-size:12px;font-weight:bold;}"
             "QPushButton:hover{color:#f77;background:rgba(200,50,50,80);border-radius:3px;}"
         )
-        self._close_btn.clicked.connect(self.hide)
+        self._close_btn.clicked.connect(self._on_close)
         lay.addWidget(self._close_btn)
 
         return w
@@ -878,6 +878,13 @@ class OverlayWindow(QWidget):
 
     def stop_refresh(self):
         self._timer.stop()
+
+    def _on_close(self):
+        """关闭按钮：停止刷新并退出整个进程。"""
+        self.stop_refresh()
+        self._save_geometry()
+        self.close_requested.emit()
+        QApplication.quit()
 
     # ── 核心刷新 ──
 
@@ -1058,84 +1065,83 @@ class OverlayWindow(QWidget):
         self._hand_list.update_cards(hand_cards, "hand")
 
     def _refresh_deck(self, gs: CompleteGameState):
-        """刷新卡组区 — 显示最可能卡组 A/B/C 切换。"""
-        multi = gs.multi_deck_predictions
+        """刷新卡组区 — 显示预测卡组，标记已打出/已打完。"""
+        opp = gs.opponent
 
-        # 更新标签栏
-        tabs = []
-        for md in multi:
-            tabs.append({
-                "name": md.get("archetype_name", "未知"),
-                "probability": md.get("probability", 0),
+        # 选择卡组数据源：优先使用预测卡组（完整30张），回退到已知卡牌
+        deck_cards = gs.deck_predictions  # HandPredictor 的完整预测
+        if not deck_cards and gs.multi_deck_predictions:
+            idx = min(self._sel_arch, len(gs.multi_deck_predictions) - 1)
+            if idx >= 0:
+                deck_cards = gs.multi_deck_predictions[idx].get("cards", [])
+        
+        # 回退到已知打出卡牌
+        if not deck_cards:
+            deck_cards = [
+                {
+                    "card_id": c.card_id,
+                    "name": c.name,
+                    "cost": c.cost,
+                    "quantity": c.quantity,
+                    "remaining": c.remaining,
+                    "source": c.source,
+                    "played": c.played,
+                    "in_hand": c.in_hand,
+                    "card_type": c.card_type,
+                    "race": c.race,
+                    "hand_probability": 0.0,
+                }
+                for c in opp.deck
+            ]
+
+        # 构建显示数据
+        display = []
+        for c in deck_cards:
+            display.append({
+                "card_id": c.get("card_id", ""),
+                "name": c.get("name", ""),
+                "cost": c.get("cost", 0),
+                "quantity": c.get("quantity", 1),
+                "remaining": c.get("remaining", 1),
+                "source": c.get("source", "deck"),
+                "played": c.get("played", False),
+                "in_hand": c.get("in_hand", False),
+                "rarity": c.get("rarity", ""),
+                "race": c.get("race", ""),
+                "hand_probability": c.get("hand_probability", 0.0),
             })
-        self._deck_tab.set_tabs(tabs)
-        self._deck_tab.set_active(self._sel_arch)
-        self._deck_tab.setVisible(len(tabs) > 1)
 
-        # 获取当前选中卡组
-        if multi:
-            if self._sel_arch >= len(multi):
-                self._sel_arch = 0
-            sel = multi[self._sel_arch]
-            cards = sel.get("cards", [])
+        # 按费用排序
+        display.sort(key=lambda c: (c.get("cost", 0), c.get("name", "")))
 
-            # 只显示剩余 > 0 或未打出的
-            deck_cards = []
-            for c in cards:
-                rem = c.get("remaining", 0)
-                if rem > 0:
-                    deck_cards.append({
-                        "card_id": c.get("card_id", ""),
-                        "name": c.get("name", "?"),
-                        "cost": c.get("cost", 0),
-                        "quantity": c.get("quantity", 1),
-                        "remaining": rem,
-                        "source": c.get("source", "deck"),
-                        "in_hand": c.get("in_hand", False),
-                        "played": c.get("played", False),
-                        "hand_probability": c.get("hand_probability", 0),
-                        "rarity": c.get("rarity", ""),
-                    })
+        # 统计
+        total = sum(c.get("quantity", 1) for c in display)
+        played_count = sum(1 for c in display if c.get("remaining", 1) == 0)
+        self._deck_header.set_title("对手卡组", total)
 
-            # 按费用排序
-            deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
-
-            # 增量刷新 — 使用 frozenset + arch index 避免字符串拼接顺序敏感性
-            d_hash = (self._sel_arch, frozenset((c["card_id"], c["remaining"]) for c in deck_cards))
-            if d_hash != self._deck_hash:
-                self._deck_hash = d_hash
-                self._deck_header.set_title(
-                    sel.get("archetype_name", "对手卡组"),
-                    sum(c["remaining"] for c in deck_cards),
-                )
-                self._deck_list.update_cards(deck_cards, "deck")
+        # Tab bar: 多卡组预测
+        tabs = []
+        for mp in gs.multi_deck_predictions:
+            tabs.append({
+                "name": mp.get("archetype_name", "?"),
+                "probability": mp.get("probability", 0),
+            })
+        if tabs:
+            self._deck_tab.set_tabs(tabs)
+            self._deck_tab.setVisible(self._deck_expanded)
         else:
-            # 无多卡组预测时使用 deck_predictions
-            dp = gs.deck_predictions
-            deck_cards = []
-            for c in dp:
-                if c.get("remaining", 0) > 0:
-                    deck_cards.append({
-                        "card_id": c.get("card_id", ""),
-                        "name": c.get("name", "?"),
-                        "cost": c.get("cost", 0),
-                        "quantity": c.get("quantity", 1),
-                        "remaining": c.get("remaining", 0),
-                        "source": c.get("source", "deck"),
-                        "in_hand": c.get("in_hand", False),
-                        "played": c.get("played", False),
-                        "hand_probability": c.get("hand_probability", 0),
-                        "rarity": c.get("rarity", ""),
-                    })
-            deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
-
-            d_hash = frozenset((c["card_id"], c["remaining"]) for c in deck_cards)
-            if d_hash != self._deck_hash:
-                self._deck_hash = d_hash
-                self._deck_header.set_title("对手卡组", len(deck_cards))
-                self._deck_list.update_cards(deck_cards, "deck")
-
             self._deck_tab.setVisible(False)
+
+        # 增量刷新
+        d_hash = tuple(
+            (c["card_id"], c.get("remaining", 0), c.get("played", False))
+            for c in display
+        )
+        if d_hash == self._deck_hash:
+            return
+        self._deck_hash = d_hash
+
+        self._deck_list.update_cards(display, mode="deck")
 
     def _refresh_grave(self, gs: CompleteGameState):
         """刷新墓地区 — 使用 opp_graveyard 作为主数据源。

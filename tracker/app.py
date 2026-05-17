@@ -274,6 +274,13 @@ class TrackerApp:
         from tracker.hsreplay_updater import HSReplayUpdater
         self._hsreplay_updater = HSReplayUpdater(update_interval_hours=24.0)
 
+        # 7. 卡组文件热更新监视器
+        self._deck_codes_mtime: float = 0.0
+        self._deck_watch_timer = QTimer(self._qt_app) if self._qt_app else None
+        if self._deck_watch_timer:
+            self._deck_watch_timer.timeout.connect(self._check_deck_codes_update)
+            self._deck_watch_timer.setInterval(5000)  # 每5秒检查一次
+
         # 6. 叠加 UI
         from tracker.overlay_ui import OverlayWindow
         self._overlay = OverlayWindow(
@@ -342,6 +349,13 @@ class TrackerApp:
 
         # 启动 HSReplay 更新器
         self._hsreplay_updater.start()
+
+        # 启动卡组文件监视
+        if self._deck_watch_timer:
+            deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
+            if deck_codes_path.exists():
+                self._deck_codes_mtime = deck_codes_path.stat().st_mtime
+            self._deck_watch_timer.start()
 
         # 启动日志监控
         self._log_monitor.start()
@@ -419,6 +433,28 @@ class TrackerApp:
         """HSReplay 更新失败。"""
         logger.warning("HSReplay 更新失败: %s", error_msg)
 
+    def _check_deck_codes_update(self):
+        """定时检查 deck_codes.txt 是否更新，如有变化则重新加载卡组数据。"""
+        try:
+            deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
+            if not deck_codes_path.exists():
+                return
+            mtime = deck_codes_path.stat().st_mtime
+            if mtime <= self._deck_codes_mtime:
+                return
+            self._deck_codes_mtime = mtime
+            logger.info("检测到 deck_codes.txt 更新，重新加载卡组数据")
+            # 重新加载 DeckProvider 的卡组数据
+            from analysis.data.deck_provider import DeckProvider
+            if hasattr(self, '_log_monitor') and hasattr(self._log_monitor, 'game_tracker'):
+                old_provider = self._log_monitor.game_tracker.deck_provider
+                new_provider = DeckProvider()
+                new_provider.load_deck_codes(str(deck_codes_path))
+                self._log_monitor.game_tracker.deck_provider = new_provider
+                logger.info("卡组数据热更新完成，加载 %d 个卡组", len(new_provider._decks) if hasattr(new_provider, '_decks') else 0)
+        except Exception as e:
+            logger.debug("卡组热更新检查失败: %s", e)
+
     # ── 清理 ───────────────────────────────────────────────────
 
     def _cleanup(self):
@@ -433,6 +469,9 @@ class TrackerApp:
 
         if self._overlay is not None:
             self._overlay.stop_refresh()
+
+        if hasattr(self, '_deck_watch_timer') and self._deck_watch_timer is not None:
+            self._deck_watch_timer.stop()
 
         logger.info("清理完成")
 
