@@ -125,3 +125,29 @@ Stage Summary:
 - 修复后世界模型产出17条证据(未出牌证据11条+法力空隙3条+打法风格3条)
 - 新增2个分析器：playstyle_prior 和 board_state
 - 代码已推送到 GitHub: c5a192b
+
+---
+Task ID: 1
+Agent: Super Z (main)
+Task: 将MCTS世界节点模拟系统集成到对手手牌概率推断，替代硬编码概率修改
+
+Work Log:
+- 拉取最新代码，完整阅读项目架构：MCTS引擎、世界模型、对手模拟器、卡牌效果引擎
+- 设计逆MCTS (Inverse MCTS) 架构：已知对手行为→推最可能手牌
+- 实现新模块 analysis/engine/opponent_hand_mcts.py（约600行）
+- 实现 BehaviorMatcher: 比较模拟行为与观测行为的匹配度
+- 实现 OpponentTurnSimulator: 调用卡牌效果引擎模拟对手回合决策
+- 实现 HandSampler: 从贝叶斯卡组中采样候选手牌组合
+- 实现 OpponentHandMCTS: MCTS世界节点模拟推断引擎
+- 修改 dynamic_probability.py: 新增 _apply_mcts_simulation_evidence() 方法
+- _apply_world_model_evidence() 现在优先使用MCTS，回退到似然比
+- 运行70个相关测试全部通过
+- 推送到GitHub
+
+Stage Summary:
+- 新增 analysis/engine/opponent_hand_mcts.py 完整MCTS模拟推断引擎
+- 修改 analysis/engine/dynamic_probability.py 集成MCTS（优先）+似然比（回退）
+- 修改 analysis/engine/__init__.py 更新模块说明
+- 核心改进：通过模拟对手决策推断手牌概率，无硬编码概率值
+- 跨回合验证：不只看当前回合，还模拟未来1-2回合
+- 所有70个相关测试通过
