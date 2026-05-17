@@ -351,7 +351,14 @@ class CoreLogMonitor:
             self._player_names.clear()
             self._game_lifecycle = GameLifecycle.IDLE
             self.game_tracker.reset()
+            # 保存当前 controller，因为 on_game_start 会重置为 0
+            # 日志轮转后如果新日志中有继续的游戏数据，需要先保留 controller
+            old_our = self.global_tracker.our_controller
+            old_opp = self.global_tracker.opp_controller
             self.global_tracker.on_game_start()
+            # 如果有已知 controller，恢复它们（等待真正的 game_start 重新设置）
+            if old_our and old_opp:
+                self.global_tracker.set_controllers(old_our, old_opp)
 
         if current_size <= self._file_pos:
             return
@@ -521,21 +528,20 @@ class CoreLogMonitor:
             if new_card_id:
                 self._last_known_card_ids[entity_id] = new_card_id
 
-            # 区域变化检测：只对未桥接实体执行，避免与 _bridge_new_entities() 双重桥接
-            # 已桥接实体的区域变化由 _bridge_new_entities() 负责（在同一轮 _process_lines 中先于本方法被调用会延迟一拍，但 _process_lines 末尾的 _bridge_new_entities 会在下一轮补上）
-            # 未桥接实体的区域变化需要在这里处理，因为 _bridge_single_entity 只在首次桥接时记录 zone，不触发 on_zone_change
+            # 区域变化检测：对所有实体执行（含已桥接实体）
+            # 已桥接实体的后续区域变化（如 HAND→PLAY、PLAY→GRAVEYARD）
+            # 必须桥接到 GlobalTracker，否则对手出牌/随从死亡等关键事件丢失
+            # _entity_played_set 防止 on_show_entity + on_zone_change 双重记录出牌
             if old_zone is not None and old_zone != new_zone:
-                if entity_id not in self._bridged_entities:
-                    # 未桥接实体的区域变化——桥接到 GlobalTracker
-                    fields = _extract_entity_fields(ent_data)
-                    self.global_tracker.on_zone_change(
-                        entity_id=entity_id,
-                        controller=fields.controller,
-                        old_zone=old_zone,
-                        new_zone=new_zone,
-                        card_id=fields.card_id,
-                        card_type=fields.card_type,
-                    )
+                fields = _extract_entity_fields(ent_data)
+                self.global_tracker.on_zone_change(
+                    entity_id=entity_id,
+                    controller=fields.controller,
+                    old_zone=old_zone,
+                    new_zone=new_zone,
+                    card_id=fields.card_id,
+                    card_type=fields.card_type,
+                )
 
             # 更新快照（zone=0 也记录，避免首次变化被静默忽略）
             # zone=0 表示 INVALID/未分配区域，但实体后续会变到有效区域
@@ -759,6 +765,13 @@ class CoreLogMonitor:
         self._final_state = self.build_state_dict()
         if self.on_game_ended:
             self.on_game_ended()
+        # 重置 GlobalTracker 状态，避免下局开始前 overlay 显示旧游戏数据
+        self.global_tracker.on_game_start()
+        # 重置增量桥接追踪
+        self._bridged_entities.clear()
+        self._last_known_zones.clear()
+        self._last_known_card_ids.clear()
+        self._first_player_detected = False
         # 结束回调完成后重置为 IDLE
         self._game_lifecycle = GameLifecycle.IDLE
 

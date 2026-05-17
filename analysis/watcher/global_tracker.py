@@ -297,7 +297,10 @@ class GlobalTracker:
                 card_type, self.state, is_opp=True,
             )
 
-            self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
+            # 只在 HAND/SECRET 区域时记录到手牌追踪——其他区域的卡牌
+            # 不在手牌中，无需追踪；避免 PLAY/DECK 区域的条目无限增长
+            if zone in (self.ZONE_HAND, self.ZONE_SECRET):
+                self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
 
             # 将对手揭示到PLAY/SECRET的卡牌追踪为"已打出"
             # 对手的HAND→PLAY不可见，直接通过SHOW_ENTITY出现在最终区域
@@ -387,12 +390,21 @@ class GlobalTracker:
                     self.state.opp_hero_class = hero_class
                 elif self.state.opp_hero_class != hero_class and self._bayesian_initialized:
                     # 对手职业被修正（如 controller 修正后），重新初始化贝叶斯模型
-                    logger.info("对手职业修正: %s → %s，重新初始化贝叶斯模型",
-                                self.state.opp_hero_class, hero_class)
+                    # 保存已知的对手卡牌证据，重新喂入新模型
+                    old_known_cards = list(self.state.opp_known_cards)
+                    logger.info("对手职业修正: %s → %s，重新初始化贝叶斯模型（重喂 %d 张已知卡牌）",
+                                self.state.opp_hero_class, hero_class, len(old_known_cards))
                     self.state.opp_hero_class = hero_class
                     self._bayesian_model = None
                     self._bayesian_initialized = False
                     self._secret_model = None
+                    # 重新喂入已知对手卡牌到新的贝叶斯模型
+                    if self._init_bayesian_model(hero_class):
+                        for kc in old_known_cards:
+                            if kc.source == CardSource.DECK and kc.card_id:
+                                self.feed_bayesian_update(kc.card_id)
+                            elif kc.source == CardSource.GENERATED and kc.card_id:
+                                self.feed_bayesian_generated_update(kc.card_id)
 
     def on_zone_change(self, entity_id: int, controller: int,
                        old_zone: int, new_zone: int,
@@ -649,12 +661,6 @@ class GlobalTracker:
             if entry and entry[0]:
                 self.state.opp_returned_to_hand_seen.append(entry[0])
 
-    def _on_zone_deck_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
-        """抽牌: DECK -> HAND"""
-        # 对手抽牌时 card_id 通常为空（隐藏信息），但 _extract_tutor_constraints
-        # 等后续逻辑需要知道抽牌发生了。card_id fallback 已在 on_zone_change 中处理。
-        pass
-
     def _on_zone_hand_to_secret(self, entity_id, controller, card_id, card_type, is_opp):
         """打出奥秘: HAND -> SECRET (§7)
 
@@ -785,13 +791,18 @@ class GlobalTracker:
                     return CardSource.DECK
                 return CardSource.GENERATED
 
-        # 兜底：查卡牌数据库的可收集性
+        # 兜底：无出生记录时，不可收集=衍生，可收集=未知
+        # 不再默认可收集卡牌=DECK，因为发现的牌也可以是可收集的
         if card_id:
             meta = self._card_metadata(card_id)
             if meta:
                 if not meta.get("collectible", False):
                     return CardSource.GENERATED
-                return CardSource.DECK
+                # 可收集但无出生记录，无法确定来源
+                # 如果对手已打出超过牌库限制，则判断为衍生
+                if self._is_over_copy_limit(card_id):
+                    return CardSource.GENERATED
+                return CardSource.UNKNOWN
 
         return CardSource.UNKNOWN
 
@@ -807,13 +818,16 @@ class GlobalTracker:
             self.state.opp_shuffled_into_deck.remove(card_id)
         # Remove from known shuffled cards
         self.state.opp_shuffled_known_cards.pop(card_id, None)
-        # Reset play count so _is_over_copy_limit doesn't falsely flag
-        # the original deck copies as GENERATED when a shuffled copy is played
-        self._opp_card_play_count[card_id] = 0
+        # Decrease play count by 1 instead of resetting to 0.
+        # Resetting to 0 would lose the count of original deck copies played,
+        # causing _is_over_copy_limit to misclassify future generated copies as DECK.
+        current = self._opp_card_play_count.get(card_id, 0)
+        if current > 0:
+            self._opp_card_play_count[card_id] = current - 1
         
         logger.debug(
-            "Shuffled card played (marked GENERATED, play count reset): %s",
-            card_id,
+            "Shuffled card played (marked GENERATED, play count decremented): %s (%d→%d)",
+            card_id, current, max(0, current - 1),
         )
 
     def _is_over_copy_limit(self, card_id: str) -> bool:
@@ -890,10 +904,9 @@ class GlobalTracker:
                 self.state.last_turn_schools_player = set(player_stats.spell_schools.keys())
 
             # 清除本回合打出卡牌的追踪
-            # P1 #9: 当 is_first_player 仍为默认值且 current_turn==0 时，
-            # 无法确定回合归属，跳过清理
-            if self.state.current_turn == 0 and self.state.is_first_player is True:
-                # is_first_player 可能尚未确定，跳过清理
+            # 当 is_first_player 为 None（未知）时，无法确定回合归属，跳过清理
+            if self.state.is_first_player is None:
+                # 先后手未确定，跳过清理避免清错列表
                 pass
             else:
                 # 使用 is_first_player 判断回合归属，而非硬编码 turn%2

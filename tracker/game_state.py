@@ -152,7 +152,7 @@ class PlayerState:
     overload_current: int = 0
     overload_next: int = 0
     stats: Dict = field(default_factory=dict)
-    is_first_player: bool = True
+    is_first_player: Optional[bool] = None  # None=未知, True=先手, False=后手
 
 
 @dataclass
@@ -463,7 +463,7 @@ class GameStateManager:
         player.overload_next = player_stats.get("overload_next", 0)
 
         # 先手
-        player.is_first_player = state_dict.get("is_first_player", True)
+        player.is_first_player = state_dict.get("is_first_player", None)
 
         # 统计
         player.stats = state_dict.get("player_stats", {})

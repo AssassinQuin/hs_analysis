@@ -795,8 +795,8 @@ class OverlayWindow(QWidget):
         # 按概率降序
         hand_cards.sort(key=lambda c: -c.get("probability", 0))
 
-        # 增量刷新 — 使用 frozenset 避免字符串拼接顺序敏感性
-        h_hash = frozenset((c["card_id"], c["probability"]) for c in hand_cards)
+        # 增量刷新 — 使用 tuple（保留顺序和重复项）避免 frozenset 去重问题
+        h_hash = tuple((c["card_id"], c["probability"]) for c in hand_cards)
         if h_hash == self._hand_hash:
             return
         self._hand_hash = h_hash

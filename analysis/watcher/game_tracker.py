@@ -431,6 +431,25 @@ class GameTracker:
             return "NOT_STARTED"
         return self._last_step or "UNKNOWN"
 
+    def reset(self) -> None:
+        """完全重置追踪器状态（日志轮转/新session时调用）。
+
+        清空所有内部状态，包括 hslog LogParser 的游戏历史、
+        entity_cache、回合/步骤追踪等，确保旧游戏的实体
+        不会泄漏到新 session。
+        """
+        self._parser = LogParser()
+        self._game_count = 0
+        self._in_game = False
+        self._current_game_entities = None
+        self._last_event_type = None
+        self._last_turn = 0
+        self._fired_turn = -1
+        self._last_step = "UNKNOWN"
+        self._game_start_timestamp = None
+        self._current_block_entity_id = None
+        self.entity_cache.reset()
+
     @property
     def game_start_timestamp(self) -> Optional[str]:
         """当前游戏的开始时间戳 (HH:MM:SS)，未在游戏中返回None"""

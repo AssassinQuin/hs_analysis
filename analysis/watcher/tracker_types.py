@@ -212,8 +212,8 @@ class GlobalGameState:
     """我方已进入墓地的已知 card_id 列表"""
 
     # ---- 先后手 (§1.7) ----
-    is_first_player: bool = True
-    """我方是否先手"""
+    is_first_player: Optional[bool] = None
+    """我方是否先手（None=未知，True=先手，False=后手）"""
     coin_used: bool = False
     """硬币是否已使用"""
     coin_entity_id: int = 0
