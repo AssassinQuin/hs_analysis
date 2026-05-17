@@ -9,107 +9,149 @@
 #
 # 支持热更新：对局中可随时添加/修改卡组，保存后自动生效
 #
-# 更新日期: 2026-05-17 — 甲虫年·大地的裂变 标准环境
+# 更新日期: 2026-05-17 — 自动从 HSReplay.net 获取
 
-# ═══════════════════════════════════════════════════════════════
-# 甲虫年 2026 标准环境 — 最新Meta卡组
-# ═══════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════
+# 最新 Meta 卡组（2026-05-17 更新）
+# ════════════════════════════════════════════════════════════
 
-# name: 铺场德 | arch: midrange
-AAECAcaLBwTDgwevhwe4nwfgwAcNrp8EgdQEiIMHrocHkpcHlJcH15cHqq8H18AH28AH7MAH9sEH0MQHAAA=
+# name: Dragon Warrior | arch: midrange
+AAECAQcCi6AE0LIHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB+yyB4S9B7XAB5XCB5vCB5zCB/nDBwAA
 
-# name: 法术瞎 | arch: tempo
-AAECAYfPBga0lweKqgeSqgeTqgensQeUvwcM4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEH6LEHkr8Hlb8HAAA=
-
-# name: 发现法 | arch: midrange
-AAECAanlBwbv/AbDgwezhwenmwfysgeT2gcMm/IG8ZEHsJsH+psH1Z0H0aYHy7YH+cMHhsQHksQHhuAHnIIIAAA=
-
-# name: 快攻猎 | arch: aggro
-AAECAZ/DAwSZpweapwebpwfFsQcNqZ8Eqp8E054Gr5IHhZUHzpsH7p8HkKcHmKcHy7YHtMAHucAHu8AHAAA=
-
-# name: 兆示贼 | arch: combo
-AAECAcKPBA6hgQeQgweSgwfDgweCmAfRnQfspQeGqAeHqAeIqAfQvweK1Aeb1AeI2QcI958E054GwZcHx64HtMEHwMEHncUH1cUHAAA=
-
-# name: 龙德 | arch: midrange
-AAECAbSKAwqp9QahgQeSgwfDgwevhwesiAeCmAe4sgfgwAfiwAcKrp8EiIMHqq8HrK8H6LEHvrIHhL0H18AH2MAHk/EHAAA=
-
-# name: 龙战 | arch: midrange
-AAECAce+BQLQsgf5wwcO4+YGqvwGq/wG94MH6IcH0pcHt60Hj7EH7LIHhL0HtcAHlcIHm8IHnMIHAAA=
-
-# name: 伙伴猎 | arch: aggro
-AAECAa/XAwidoASpgQfDgweZpweapwebpwfLtgfkxAcLqZ8EidQE4okHr5IH7p8Hu8AH3sQH4MQH48QH+cQHof0HAAA=
-
-# name: 死亡骑士控制 | arch: control
-AAECAfHhBA7UngbV5QbDgwefngf0qgfSrgeGsQeosQfisQePvgeOvwfQvwfqyQeb1AcIh/YE2OUGgf0G
-
-# name: 灌注德 | arch: midrange
-AAECAcTbBAbW+gaqgQeSgwfygwevhweYlwcMrp8EgdQE4IEH94EHiIMHsIcHwIcHpIkHqq8H1sAH18AH7MAHAA==
-
-# ═══════════════════════════════════════════════════════════════
-# 甲虫年 2026 — 基础卡组（旧版保留）
-# ═══════════════════════════════════════════════════════════════
-
-# name: 龙战 | arch: midrange
-AAECAYwWAougBPnDBw7j5gaq/Aar/AbohwfSlwe3rQePsQfQsgfssge1wAf2wQeVwgebwgecwgcAAA==
-
-# name: 兆灌贼 | arch: combo
-AAECAfahBwzDgwfBlwfRnQfspQeGqAeHqAeIqAfHrgfQvweK1Aeb1AeI2QcJ958E94EHkIMHjK0H2a8HmrMHtMEHncUH1cUHAAA=
-
-# name: Aggro Paladin | arch: aggro
-AAECAZ8FBM/+BrqWB8avB+XBBw2WoATJoATTngbUngbI/wb1gQeFlQfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
-
-# name: Control Warrior | arch: control
-AAECAQcCi6AE+cMHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
-
-# name: Control Warrior V2 | arch: control
-AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
-
-# name: Aggro Paladin V2 | arch: aggro
-AAECAZ8FAvGbB8avBw6roATJoATTngbUngbP/gb1gQeFlQe6lgfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
-
-# name: Midrange Shaman | arch: midrange
-AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
-
-# name: Tempo Demon Hunter | arch: tempo
-AAECAea5AwSKqgeSqgeTqgensQcN4fgF3v8G/oMHqocHtpcH550HnrEHobEHv7EHwLEH6LEHkr8Hlb8HAAA=
-
-# name: Face Hunter | arch: aggro
-AAECAR8EmacHmqcHm6cHxbEHDamfBKqfBNOeBq+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
-
-# name: Token Druid | arch: midrange
-AAECAZICCqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LABwqunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAeT8QcAAA==
-
-# name: Miracle Rogue | arch: combo
-AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwn3nwT3gQeQgweMrQfHrgfZrweaswedxQfVxQcAAA==
-
-# name: Zoo Warlock | arch: aggro
-AAECAf0EBO/8BqebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
-
-# name: Control Death Knight | arch: control
-AAECAfHhBAyH9gS1+gaSgwfDgweDigeCmAf0qgeosQfisQfQvwfqyQeb1AcJ2OUGgf0Gl4IHupUHn54HkasHj74HmsUH0MUHAAA=
-
-# name: Priest Midrange | arch: midrange
-AAECAa0GBqiWB/ypB4CqB4SqB+SyB4O/BwzwnwTLoASg+wbD/waFhge2lAedrQeFvwebvweixAeyxQeW/AcAAA==
-
-# name: Highlander Priest | arch: control
-AAECAa0GDPCfBMP/BsODB4OKB8WUB6iWB/ypB4CqB4SqB+SyB4O/B5a/BwnLoASg+waFhgedrQeFvwebvweixAeyxQeW/AcAAA==
-
-# name: Reno Warlock | arch: control
-AAECAf0GBMSeBvWYB+ybB9edBw2PnwSRoATnoATrhAepiAeEmQfenQfgnQfhnQeTvgfXvgfYvgfgvgcAAA==
-
-# name: Control Death Knight V2 | arch: control
-AAECAfHhBAqH9gTDgweCmAfSrgeosQfisQfQvwfqyQeb1AfO6gcK2OUGgf0Gl4IHupUH0JsHn54HkasHjr8HmsUH0MUHAAA=
-
-# name: End of Turnadin | arch: midrange
+# name: Bubble Paladin | arch: aggro
 AAECAZ8FBvD+BsODB+6oB++oB/CoB+XBBwzJoAS6lgfLqQfErgf1rwe+sgfiwQfowQfqwQf2wQeDwgerxgcAAA==
 
-# name: Harold Shaman | arch: midrange
+# name: Herald Shaman | arch: midrange
+AAECAaoICK+fBMODB9umB9+mB+WmB9C/B4LUB5vUBwv9nwTmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
+
+# name: Aggro Druid | arch: aggro
+AAECAZICBMODB6+HB7ifB+DABw2unwSB1ASIgweuhweSlweUlwfXlwfanQeqrwfXwAfbwAfswAf2wQcAAA==
+
+# name: Spell Demon Hunter | arch: tempo
+AAECAea5Awa0lweKqgeSqgeTqgensQeUvwcM4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEH6LEHkr8Hlb8HAAA=
+
+# name: Aggro Druid | arch: aggro
+AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nwfJrAeqrwfXwAfbwAfswAf2wQcAAA==
+
+# name: Herald Warrior | arch: midrange
+AAECAQcEhJ0H0L8HzskHm9QHDePmBqr8Bqv8BveDB+iHB9KXB4+xB9CyB+yyB4S9B7XAB6/BB6DFBwAA
+
+# name: Control Priest | arch: control
+AAECAa0GCKn1Bpb9BpKDB/ypB4CqB4SqB5GuB+SyBwuEnwTwnwSd1ATW+gag+wbD/wb3gQeFhgeLrQedrQesrQcAAA==
+
+# name: Silver Hand Paladin | arch: midrange
+AAECAZ8FBMavB+XBB4TEB+jFBw3JoASU9QW6lgeNnQf1rwe+sgf2wQeDwgfkxQflxQfmxQfnxQfD4wcAAA==
+
+# name: Imbue Rogue | arch: combo
+AAECAaIHCsODB9GdB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwr3nwT3gQeQgweMrQfHrgfZrweaswe0wQedxQfVxQcAAA==
+
+# name: Unholy Death Knight | arch: midrange
+AAECAfHhBAKilwftnwcOhfYE1J4G1+UGyIwHupUHvJoH0JsH0q0HhrEH4rEHiL8Hjr8H/78H9sEHAAA=
+
+# name: Imbue Paladin | arch: combo
+AAECAZ8FBPD+BrSBB8ODB/KDBw2cnwTunwTJoATW+gah+wbP/gbv/gbI/wb3gQfAhwfCjwfDjwe2lAcAAA==
+
+# name: Face Hunter | arch: aggro
+AAECAR8GmacHmqcHm6cHxbEHg8AHhMQHDKmfBKqfBK+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
+
+# name: Companion Hunter | arch: aggro
+AAECAR8GqYEHmacHmqcHm6cHxbEH5MQHDKmfBInUBOL6Bq+SB+6fB8u2B7vAB97EB+DEB+PEB/nEB6H9BwAA
+
+# name: Quest Mage | arch: combo
+AAECAf0EBu/8BsODB7OHB6ebB/KyB5PaBwyb8gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
+
+# ════════════════════════════════════════════════════════════
+# 历史卡组（旧版保留）
+# ════════════════════════════════════════════════════════════
+
+# name: 铺场德(旧) | arch: midrange
+AAECAcaLBwTDgwevhwe4nwfgwAcNrp8EgdQEiIMHrocHkpcHlJcH15cHqq8H18AH28AH7MAH9sEH0MQHAAA=
+
+# name: 法术瞎(旧) | arch: tempo
+AAECAYfPBga0lweKqgeSqgeTqgensQeUvwcM4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEH6LEHkr8Hlb8HAAA=
+
+# name: 发现法(旧) | arch: midrange
+AAECAanlBwbv/AbDgwezhwenmwfysgeT2gcMm/IG8ZEHsJsH+psH1Z0H0aYHy7YH+cMHhsQHksQHhuAHnIIIAAA=
+
+# name: 快攻猎(旧) | arch: aggro
+AAECAZ/DAwSZpweapwebpwfFsQcNqZ8Eqp8E054Gr5IHhZUHzpsH7p8HkKcHmKcHy7YHtMAHucAHu8AHAAA=
+
+# name: 兆示贼(旧) | arch: combo
+AAECAcKPBA6hgQeQgweSgwfDgweCmAfRnQfspQeGqAeHqAeIqAfQvweK1Aeb1AeI2QcI958E054GwZcHx64HtMEHwMEHncUH1cUHAAA=
+
+# name: 龙德(旧) | arch: midrange
+AAECAbSKAwqp9QahgQeSgwfDgwevhwesiAeCmAe4sgfgwAfiwAcKrp8EiIMHqq8HrK8H6LEHvrIHhL0H18AH2MAHk/EHAAA=
+
+# name: 龙战(旧) | arch: midrange
+AAECAce+BQLQsgf5wwcO4+YGqvwGq/wG94MH6IcH0pcHt60Hj7EH7LIHhL0HtcAHlcIHm8IHnMIHAAA=
+
+# name: 伙伴猎(旧) | arch: aggro
+AAECAa/XAwidoASpgQfDgweZpweapwebpwfLtgfkxAcLqZ8EidQE4okHr5IH7p8Hu8AH3sQH4MQH48QH+cQHof0HAAA=
+
+# name: 死亡骑士控制(旧) | arch: control
+AAECAfHhBA7UngbV5QbDgwefngf0qgfSrgeGsQeosQfisQePvgeOvwfQvwfqyQeb1AcIh/YE2OUGgf0G
+
+# name: 灌注德(旧) | arch: midrange
+AAECAcTbBAbW+gaqgQeSgwfygwevhweYlwcMrp8EgdQE4IEH94EHiIMHsIcHwIcHpIkHqq8H1sAH18AH7MAHAA==
+
+# name: 龙战(旧) | arch: midrange
+AAECAYwWAougBPnDBw7j5gaq/Aar/AbohwfSlwe3rQePsQfQsgfssge1wAf2wQeVwgebwgecwgcAAA==
+
+# name: 兆灌贼(旧) | arch: combo
+AAECAfahBwzDgwfBlwfRnQfspQeGqAeHqAeIqAfHrgfQvweK1Aeb1AeI2QcJ958E94EHkIMHjK0H2a8HmrMHtMEHncUH1cUHAAA=
+
+# name: Aggro Paladin(旧) | arch: aggro
+AAECAZ8FBM/+BrqWB8avB+XBBw2WoATJoATTngbUngbI/wb1gQeFlQfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
+
+# name: Control Warrior(旧) | arch: control
+AAECAQcCi6AE+cMHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
+
+# name: Control Warrior V2(旧) | arch: control
+AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
+
+# name: Aggro Paladin V2(旧) | arch: aggro
+AAECAZ8FAvGbB8avBw6roATJoATTngbUngbP/gb1gQeFlQe6lgfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
+
+# name: Midrange Shaman(旧) | arch: midrange
 AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
 
-# name: Harold Rogue | arch: midrange
+# name: Tempo Demon Hunter(旧) | arch: tempo
+AAECAea5AwSKqgeSqgeTqgensQcN4fgF3v8G/oMHqocHtpcH550HnrEHobEHv7EHwLEH6LEHkr8Hlb8HAAA=
+
+# name: Face Hunter(旧) | arch: aggro
+AAECAR8EmacHmqcHm6cHxbEHDamfBKqfBNOeBq+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
+
+# name: Token Druid(旧) | arch: midrange
+AAECAZICCqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LABwqunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAeT8QcAAA==
+
+# name: Miracle Rogue(旧) | arch: combo
+AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwn3nwT3gQeQgweMrQfHrgfZrweaswedxQfVxQcAAA==
+
+# name: Zoo Warlock(旧) | arch: aggro
+AAECAf0EBO/8BqebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
+
+# name: Control Death Knight(旧) | arch: control
+AAECAfHhBAyH9gS1+gaSgwfDgweDigeCmAf0qgeosQfisQfQvwfqyQeb1AcJ2OUGgf0Gl4IHupUHn54HkasHj74HmsUH0MUHAAA=
+
+# name: Priest Midrange(旧) | arch: midrange
+AAECAa0GBqiWB/ypB4CqB4SqB+SyB4O/BwzwnwTLoASg+wbD/waFhge2lAedrQeFvwebvweixAeyxQeW/AcAAA==
+
+# name: Highlander Priest(旧) | arch: control
+AAECAa0GDPCfBMP/BsODB4OKB8WUB6iWB/ypB4CqB4SqB+SyB4O/B5a/BwnLoASg+waFhgedrQeFvwebvweixAeyxQeW/AcAAA==
+
+# name: Reno Warlock(旧) | arch: control
+AAECAf0GBMSeBvWYB+ybB9edBw2PnwSRoATnoATrhAepiAeEmQfenQfgnQfhnQeTvgfXvgfYvgfgvgcAAA==
+
+# name: Control Death Knight V2(旧) | arch: control
+AAECAfHhBAqH9gTDgweCmAfSrgeosQfisQfQvwfqyQeb1AfO6gcK2OUGgf0Gl4IHupUH0JsHn54HkasHjr8HmsUH0MUHAAA=
+
+# name: Harold Shaman(旧) | arch: midrange
+AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
+
+# name: Harold Rogue(旧) | arch: midrange
 AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwSQgwfBlweMrQfZrwe0wQfAwQedxQfVxQcAAA==
 
-# name: 空手猎 | arch: aggro
+# name: 空手猎(旧) | arch: aggro
 AAECAR8GsYcHmacHmqcHm6cHxbEHhMQHDKmfBKqfBK+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
 
 # name: 铺场德(旧) | arch: midrange

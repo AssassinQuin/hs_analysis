@@ -24,6 +24,7 @@ import configparser
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional, List
 
@@ -247,6 +248,9 @@ class TrackerApp:
         """初始化所有组件。"""
         logger.info("初始化组件…")
 
+        # 0. 启动时更新最新卡组代码（静默，失败不影响启动）
+        self._update_deck_codes_on_startup()
+
         # 1. 卡牌图像管理器
         from tracker.card_images import CardImageManager
         self._image_manager = CardImageManager()
@@ -277,6 +281,44 @@ class TrackerApp:
         )
 
         logger.info("组件初始化完成")
+
+    def _update_deck_codes_on_startup(self):
+        """启动时静默更新最新卡组代码。
+
+        在后台线程中执行，不阻塞 UI 初始化。
+        如果更新失败（网络问题等），不影响正常启动。
+        """
+        import threading
+        from pathlib import Path
+
+        # 检查是否需要更新：如果上次更新在 12 小时内，跳过
+        deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
+        update_flag = deck_codes_path.parent / ".deck_codes_last_update"
+
+        if update_flag.exists():
+            try:
+                last_update = float(update_flag.read_text().strip())
+                if time.time() - last_update < 43200:  # 12 小时
+                    logger.info("卡组代码在 12 小时内已更新，跳过")
+                    return
+            except (ValueError, OSError):
+                pass
+
+        def _do_update():
+            try:
+                from scripts.update_deck_codes import update_deck_codes
+                success = update_deck_codes(max_decks=25, backup=True)
+                if success:
+                    update_flag.write_text(str(time.time()))
+                    logger.info("卡组代码更新完成")
+                else:
+                    logger.info("卡组代码更新失败，使用现有数据")
+            except Exception as e:
+                logger.info("卡组代码更新异常: %s，使用现有数据", e)
+
+        t = threading.Thread(target=_do_update, daemon=True)
+        t.start()
+        logger.info("卡组代码更新已在后台启动")
 
     def _connect_signals(self):
         """连接信号和槽。"""

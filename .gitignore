@@ -34,3 +34,5 @@ mcp-servers/
 
 # Environment variables
 .env
+deck_codes.bak.*
+.deck_codes_last_update
