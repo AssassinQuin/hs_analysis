@@ -59,6 +59,10 @@ class StateBridge:
         FieldMapping("opp_quests", "opp_quests", list),
         FieldMapping("opp_shuffled_into_deck", "opp_shuffled_into_deck", list),
         FieldMapping("opp_corrupted_cards", "opp_corrupted_cards", list),
+        # P1 #10: 新增缺失的字段映射
+        FieldMapping("opp_known_deck_cards", "opp_known_deck_cards", dict),
+        FieldMapping("opp_known_hand_types", "opp_known_hand_types", list),
+        FieldMapping("opp_entity_transforms", "opp_entity_transforms", dict),
     ]
 
     # Declarative field mappings: GlobalGameState → GameState (player fields)
@@ -668,6 +672,29 @@ class StateBridge:
                     {"card_id": kc.card_id, "turn_seen": kc.turn_seen}
                     for kc in global_state.opp_secrets_triggered
                 ]
+
+            # P1 #10: 序列化 CardRevealRecord 列表到决策引擎
+            for attr_name in (
+                'opp_revealed_hand_cards',
+                'opp_revealed_deck_cards',
+                'opp_transform_events',
+                'opp_tutor_evidence',
+                'opp_deck_insert_events',
+            ):
+                records = getattr(global_state, attr_name, None)
+                if records:
+                    serialized = [
+                        {
+                            "card_id": rec.card_id,
+                            "reveal_type": rec.reveal_type.value if hasattr(rec.reveal_type, 'value') else str(rec.reveal_type),
+                            "turn": rec.turn,
+                            "entity_id": rec.entity_id,
+                            "details": rec.details,
+                            "source_card_id": getattr(rec, 'source_card_id', ''),
+                        }
+                        for rec in records
+                    ]
+                    setattr(opp_state, attr_name, serialized)
 
             # Apply declarative opponent field mappings
             self._apply_field_map(self._OPP_FIELD_MAP, opp_state, global_state)

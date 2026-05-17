@@ -345,16 +345,16 @@ class RevealTrackerRule:
 
         # 对手卡牌揭示到 HAND 区域：这是看对手手牌的情况
         if zone == self._ZONE_HAND:
-            if state.current_turn > 0:
-                record = CardRevealRecord(
-                    card_id=card_id,
-                    reveal_type=CardRevealType.HAND_REVEAL,
-                    turn=state.current_turn,
-                    entity_id=entity_id,
-                    details="shown_to_hand",
-                    is_opp=True,
-                )
-                state.opp_revealed_hand_cards.append(record)
+            # P1 #7: 移除 current_turn > 0 的守卫，让 Mulligan 阶段的揭示也被追踪
+            record = CardRevealRecord(
+                card_id=card_id,
+                reveal_type=CardRevealType.HAND_REVEAL,
+                turn=state.current_turn,
+                entity_id=entity_id,
+                details="shown_to_hand",
+                is_opp=True,
+            )
+            state.opp_revealed_hand_cards.append(record)
 
         # 对手卡牌揭示到 DECK 区域：这是看对手卡组的情况
         elif zone == self._ZONE_DECK:

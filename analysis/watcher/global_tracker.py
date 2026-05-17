@@ -128,6 +128,10 @@ class GlobalTracker:
             (self.ZONE_HAND, self.ZONE_SECRET): self._on_zone_hand_to_secret,
             (self.ZONE_SECRET, self.ZONE_GRAVEYARD): self._on_zone_secret_resolved,
             (self.ZONE_SECRET, self.ZONE_SETASIDE): self._on_zone_secret_resolved,
+            # P1 #4 / P2 #11: 新增区域转换处理器
+            (self.ZONE_HAND, self.ZONE_GRAVEYARD): self._on_zone_hand_to_graveyard,
+            (self.ZONE_DECK, self.ZONE_PLAY): self._on_zone_deck_to_play,
+            (self.ZONE_HAND, self.ZONE_DECK): self._on_zone_hand_to_deck,
         }
 
         # 可插拔追踪规则
@@ -143,6 +147,9 @@ class GlobalTracker:
 
         # 实体卡牌ID快照: entity_id → card_id (用于检测 ChangeEntity 变形)
         self._last_known_card_ids: Dict[int, str] = {}
+
+        # P0 #1: 防止同一实体重复记录为打出（zone_change + show_entity 双路径）
+        self._entity_played_set: Set[int] = set()
 
     def set_controllers(self, our: int, opp: int):
         self.our_controller = our
@@ -166,6 +173,8 @@ class GlobalTracker:
         self.state.opp_hand_card_ids.clear()
         # 清理卡牌ID快照
         self._last_known_card_ids.clear()
+        # 清理已打出实体集合（P0 #1）
+        self._entity_played_set.clear()
         # 通知所有 Rule 重置其 per-game 状态
         self._rule_dispatcher.dispatch_game_start(self.state)
 
@@ -222,12 +231,13 @@ class GlobalTracker:
             initial_zone=zone,
             card_type=card_type,
             cost=cost,
+            birth_turn=self.state.current_turn,  # P0 #2: 记录出生回合
         )
         self._entity_birth[entity_id] = birth
 
-        # 追踪对手初始牌库大小
+        # 追踪对手初始牌库大小（P2 #13: 仅计数有效卡牌类型）
         if controller == self.opp_controller and zone == self.ZONE_DECK:
-            if card_type not in (2,):  # 排除PLAYER类型
+            if card_type in (self.CT_MINION, self.CT_SPELL, self.CT_WEAPON, self.CT_LOCATION):
                 self.state.opp_initial_deck_size += 1
 
         # 从英雄实体检测英雄职业
@@ -586,11 +596,35 @@ class GlobalTracker:
         """
         self._on_card_played(entity_id, controller, card_id, card_type)
 
+    def _on_zone_hand_to_graveyard(self, entity_id, controller, card_id, card_type, is_opp):
+        """弃牌/死亡: HAND -> GRAVEYARD (P1 #4)
+
+        记录弃牌并添加到 opp_graveyard_seen。
+        """
+        if is_opp and card_id:
+            self.state.opp_graveyard_seen.append(card_id)
+
+    def _on_zone_deck_to_play(self, entity_id, controller, card_id, card_type, is_opp):
+        """直接从牌库打出: DECK -> PLAY (P2 #11)
+
+        极罕见情况（如追踪术直接从牌库放随从到场），
+        不算"打出"，不触发 _on_card_played。
+        """
+        pass
+
+    def _on_zone_hand_to_deck(self, entity_id, controller, card_id, card_type, is_opp):
+        """手牌回牌库: HAND -> DECK (P2 #11)
+
+        例如污染者玛法里奥的效果。
+        不触发 _on_card_played。
+        """
+        pass
+
     def _on_zone_secret_resolved(self, entity_id, controller, card_id, card_type, is_opp):
         """奥秘触发/过期: SECRET -> GRAVEYARD/SETASIDE"""
         if is_opp and card_id:
-            if card_id in self.state.opp_secrets:
-                self.state.opp_secrets.remove(card_id)
+            # P2 #17: 移除所有匹配的奥秘条目（而非仅第一个）
+            self.state.opp_secrets = [s for s in self.state.opp_secrets if s != card_id]
             self.state.opp_secrets_triggered.append(KnownCard(
                 card_id=card_id,
                 turn_seen=self.state.current_turn,
@@ -604,6 +638,11 @@ class GlobalTracker:
     def _on_card_played(self, entity_id: int, controller: int,
                         card_id: str, card_type: int):
         """记录一张卡牌被打出（HAND -> PLAY 或 HAND -> SECRET）"""
+        # P0 #1: 防止同一实体被重复记录为打出
+        if entity_id in self._entity_played_set:
+            return
+        self._entity_played_set.add(entity_id)
+
         is_opp = (controller == self.opp_controller)
         source = self._classify_source(entity_id, card_id)
 
@@ -668,9 +707,10 @@ class GlobalTracker:
                 return CardSource.GENERATED
             # HAND区域：区分初始手牌 vs 衍生到手牌
             if birth.initial_zone == self.ZONE_HAND:
-                # 初始手牌（turn==0 时出现）属于牌库牌
+                # P0 #2: 使用 birth_turn 而非 current_turn 判断初始手牌
+                # 初始手牌（出生时 turn==0）属于牌库牌
                 # 硬币也属于牌库牌（后手硬币是初始手牌的一部分）
-                if self.state.current_turn == 0 or self._is_coin_entity(card_id):
+                if birth.birth_turn == 0 or self._is_coin_entity(card_id):
                     return CardSource.DECK
                 return CardSource.GENERATED
 
@@ -776,16 +816,29 @@ class GlobalTracker:
                 self.state.last_turn_schools_player = set(player_stats.spell_schools.keys())
 
             # 清除本回合打出卡牌的追踪
-            # 使用 is_first_player 判断回合归属，而非硬编码 turn%2
-            # 先手玩家在奇数回合行动，后手在偶数回合行动
-            is_our_turn = (
-                (self.state.is_first_player and turn % 2 == 1)
-                or (not self.state.is_first_player and turn % 2 == 0)
-            )
-            if is_our_turn:
-                self.state.cards_played_this_turn_player.clear()
+            # P1 #9: 当 is_first_player 仍为默认值且 current_turn==0 时，
+            # 无法确定回合归属，跳过清理
+            if self.state.current_turn == 0 and self.state.is_first_player is True:
+                # is_first_player 可能尚未确定，跳过清理
+                pass
             else:
-                self.state.cards_played_this_turn_opp.clear()
+                # 使用 is_first_player 判断回合归属，而非硬编码 turn%2
+                # 先手玩家在奇数回合行动，后手在偶数回合行动
+                is_our_turn = (
+                    (self.state.is_first_player and turn % 2 == 1)
+                    or (not self.state.is_first_player and turn % 2 == 0)
+                )
+                if is_our_turn:
+                    self.state.cards_played_this_turn_player.clear()
+                else:
+                    self.state.cards_played_this_turn_opp.clear()
+
+            # P2 #14: 修剪过期的 opp_known_hand_types（类似 TutorConstraintTrackerRule 的 2 回合截止）
+            cutoff = turn - 2
+            self.state.opp_known_hand_types = [
+                ht for ht in self.state.opp_known_hand_types
+                if ht.get("turn", 0) >= cutoff
+            ]
 
         self.state.current_turn = turn
         # 分发回合变化事件到所有 TrackerRule
@@ -1268,3 +1321,4 @@ class _EntityBirth:
     initial_zone: int = 0
     card_type: int = 0
     cost: int = 0
+    birth_turn: int = 0  # 实体出生时的回合数（P0 #2: 用于 _classify_source 区分初始手牌）

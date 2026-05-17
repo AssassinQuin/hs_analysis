@@ -929,38 +929,57 @@ class CoreLogMonitor:
         gt = self.global_tracker
         fields = _extract_entity_fields(ent_data)
 
-        if fields.card_id:
-            # 先调用 on_full_entity（记录实体出生 + 检测硬币）
+        # P0 #3: 使用 _last_known_zones 中的区域作为 on_full_entity 的初始区域
+        # 如果实体在桥接之前已经发生过区域变化，应使用最早记录的区域
+        initial_zone = self._last_known_zones.get(entity_id, fields.zone)
+
+        # P1 #5: 对手 DECK 实体即使没有 card_id 也需要调用 on_full_entity
+        # 以确保 opp_initial_deck_size 正确计数
+        is_opp_deck_no_cardid = (
+            not fields.card_id
+            and fields.controller == gt.opp_controller
+            and fields.zone == ZONE_DECK
+        )
+
+        if fields.card_id or is_opp_deck_no_cardid:
+            # 先调用 on_full_entity（记录实体出生 + 检测硬币 + 牌库计数）
             gt.on_full_entity(
                 entity_id=entity_id,
-                card_id=fields.card_id,
+                card_id=fields.card_id or "",
                 controller=fields.controller,
-                zone=fields.zone,
+                zone=initial_zone,  # P0 #3: 使用最初记录的区域
                 card_type=fields.card_type,
                 cost=fields.cost,
                 is_coin_tag=fields.is_coin_tag,
             )
 
-            # 有 card_id 的实体均调用 on_show_entity（包括 DECK 区域的窥探揭示）
+            # P1 #8: 只为对手非 DECK 区域的实体调用 on_show_entity
+            # DECK 区域始终可见的实体（FULL_ENTITY with card_id）不是"揭示"事件，
+            # 不应创建虚假的窥探记录
+            # 只有当实体从隐藏变为可见（如 DECK 中无 cardid 的实体获得 cardid）
+            # 或者对手实体不在 DECK 区域时，才调用 on_show_entity
             if fields.card_id:
-                gt.on_show_entity(
-                    entity_id=entity_id,
-                    card_id=fields.card_id,
-                    controller=fields.controller,
-                    zone=fields.zone,
-                    card_type=fields.card_type,
-                    cost=fields.cost,
-                    is_coin_tag=fields.is_coin_tag,
-                )
+                is_opp = (fields.controller == gt.opp_controller)
+                if not is_opp or fields.zone != ZONE_DECK:
+                    # 对手非 DECK 区域 或 我方实体 → 调用 on_show_entity
+                    gt.on_show_entity(
+                        entity_id=entity_id,
+                        card_id=fields.card_id,
+                        controller=fields.controller,
+                        zone=fields.zone,
+                        card_type=fields.card_type,
+                        cost=fields.cost,
+                        is_coin_tag=fields.is_coin_tag,
+                    )
 
             # 记录区域和初始 card_id，用于后续 ChangeEntity 变形和窥探揭示检测
             self._last_known_zones[entity_id] = fields.zone
             self._last_known_card_ids[entity_id] = fields.card_id or ""
 
-            # 有 card_id 的实体标记为已桥接
+            # 标记为已桥接
             self._bridged_entities.add(entity_id)
         else:
-            # 无 card_id 的实体：只在 DECK 区域或 ENCHANTMENT 时标记已桥接
+            # 无 card_id 的非对手 DECK 实体：只在 DECK 区域或 ENCHANTMENT 时标记已桥接
             # DECK 中的暗牌可能后续通过窥探效果获得 card_id，
             # 此时 _bridge_new_entities 的 card_id diff 会检测到并 dispatch on_show_entity
             # 非 DECK 区域的实体可能后续通过 SHOW_ENTITY 获得 card_id，
