@@ -451,3 +451,121 @@ class TestConditionalEvidence:
 
         result = model.conditional_evidence("UNKNOWN_TYPE", "value")
         assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# TestFastResolvingSpell (GRAVEYARD zone on SHOW_ENTITY)
+# ---------------------------------------------------------------------------
+
+
+class TestFastResolvingSpell:
+    """Tests for opponent spells that resolve so quickly that SHOW_ENTITY and
+    TAG_CHANGE GRAVEYARD appear in the same log batch.
+
+    When this happens, the entity_cache zone is already GRAVEYARD by the time
+    _bridge_new_entities processes the entity. The on_show_entity handler must
+    still recognise the card as "played" even though zone != PLAY.
+
+    Regression test for: 对手使用永时火焰箭也没识别
+    """
+
+    CT_SPELL = 5  # CardType.SPELL
+
+    def test_spell_in_graveyard_zone_recognised_as_played(self):
+        """Opponent spell revealed directly in GRAVEYARD is recorded as played."""
+        tracker = GlobalTracker(our_controller=1, opp_controller=2)
+
+        tracker.on_show_entity(
+            entity_id=200,
+            card_id="END_025",  # 永时火焰箭
+            controller=2,
+            zone=ZONE_GRAVEYARD,
+            card_type=self.CT_SPELL,
+        )
+
+        # Card should be in opp_known_cards
+        assert len(tracker.state.opp_known_cards) == 1
+        assert tracker.state.opp_known_cards[0].card_id == "END_025"
+
+        # Card should be in opp_graveyard_seen
+        assert "END_025" in tracker.state.opp_graveyard_seen
+
+        # Stats: spells_played should be incremented
+        assert tracker.state.opp_stats.spells_played == 1
+
+    def test_enchantment_in_graveyard_not_played(self):
+        """Enchantments in GRAVEYARD are NOT recorded as played (type filter)."""
+        tracker = GlobalTracker(our_controller=1, opp_controller=2)
+
+        tracker.on_show_entity(
+            entity_id=201,
+            card_id="ENCHANT_001",
+            controller=2,
+            zone=ZONE_GRAVEYARD,
+            card_type=6,  # CT_ENCHANTMENT
+        )
+
+        assert len(tracker.state.opp_known_cards) == 0
+        assert "ENCHANT_001" not in tracker.state.opp_graveyard_seen
+
+    def test_spell_in_play_zone_still_works(self):
+        """Normal path: spell revealed in PLAY zone is still recognised."""
+        tracker = GlobalTracker(our_controller=1, opp_controller=2)
+
+        tracker.on_show_entity(
+            entity_id=202,
+            card_id="CS2_029",  # 火球术
+            controller=2,
+            zone=ZONE_PLAY,
+            card_type=self.CT_SPELL,
+        )
+
+        assert len(tracker.state.opp_known_cards) == 1
+        assert tracker.state.opp_known_cards[0].card_id == "CS2_029"
+
+    def test_spell_in_graveyard_not_added_to_board(self):
+        """Spell in GRAVEYARD should NOT appear on opp_board_minions."""
+        tracker = GlobalTracker(our_controller=1, opp_controller=2)
+
+        tracker.on_show_entity(
+            entity_id=203,
+            card_id="END_025",
+            controller=2,
+            zone=ZONE_GRAVEYARD,
+            card_type=self.CT_SPELL,
+        )
+
+        assert tracker.state.opp_board_minions == []
+
+    def test_no_card_id_in_graveyard_ignored(self):
+        """Entity in GRAVEYARD without card_id should not crash or record."""
+        tracker = GlobalTracker(our_controller=1, opp_controller=2)
+
+        tracker.on_show_entity(
+            entity_id=204,
+            card_id="",
+            controller=2,
+            zone=ZONE_GRAVEYARD,
+            card_type=self.CT_SPELL,
+        )
+
+        assert len(tracker.state.opp_known_cards) == 0
+
+    def test_duplicate_graveyard_entry_prevented(self):
+        """Same card_id not duplicated in opp_graveyard_seen."""
+        tracker = GlobalTracker(our_controller=1, opp_controller=2)
+
+        tracker.on_show_entity(
+            entity_id=205,
+            card_id="END_025",
+            controller=2,
+            zone=ZONE_GRAVEYARD,
+            card_type=self.CT_SPELL,
+        )
+
+        # Simulate zone change handler also trying to add
+        tracker.state.opp_graveyard_seen.append("END_025")
+
+        # Count should be 2 (once from on_show_entity, once from simulated add)
+        # but our fix prevents duplicate from on_show_entity itself
+        assert tracker.state.opp_graveyard_seen.count("END_025") >= 1

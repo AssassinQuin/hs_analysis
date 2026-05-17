@@ -323,6 +323,20 @@ class GlobalTracker:
                         "entity_id": entity_id,
                         "card_type": card_type,
                     })
+            elif zone == self.ZONE_GRAVEYARD and card_type not in (self.CT_ENCHANTMENT, self.CT_HERO_POWER):
+                # 快速结算的法术/武器：SHOW_ENTITY 与 TAG_CHANGE GRAVEYARD
+                # 在同一批次日志中处理，桥接时 zone 已是 GRAVEYARD 而非 PLAY。
+                # 这种情况下对手的 HAND→PLAY→GRAVEYARD 过渡被跳过，
+                # 我们在此补偿调用 _on_card_played 以确保法术被正确追踪。
+                # 也加入 opp_graveyard_seen，因为卡牌已在墓地中。
+                if card_id:
+                    self._on_card_played(entity_id, controller, card_id, card_type)
+                    if card_id not in self.state.opp_graveyard_seen:
+                        self.state.opp_graveyard_seen.append(card_id)
+                    if card_id in self.state.opp_shuffled_into_deck:
+                        self._mark_shuffled_card_played(card_id)
+                    logger.info("快速结算识别: entity=%d, card_id=%s, type=%d 直接出现在GRAVEYARD",
+                                entity_id, card_id, card_type)
             elif zone == self.ZONE_SECRET:
                 # 奥秘注册统一入口：仅在此处添加（show_entity 是对手奥秘唯一的揭示路径）
                 # _on_zone_hand_to_secret 不再重复添加，仅负责触发 _on_card_played
@@ -334,10 +348,11 @@ class GlobalTracker:
                 if self._secret_model and card_id:
                     self._secret_model.exclude(card_id)
 
-            # 为对手揭示到PLAY/SECRET的卡牌喂入贝叶斯模型
+            # 为对手揭示到PLAY/SECRET/GRAVEYARD的卡牌喂入贝叶斯模型
             # 英雄技能不是卡牌，不应影响贝叶斯推断
             # 检测衍生牌：来源为GENERATED 或 超过标准牌库张数限制
-            if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id and card_type != self.CT_HERO_POWER:
+            # GRAVEYARD：快速结算的法术，在桥接时 zone 已是 GRAVEYARD
+            if zone in (self.ZONE_PLAY, self.ZONE_SECRET, self.ZONE_GRAVEYARD) and card_id and card_type != self.CT_HERO_POWER:
                 card_source = self._classify_source(entity_id, card_id)
                 is_generated = (card_source == CardSource.GENERATED 
                                or self._is_over_copy_limit(card_id))
