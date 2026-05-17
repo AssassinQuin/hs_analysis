@@ -396,6 +396,19 @@ class TrackerApp:
         self._game_state_manager.reset()
         # 立即同步新状态到 overlay，避免窗口引用旧实例
         self._overlay.update_state(self._game_state_manager.state)
+        # 注入 log_monitor 到 HandPredictor，启用 Power.log 实时数据模式
+        # 这样 MCTS 模拟会使用真实的 GameState（从 entity_cache 构建）
+        if self._hand_predictor is not None and self._log_monitor is not None:
+            our_ctrl = info.get("our_controller", 0)
+            opp_ctrl = info.get("opp_controller", 0)
+            if our_ctrl and opp_ctrl:
+                self._hand_predictor.set_log_monitor(
+                    self._log_monitor, our_ctrl, opp_ctrl,
+                )
+                logger.info(
+                    "已注入 log_monitor 到 HandPredictor (our=%d, opp=%d)",
+                    our_ctrl, opp_ctrl,
+                )
 
     def _on_game_ended(self):
         """游戏结束。更新 UI 显示最终状态，然后重置。"""

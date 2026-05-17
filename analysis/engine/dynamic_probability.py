@@ -261,6 +261,11 @@ class DynamicProbabilityEngine:
         self._last_mcts_result: Optional[Dict[str, float]] = None  # MCTS推断结果缓存
         # MCTS模拟状态缓存哈希
         self._last_mcts_hash: int = 0
+        # ── Power.log + Tracker 实时数据 ──
+        # v2: 当 log_monitor 可用时，使用真实 GameState 构建
+        self._log_monitor = None  # CoreLogMonitor 实例（外部注入）
+        self._our_controller: int = 0
+        self._opp_controller: int = 0
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -378,6 +383,32 @@ class DynamicProbabilityEngine:
 
     def add_constraint(self, constraint: HandConstraint):
         self._constraints.append(constraint)
+
+    def set_log_monitor(
+        self,
+        log_monitor,
+        our_controller: int = 0,
+        opp_controller: int = 0,
+    ):
+        """注入 CoreLogMonitor 实例，启用 Power.log 实时数据模式。
+
+        当 log_monitor 可用时，MCTS 模拟会使用真实的 GameState
+        （从 entity_cache 构建），而非手动构建的简化 GameState。
+
+        这显著提升了模拟精度，因为：
+        1. 英雄 HP/护甲从 entity_cache 精确提取
+        2. 法力值从 PLAYER 标签精确提取
+        3. 场面随从的属性和关键词从实体标签精确提取
+        4. 武器状态从 WEAPON 实体提取
+
+        Args:
+            log_monitor: CoreLogMonitor 实例
+            our_controller: 我方控制器 ID（1 或 2）
+            opp_controller: 对手控制器 ID（1 或 2）
+        """
+        self._log_monitor = log_monitor
+        self._our_controller = our_controller
+        self._opp_controller = opp_controller
 
     def compute_probabilities(
         self,
@@ -876,14 +907,29 @@ class DynamicProbabilityEngine:
                 return False
 
             # 执行MCTS推断
-            mcts_probs = self._mcts_engine.infer_hand_probabilities(
-                bayesian_state=self._bayesian_state,
-                observed=observed,
-                seen_cards=self._seen_cards,
-                generated_cards=self._generated_cards,
-                hand_size=hand_size,
-                time_budget_ms=400.0,
-            )
+            # 优先使用 Power.log + Tracker 实时数据（v2）
+            if self._log_monitor is not None and self._our_controller and self._opp_controller:
+                mcts_probs = self._mcts_engine.infer_from_tracker(
+                    log_monitor=self._log_monitor,
+                    our_controller=self._our_controller,
+                    opp_controller=self._opp_controller,
+                    observed=observed,
+                    bayesian_state=self._bayesian_state,
+                    seen_cards=self._seen_cards,
+                    generated_cards=self._generated_cards,
+                    hand_size=hand_size,
+                    time_budget_ms=400.0,
+                )
+            else:
+                # 回退到简化模式（兼容旧接口）
+                mcts_probs = self._mcts_engine.infer_hand_probabilities(
+                    bayesian_state=self._bayesian_state,
+                    observed=observed,
+                    seen_cards=self._seen_cards,
+                    generated_cards=self._generated_cards,
+                    hand_size=hand_size,
+                    time_budget_ms=400.0,
+                )
 
             if not mcts_probs:
                 return False

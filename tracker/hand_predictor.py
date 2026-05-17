@@ -441,6 +441,23 @@ class HandPredictor:
             logger.debug("无法连接 HSReplay 数据库: %s", e)
             return None
 
+    def set_log_monitor(self, log_monitor, our_controller: int = 0, opp_controller: int = 0):
+        """注入 CoreLogMonitor 实例，启用 Power.log 实时数据模式。
+
+        当 log_monitor 可用时，MCTS 模拟会使用真实的 GameState
+        （从 entity_cache 构建），替代手动构建的简化 GameState。
+
+        Args:
+            log_monitor: CoreLogMonitor 实例
+            our_controller: 我方控制器 ID（1 或 2）
+            opp_controller: 对手控制器 ID（1 或 2）
+        """
+        self._ensure_engines()
+        if self._probability_engine is not None:
+            self._probability_engine.set_log_monitor(
+                log_monitor, our_controller, opp_controller,
+            )
+
     def close(self):
         """关闭缓存的数据库连接。"""
         if self._db_conn is not None:
