@@ -103,3 +103,25 @@ Work Log:
 Stage Summary:
 - 816个测试全部通过
 - 已推送到GitHub (commit f0e18a5)
+
+---
+Task ID: 1
+Agent: main
+Task: 将引擎和世界推断系统接入对手手牌概率
+
+Work Log:
+- 探索项目结构，找到 analysis/engine/world_model.py (世界模型)、dynamic_probability.py (概率引擎)、card_effect_inference.py (效果推断引擎)
+- 发现5个关键数据断裂导致世界模型无法正常工作
+- 修复 log_monitor.py: build_state_dict() 添加 available_mana 和 opp_cards_played_this_turn
+- 修复 dynamic_probability.py: _build_world_evidence() 中 opp_hand_count 从0改为从 compute_probabilities 传入
+- 将 CardEffectInferenceEngine 结果通过 hand_predictor.py 传递给 DynamicProbabilityEngine._effect_inferences
+- 在 world_model.py 添加 analyze_playstyle_prior() (打法风格推断) 和 analyze_board_state() (场面状态推断)
+- 在 dynamic_probability.py 的 _collect_relevant_evidence() 中添加 playstyle_prior 和 board_state 证据类型支持
+- 运行35个测试全部通过
+- 端到端测试验证：世界模型正确将 aggro 打法+pass turn 的对手，低费牌概率从30%降至5.68%，高费牌概率从10%提升至16.67%
+
+Stage Summary:
+- 关键发现：世界模型已集成但数据流断裂(opp_hand_count=0, available_mana未传入, effect_inferences未传递)
+- 修复后世界模型产出17条证据(未出牌证据11条+法力空隙3条+打法风格3条)
+- 新增2个分析器：playstyle_prior 和 board_state
+- 代码已推送到 GitHub: c5a192b
