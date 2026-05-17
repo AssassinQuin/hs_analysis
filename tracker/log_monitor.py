@@ -974,6 +974,7 @@ class CoreLogMonitor:
             "opp_shuffled_into_deck": list(gt_state.opp_shuffled_into_deck),
             "is_first_player": gt_state.is_first_player,
             "coin_used": gt_state.coin_used,
+            "opp_hand_hold": dict(gt_state.opp_hand_hold_since),
             "known_hand": [(eid, cid) for eid, cid in known_hand],
             "known_cards": [
                 {

@@ -219,6 +219,11 @@ class DynamicProbabilityEngine:
         # DB 卡组数据缓存（首次调用批量加载，避免每次概率计算都开/关 DB）
         self._deck_cards_cache: Dict[int, List[int]] = {}
         self._deck_cache_loaded: bool = False
+        # 对手后手/硬币/回合/持有推断
+        self._is_first_player: bool = True
+        self._coin_used: bool = False
+        self._current_turn: int = 0
+        self._opp_hand_hold: Dict[int, int] = {}  # entity_id → turn_first_seen_in_hand
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -242,6 +247,12 @@ class DynamicProbabilityEngine:
         self._generated_cards = set(state_dict.get("generated_cards", set()))
         self._revealed_hand = list(state_dict.get("known_hand", []))
         self._constraints = []
+
+        # 对手先后手/硬币/回合信息
+        self._is_first_player = state_dict.get("is_first_player", True)
+        self._coin_used = state_dict.get("coin_used", False)
+        self._current_turn = state_dict.get("turn", 0)
+        self._opp_hand_hold = dict(state_dict.get("opp_hand_hold", {}))
 
         # Track discarded cards for probability exclusion
         self._discarded_cards = set(state_dict.get("discarded_cards", []))
@@ -346,6 +357,20 @@ class DynamicProbabilityEngine:
                 report.card_probabilities.append(cp)
                 revealed_set.add(card_id)
 
+        # 1a. 后手硬币：如果对手是后手且硬币未使用，100%确认对手手牌有硬币
+        # 后手第5张牌一定是硬币，这是游戏机制
+        if not self._is_first_player and not self._coin_used:
+            # 硬币卡牌ID
+            from analysis.constants.hs_enums import COIN_CARD_IDS
+            for coin_id in COIN_CARD_IDS:
+                if coin_id not in revealed_set:
+                    # 检查硬币是否已打出（如果 seen_cards 中有硬币，说明已用过但 coin_used 未检测到）
+                    if self._seen_cards.get(coin_id, 0) == 0:
+                        cp = self._card_id_to_probability(coin_id, 1.0, "revealed")
+                        report.card_probabilities.append(cp)
+                        revealed_set.add(coin_id)
+                        break  # 只添加一种硬币
+
         # 1b. 确认手牌（来自 Mind Vision 等复制效果）
         # 这些卡已被复制走，对手当前不一定还有，但作为贝叶斯先验适度提升
         confirmed_boost = {}  # card_id → boosted probability
@@ -378,14 +403,23 @@ class DynamicProbabilityEngine:
         # 3. 条件证据修正
         self._apply_conditional_modifiers(report)
 
-        # 4. 应用确认手牌先验提升（在条件修正之后，确保不被覆盖）
+        # 4. 持有回合推断：多回合不打的牌更可能是高费牌
+        self._apply_hold_duration_bias(report)
+
+        # 5. 留牌推断：对手在mulligan阶段选择保留的牌更可能是低费牌
+        self._apply_mulligan_keep_bias(report)
+
+        # 6. 衍生牌共现推断：对手打出衍生牌说明同卡组牌概率提升
+        self._apply_generated_cooccurrence_boost(report)
+
+        # 7. 应用确认手牌先验提升（在条件修正之后，确保不被覆盖）
         for cp in report.card_probabilities:
             if cp.card_id in confirmed_boost and cp.source != "revealed":
                 cp.probability = max(cp.probability, confirmed_boost[cp.card_id])
                 if cp.source != "inferred":
                     cp.source = "confirmed_prior"
 
-        # 5. 排序
+        # 8. 排序
         report.card_probabilities.sort(
             key=lambda cp: (
                 0 if cp.source == "revealed" else 1,
@@ -665,6 +699,159 @@ class DynamicProbabilityEngine:
                 reduction = p_holds_type * 0.3
                 for cp in non_type:
                     cp.probability = max(0.0, cp.probability * (1.0 - reduction))
+
+    # ── 持有回合推断 ──────────────────────────────────────
+
+    def _apply_hold_duration_bias(self, report: HandProbabilityReport):
+        """根据对手手牌持有时长修正概率。
+
+        对手多回合不打出某张牌，说明该牌更可能是高费牌。
+        逻辑：
+        - 计算对手手牌的平均持有时长
+        - 持有时间越长，高费牌概率提升，低费牌概率降低
+        - 这种推断基于炉石常识：1费牌通常在1-2回合打出，
+          5费以上牌通常要等更久
+        """
+        hand_count = report.hand_size
+        current_turn = self._current_turn
+        hold_data = self._opp_hand_hold
+
+        if not hold_data or hand_count <= 0 or current_turn <= 1:
+            return
+
+        # 计算平均持有回合数
+        hold_durations = []
+        for eid, start_turn in hold_data.items():
+            duration = current_turn - start_turn
+            if duration > 0:
+                hold_durations.append(duration)
+
+        if not hold_durations:
+            return
+
+        avg_hold = sum(hold_durations) / len(hold_durations)
+
+        # 如果平均持有 <= 1 回合，不需要调整
+        if avg_hold <= 1:
+            return
+
+        # 偏好强度：持有越久，区分度越大
+        bias_strength = min(1.0, avg_hold / 5.0)
+
+        for cp in report.card_probabilities:
+            if cp.source == "revealed":
+                continue
+            cost = cp.cost
+            if cost <= 1:
+                # 0-1费牌多回合不打：可能不是这些牌 → 降低
+                cp.probability *= (1.0 - 0.3 * bias_strength)
+            elif cost <= 3:
+                # 2-3费牌：轻微降低
+                cp.probability *= (1.0 - 0.1 * bias_strength)
+            elif cost <= 5:
+                # 4-5费牌：轻微提升
+                cp.probability *= (1.0 + 0.2 * bias_strength)
+            elif cost <= 7:
+                # 6-7费牌：提升
+                cp.probability *= (1.0 + 0.4 * bias_strength)
+            else:
+                # 8+费牌：显著提升
+                cp.probability *= (1.0 + 0.6 * bias_strength)
+            cp.probability = max(0.0, min(1.0, cp.probability))
+
+    # ── 留牌推断 ──────────────────────────────────────
+
+    def _apply_mulligan_keep_bias(self, report: HandProbabilityReport):
+        """根据对手留牌行为修正概率。
+
+        对手在mulligan阶段选择保留的牌更可能是低费牌。
+        炉石玩家通常保留1-3费牌，换掉7+费牌。
+        如果当前回合 <= 3（仍在早期），对手手牌中仍有mulligan保留的牌，
+        那么这些牌更可能是低费的。
+
+        逻辑：
+        - 早期回合（turn <= 3）时，对手手牌中大部分还是mulligan保留的
+        - 低费牌（0-3费）概率提升
+        - 高费牌（7+费）概率降低（通常会被换掉）
+        - 中期回合之后这个效果逐渐消退
+        """
+        current_turn = self._current_turn
+        if current_turn <= 0:
+            return
+
+        # 只在早期回合生效（1-5回合），之后mulligan效果消退
+        if current_turn > 5:
+            return
+
+        # 效果强度随回合衰减
+        # turn 1: 最强(1.0), turn 3: 中等(0.5), turn 5: 微弱(0.1)
+        mulligan_factor = max(0.0, 1.0 - (current_turn - 1) * 0.25)
+
+        for cp in report.card_probabilities:
+            if cp.source == "revealed":
+                continue
+            cost = cp.cost
+            if cost <= 1:
+                # 0-1费：几乎一定会保留
+                cp.probability *= (1.0 + 0.3 * mulligan_factor)
+            elif cost <= 3:
+                # 2-3费：通常会保留
+                cp.probability *= (1.0 + 0.2 * mulligan_factor)
+            elif cost >= 7:
+                # 7+费：通常会被换掉，除非是特殊卡组
+                cp.probability *= (1.0 - 0.25 * mulligan_factor)
+            elif cost >= 5:
+                # 5-6费：部分保留部分换
+                cp.probability *= (1.0 - 0.1 * mulligan_factor)
+            # 4费：大致中性
+            cp.probability = max(0.0, min(1.0, cp.probability))
+
+    # ── 衍生牌共现推断 ──────────────────────────────────────
+
+    def _apply_generated_cooccurrence_boost(self, report: HandProbabilityReport):
+        """对手打出衍生牌时，同卡组牌概率应提升。
+
+        当对手打出一张衍生牌（发现/创造），这张牌本身不是牌库牌，
+        但它的出现说明对手拥有产生这张牌的源牌，源牌在卡组中。
+        因此，同卡组中与源牌相关的其他牌概率也应该提升。
+
+        更直接的逻辑：对手每打出一张牌（包括衍生牌），
+        都增加了对手卡组"活跃度"的证据——如果对手已打出N张牌，
+        而这些牌大多属于某个卡组，那么该卡组中的未打出牌
+        在手牌中的概率更高（因为牌库更小、密度更高）。
+        """
+        # 统计对手已打出的总牌数（包括衍生牌）
+        total_played = sum(self._seen_cards.values())
+
+        if total_played <= 0:
+            return
+
+        # 衍生牌的源牌信息
+        # 对手打出衍生牌 → 他一定有产生这张牌的源牌 → 源牌在卡组中
+        # 我们无法精确知道源牌是哪张，但知道：
+        # 1. 衍生牌越多，说明对手的卡组越倾向于"生成"类卡组
+        # 2. 生成类卡组通常有更多"发现"/"随机"效果
+        # 3. 效果触发牌（conditional_evidence triggered）提供了确定的手牌信息
+
+        # 简化逻辑：对于每张已打出的衍生牌，其同卡组牌获得小幅加成
+        # 这基于"对手能打出衍生牌 = 对手有足够的回合和手牌空间 = 更多卡组牌在手牌中"
+        generated_count = len(self._generated_cards)
+
+        if generated_count <= 0:
+            return
+
+        # 加成因子：衍生牌越多，说明对手越活跃，手牌中卡组牌密度越高
+        # 但要适度，避免过度加成
+        boost = min(0.3, generated_count * 0.05)  # 最多 30% 加成
+
+        for cp in report.card_probabilities:
+            if cp.source == "revealed":
+                continue
+            # 对手打出衍生牌 = 对手有法力余量 + 手牌有牌可打
+            # → 同卡组中低中费牌更有可能在手牌中
+            if cp.cost <= 5:
+                cp.probability = min(1.0, cp.probability * (1.0 + boost))
+            # 高费牌不一定有加成（可能法力不够打不出来）
 
     def _get_deck_cards(self, archetype_id: int) -> List[int]:
         """获取指定卡组原型包含的卡牌 dbfId 列表。

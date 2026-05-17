@@ -152,6 +152,9 @@ class GlobalGameState:
     opp_hand_card_ids: Dict[int, Tuple[str, int]] = field(default_factory=dict)
     """对手手牌 entity_id -> (card_id, zone)（SHOW_ENTITY 揭示的）"""
 
+    opp_hand_hold_since: Dict[int, int] = field(default_factory=dict)
+    """对手手牌 entity_id -> 首次进入HAND的回合数（用于持有回合推断）"""
+
     opp_hand_count: int = 0
     """对手当前手牌数量（从实体区域计数）"""
 

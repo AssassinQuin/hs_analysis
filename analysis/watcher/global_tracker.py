@@ -463,8 +463,14 @@ class GlobalTracker:
         if is_opp:
             if old_zone == self.ZONE_HAND and new_zone != self.ZONE_HAND:
                 self.state.opp_hand_count = max(0, self.state.opp_hand_count - 1)
+                # 卡牌离开手牌，清除持有追踪
+                self.state.opp_hand_hold_since.pop(entity_id, None)
             elif old_zone != self.ZONE_HAND and new_zone == self.ZONE_HAND:
                 self.state.opp_hand_count += 1
+                # 卡牌进入手牌，记录回合（用于持有回合推断）
+                current_turn = self.state.current_turn
+                if entity_id not in self.state.opp_hand_hold_since and current_turn > 0:
+                    self.state.opp_hand_hold_since[entity_id] = current_turn
         # 我方手牌也实时追踪
         elif controller == self.our_controller:
             if old_zone == self.ZONE_HAND and new_zone != self.ZONE_HAND:
