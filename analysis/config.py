@@ -5,7 +5,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 
 # ── Data source ──────────────────────────────────────────────────────────
-DATA_BUILD = os.environ.get("HS_DATA_BUILD", "240397")
+DATA_BUILD = os.environ.get("HS_DATA_BUILD", "241958")
 DATA_DIR = PROJECT_ROOT / "card_data" / DATA_BUILD
 
 COLLECTIBLE_JSON = DATA_DIR / "zhCN" / "cards.collectible.json"
