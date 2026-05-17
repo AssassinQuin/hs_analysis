@@ -183,10 +183,22 @@ class ShuffleTrackerRule:
         from analysis.constants.hs_enums import ZONE_DECK
         self._ZONE_DECK = ZONE_DECK
 
+    def on_show_entity(self, entity_id: int, card_id: str,
+                       controller: int, zone: int,
+                       card_type: int, state: "GlobalGameState",
+                       is_opp: bool) -> None:
+        """Shuffle rule doesn't need show_entity — no-op."""
+        pass
+
+    def on_turn_change(self, new_turn: int,
+                       state: "GlobalGameState") -> None:
+        """Shuffle rule doesn't need turn_change — no-op."""
+        pass
+
     def on_zone_change(self, ctx: TrackingContext) -> None:
         if ctx.new_zone != self._ZONE_DECK:
             return
-            
+
         if ctx.is_opp:
             # Always track in the legacy list for backward compat
             if ctx.card_id:
