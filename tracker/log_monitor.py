@@ -125,10 +125,12 @@ def find_power_log_path() -> Optional[Path]:
 
 # 补充 hs_enums 中未覆盖的额外映射项
 _ZONE_MAP = {
-    "INVALID": 0, "REMOVEDFROMGAME": 5,
+    "INVALID": 0,
 }
 # 合并 hs_enums 中的权威映射
 _ZONE_MAP.update(ZONE_NAME_MAP)
+# REMOVEDFROMGAME 权威值为 8（来自 hs_enums）
+_ZONE_MAP["REMOVEDFROMGAME"] = 8
 
 _CARD_TYPE_MAP = {
     "INVALID": 0, "GAME": 1, "PLAYER": 2, "ITEM": 8,
@@ -798,7 +800,7 @@ class CoreLogMonitor:
             ],
             "generated_cards": list(gt_state.opp_generated_seen),
             "graveyard": list(gt_state.opp_graveyard_seen),
-            "known_deck_cards": list(gt_state.opp_known_deck_cards),
+            "peeked_deck_cards": list(gt_state.opp_peeked_deck_cards),
             "hand_transforms": list(gt_state.opp_hand_transforms),
             "discarded_cards": list(gt_state.opp_discarded_cards),
             "hand_type_constraints": list(gt_state.opp_hand_type_constraints),

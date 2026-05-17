@@ -210,6 +210,15 @@ class DynamicProbabilityEngine:
         self._seen_cards: Dict[str, int] = {}
         self._generated_cards: Set[str] = set()
         self._revealed_hand: List[Tuple[int, str]] = []
+        self._discarded_cards: set = set()
+        self._known_deck_cards: list = []
+        self._hand_transforms: list = []
+        self._confirmed_hand_cards: set = set()
+        self._pool_cache_max = 256
+        self._pool_cache: Dict = {}
+        # DB 卡组数据缓存（首次调用批量加载，避免每次概率计算都开/关 DB）
+        self._deck_cards_cache: Dict[int, List[int]] = {}
+        self._deck_cache_loaded: bool = False
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -235,19 +244,19 @@ class DynamicProbabilityEngine:
         self._constraints = []
 
         # Track discarded cards for probability exclusion
-        self._discarded_cards: set = set(state_dict.get("discarded_cards", []))
+        self._discarded_cards = set(state_dict.get("discarded_cards", []))
 
         # Track deck peek cards — these are confirmed to be in opponent's deck
         # Used to reduce uncertainty about deck composition
-        self._known_deck_cards: list = list(state_dict.get("known_deck_cards", []))
+        self._known_deck_cards = list(state_dict.get("known_deck_cards", []))
 
         # Track hand transforms — original card_id no longer in original form
         # Used to exclude transformed-from cards and include transformed-to cards
-        self._hand_transforms: list = list(state_dict.get("hand_transforms", []))
+        self._hand_transforms = list(state_dict.get("hand_transforms", []))
 
         # Track confirmed hand cards (from copy effects like Mind Vision)
         # These cards are 100% confirmed to be/was in opponent's hand
-        self._confirmed_hand_cards: list = list(state_dict.get("confirmed_hand_cards", []))
+        self._confirmed_hand_cards = list(state_dict.get("confirmed_hand_cards", []))
 
         for kc in state_dict.get("known_cards", []):
             ce = kc.get("conditional_evidence", "")
@@ -360,7 +369,7 @@ class DynamicProbabilityEngine:
 
         # 2. 基于贝叶斯卡组的超几何分布概率
         bayesian_probs = self._compute_bayesian_hand_probabilities(
-            hand_size, deck_remaining
+            hand_size, deck_remaining, transformed_from_ids
         )
         for cp in bayesian_probs:
             if cp.card_id not in revealed_set:
@@ -382,12 +391,15 @@ class DynamicProbabilityEngine:
         return report
 
     def _compute_bayesian_hand_probabilities(
-        self, hand_size: int, deck_remaining: int
+        self, hand_size: int, deck_remaining: int,
+        transformed_from_ids: set | None = None,
     ) -> List[CardProbability]:
         """基于贝叶斯后验 + 超几何分布计算每张卡牌的手牌概率。
 
         P(c in hand | observed) = Σ_j P(c in hand | deck=j) × P(deck=j | observed)
         """
+        if transformed_from_ids is None:
+            transformed_from_ids = set()
         results: List[CardProbability] = []
         pool = hand_size + deck_remaining
 
@@ -567,21 +579,35 @@ class DynamicProbabilityEngine:
                     cp.probability = max(0.0, cp.probability * (1.0 - reduction))
 
     def _get_deck_cards(self, archetype_id: int) -> List[int]:
-        try:
-            from analysis.data.fetch_hsreplay import init_db, get_meta_decks
-            from analysis.config import HSREPLAY_CACHE_DB
+        """获取指定卡组原型包含的卡牌 dbfId 列表。
 
-            conn = init_db(str(HSREPLAY_CACHE_DB))
+        首次调用时批量加载所有卡组数据到内存缓存，
+        后续调用直接查内存，不再重复打开 DB 连接。
+        """
+        # 先查内存缓存
+        if archetype_id in self._deck_cards_cache:
+            return self._deck_cards_cache[archetype_id]
+
+        # 批量加载所有卡组数据（仅首次调用时打开 DB）
+        if not self._deck_cache_loaded:
             try:
-                decks = get_meta_decks(conn)
-                for d in decks:
-                    if d["archetype_id"] == archetype_id:
-                        return d.get("cards", [])
-            finally:
-                conn.close()
-        except Exception as e:
-            logger.debug("获取卡组卡牌失败: %s", e)
-        return []
+                from analysis.data.fetch_hsreplay import init_db, get_meta_decks
+                from analysis.config import HSREPLAY_CACHE_DB
+
+                conn = init_db(str(HSREPLAY_CACHE_DB))
+                try:
+                    for d in get_meta_decks(conn):
+                        aid = d.get("archetype_id")
+                        if aid is not None:
+                            self._deck_cards_cache[aid] = d.get("cards", [])
+                finally:
+                    conn.close()
+                self._deck_cache_loaded = True
+            except Exception as e:
+                logger.debug("批量加载卡组数据失败: %s", e)
+                self._deck_cache_loaded = True  # 避免重复尝试
+
+        return self._deck_cards_cache.get(archetype_id, [])
 
     def _estimate_remaining_copies(self, card_id: str) -> int:
         top_decks = self._bayesian_state.get("top_decks", [])

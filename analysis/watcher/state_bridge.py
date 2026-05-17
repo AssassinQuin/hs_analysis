@@ -578,31 +578,45 @@ class StateBridge:
             log.warning(f"Error counting hand: {e}")
             return 0
 
+    # ── 费用分段定义（单一数据源，避免硬编码阈值散落各处） ──
+    _COST_BUCKET_LOW = 2    # 低费：0-2
+    _COST_BUCKET_MID = 4    # 中费：3-4
+    # 高费：5+
+
+    # ── 风格判定阈值（集中定义，便于调参和测试） ──
+    _STYLE_THRESHOLDS = {
+        "aggro":    {"max_avg": 2.0, "min_low_pct": 0.55},
+        "tempo":    {"max_avg": 2.8, "min_low_pct": 0.40, "max_high_pct": 0.20},
+        "control":  {"min_avg": 4.0, "min_high_pct": 0.30},
+        "midrange": {"min_low_pct": 0.25, "min_mid_pct": 0.25},
+    }
+
     @staticmethod
     def _infer_our_playstyle(state: GameState) -> str:
-        """Infer our deck archetype from hand composition.
+        """推断我方卡组风格（aggro / tempo / midrange / control / unknown）。
 
-        Uses mana cost distribution of hand cards as a proxy for deck archetype.
-        Falls back to 'unknown' if hand is too small.
+        基于当前手牌的法力值分布作为卡组风格的代理指标。
+        分三档：低费(0-2) / 中费(3-4) / 高费(5+)，按占比和均值匹配风格。
+        手牌不足 3 张时返回 'unknown'。
         """
         hand = state.hand
         if not hand or len(hand) < 3:
             return "unknown"
 
-        low = 0
-        mid = 0
-        high = 0
-        total_cost = 0
-        n = 0
+        bucket_low = StateBridge._COST_BUCKET_LOW
+        bucket_mid = StateBridge._COST_BUCKET_MID
+        t = StateBridge._STYLE_THRESHOLDS
+
+        low = mid = high = total_cost = n = 0
         for c in hand:
             cost = getattr(c, "cost", 0)
             if not isinstance(cost, (int, float)):
                 continue
             total_cost += cost
             n += 1
-            if cost <= 2:
+            if cost <= bucket_low:
                 low += 1
-            elif cost <= 4:
+            elif cost <= bucket_mid:
                 mid += 1
             else:
                 high += 1
@@ -612,15 +626,19 @@ class StateBridge:
 
         avg = total_cost / n
         low_pct = low / n
+        mid_pct = mid / n
         high_pct = high / n
 
-        if avg <= 2.0 and low_pct >= 0.55:
+        # 按阈值表逐条匹配（优先级：aggro > tempo > control > midrange）
+        if avg <= t["aggro"]["max_avg"] and low_pct >= t["aggro"]["min_low_pct"]:
             return "aggro"
-        if avg <= 2.8 and low_pct >= 0.40 and high_pct <= 0.20:
+        if (avg <= t["tempo"]["max_avg"]
+                and low_pct >= t["tempo"]["min_low_pct"]
+                and high_pct <= t["tempo"]["max_high_pct"]):
             return "tempo"
-        if avg >= 4.0 and high_pct >= 0.30:
+        if avg >= t["control"]["min_avg"] and high_pct >= t["control"]["min_high_pct"]:
             return "control"
-        if low_pct >= 0.30 and mid_pct >= 0.25:
+        if low_pct >= t["midrange"]["min_low_pct"] and mid_pct >= t["midrange"]["min_mid_pct"]:
             return "midrange"
 
         return "unknown"

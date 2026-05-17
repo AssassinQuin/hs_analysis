@@ -45,6 +45,13 @@ class CardEffects:
     has_discover: bool = False
     target_side: str = ""
     has_lifesteal: bool = False
+    # ── Tutor constraints ──
+    # When a card says "Draw a [type]" or "Discover a [type]",
+    # we know the opponent gains a card of that type.  These store the
+    # *first* matching constraint per category (type / race / spell school).
+    tutor_card_type: str = ""
+    tutor_race: str = ""
+    tutor_spell_school: str = ""
 
 
 def _mechanics_set(card: Card) -> set:
@@ -85,6 +92,10 @@ def get_effects(card: Card) -> CardEffects:
             _fill_spell_effects(text, eff, mechs)
         if "CHARGE" in mechs or "RUSH" in mechs:
             pass
+
+    # Tutor constraints are card-type agnostic (minions, spells, weapons
+    # can all have "Draw a [type]" effects).
+    _fill_tutor_constraints(text, eff)
 
     return eff
 
@@ -169,6 +180,64 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
         eff.has_destroy = True
     if "沉默" in text or "Silence" in text:
         eff.has_silence = True
+
+
+# ── Tutor constraint extraction ──────────────────────────────────────
+# Negative lookahead avoids matching conditional phrases like
+# "if you've drawn a minion this game".
+_TUTOR_TYPE_RE = re.compile(
+    r"(?:draw|discover)\s+a\s+(minion|spell|weapon|location)\b"
+    r"(?![\w\s]*(?:this\s+game|this\s+turn))"
+)
+_TUTOR_RACE_RE = re.compile(
+    r"(?:draw|discover)\s+a\s+(dragon|demon|mech(?:anical)?|beast|murloc|totem|"
+    r"pirate|elemental|undead|quilboar|naga|draenei)\b"
+    r"(?![\w\s]*(?:this\s+game|this\s+turn))"
+)
+_TUTOR_SCHOOL_RE = re.compile(
+    r"(?:draw|discover)\s+a\s+(fire|frost|arcane|holy|shadow|nature|"
+    r"fel|blood|physical)\s+spell\b"
+    r"(?![\w\s]*(?:this\s+game|this\s+turn))"
+)
+
+_RACE_NORMALIZE = {
+    "dragon": "DRAGON",
+    "demon": "DEMON",
+    "mech": "MECHANICAL",
+    "mechanical": "MECHANICAL",
+    "beast": "BEAST",
+    "murloc": "MURLOC",
+    "pirate": "PIRATE",
+    "elemental": "ELEMENTAL",
+    "undead": "UNDEAD",
+    "totem": "TOTEM",
+    "naga": "NAGA",
+    "draenei": "DRAENEI",
+    "quilboar": "QUILBOAR",
+}
+
+
+def _fill_tutor_constraints(text: str, eff: CardEffects) -> None:
+    """Parse card text for tutor effects and populate constraint fields.
+
+    Matches against English text only (always available from HearthstoneJSON).
+    Sets at most one value per category (first match wins).
+    """
+    if not text:
+        return
+    text_lower = text.lower()
+
+    m = _TUTOR_TYPE_RE.search(text_lower)
+    if m:
+        eff.tutor_card_type = m.group(1).upper()
+
+    m = _TUTOR_RACE_RE.search(text_lower)
+    if m:
+        eff.tutor_race = _RACE_NORMALIZE.get(m.group(1).lower(), m.group(1).upper())
+
+    m = _TUTOR_SCHOOL_RE.search(text_lower)
+    if m:
+        eff.tutor_spell_school = m.group(1).upper()
 
 
 def _fill_armor_from_text(text: str, eff: CardEffects) -> None:

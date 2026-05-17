@@ -249,7 +249,7 @@ class GlobalGameState:
     """我方洗入牌库的已知 card_id"""
 
     # ---- 对手牌库已知卡牌（窥探效果） ----
-    opp_known_deck_cards: List[Dict] = field(default_factory=list)
+    opp_peeked_deck_cards: List[Dict] = field(default_factory=list)
     """窥探到的对手牌库卡牌 [{"card_id": str, "entity_id": int, "turn": int}, ...]"""
 
     # ---- 手牌变形追踪 ----

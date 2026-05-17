@@ -287,7 +287,10 @@ class GlobalTracker:
                 if card_id and card_id in self.state.opp_shuffled_into_deck:
                     self._mark_shuffled_card_played(card_id)
             elif zone == self.ZONE_SECRET:
-                self.state.opp_secrets.append(card_id)
+                # 奥秘注册统一入口：仅在此处添加（show_entity 是对手奥秘唯一的揭示路径）
+                # _on_zone_hand_to_secret 不再重复添加，仅负责触发 _on_card_played
+                if card_id not in self.state.opp_secrets:
+                    self.state.opp_secrets.append(card_id)
                 self._on_card_played(entity_id, controller, card_id, card_type)
                 # 更新奥秘概率模型
                 self._ensure_secret_model()
@@ -363,8 +366,12 @@ class GlobalTracker:
         # 注意：不在此处检查is_opp——controller可能已变化
         # （例如对手卡牌在回合开始时转移到玩家牌库）
         if entity_id in self.state.opp_hand_card_ids:
-            card_id = self.state.opp_hand_card_ids[entity_id][0]
-            self.state.opp_hand_card_ids[entity_id] = (card_id, new_zone)
+            tracked_card_id = self.state.opp_hand_card_ids[entity_id][0]
+            self.state.opp_hand_card_ids[entity_id] = (tracked_card_id, new_zone)
+            # 仅在日志未提供 card_id 时使用追踪值作为回退
+            # 不盲目覆写——变形后的 ChangeEntity 会先更新 card_id
+            if not card_id:
+                card_id = tracked_card_id
 
         # 区域转换分发
         handler = self._zone_handlers.get((old_zone, new_zone))
@@ -572,9 +579,11 @@ class GlobalTracker:
             self.state.opp_returned_to_hand_seen.append(card_id)
 
     def _on_zone_hand_to_secret(self, entity_id, controller, card_id, card_type, is_opp):
-        """打出奥秘: HAND -> SECRET (§7)"""
-        if is_opp and card_id:
-            self.state.opp_secrets.append(card_id)
+        """打出奥秘: HAND -> SECRET (§7)
+
+        注意：奥秘注册统一由 on_show_entity (SECRET zone) 处理。
+        此方法仅负责触发 _on_card_played 记录出牌，不操作 opp_secrets。
+        """
         self._on_card_played(entity_id, controller, card_id, card_type)
 
     def _on_zone_secret_resolved(self, entity_id, controller, card_id, card_type, is_opp):

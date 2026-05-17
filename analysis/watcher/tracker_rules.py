@@ -507,7 +507,7 @@ class DeckPeekTrackerRule:
             return
 
         self._peeked_entities.add(entity_id)
-        state.opp_known_deck_cards.append({
+        state.opp_peeked_deck_cards.append({
             "card_id": card_id,
             "entity_id": entity_id,
             "turn": state.current_turn,
@@ -595,30 +595,11 @@ class TutorConstraintTrackerRule:
     This creates a HandConstraint for probability calculation.
 
     Detection strategy:
-    - Parse card text effects from card metadata at play time
-    - Use regex with word boundaries to avoid matching conditional text
-      (e.g., "if you've drawn a minion" is NOT a tutor effect)
-    - Map Hearthstone card_type/race/spellSchool to constraint values
+    - Delegates text parsing to ``card_effects.CardEffects`` (the compiler
+      layer) which extracts ``tutor_card_type``, ``tutor_race``, and
+      ``tutor_spell_school`` from the card's English text.
+    - This rule contains **zero regex** — it only reads structured fields.
     """
-
-    import re as _re
-
-    # Regex patterns that match actual tutor actions (not conditional phrases)
-    # Negative lookbehind avoids matching "if you've drawn/discovered"
-    _TUTOR_TYPE_RE = _re.compile(
-        r"(?:draw|discover)\s+a\s+(minion|spell|weapon|location)\b"
-        r"(?![\w\s]*(?:this\s+game|this\s+turn))"
-    )
-    _TUTOR_RACE_RE = _re.compile(
-        r"(?:draw|discover)\s+a\s+(dragon|demon|mech|beast|murloc|totem|"
-        r"pirate|elemental|undead|quilboar|naga|alliance|horde)\b"
-        r"(?![\w\s]*(?:this\s+game|this\s+turn))"
-    )
-    _TUTOR_SCHOOL_RE = _re.compile(
-        r"(?:draw|discover)\s+a\s+(fire|frost|arcane|holy|shadow|nature|"
-        r"fel|blood|physical)\s+spell\b"
-        r"(?![\w\s]*(?:this\s+game|this\s+turn))"
-    )
 
     name = "tutor_constraint"
 
@@ -640,7 +621,6 @@ class TutorConstraintTrackerRule:
         """Detect tutor effects when opponent plays a card (HAND→PLAY)."""
         if not ctx.is_opp:
             return
-        # Only trigger on play (HAND→PLAY)
         from analysis.constants.hs_enums import ZONE_PLAY
         if ctx.new_zone != ZONE_PLAY:
             return
@@ -648,7 +628,7 @@ class TutorConstraintTrackerRule:
         if not ctx.card_id:
             return
 
-        # Parse the played card's text for tutor effects
+        # Read structured tutor constraints from the compiler layer
         constraints = self._extract_tutor_constraints(ctx.card_id, ctx.state.current_turn)
         for constraint in constraints:
             ctx.state.opp_hand_type_constraints.append(constraint)
@@ -662,7 +642,7 @@ class TutorConstraintTrackerRule:
                        state: "GlobalGameState") -> None:
         """Clear stale constraints.
 
-        Keep constraints from last 2 turns only. "Draw" and "Discover"
+        Keep constraints from last 2 turns only.  "Draw" and "Discover"
         effects resolve immediately, but the drawn card may stay in hand
         for a turn or two before being played.
         """
@@ -672,66 +652,49 @@ class TutorConstraintTrackerRule:
             if c.get("turn", 0) >= cutoff
         ]
 
-    def _extract_tutor_constraints(self, card_id: str, turn: int) -> list:
-        """Parse card text to extract tutor type constraints using regex.
+    @staticmethod
+    def _extract_tutor_constraints(card_id: str, turn: int) -> list:
+        """Read tutor constraints from the structured card effects layer.
 
-        Uses word-boundary matching and negative lookahead to avoid
-        matching conditional phrases like "if you've drawn a minion".
+        Delegates to ``card_effects.get_effects()`` — no regex here.
         """
         try:
             from analysis.data.hsdb import get_db
+            from analysis.data.card_effects import get_effects
+            from analysis.models.card import Card
+
             db = get_db()
-            card = db.get_card(card_id)
-            if not card:
+            raw = db.get_card(card_id)
+            if not raw:
                 return []
-            text = (card.get("text", "") or "").lower()
-            if not text:
-                return []
+
+            card = Card.from_hsdb_dict(raw)
+            eff = get_effects(card)
         except Exception:
             return []
 
         constraints = []
-        seen = set()
-
-        # Check for card type tutors: "draw a minion card", "discover a spell"
-        for m in self._TUTOR_TYPE_RE.finditer(text):
-            card_type = m.group(1).upper()
-            key = ("card_type", card_type)
-            if key not in seen:
-                seen.add(key)
-                constraints.append({
-                    "type": "card_type",
-                    "value": card_type,
-                    "card_id": card_id,
-                    "turn": turn,
-                })
-
-        # Check for race tutors: "draw a Dragon", "discover a Beast"
-        for m in self._TUTOR_RACE_RE.finditer(text):
-            race = m.group(1).upper()
-            key = ("race", race)
-            if key not in seen:
-                seen.add(key)
-                constraints.append({
-                    "type": "race",
-                    "value": race,
-                    "card_id": card_id,
-                    "turn": turn,
-                })
-
-        # Check for spell school tutors: "draw a Fire spell"
-        for m in self._TUTOR_SCHOOL_RE.finditer(text):
-            school = m.group(1).upper()
-            key = ("spell_school", school)
-            if key not in seen:
-                seen.add(key)
-                constraints.append({
-                    "type": "spell_school",
-                    "value": school,
-                    "card_id": card_id,
-                    "turn": turn,
-                })
-
+        if eff.tutor_card_type:
+            constraints.append({
+                "type": "card_type",
+                "value": eff.tutor_card_type,
+                "card_id": card_id,
+                "turn": turn,
+            })
+        if eff.tutor_race:
+            constraints.append({
+                "type": "race",
+                "value": eff.tutor_race,
+                "card_id": card_id,
+                "turn": turn,
+            })
+        if eff.tutor_spell_school:
+            constraints.append({
+                "type": "spell_school",
+                "value": eff.tutor_spell_school,
+                "card_id": card_id,
+                "turn": turn,
+            })
         return constraints
 
 
