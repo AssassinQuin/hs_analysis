@@ -1008,21 +1008,27 @@ class OverlayWindow(QWidget):
         predicted_cards.sort(key=lambda c: -c.get("probability", 0))
         hand_cards = confirmed_cards + predicted_cards
 
-        # 最多显示5张有价值的卡牌
-        max_show = 5
-        shown_count = len(hand_cards)
-        hand_cards = hand_cards[:max_show]
+        # 显示所有已知/预测手牌 + "??"占位
+        # "??" 数量 = 实际手牌数 - 已知手牌数（已确认+预测覆盖的）
+        # 最多显示10行（手牌上限），避免过长
+        max_total = 10
+        known_count = len(hand_cards)
 
-        # 计算不确定的手牌数量（用于显示 "??"占位）
-        # 不确定数 = 总手牌数 - 已确认数（已被揭示的手牌对UI来说是确定的）
+        # 不确定的手牌数 = 总手牌 - 已确认数（揭示的手牌）
+        # 预测手牌不算"已确认"，但覆盖了一个位置
         unknown_count = max(0, hand_count - len(confirmed_cards))
-        # "??" 行数 = 不确定手牌中未被预测覆盖的数量
-        # 但最多只显示到 max_show 总行数
-        slots_remaining = max_show - len(hand_cards)
-        unknown_slots = min(unknown_count, slots_remaining) if unknown_count > 0 else 0
-        # 如果完全没有预测数据，只显示 unknown_slots 个 "??"
+        # "??" 行数 = 不确定中没被预测覆盖的数量
+        # 预测手牌已占了一个位置，所以 unknown = hand_count - confirmed - predicted
+        predicted_not_confirmed = len(predicted_cards)
+        unknown_slots = max(0, hand_count - len(confirmed_cards) - predicted_not_confirmed)
+        # 如果完全没有预测数据，全部显示为 "??"
         if not hand_cards and hand_count > 0:
-            unknown_slots = min(hand_count, max_show)
+            unknown_slots = min(hand_count, max_total)
+
+        # 限制总行数
+        total_with_unknown = known_count + unknown_slots
+        if total_with_unknown > max_total:
+            unknown_slots = max(0, max_total - known_count)
 
         # 添加 "??"占位行
         for _ in range(unknown_slots):
@@ -1045,7 +1051,7 @@ class OverlayWindow(QWidget):
 
         # 标题显示手牌总数
         title = f"对手手牌 ({hand_count})" if hand_count else "对手手牌"
-        self._hand_header.set_title(title, shown_count)
+        self._hand_header.set_title(title, hand_count)
         self._hand_list.update_cards(hand_cards, "hand")
 
     def _refresh_deck(self, gs: CompleteGameState):
@@ -1129,44 +1135,64 @@ class OverlayWindow(QWidget):
             self._deck_tab.setVisible(False)
 
     def _refresh_grave(self, gs: CompleteGameState):
-        """刷新墓地区 — 区分卡组来源牌和衍生牌。"""
-        # 从对手已打出的卡牌获取墓地信息
-        # 已打出的牌：played=True 或 remaining=0
-        grave_cards = []
+        """刷新墓地区 — 使用 opp_graveyard 作为主数据源。
 
-        # 优先从 multi_deck_predictions 获取
+        数据来源优先级：
+        1. gs.opp_graveyard: 直接区域变化检测到的（PLAY/HAND/SECRET→GRAVEYARD）
+        2. deck_predictions/multi_deck_predictions 中 played=True 的卡牌（补充）
+
+        这样即使 deck_predictions 为空（贝叶斯未初始化），
+        也能显示通过区域变化检测到的对手出牌/随从死亡。
+        """
+        grave_cards = []
+        seen_ids = set()
+
+        # ── 主数据源：opp_graveyard（区域变化检测） ──
+        for entry in gs.opp_graveyard:
+            cid = entry.get("card_id", "")
+            if not cid or cid in seen_ids:
+                continue
+            seen_ids.add(cid)
+            grave_cards.append({
+                "card_id": cid,
+                "name": entry.get("name", cid),
+                "cost": entry.get("cost", 0),
+                "quantity": 1,
+                "remaining": 0,
+                "source": entry.get("source", "deck"),
+                "played": True,
+                "rarity": entry.get("rarity", ""),
+            })
+
+        # ── 补充：从 deck_predictions 获取（贝叶斯推断的已打出卡牌） ──
+        # 只补充 opp_graveyard 中没有的
+        predictions = []
         multi = gs.multi_deck_predictions
         if multi:
             if self._sel_arch >= len(multi):
                 sel = multi[0]
             else:
                 sel = multi[self._sel_arch]
-            for c in sel.get("cards", []):
-                if c.get("played", False) or c.get("remaining", 0) <= 0:
-                    grave_cards.append({
-                        "card_id": c.get("card_id", ""),
-                        "name": c.get("name", "?"),
-                        "cost": c.get("cost", 0),
-                        "quantity": c.get("quantity", 1),
-                        "remaining": c.get("remaining", 0),
-                        "source": c.get("source", "deck"),
-                        "played": True,
-                        "rarity": c.get("rarity", ""),
-                    })
+            predictions = sel.get("cards", [])
         else:
-            # 从 deck_predictions 获取
-            for c in gs.deck_predictions:
-                if c.get("played", False) or c.get("remaining", 0) <= 0:
-                    grave_cards.append({
-                        "card_id": c.get("card_id", ""),
-                        "name": c.get("name", "?"),
-                        "cost": c.get("cost", 0),
-                        "quantity": c.get("quantity", 1),
-                        "remaining": c.get("remaining", 0),
-                        "source": c.get("source", "deck"),
-                        "played": True,
-                        "rarity": c.get("rarity", ""),
-                    })
+            predictions = gs.deck_predictions
+
+        for c in predictions:
+            cid = c.get("card_id", "")
+            if not cid or cid in seen_ids:
+                continue
+            if c.get("played", False) or c.get("remaining", 0) <= 0:
+                seen_ids.add(cid)
+                grave_cards.append({
+                    "card_id": cid,
+                    "name": c.get("name", cid),
+                    "cost": c.get("cost", 0),
+                    "quantity": c.get("quantity", 1),
+                    "remaining": c.get("remaining", 0),
+                    "source": c.get("source", "deck"),
+                    "played": True,
+                    "rarity": c.get("rarity", ""),
+                })
 
         # 排序：卡组来源优先，然后按费用
         grave_cards.sort(key=lambda c: (0 if c.get("source") == "deck" else 1, c["cost"], c["name"]))

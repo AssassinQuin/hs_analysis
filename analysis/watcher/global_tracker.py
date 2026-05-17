@@ -450,10 +450,18 @@ class GlobalTracker:
         self._rule_dispatcher.dispatch_zone_change(ctx)
 
         # 硬币使用：检测硬币法术从HAND离开（统一方法）
-        if old_zone == self.ZONE_HAND and self._is_coin_entity(card_id, entity_id=entity_id):
+        # 如果 card_id 为空，从出生记录回退查找
+        coin_card_id = card_id
+        if not coin_card_id and entity_id:
+            birth = self._entity_birth.get(entity_id)
+            if birth and birth.card_id:
+                coin_card_id = birth.card_id
+            else:
+                coin_card_id = self._last_known_card_ids.get(entity_id, "")
+        if old_zone == self.ZONE_HAND and self._is_coin_entity(coin_card_id, entity_id=entity_id):
             self.state.coin_used = True
             who = "对手" if is_opp else "我方"
-            logger.info("检测到%s使用硬币 (entity_id=%d, card_id=%s)", who, entity_id, card_id)
+            logger.info("检测到%s使用硬币 (entity_id=%d, card_id=%s)", who, entity_id, coin_card_id)
 
     # ── 卡牌变形/控制器变化事件 ──────────────────────────────────
 
@@ -630,6 +638,14 @@ class GlobalTracker:
 
     def _on_zone_play_to_graveyard(self, entity_id, controller, card_id, card_type, is_opp):
         """随从死亡/武器摧毁: PLAY -> GRAVEYARD"""
+        # 如果 card_id 为空，尝试从出生记录或历史快照回退查找
+        if not card_id:
+            birth = self._entity_birth.get(entity_id)
+            if birth and birth.card_id:
+                card_id = birth.card_id
+            else:
+                card_id = self._last_known_card_ids.get(entity_id, "")
+
         if is_opp and card_id:
             self.state.opp_graveyard_seen.append(card_id)
         if not is_opp and card_id:
@@ -674,6 +690,12 @@ class GlobalTracker:
 
         记录弃牌并添加到 opp_graveyard_seen。
         """
+        if not card_id:
+            birth = self._entity_birth.get(entity_id)
+            if birth and birth.card_id:
+                card_id = birth.card_id
+            else:
+                card_id = self._last_known_card_ids.get(entity_id, "")
         if is_opp and card_id:
             self.state.opp_graveyard_seen.append(card_id)
 

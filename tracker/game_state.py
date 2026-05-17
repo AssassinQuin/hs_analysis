@@ -179,6 +179,9 @@ class CompleteGameState:
     # 硬币
     coin_used: bool = False
 
+    # 对手墓地（卡组来源 + 衍生牌）
+    opp_graveyard: List[Dict] = field(default_factory=list)
+
     # 对手手牌预测
     hand_predictions: List[Dict] = field(default_factory=list)
     deck_predictions: List[Dict] = field(default_factory=list)
@@ -383,6 +386,9 @@ class GameStateManager:
 
         # 统计
         opp.stats = state_dict.get("opp_stats", {})
+
+        # 对手墓地：从 state_dict 的 graveyard 字段构建
+        gs.opp_graveyard = self._build_graveyard(state_dict)
 
         # 对手棋盘随从
         opp.board = []
@@ -643,6 +649,62 @@ class GameStateManager:
 
         deck.sort(key=lambda c: (c.cost, c.name))
         return deck
+
+    def _build_graveyard(self, state_dict: dict) -> List[Dict]:
+        """从 state_dict 构建对手墓地列表。
+
+        数据来源：
+        1. opp_graveyard_seen: 直接区域变化检测到的卡牌（最可靠）
+        2. known_cards 中 source=deck 且已打出的卡牌
+        3. generated_cards 中的衍生牌
+
+        每条记录包含: card_id, name, cost, source("deck"/"generated"), rarity
+        """
+        graveyard = []
+        seen_ids = set()
+
+        # 来源1: opp_graveyard_seen（区域变化 PLAY/HAND/SECRET→GRAVEYARD）
+        raw_graveyard = state_dict.get("graveyard", [])
+        for card_id in raw_graveyard:
+            if not card_id or card_id in seen_ids:
+                continue
+            seen_ids.add(card_id)
+            entry = {"card_id": card_id, "source": "deck", "name": card_id, "cost": 0, "rarity": ""}
+            if self._card_db is not None:
+                card = self._card_db.get_card(card_id)
+                if card:
+                    entry["name"] = card.get("name", card_id)
+                    entry["cost"] = card.get("cost", 0)
+                    entry["rarity"] = card.get("rarity", "")
+            graveyard.append(entry)
+
+        # 来源2: known_cards（已被揭示且打出的卡牌）
+        generated_set = state_dict.get("generated_cards", set())
+        for kc in state_dict.get("known_cards", []):
+            cid = kc.get("card_id", "")
+            if not cid or cid in seen_ids:
+                continue
+            source = kc.get("source", "unknown")
+            is_generated = cid in generated_set or source == "generated"
+            seen_ids.add(cid)
+            entry = {
+                "card_id": cid,
+                "source": "generated" if is_generated else "deck",
+                "name": cid,
+                "cost": kc.get("cost", 0),
+                "rarity": kc.get("rarity", ""),
+            }
+            if self._card_db is not None:
+                card = self._card_db.get_card(cid)
+                if card:
+                    entry["name"] = card.get("name", cid)
+                    entry["cost"] = card.get("cost", card.get("cost", 0))
+                    entry["rarity"] = card.get("rarity", "")
+            graveyard.append(entry)
+
+        # 按来源分组排序：卡组来源优先，然后按费用
+        graveyard.sort(key=lambda c: (0 if c.get("source") == "deck" else 1, c.get("cost", 0), c.get("name", "")))
+        return graveyard
 
     def reset(self):
         """重置游戏状态。"""
