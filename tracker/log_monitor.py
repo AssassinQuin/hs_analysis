@@ -36,6 +36,7 @@ from analysis.constants.hs_enums import (
     ZONE_NAME_MAP, CARDTYPE_NAME_MAP,
 )
 from analysis.utils.hero_class import class_to_cn
+from analysis.utils.player_name import normalize_player_name
 from hearthstone.enums import GameTag, Zone, CardType
 
 logger = logging.getLogger(__name__)
@@ -273,6 +274,11 @@ class CoreLogMonitor:
         self._player_names: Dict[int, str] = {}  # player_id → player_name
         self._re_player_name = re.compile(r"PlayerID=(\d+),\s*PlayerName=(.+)")
 
+        # 已知我方玩家名称（跨游戏持久化）
+        # 一旦通过 AI_TAG / BattleTag 等正确识别我方名称后，后续游戏直接用此名称匹配
+        # 避免 PvP 双方都有 BattleTag 时默认 my_idx=0 导致 50% 概率反转
+        self._our_known_name: str = ""
+
         # 游戏生命周期状态（替代 _game_started_emitted 标志对）
         self._game_lifecycle = GameLifecycle.IDLE
 
@@ -422,7 +428,7 @@ class CoreLogMonitor:
                     self._last_known_zones.clear()
                     self._last_known_card_ids.clear()
                     self._first_player_detected = False
-                    self._player_names.clear()
+                    # 不再清空 _player_names — 同 _on_game_start 理由
                 continue
 
             if event == "game_start":
@@ -448,6 +454,7 @@ class CoreLogMonitor:
         """确定哪个玩家是本地玩家（我方）。
 
         判定规则（按优先级）:
+          0. 已知我方名称匹配：_our_known_name 与玩家名精确匹配
           1. AI_MAKES_DECISIONS_FOR_PLAYER 标签：AI 玩家标签=1，我方=0
           2. 从 _player_names 匹配：名字含 '#' 的 BattleTag 用户是本地玩家
              当双方都有 '#' 时，用 saved_our_controller（上局 controller）匹配
@@ -468,7 +475,20 @@ class CoreLogMonitor:
         n0 = getattr(players[0], 'name', '') or ''
         n1 = getattr(players[1], 'name', '') or ''
 
-        # 优先级最高: AI_MAKES_DECISIONS_FOR_PLAYER 标签
+        # 最高优先级: 已知我方名称匹配（跨游戏持久化）
+        # 一旦从任何方式正确识别过，后续游戏直接用名称匹配
+        if self._our_known_name:
+            norm_known = normalize_player_name(self._our_known_name)
+            norm_n0 = normalize_player_name(n0)
+            norm_n1 = normalize_player_name(n1)
+            if norm_known and norm_n0 and norm_known == norm_n0:
+                logger.debug("玩家检测(KNOWN_NAME): 我方=players[0] (name=%s)", n0)
+                return 0
+            if norm_known and norm_n1 and norm_known == norm_n1:
+                logger.debug("玩家检测(KNOWN_NAME): 我方=players[1] (name=%s)", n1)
+                return 1
+
+        # 优先级次高: AI_MAKES_DECISIONS_FOR_PLAYER 标签
         # AI 玩家此标签=1，我方(人类)此标签=0或不存在
         try:
             ai0 = players[0].tags.get(GameTag.AI_MAKES_DECISIONS_FOR_PLAYER, 0)
@@ -513,8 +533,10 @@ class CoreLogMonitor:
                     c1 = players[1].tags.get(GameTag.CONTROLLER, 0)
                     if saved_our_controller and c0 == saved_our_controller:
                         my_idx = 0
+                        self._our_known_name = name0
                     elif saved_our_controller and c1 == saved_our_controller:
                         my_idx = 1
+                        self._our_known_name = name1
                     else:
                         # 首次游戏 / 无法匹配：用 FIRST_PLAYER 验证
                         # 检测 entity_cache 中的 FIRST_PLAYER 标签
@@ -535,11 +557,13 @@ class CoreLogMonitor:
 
             if has_tag1:
                 my_idx = 1
+                self._our_known_name = name1
                 logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
                              my_idx, name1, 1 - my_idx, name0)
                 return my_idx
             if has_tag0:
                 my_idx = 0
+                self._our_known_name = name0
                 logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
                              my_idx, name0, 1 - my_idx, name1)
                 return my_idx
@@ -817,7 +841,9 @@ class CoreLogMonitor:
         self._last_known_zones.clear()
         self._last_known_card_ids.clear()
         self._first_player_detected = False
-        self._player_names.clear()
+        # 注意：不再清空 _player_names — DebugPrintGame() 的 PlayerName 行
+        # 可能在 CREATE_GAME 之前就已解析，清空会丢失当前游戏的有效信息。
+        # _player_names 在日志轮转时清空（line 355）。
         self._game_lifecycle = GameLifecycle.STARTING
 
         # 重置 GlobalTracker 状态（清空旧游戏数据）
@@ -837,6 +863,11 @@ class CoreLogMonitor:
                 logger.info("玩家检测: 我方=players[%d](controller=%d), 对手=players[%d](controller=%d), saved_ctrl=(%d,%d)",
                             my_idx, our_controller, 1 - my_idx, opp_controller,
                             saved_our_controller, saved_opp_controller)
+                # 保存我方名称用于后续游戏识别（跨游戏持久化）
+                our_name = getattr(players[my_idx], 'name', '') or ''
+                if our_name and '#' in our_name and our_name != 'UNKNOWN HUMAN PLAYER':
+                    self._our_known_name = our_name
+                    logger.debug("保存我方名称: %s (从 hslog player.name)", our_name)
         except Exception as e:
             logger.debug("检测玩家 controller 失败: %s", e)
 
