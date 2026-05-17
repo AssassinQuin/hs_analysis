@@ -677,7 +677,8 @@ class PacketReplayer:
 
             # Count opponent deck / hand
             opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
-            opp_hand_count = self.global_tracker.get_opp_hand_count(opp_entities)
+            self.global_tracker.count_opp_hand(opp_entities)
+            opp_hand_count = self.global_tracker.get_opp_hand_count()
 
             # Update opponent weapon/location tracking
             self.global_tracker.update_opp_weapon(opp_entities)
@@ -1940,7 +1941,8 @@ class PacketReplayer:
                     })
 
             # Opponent hand count & deck
-            opp_hand_count = self.global_tracker.get_opp_hand_count(opp_entities)
+            self.global_tracker.count_opp_hand(opp_entities)
+            opp_hand_count = self.global_tracker.get_opp_hand_count()
             opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
 
             # Update opponent weapon/location tracking

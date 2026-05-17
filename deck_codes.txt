@@ -8,6 +8,52 @@
 #   4. 对局中修改此文件会自动热更新（无需重启）
 #
 # 支持热更新：对局中可随时添加/修改卡组，保存后自动生效
+#
+# 更新日期: 2026-05-17 — 甲虫年·大地的裂变 标准环境
+
+# ═══════════════════════════════════════════════════════════════
+# 甲虫年 2026 标准环境 — 最新Meta卡组
+# ═══════════════════════════════════════════════════════════════
+
+# name: 铺场德 | arch: midrange
+AAECAcaLBwTDgwevhwe4nwfgwAcNrp8EgdQEiIMHrocHkpcHlJcH15cHqq8H18AH28AH7MAH9sEH0MQHAAA=
+
+# name: 法术瞎 | arch: tempo
+AAECAYfPBga0lweKqgeSqgeTqgensQeUvwcM4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEH6LEHkr8Hlb8HAAA=
+
+# name: 发现法 | arch: midrange
+AAECAanlBwbv/AbDgwezhwenmwfysgeT2gcMm/IG8ZEHsJsH+psH1Z0H0aYHy7YH+cMHhsQHksQHhuAHnIIIAAA=
+
+# name: 快攻猎 | arch: aggro
+AAECAZ/DAwSZpweapwebpwfFsQcNqZ8Eqp8E054Gr5IHhZUHzpsH7p8HkKcHmKcHy7YHtMAHucAHu8AHAAA=
+
+# name: 兆示贼 | arch: combo
+AAECAcKPBA6hgQeQgweSgwfDgweCmAfRnQfspQeGqAeHqAeIqAfQvweK1Aeb1AeI2QcI958E054GwZcHx64HtMEHwMEHncUH1cUHAAA=
+
+# name: 龙德 | arch: midrange
+AAECAbSKAwqp9QahgQeSgwfDgwevhwesiAeCmAe4sgfgwAfiwAcKrp8EiIMHqq8HrK8H6LEHvrIHhL0H18AH2MAHk/EHAAA=
+
+# name: 龙战 | arch: midrange
+AAECAce+BQLQsgf5wwcO4+YGqvwGq/wG94MH6IcH0pcHt60Hj7EH7LIHhL0HtcAHlcIHm8IHnMIHAAA=
+
+# name: 伙伴猎 | arch: aggro
+AAECAa/XAwidoASpgQfDgweZpweapwebpwfLtgfkxAcLqZ8EidQE4okHr5IH7p8Hu8AH3sQH4MQH48QH+cQHof0HAAA=
+
+# name: 死亡骑士控制 | arch: control
+AAECAfHhBA7UngbV5QbDgwefngf0qgfSrgeGsQeosQfisQePvgeOvwfQvwfqyQeb1AcIh/YE2OUGgf0G
+
+# name: 灌注德 | arch: midrange
+AAECAcTbBAbW+gaqgQeSgwfygwevhweYlwcMrp8EgdQE4IEH94EHiIMHsIcHwIcHpIkHqq8H1sAH18AH7MAHAA==
+
+# ═══════════════════════════════════════════════════════════════
+# 甲虫年 2026 — 基础卡组（旧版保留）
+# ═══════════════════════════════════════════════════════════════
+
+# name: 龙战 | arch: midrange
+AAECAYwWAougBPnDBw7j5gaq/Aar/AbohwfSlwe3rQePsQfQsgfssge1wAf2wQeVwgebwgecwgcAAA==
+
+# name: 兆灌贼 | arch: combo
+AAECAfahBwzDgwfBlwfRnQfspQeGqAeHqAeIqAfHrgfQvweK1Aeb1AeI2QcJ958E94EHkIMHjK0H2a8HmrMHtMEHncUH1cUHAAA=
 
 # name: Aggro Paladin | arch: aggro
 AAECAZ8FBM/+BrqWB8avB+XBBw2WoATJoATTngbUngbI/wb1gQeFlQfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
@@ -18,158 +64,53 @@ AAECAQcCi6AE+cMHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
 # name: Control Warrior V2 | arch: control
 AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
 
-# name: Control Warrior V3 | arch: control
-AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB4S9B7XAB5XCB5vCB5zCBwAA
-
 # name: Aggro Paladin V2 | arch: aggro
 AAECAZ8FAvGbB8avBw6roATJoATTngbUngbP/gb1gQeFlQe6lgfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
 
-# name: Midrange Shaman
+# name: Midrange Shaman | arch: midrange
 AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
 
-# name: Tempo Demon Hunter
+# name: Tempo Demon Hunter | arch: tempo
 AAECAea5AwSKqgeSqgeTqgensQcN4fgF3v8G/oMHqocHtpcH550HnrEHobEHv7EHwLEH6LEHkr8Hlb8HAAA=
-
-# name: Tempo Demon Hunter V2
-AAECAea5AwaKqgeSqgeTqgensQfosQeUvwcM4fgF3v8G/oMHqocHtJcHtpcH550HnrEHobEHwLEHkr8Hlb8HAAA=
-
-# name: Tempo Demon Hunter V3
-AAECAea5AwjsoAS0lweKqgeSqgeTqgensQfosQeUvwcL4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEHkr8Hlb8HAAA=
 
 # name: Face Hunter | arch: aggro
 AAECAR8EmacHmqcHm6cHxbEHDamfBKqfBNOeBq+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
 
-# name: Ramp Druid | arch: midrange
-AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nweqrwfXwAfYwAfbwAfswAf2wQcAAA==
-
-# name: Token Druid
+# name: Token Druid | arch: midrange
 AAECAZICCqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LABwqunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAeT8QcAAA==
-
-# name: Token Druid V2
-AAECAZICDKn1BqGBB5KDB8ODB6+HB6yIB4KYB+ixB7iyB+DAB+LAB4/BBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
 
 # name: Miracle Rogue | arch: combo
 AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwn3nwT3gQeQgweMrQfHrgfZrweaswedxQfVxQcAAA==
 
-# name: Miracle Rogue V2 | arch: combo
-AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB8euB9C/B4rUB5vUB4jZBwn3nwT3gQeQgweMrQfZrweaswe0wQedxQfVxQcAAA==
-
 # name: Zoo Warlock | arch: aggro
 AAECAf0EBO/8BqebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
-
-# name: Rogue Tempo
-AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwTBlweMrQfZrwe0wQfAwQedxQfVxQfD8gcAAA==
-
-# name: Rogue Midrange
-AAECAaIHCs2eBs6eBoaoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwr3nwTTngac+wb3gQeMrQfZrweaswe6swedxQfVxQcAAA==
-
-# name: Zoo Warlock V2 | arch: aggro
-AAECAf0EBMODB6ebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
 
 # name: Control Death Knight | arch: control
 AAECAfHhBAyH9gS1+gaSgwfDgweDigeCmAf0qgeosQfisQfQvwfqyQeb1AcJ2OUGgf0Gl4IHupUHn54HkasHj74HmsUH0MUHAAA=
 
-# name: Reno Warlock | arch: control
-AAECAf0GBMSeBvWYB+ybB9edBw2PnwSRoATnoATrhAepiAeEmQfenQfgnQfhnQeTvgfXvgfYvgfgvgcAAA==
-
-# name: Priest Midrange
+# name: Priest Midrange | arch: midrange
 AAECAa0GBqiWB/ypB4CqB4SqB+SyB4O/BwzwnwTLoASg+wbD/waFhge2lAedrQeFvwebvweixAeyxQeW/AcAAA==
-
-# name: Control Death Knight V2 | arch: control
-AAECAfHhBAqH9gTDgweCmAfSrgeosQfisQfQvwfqyQeb1AfO6gcK2OUGgf0Gl4IHupUH0JsHn54HkasHjr8HmsUH0MUHAAA=
 
 # name: Highlander Priest | arch: control
 AAECAa0GDPCfBMP/BsODB4OKB8WUB6iWB/ypB4CqB4SqB+SyB4O/B5a/BwnLoASg+waFhgedrQeFvwebvweixAeyxQeW/AcAAA==
 
-# name: Zoo Warlock V3 | arch: aggro
-AAECAf0EBO/8BsODB6ebB/KyBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeT2geG4AcAAA==
+# name: Reno Warlock | arch: control
+AAECAf0GBMSeBvWYB+ybB9edBw2PnwSRoATnoATrhAepiAeEmQfenQfgnQfhnQeTvgfXvgfYvgfgvgcAAA==
 
-### 龙战
-# 职业：战士
-# 模式：标准模式
-# 甲虫年
-#
-# 2x (1) 暮光龙卵
-# 2x (1) 永时困苦
-# 2x (1) 烈火炙烤
-# 2x (1) 赤红深渊
-# 2x (1) 载蛋雏龙
-# 2x (1) 黑暗的龙骑士
-# 2x (2) 先行打击
-# 2x (2) 影焰晕染
-# 2x (2) 灼热裂隙
-# 1x (2) 蔽影密探
-# 2x (2) 龙巢守护者
-# 2x (3) 喷发火山
-# 2x (4) 现场播报员
-# 2x (7) 先觉蜿变幼龙
-# 2x (8) 乘风浮龙
-# 1x (8) 格罗玛什·地狱咆哮
-# 
-AAECAYwWAougBPnDBw7j5gaq/Aar/AbohwfSlwe3rQePsQfQsgfssge1wAf2wQeVwgebwgecwgcAAA==
-# 
-# 想要使用这副套牌，请先复制到剪贴板，然后在游戏中点击“新套牌”进行粘贴。
+# name: Control Death Knight V2 | arch: control
+AAECAfHhBAqH9gTDgweCmAfSrgeosQfisQfQvwfqyQeb1AfO6gcK2OUGgf0Gl4IHupUH0JsHn54HkasHjr8HmsUH0MUHAAA=
 
-### 兆灌贼
-# 职业：潜行者
-# 模式：标准模式
-# 甲虫年
-#
-# 2x (0) 伺机待发
-# 1x (0) 殒命暗影
-# 1x (1) 似曾相识
-# 2x (1) 古神的眼线
-# 2x (1) 梦魇供能
-# 2x (2) 不测之变
-# 1x (2) 异教地图
-# 2x (2) 暮光祭礼
-# 2x (2) 狐人老千
-# 2x (2) 苦花骑士
-# 2x (2) 闪回
-# 2x (3) 癫狂的追随者
-# 1x (3) 米尔雷斯，晶化镜甲龙
-# 1x (4) 半兽人迦罗娜
-# 1x (3) 莱恩国王
-# 1x (2) 弑君者
-# 1x (4) 梦魇之王萨维斯
-# 1x (6) 奥卓克希昂
-# 1x (6) 希奈丝特拉
-# 1x (6) 潜踪大师奥普
-# 1x (10) 灭世者死亡之翼
-# 
-AAECAfahBwzDgwfBlwfRnQfspQeGqAeHqAeIqAfHrgfQvweK1Aeb1AeI2QcJ958E94EHkIMHjK0H2a8HmrMHtMEHncUH1cUHAAA=
-# 
-# 想要使用这副套牌，请先复制到剪贴板，然后在游戏中点击“新套牌”进行粘贴。
-
-### End of Turnadin
+# name: End of Turnadin | arch: midrange
 AAECAZ8FBvD+BsODB+6oB++oB/CoB+XBBwzJoAS6lgfLqQfErgf1rwe+sgfiwQfowQfqwQf2wQeDwgerxgcAAA==
 
-### Harold Shaman
+# name: Harold Shaman | arch: midrange
 AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
 
-### End of Turnadin
-AAECAZ8FCKiKBPD+BsODB+6oB++oB/CoB8avB+XBBwvJoAS6lgfLqQfErge+sgfiwQfowQfqwQf2wQeDwgerxgcAAA==
-
-### Merithra Druid
-AAECAZICCqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LABwqunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAeT8QcAAA==
-
-### 铺场德
-AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nweqrwfXwAfYwAfbwAfswAf2wQcAAA==
-
-### Harold Rogue
+# name: Harold Rogue | arch: midrange
 AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwSQgwfBlweMrQfZrwe0wQfAwQedxQfVxQcAAA==
 
-### Merithra Druid
-AAECAZICDKn1BqGBB5KDB8ODB6+HB6yIB4KYB+ixB7iyB+DAB+LAB4/BBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
-
-### 任务法
-AAECAf0EBu/8BsODB7OHB6ebB/KyB5PaBwyb8gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
-
-### 空手猎
+# name: 空手猎 | arch: aggro
 AAECAR8GsYcHmacHmqcHm6cHxbEHhMQHDKmfBKqfBK+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
 
-### 铺场德
-AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nwfJrAeqrwfXwAfbwAfswAf2wQcAAA==
-
-### Merithra Druid
-AAECAZICDM2eBqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LAB4/BBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
+# name: 铺场德(旧) | arch: midrange
+AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nweqrwfXwAfYwAfbwAfswAf2wQcAAA==

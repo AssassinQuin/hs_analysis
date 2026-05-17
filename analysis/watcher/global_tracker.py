@@ -154,13 +154,20 @@ class GlobalTracker:
     # 延迟加载卡牌数据库
     # ---------------------------------------------------------------
 
-    def _get_card_db(self):
-        """延迟加载HSCardDB，用于卡牌元数据（种族、学派等）"""
+    def _get_card_db(self, strict: bool = False):
+        """延迟加载HSCardDB，用于卡牌元数据（种族、学派等）
+
+        Args:
+            strict: 为 True 时，导入失败抛出 ImportError 而非仅记录警告。
+                    用于贝叶斯等需要 dbfId 查询的场景。
+        """
         if self._card_db is None:
             try:
                 from analysis.data.hsdb import get_db
                 self._card_db = get_db()
             except ImportError:
+                if strict:
+                    raise
                 logger.warning("HSCardDB unavailable, race/school tracking disabled")
         return self._card_db
 
@@ -178,8 +185,16 @@ class GlobalTracker:
     # 实体生命周期
     # ---------------------------------------------------------------
 
+    def _is_coin_entity(self, card_id: str, is_coin_tag: bool = False,
+                         entity_id: int = 0) -> bool:
+        """统一硬币检测。\n\n        优先级：\n        1. COIN_CARD GameTag（来自 FULL_ENTITY/SHOW_ENTITY）\n        2. card_id 匹配 COIN_CARD_IDS\n        3. entity_id 匹配 state.coin_entity_id（区域变化路径）\n        """
+        return (is_coin_tag
+                or card_id in self.COIN_CARD_IDS
+                or (entity_id != 0 and entity_id == self.state.coin_entity_id))
+
     def on_full_entity(self, entity_id: int, card_id: str, controller: int,
-                       zone: int, card_type: int = 0, cost: int = 0):
+                       zone: int, card_type: int = 0, cost: int = 0,
+                       is_coin_tag: bool = False):
         """解析到 FULL_ENTITY - Creating 时调用"""
         birth = _EntityBirth(
             entity_id=entity_id,
@@ -205,18 +220,32 @@ class GlobalTracker:
             elif controller == self.opp_controller:
                 self.state.opp_hero_class = hero_class
 
-        # 检测硬币实体
-        if card_id in self.COIN_CARD_IDS:
+        # 检测硬币实体（统一方法）
+        if self._is_coin_entity(card_id, is_coin_tag):
             self.state.coin_entity_id = entity_id
+            # 如果硬币出生在HAND区域，说明持有方是后手
+            if zone == self.ZONE_HAND:
+                if controller == self.opp_controller:
+                    self.state.is_first_player = False
+                    logger.info("检测到对手持有硬币 → 对手后手")
 
     def on_show_entity(self, entity_id: int, card_id: str, controller: int,
-                       zone: int, card_type: int = 0, cost: int = 0):
+                       zone: int, card_type: int = 0, cost: int = 0,
+                       is_coin_tag: bool = False):
         """解析到 SHOW_ENTITY 揭示隐藏实体时调用。
 
         对于对手直接揭示到PLAY/SECRET区域的卡牌（典型情况——对手打出
         一张牌，我们看到它出现），我们将其追踪为"已打出"的卡牌，
         因为对手的 HAND→PLAY 区域变化对我们不可见。
         """
+        # 检测硬币揭示（统一方法）
+        if self._is_coin_entity(card_id, is_coin_tag):
+            self.state.coin_entity_id = entity_id
+            if zone == self.ZONE_HAND:
+                if controller == self.opp_controller:
+                    self.state.is_first_player = False
+                    logger.info("检测到对手揭示硬币 → 对手后手")
+
         if controller == self.opp_controller:
             # 追踪规则分发（Corrupt升级检测等由 CorruptTrackerRule 处理）
             self._rule_dispatcher.dispatch_show_entity(
@@ -328,10 +357,11 @@ class GlobalTracker:
         )
         self._rule_dispatcher.dispatch_zone_change(ctx)
 
-        # 硬币使用：检测硬币法术从HAND离开
-        if (old_zone == self.ZONE_HAND and
-            card_id in self.COIN_CARD_IDS):
+        # 硬币使用：检测硬币法术从HAND离开（统一方法）
+        if old_zone == self.ZONE_HAND and self._is_coin_entity(card_id, entity_id=entity_id):
             self.state.coin_used = True
+            who = "对手" if is_opp else "我方"
+            logger.info("检测到%s使用硬币 (entity_id=%d, card_id=%s)", who, entity_id, card_id)
 
     # ── 区域转换处理器 ─────────────────────────────────────────
 
@@ -479,7 +509,7 @@ class GlobalTracker:
         # Remove from known shuffled cards
         self.state.opp_shuffled_known_cards.pop(card_id, None)
         
-        log.debug(
+        logger.debug(
             "Shuffled card played (marked GENERATED): %s",
             card_id,
         )
@@ -618,9 +648,12 @@ class GlobalTracker:
     # 对手手牌/武器/地点追踪
     # ---------------------------------------------------------------
 
-    def get_opp_hand_count(self, opp_entities: list) -> int:
-        """统计对手在HAND区域的实体数"""
-        return sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_HAND)
+    def get_opp_hand_count(self) -> int:
+        """返回对手当前手牌数量（纯读取，无副作用）。
+
+        如需更新计数，应显式调用 count_opp_hand(opp_entities)。
+        """
+        return self.state.opp_hand_count
 
     def get_opp_known_hand(self) -> List[Tuple[int, str]]:
         """返回对手已知手牌的 (entity_id, card_id) 列表。
@@ -746,11 +779,8 @@ class GlobalTracker:
     # ---------------------------------------------------------------
 
     def _ensure_card_db(self):
-        """延迟加载卡牌数据库，用于dbfId查询"""
-        if self._card_db is None:
-            from analysis.data.hsdb import get_db
-            self._card_db = get_db()
-        return self._card_db
+        """延迟加载卡牌数据库，用于dbfId查询（strict 模式）"""
+        return self._get_card_db(strict=True)
 
     def _ensure_secret_model(self):
         """基于对手英雄职业初始化奥秘概率模型"""
@@ -955,7 +985,8 @@ class GlobalTracker:
     def opp_summary_str(self, opp_entities: list, card_name_fn=None) -> str:
         """生成人类可读的对手状态摘要字符串"""
         deck = self.count_opp_deck(opp_entities)
-        hand = self.get_opp_hand_count(opp_entities)
+        self.count_opp_hand(opp_entities)
+        hand = self.get_opp_hand_count()
         known_hand = self.get_opp_known_hand()
 
         parts = [f"手牌={hand}张", f"牌库={deck}张"]

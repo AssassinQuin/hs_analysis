@@ -38,7 +38,7 @@ _W_MIN, _H_MIN = 180, 280
 _GRIP_SIZE = 12
 _HDR_H = 30
 _SEC_HDR_H = 26
-_ROW_H = 24
+_ROW_H_DEFAULT = 24  # 模块级默认行高常量（仅作 OverlayWindow 初始化参考）
 _TAB_H = 24
 
 # ── 颜色 ──
@@ -116,9 +116,9 @@ def _prob_color(p: float) -> QColor:
 class _CardRow(QWidget):
     """单行卡牌：[法力水晶] [卡名(稀有度色)] [数量/概率]"""
 
-    def __init__(self, parent=None):
+    def __init__(self, row_height: int = _ROW_H_DEFAULT, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(_ROW_H)
+        self.setFixedHeight(row_height)
         self._d: dict = {}
         self._mode = "deck"  # "deck" | "hand" | "grave"
 
@@ -446,7 +446,7 @@ class _DeckTabBar(QWidget):
 class _CardListArea(QScrollArea):
     """可滚动的卡牌行列表区域。"""
 
-    def __init__(self, max_rows: int = 35, parent=None):
+    def __init__(self, max_rows: int = 35, row_height: int = _ROW_H_DEFAULT, parent=None):
         super().__init__(parent)
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -463,7 +463,7 @@ class _CardListArea(QScrollArea):
 
         self._rows: List[_CardRow] = []
         for _ in range(max_rows):
-            r = _CardRow(self._container)
+            r = _CardRow(row_height, self._container)
             r.hide()
             self._layout.insertWidget(self._layout.count() - 1, r)
             self._rows.append(r)
@@ -541,6 +541,9 @@ class OverlayWindow(QWidget):
         self._resize_start = None
         self._resize_start_geo = None
 
+        # 动态行高（实例级控制，初始值来自模块常量）
+        self._row_height: int = _ROW_H_DEFAULT
+
     # ── 窗口初始化 ──
 
     def _init_window(self):
@@ -574,7 +577,7 @@ class OverlayWindow(QWidget):
         self._hand_header = _SectionHeader("对手手牌")
         self._hand_header.clicked.connect(self._toggle_hand)
         self._root.addWidget(self._hand_header)
-        self._hand_list = _CardListArea(max_rows=10)
+        self._hand_list = _CardListArea(max_rows=10, row_height=self._row_height)
         self._root.addWidget(self._hand_list, stretch=2)
 
         # 3. 卡组区
@@ -584,14 +587,14 @@ class OverlayWindow(QWidget):
         self._deck_tab = _DeckTabBar()
         self._deck_tab.tab_changed.connect(self._switch_arch)
         self._root.addWidget(self._deck_tab)
-        self._deck_list = _CardListArea(max_rows=35)
+        self._deck_list = _CardListArea(max_rows=35, row_height=self._row_height)
         self._root.addWidget(self._deck_list, stretch=4)
 
         # 4. 墓地区
         self._grave_header = _SectionHeader("墓地")
         self._grave_header.clicked.connect(self._toggle_grave)
         self._root.addWidget(self._grave_header)
-        self._grave_list = _CardListArea(max_rows=35)
+        self._grave_list = _CardListArea(max_rows=35, row_height=self._row_height)
         self._root.addWidget(self._grave_list, stretch=3)
 
     # ── 标题栏 ──
@@ -1010,6 +1013,9 @@ class OverlayWindow(QWidget):
             new_h = 22
         else:
             new_h = 24
-        for row_list in [self._hand_list, self._deck_list, self._grave_list]:
-            for row in row_list._rows:
-                row.setFixedHeight(new_h)
+        # 只在行高变化时更新（避免不必要的布局重算）
+        if new_h != self._row_height:
+            self._row_height = new_h
+            for row_list in [self._hand_list, self._deck_list, self._grave_list]:
+                for row in row_list._rows:
+                    row.setFixedHeight(new_h)

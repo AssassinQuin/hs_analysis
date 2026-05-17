@@ -356,4 +356,10 @@ SCHOOL_ZH_MAP = {
 # Coin card IDs (canonical)
 # ═══════════════════════════════════════════════════════════════
 
-COIN_CARD_IDS = frozenset({"GAME_005", "TB_BlingBrawl_Coin", "NEW1_008t"})
+COIN_CARD_IDS = frozenset({
+    "GAME_005",            # Classic coin (幸运币)
+    "TB_BlingBrawl_Coin",  # Tavern Brawl coin
+    "NEW1_008t",           # Unused/legacy
+    "BAR_COIN1",           # Barrens expansion coin (幸运币)
+    "MUDAN_COIN1",         # 牡丹/当前赛季 coin (幸运币)
+})
