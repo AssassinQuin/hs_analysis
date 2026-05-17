@@ -383,8 +383,12 @@ class TrackerApp:
         self._overlay.update_state(self._game_state_manager.state)
 
     def _on_game_ended(self):
-        """游戏结束。"""
+        """游戏结束。更新 UI 显示最终状态，然后重置。"""
         logger.info("游戏结束")
+        # 重置游戏状态管理器，清空所有追踪数据
+        self._game_state_manager.reset()
+        # 推送空状态到 overlay，使其显示为"等待新游戏"
+        self._overlay.update_state(self._game_state_manager.state)
 
     def _on_turn_changed(self, turn: int):
         """回合切换。"""

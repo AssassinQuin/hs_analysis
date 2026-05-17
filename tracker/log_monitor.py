@@ -448,10 +448,11 @@ class CoreLogMonitor:
         """确定哪个玩家是本地玩家（我方）。
 
         判定规则（按优先级）:
-          1. 从 _player_names 匹配：名字含 '#' 的 BattleTag 用户是本地玩家
+          1. AI_MAKES_DECISIONS_FOR_PLAYER 标签：AI 玩家标签=1，我方=0
+          2. 从 _player_names 匹配：名字含 '#' 的 BattleTag 用户是本地玩家
              当双方都有 '#' 时，优先选与上次已知的我方 controller 一致的那个
-          2. 从 hslog player.name 匹配：名字含 '#' 的是本地玩家
-          3. 都不含 '#' 时默认 players[0] 为我方
+          3. 从 hslog player.name 匹配：名字含 '#' 的是本地玩家
+          4. 都不含 '#' 时默认 players[0] 为我方
 
         Returns:
             我方在 players 列表中的索引 (0 或 1)
@@ -463,7 +464,28 @@ class CoreLogMonitor:
         n0 = getattr(players[0], 'name', '') or ''
         n1 = getattr(players[1], 'name', '') or ''
 
-        # 优先使用 _player_names（从 DebugPrintGame() 解析的玩家名）
+        # 优先级最高: AI_MAKES_DECISIONS_FOR_PLAYER 标签
+        # AI 玩家此标签=1，我方(人类)此标签=0或不存在
+        try:
+            ai0 = players[0].tags.get(GameTag.AI_MAKES_DECISIONS_FOR_PLAYER, 0)
+            ai1 = players[1].tags.get(GameTag.AI_MAKES_DECISIONS_FOR_PLAYER, 0)
+            if ai0 and not ai1:
+                # players[0] 是 AI → 我方是 players[1]
+                my_idx = 1
+                logger.debug("玩家检测(AI_TAG): 我方=players[%d] (name=%s), AI=players[%d] (name=%s)",
+                             my_idx, n1, 1 - my_idx, n0)
+                return my_idx
+            elif ai1 and not ai0:
+                # players[1] 是 AI → 我方是 players[0]
+                my_idx = 0
+                logger.debug("玩家检测(AI_TAG): 我方=players[%d] (name=%s), AI=players[%d] (name=%s)",
+                             my_idx, n0, 1 - my_idx, n1)
+                return my_idx
+            # 两个都是 AI 或都不是 → 继续后续判断
+        except (AttributeError, TypeError):
+            pass
+
+        # 第二优先: 从 _player_names 匹配（从 DebugPrintGame() 解析的玩家名）
         if self._player_names:
             pid0 = 0
             pid1 = 0
@@ -507,7 +529,7 @@ class CoreLogMonitor:
                              my_idx, name0, 1 - my_idx, name1)
                 return my_idx
 
-        # 回退: 使用 hslog player.name
+        # 第三优先: 使用 hslog player.name
         has_tag0 = '#' in n0 and n0 != 'UNKNOWN HUMAN PLAYER'
         has_tag1 = '#' in n1 and n1 != 'UNKNOWN HUMAN PLAYER'
         if has_tag1 and not has_tag0:
