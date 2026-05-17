@@ -975,6 +975,12 @@ class CoreLogMonitor:
             "is_first_player": gt_state.is_first_player,
             "coin_used": gt_state.coin_used,
             "opp_hand_hold": dict(gt_state.opp_hand_hold_since),
+            # ── 对手可用法力推断 ──
+            # 从回合数估算：基础法力 = min(turn, 10)
+            # 后手硬币已单独追踪，此处不额外加1
+            "available_mana": min(self.game_tracker.get_current_turn(), 10),
+            # ── 对手本回合打出的卡牌（用于计算已花费法力） ──
+            "opp_cards_played_this_turn": list(gt_state.cards_played_this_turn_opp),
             "known_hand": [(eid, cid) for eid, cid in known_hand],
             "known_cards": [
                 {

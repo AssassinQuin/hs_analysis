@@ -198,6 +198,12 @@ class HandPredictor:
         # ── 使用 DynamicProbabilityEngine 计算概率 ──
         if self._probability_engine is not None:
             self._probability_engine.update_from_state_dict(state_dict)
+
+            # 将 CardEffectInferenceEngine 的推断结果传递给概率引擎
+            # 这样世界模型可以使用这些条件证据
+            if self._effect_engine is not None:
+                self._probability_engine._effect_inferences = self._effect_engine.get_inferences()
+
             prob_report = self._probability_engine.compute_probabilities(
                 hand_size=opp_hand_count,
                 deck_remaining=opp_deck_count,

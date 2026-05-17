@@ -18,6 +18,16 @@
 - 每当新牌打出/揭示时自动更新
 - 支持条件证据修正（如"如果你手持龙牌"效果触发）
 - 支持多卡组假设加权（未锁定卡组时考虑 top-N 卡组的概率加权）
+- 世界推断驱动：用贝叶斯似然比替代硬编码概率调整
+
+概率调整方法（v2 — 世界推断驱动）：
+    原有三个硬编码方法已被世界模型证据替代：
+    - _apply_hold_duration_bias      → analyze_unplayed_cards (贝叶斯似然比)
+    - _apply_mulligan_keep_bias      → analyze_mana_curve_gap (法力曲线空隙 + mulligan)
+    - _apply_generated_cooccurrence_boost → integrate() 中的衍生牌推断
+
+    所有调整现在基于贝叶斯似然比 LR = P(E|H) / P(E|¬H)，
+    通过 apply_likelihood_to_probability() 修正先验概率。
 """
 
 from __future__ import annotations
@@ -27,6 +37,14 @@ import math
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
+
+# 世界模型证据导入 — 用贝叶斯似然比替代硬编码概率调整
+from analysis.engine.world_model import (
+    WorldModelEvidence,
+    WorldModelIntegrator,
+    BehaviorEvidence,
+    apply_likelihood_to_probability,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +242,19 @@ class DynamicProbabilityEngine:
         self._coin_used: bool = False
         self._current_turn: int = 0
         self._opp_hand_hold: Dict[int, int] = {}  # entity_id → turn_first_seen_in_hand
+        # ── 世界模型所需的额外场景信息 ──
+        # 这些字段由 update_from_state_dict() 填充，供 WorldModelIntegrator 使用
+        self._available_mana: int = 0           # 对手当前可用法力
+        self._opp_board_minions: List[Dict] = [] # 对手场面随从
+        self._playstyle: str = "unknown"         # 对手打法风格
+        self._known_cards_with_info: List[Dict] = []  # 带有 turn_seen/cost 的已知卡牌
+        self._opp_cards_played_this_turn: List[str] = []  # 对手本回合打出的卡牌
+        # 世界模型整合器（延迟初始化）
+        self._world_model_integrator: Optional[WorldModelIntegrator] = None
+        # 上一次的世界模型证据（缓存，避免重复计算）
+        self._last_world_evidence: Optional[WorldModelEvidence] = None
+        # 卡牌效果推断引擎（延迟初始化）
+        self._effect_inferences: Optional[List] = None
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -234,11 +265,20 @@ class DynamicProbabilityEngine:
                 logger.warning("无法加载卡牌数据库: %s", e)
 
     def update_from_state_dict(self, state_dict: dict):
-        """从 LogMonitor 的状态字典更新引擎状态。"""
+        """从 LogMonitor 的状态字典更新引擎状态。
+
+        扩展字段（供世界模型使用）：
+        - available_mana: 对手当前可用法力（从打出记录推断）
+        - opp_board_minions: 对手场面随从列表
+        - playstyle: 对手打法风格 (aggro/tempo/control/midrange/unknown)
+        - known_cards: 现在需要包含 turn_seen 和 cost 信息
+        """
         self._ensure_card_db()
         self._bayesian_state = state_dict.get("bayesian", {})
 
         self._seen_cards = {}
+        # 保存带有完整信息的已知卡牌列表（供世界模型使用）
+        self._known_cards_with_info = list(state_dict.get("known_cards", []))
         for kc in state_dict.get("known_cards", []):
             cid = kc.get("card_id", "")
             if cid:
@@ -253,6 +293,12 @@ class DynamicProbabilityEngine:
         self._coin_used = state_dict.get("coin_used", False)
         self._current_turn = state_dict.get("turn", 0)
         self._opp_hand_hold = dict(state_dict.get("opp_hand_hold", {}))
+
+        # ── 世界模型所需的额外场景信息 ──
+        self._available_mana = state_dict.get("available_mana", 0)
+        self._opp_board_minions = list(state_dict.get("opp_board_minions", []))
+        self._playstyle = self._bayesian_state.get("playstyle", "unknown") or "unknown"
+        self._opp_cards_played_this_turn = list(state_dict.get("opp_cards_played_this_turn", []))
 
         # Track discarded cards for probability exclusion
         self._discarded_cards = set(state_dict.get("discarded_cards", []))
@@ -300,6 +346,9 @@ class DynamicProbabilityEngine:
                     card_id=tc.get("card_id", ""),
                     turn=tc.get("turn", 0),
                 ))
+
+        # 重置世界模型证据缓存（状态已更新）
+        self._last_world_evidence = None
 
     def _add_constraint_from_evidence(self, evidence_type: str, card_info: dict):
         rule = _CONDITIONAL_RULES.get(evidence_type.upper())
@@ -403,23 +452,20 @@ class DynamicProbabilityEngine:
         # 3. 条件证据修正
         self._apply_conditional_modifiers(report)
 
-        # 4. 持有回合推断：多回合不打的牌更可能是高费牌
-        self._apply_hold_duration_bias(report)
+        # 4. 世界模型证据修正（替代原有的三个硬编码方法）
+        #    原 _apply_hold_duration_bias  → analyze_unplayed_cards
+        #    原 _apply_mulligan_keep_bias  → analyze_mana_curve_gap
+        #    原 _apply_generated_cooccurrence_boost → integrate() 中的综合证据
+        self._apply_world_model_evidence(report, hand_size=hand_size)
 
-        # 5. 留牌推断：对手在mulligan阶段选择保留的牌更可能是低费牌
-        self._apply_mulligan_keep_bias(report)
-
-        # 6. 衍生牌共现推断：对手打出衍生牌说明同卡组牌概率提升
-        self._apply_generated_cooccurrence_boost(report)
-
-        # 7. 应用确认手牌先验提升（在条件修正之后，确保不被覆盖）
+        # 5. 应用确认手牌先验提升（在条件修正之后，确保不被覆盖）
         for cp in report.card_probabilities:
             if cp.card_id in confirmed_boost and cp.source != "revealed":
                 cp.probability = max(cp.probability, confirmed_boost[cp.card_id])
                 if cp.source != "inferred":
                     cp.source = "confirmed_prior"
 
-        # 8. 排序
+        # 6. 排序
         report.card_probabilities.sort(
             key=lambda cp: (
                 0 if cp.source == "revealed" else 1,
@@ -700,158 +746,241 @@ class DynamicProbabilityEngine:
                 for cp in non_type:
                     cp.probability = max(0.0, cp.probability * (1.0 - reduction))
 
-    # ── 持有回合推断 ──────────────────────────────────────
+    # ── 世界模型证据修正 ──────────────────────────────────────
 
-    def _apply_hold_duration_bias(self, report: HandProbabilityReport):
-        """根据对手手牌持有时长修正概率。
+    def _apply_world_model_evidence(
+        self,
+        report: HandProbabilityReport,
+        evidence: Optional[WorldModelEvidence] = None,
+        hand_size: int = 0,
+    ):
+        """应用世界模型证据修正概率（替代三个硬编码方法）。
 
-        对手多回合不打出某张牌，说明该牌更可能是高费牌。
-        逻辑：
-        - 计算对手手牌的平均持有时长
-        - 持有时间越长，高费牌概率提升，低费牌概率降低
-        - 这种推断基于炉石常识：1费牌通常在1-2回合打出，
-          5费以上牌通常要等更久
+        此方法替代了原有的三个硬编码概率调整方法：
+        - _apply_hold_duration_bias      → analyze_unplayed_cards (贝叶斯似然比)
+        - _apply_mulligan_keep_bias      → analyze_mana_curve_gap (法力曲线空隙 + mulligan)
+        - _apply_generated_cooccurrence_boost → integrate() 中的综合证据
+
+        所有修正基于贝叶斯似然比 LR = P(E|H) / P(E|¬H)，
+        通过 apply_likelihood_to_probability() 将似然比转化为后验概率。
+
+        如果没有提供 evidence 参数，则从当前状态自动生成。
+        如果状态信息不足，退化为超几何分布基础概率（不 crash）。
+
+        Args:
+            report: 手牌概率报告（会被就地修改）
+            evidence: 可选的 WorldModelEvidence。如果为 None，则自动从当前状态生成。
+            hand_size: 对手手牌数量，传递给 _build_world_evidence
         """
-        hand_count = report.hand_size
-        current_turn = self._current_turn
-        hold_data = self._opp_hand_hold
+        # 如果没有提供证据，自动生成
+        if evidence is None:
+            evidence = self._build_world_evidence(hand_size=hand_size)
 
-        if not hold_data or hand_count <= 0 or current_turn <= 1:
+        # 如果证据为空或没有行为证据，保持基础概率不变
+        if evidence is None or not evidence.behavior_evidence:
             return
 
-        # 计算平均持有回合数
-        hold_durations = []
-        for eid, start_turn in hold_data.items():
-            duration = current_turn - start_turn
-            if duration > 0:
-                hold_durations.append(duration)
-
-        if not hold_durations:
-            return
-
-        avg_hold = sum(hold_durations) / len(hold_durations)
-
-        # 如果平均持有 <= 1 回合，不需要调整
-        if avg_hold <= 1:
-            return
-
-        # 偏好强度：持有越久，区分度越大
-        bias_strength = min(1.0, avg_hold / 5.0)
-
+        # ── 按卡牌逐一应用似然比 ──
+        # 对每张手牌概率，找到所有相关的证据，
+        # 将多个似然比依次应用于先验概率
         for cp in report.card_probabilities:
             if cp.source == "revealed":
+                continue  # 确认手牌不受世界模型调整
+
+            # 收集与此卡牌相关的所有证据
+            relevant_evidence = self._collect_relevant_evidence(cp, evidence)
+
+            if not relevant_evidence:
                 continue
-            cost = cp.cost
-            if cost <= 1:
-                # 0-1费牌多回合不打：可能不是这些牌 → 降低
-                cp.probability *= (1.0 - 0.3 * bias_strength)
-            elif cost <= 3:
-                # 2-3费牌：轻微降低
-                cp.probability *= (1.0 - 0.1 * bias_strength)
-            elif cost <= 5:
-                # 4-5费牌：轻微提升
-                cp.probability *= (1.0 + 0.2 * bias_strength)
-            elif cost <= 7:
-                # 6-7费牌：提升
-                cp.probability *= (1.0 + 0.4 * bias_strength)
-            else:
-                # 8+费牌：显著提升
-                cp.probability *= (1.0 + 0.6 * bias_strength)
-            cp.probability = max(0.0, min(1.0, cp.probability))
 
-    # ── 留牌推断 ──────────────────────────────────────
+            # 依次应用每个似然比
+            # 后验几率 = 先验几率 × LR1 × LR2 × ...
+            # 等价于 P_posterior = apply_likelihood(P_prior, LR_combined)
+            # 其中 LR_combined = LR1 × LR2 × ...
+            combined_lr = 1.0
+            for ev in relevant_evidence:
+                combined_lr *= ev.likelihood
 
-    def _apply_mulligan_keep_bias(self, report: HandProbabilityReport):
-        """根据对手留牌行为修正概率。
+            # 用组合似然比修正概率
+            cp.probability = apply_likelihood_to_probability(cp.probability, combined_lr)
 
-        对手在mulligan阶段选择保留的牌更可能是低费牌。
-        炉石玩家通常保留1-3费牌，换掉7+费牌。
-        如果当前回合 <= 3（仍在早期），对手手牌中仍有mulligan保留的牌，
-        那么这些牌更可能是低费的。
+            # 标记来源为推断（如果概率被显著调整）
+            if abs(combined_lr - 1.0) > 0.05 and cp.source not in ("revealed", "inferred"):
+                cp.source = "inferred"
 
-        逻辑：
-        - 早期回合（turn <= 3）时，对手手牌中大部分还是mulligan保留的
-        - 低费牌（0-3费）概率提升
-        - 高费牌（7+费）概率降低（通常会被换掉）
-        - 中期回合之后这个效果逐渐消退
+    def _build_world_evidence(self, hand_size: int = 0) -> Optional[WorldModelEvidence]:
+        """从当前引擎状态构建世界模型证据。
+
+        将引擎内部的场景信息打包为 state_dict 格式，
+        传给 WorldModelIntegrator 进行分析。
+
+        Args:
+            hand_size: 对手手牌数量，由 compute_probabilities 传入
+
+        Returns:
+            WorldModelEvidence 或 None（如果信息不足）
         """
-        current_turn = self._current_turn
-        if current_turn <= 0:
-            return
+        # 如果已经有缓存且状态没变，返回缓存
+        if self._last_world_evidence is not None:
+            return self._last_world_evidence
 
-        # 只在早期回合生效（1-5回合），之后mulligan效果消退
-        if current_turn > 5:
-            return
+        # 延迟初始化世界模型整合器
+        if self._world_model_integrator is None:
+            self._world_model_integrator = WorldModelIntegrator()
 
-        # 效果强度随回合衰减
-        # turn 1: 最强(1.0), turn 3: 中等(0.5), turn 5: 微弱(0.1)
-        mulligan_factor = max(0.0, 1.0 - (current_turn - 1) * 0.25)
+        # 构建状态字典（从引擎内部状态）
+        state_dict = {
+            "turn": self._current_turn,
+            "available_mana": self._available_mana,
+            "opp_hand_count": hand_size,
+            "opp_hand_hold": self._opp_hand_hold,
+            "opp_board_minions": self._opp_board_minions,
+            "playstyle": self._playstyle,
+            "known_cards": self._known_cards_with_info,
+            "generated_cards": self._generated_cards,
+            "opp_cards_played_this_turn": self._opp_cards_played_this_turn,
+        }
 
-        for cp in report.card_probabilities:
-            if cp.source == "revealed":
-                continue
-            cost = cp.cost
-            if cost <= 1:
-                # 0-1费：几乎一定会保留
-                cp.probability *= (1.0 + 0.3 * mulligan_factor)
-            elif cost <= 3:
-                # 2-3费：通常会保留
-                cp.probability *= (1.0 + 0.2 * mulligan_factor)
-            elif cost >= 7:
-                # 7+费：通常会被换掉，除非是特殊卡组
-                cp.probability *= (1.0 - 0.25 * mulligan_factor)
-            elif cost >= 5:
-                # 5-6费：部分保留部分换
-                cp.probability *= (1.0 - 0.1 * mulligan_factor)
-            # 4费：大致中性
-            cp.probability = max(0.0, min(1.0, cp.probability))
+        try:
+            evidence = self._world_model_integrator.integrate(
+                state_dict,
+                effect_inferences=self._effect_inferences,
+            )
+            self._last_world_evidence = evidence
+            return evidence
+        except Exception as e:
+            logger.debug("世界模型证据构建失败: %s", e)
+            return None
 
-    # ── 衍生牌共现推断 ──────────────────────────────────────
+    @staticmethod
+    def _collect_relevant_evidence(
+        cp: CardProbability,
+        evidence: WorldModelEvidence,
+    ) -> List[BehaviorEvidence]:
+        """收集与特定卡牌相关的所有行为证据。
 
-    def _apply_generated_cooccurrence_boost(self, report: HandProbabilityReport):
-        """对手打出衍生牌时，同卡组牌概率应提升。
+        证据匹配规则：
+        1. conditional_triggered: 匹配种族(race)或法术学派(spell_school)
+        2. unplayed_affordable: 匹配费用(cost)
+        3. play_timing: 匹配卡牌ID(card_id)或间接影响费用推断
+        4. mana_curve_gap: 匹配费用(cost)或费用范围(cost_min/cost_max)
+        5. derived_source: 匹配卡牌ID(card_id)
 
-        当对手打出一张衍生牌（发现/创造），这张牌本身不是牌库牌，
-        但它的出现说明对手拥有产生这张牌的源牌，源牌在卡组中。
-        因此，同卡组中与源牌相关的其他牌概率也应该提升。
+        对于费用相关的证据，需要将 inferred_tags 中的 cost/cost_min/cost_max
+        与卡牌的 cost 进行比较。
 
-        更直接的逻辑：对手每打出一张牌（包括衍生牌），
-        都增加了对手卡组"活跃度"的证据——如果对手已打出N张牌，
-        而这些牌大多属于某个卡组，那么该卡组中的未打出牌
-        在手牌中的概率更高（因为牌库更小、密度更高）。
+        Args:
+            cp: 待评估的卡牌概率
+            evidence: 世界模型证据
+
+        Returns:
+            相关证据列表
         """
-        # 统计对手已打出的总牌数（包括衍生牌）
-        total_played = sum(self._seen_cards.values())
+        relevant: List[BehaviorEvidence] = []
 
-        if total_played <= 0:
-            return
+        for ev in evidence.behavior_evidence:
+            is_relevant = False
 
-        # 衍生牌的源牌信息
-        # 对手打出衍生牌 → 他一定有产生这张牌的源牌 → 源牌在卡组中
-        # 我们无法精确知道源牌是哪张，但知道：
-        # 1. 衍生牌越多，说明对手的卡组越倾向于"生成"类卡组
-        # 2. 生成类卡组通常有更多"发现"/"随机"效果
-        # 3. 效果触发牌（conditional_evidence triggered）提供了确定的手牌信息
+            if ev.evidence_type == "conditional_triggered":
+                # 条件效果触发——匹配种族或学派
+                ev_race = ev.inferred_tags.get("race", "")
+                ev_school = ev.inferred_tags.get("spell_school", "")
+                if ev_race and cp.race.upper() == ev_race.upper():
+                    is_relevant = True
+                elif ev_school and cp.spell_school.upper() == ev_school.upper():
+                    is_relevant = True
 
-        # 简化逻辑：对于每张已打出的衍生牌，其同卡组牌获得小幅加成
-        # 这基于"对手能打出衍生牌 = 对手有足够的回合和手牌空间 = 更多卡组牌在手牌中"
-        generated_count = len(self._generated_cards)
+            elif ev.evidence_type == "unplayed_affordable":
+                # 未出可出牌——匹配费用
+                ev_cost = ev.inferred_tags.get("cost", "")
+                if ev_cost:
+                    try:
+                        if cp.cost == int(ev_cost):
+                            is_relevant = True
+                    except (ValueError, TypeError):
+                        pass
 
-        if generated_count <= 0:
-            return
+            elif ev.evidence_type == "play_timing":
+                # 打出时机推断——间接影响：迟延出牌提升高费牌概率
+                ev_cost = ev.inferred_tags.get("cost", "")
+                if ev_cost:
+                    try:
+                        played_cost = int(ev_cost)
+                        # 迟延出低费牌 → 提升高费牌概率、降低低费牌概率
+                        # 只对费用高于被打出牌的牌应用正似然比
+                        # 只对费用等于被打出牌的牌应用负似然比
+                        if cp.cost > played_cost:
+                            is_relevant = True  # 正 LR（提升概率）
+                        elif cp.cost == played_cost:
+                            is_relevant = True  # 使用逆 LR（降低概率）
+                    except (ValueError, TypeError):
+                        pass
 
-        # 加成因子：衍生牌越多，说明对手越活跃，手牌中卡组牌密度越高
-        # 但要适度，避免过度加成
-        boost = min(0.3, generated_count * 0.05)  # 最多 30% 加成
+            elif ev.evidence_type == "mana_curve_gap":
+                # 法力曲线空隙——匹配费用或费用范围
+                ev_cost = ev.inferred_tags.get("cost", "")
+                ev_cost_max = ev.inferred_tags.get("cost_max", "")
+                ev_cost_min = ev.inferred_tags.get("cost_min", "")
 
-        for cp in report.card_probabilities:
-            if cp.source == "revealed":
-                continue
-            # 对手打出衍生牌 = 对手有法力余量 + 手牌有牌可打
-            # → 同卡组中低中费牌更有可能在手牌中
-            if cp.cost <= 5:
-                cp.probability = min(1.0, cp.probability * (1.0 + boost))
-            # 高费牌不一定有加成（可能法力不够打不出来）
+                if ev_cost:
+                    try:
+                        if cp.cost == int(ev_cost):
+                            is_relevant = True
+                    except (ValueError, TypeError):
+                        pass
+                elif ev_cost_max:
+                    try:
+                        if cp.cost <= int(ev_cost_max):
+                            is_relevant = True
+                    except (ValueError, TypeError):
+                        pass
+                elif ev_cost_min:
+                    try:
+                        if cp.cost >= int(ev_cost_min):
+                            is_relevant = True
+                    except (ValueError, TypeError):
+                        pass
+
+            elif ev.evidence_type == "derived_source":
+                # 衍生牌源牌——匹配卡牌ID
+                if ev.card_id and cp.card_id == ev.card_id:
+                    is_relevant = True
+
+            elif ev.evidence_type == "playstyle_prior":
+                # 打法风格推断——匹配费用范围
+                ev_cost_max = ev.inferred_tags.get("cost_max", "")
+                ev_cost_min = ev.inferred_tags.get("cost_min", "")
+                ev_style = ev.inferred_tags.get("style", "")
+
+                if ev_cost_max and not ev_cost_min:
+                    try:
+                        if cp.cost <= int(ev_cost_max):
+                            is_relevant = True
+                    except (ValueError, TypeError):
+                        pass
+                elif ev_cost_min and not ev_cost_max:
+                    try:
+                        if cp.cost >= int(ev_cost_min):
+                            is_relevant = True
+                    except (ValueError, TypeError):
+                        pass
+                elif ev_cost_min and ev_cost_max:
+                    try:
+                        if int(ev_cost_min) <= cp.cost <= int(ev_cost_max):
+                            is_relevant = True
+                    except (ValueError, TypeError):
+                        pass
+
+            elif ev.evidence_type == "board_state":
+                # 场面状态推断——匹配卡牌类型
+                ev_card_type = ev.inferred_tags.get("card_type", "")
+                if ev_card_type and cp.card_type.upper() == ev_card_type.upper():
+                    is_relevant = True
+
+            if is_relevant:
+                relevant.append(ev)
+
+        return relevant
 
     def _get_deck_cards(self, archetype_id: int) -> List[int]:
         """获取指定卡组原型包含的卡牌 dbfId 列表。
@@ -913,6 +1042,17 @@ class DynamicProbabilityEngine:
             if card:
                 return card.get("cardId", card.get("id", ""))
         return ""
+
+    def set_world_evidence(self, evidence: WorldModelEvidence):
+        """直接设置世界模型证据（供外部调用者使用）。
+
+        如果调用者已经通过 WorldModelIntegrator 计算了证据，
+        可以直接传入，避免重复计算。
+
+        Args:
+            evidence: 世界模型证据
+        """
+        self._last_world_evidence = evidence
 
     def _card_id_to_probability(
         self, card_id: str, probability: float, source: str
