@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QSizePolicy, QPushButton, QApplication,
 )
-from PyQt5.QtCore import Qt, QPoint, QTimer, pyqtSignal, QRect, QSize
+from PyQt5.QtCore import Qt, QPoint, QTimer, pyqtSignal, QRect, QSize, QSettings
 from PyQt5.QtGui import (
     QPainter, QColor, QFont, QPen, QBrush, QFontMetrics, QCursor,
     QLinearGradient, QPainterPath,
@@ -329,13 +329,14 @@ class _SectionHeader(QWidget):
 
     clicked = pyqtSignal()
 
-    def __init__(self, title: str = "", parent=None):
+    def __init__(self, title: str = "", is_grave: bool = False, parent=None):
         super().__init__(parent)
         self.setFixedHeight(_SEC_HDR_H)
         self._title = title
         self._count = 0
         self._expanded = True
         self._hover = False
+        self._is_grave = is_grave
         self.setCursor(QCursor(Qt.PointingHandCursor))
 
     def set_title(self, title: str, count: int = 0):
@@ -369,28 +370,49 @@ class _SectionHeader(QWidget):
         w, h = self.width(), self.height()
 
         # 背景
-        bg = QColor(28, 34, 56, 220) if self._hover else _C_SEC_HDR
+        if self._is_grave:
+            # 墓地区使用更醒目的暗红/紫色背景
+            bg = QColor(50, 28, 38, 240) if self._hover else QColor(35, 20, 30, 230)
+        else:
+            bg = QColor(28, 34, 56, 220) if self._hover else _C_SEC_HDR
         p.fillRect(0, 0, w, h, bg)
 
         # 底部分割线
-        p.setPen(QPen(_C_BORDER, 0.5))
+        if self._is_grave:
+            # 墓地区分割线使用更明显的颜色
+            p.setPen(QPen(QColor(120, 60, 80, 200), 1))
+        else:
+            p.setPen(QPen(_C_BORDER, 0.5))
         p.drawLine(0, h - 1, w, h - 1)
 
         # 标题
-        p.setPen(QPen(_C_TEXT))
+        if self._is_grave:
+            # 墓地标题使用骷髅图标 + 暖色文字
+            title_color = QColor(255, 160, 130)
+        else:
+            title_color = _C_TEXT
+        p.setPen(QPen(title_color))
         p.setFont(QFont("Microsoft YaHei", 9, QFont.Bold))
-        p.drawText(QRect(8, 0, w - 60, h), Qt.AlignVCenter | Qt.AlignLeft, self._title)
+        # 墓地区前加骷髅图标
+        display_title = ("☠ " + self._title) if self._is_grave else self._title
+        p.drawText(QRect(8, 0, w - 60, h), Qt.AlignVCenter | Qt.AlignLeft, display_title)
 
         # 数量
         if self._count > 0:
-            p.setPen(QPen(_C_TEXT_ACC))
+            if self._is_grave:
+                p.setPen(QPen(QColor(255, 120, 100)))
+            else:
+                p.setPen(QPen(_C_TEXT_ACC))
             p.setFont(QFont("Arial", 8))
             cnt_text = f"({self._count})"
             p.drawText(QRect(w - 50, 0, 30, h), Qt.AlignVCenter | Qt.AlignRight, cnt_text)
 
         # 箭头
         arrow = "▼" if self._expanded else "▶"
-        p.setPen(QPen(_C_CHEVRON))
+        if self._is_grave:
+            p.setPen(QPen(QColor(200, 120, 100)))
+        else:
+            p.setPen(QPen(_C_CHEVRON))
         p.setFont(QFont("Arial", 9))
         p.drawText(QRect(w - 20, 0, 16, h), Qt.AlignVCenter | Qt.AlignRight, arrow)
 
@@ -606,6 +628,13 @@ class OverlayWindow(QWidget):
 
     # ── 窗口初始化 ──
 
+    # ── 设置持久化键名 ──
+    _SETTINGS_GEOM = "overlay/geometry"
+    _SETTINGS_HAND_EXP = "overlay/hand_expanded"
+    _SETTINGS_DECK_EXP = "overlay/deck_expanded"
+    _SETTINGS_GRAVE_EXP = "overlay/grave_expanded"
+    _SETTINGS_INTERACTIVE = "overlay/interactive"
+
     def _init_window(self):
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -613,6 +642,42 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setMinimumSize(_W_MIN, _H_MIN)
+
+        # 恢复上次窗口位置和大小
+        settings = QSettings("HSAnalysis", "Overlay")
+        geom = settings.value(self._SETTINGS_GEOM)
+        if geom and isinstance(geom, QRect):
+            # 确保恢复的位置在可用屏幕范围内
+            screen = QApplication.primaryScreen()
+            if screen:
+                avail = screen.availableGeometry()
+                # 如果保存的位置在屏幕外（比如换了显示器），则回到默认位置
+                if (geom.right() < avail.left() + 50 or
+                    geom.bottom() < avail.top() + 50 or
+                    geom.left() > avail.right() - 50 or
+                    geom.top() > avail.bottom() - 50):
+                    geom = None
+            if geom:
+                # 确保尺寸不低于最小值
+                geom = QRect(geom.x(), geom.y(),
+                             max(geom.width(), _W_MIN),
+                             max(geom.height(), _H_MIN))
+                self.setGeometry(geom)
+            else:
+                self._set_default_geometry()
+        else:
+            self._set_default_geometry()
+
+        # 恢复折叠状态
+        self._hand_expanded = settings.value(self._SETTINGS_HAND_EXP, True, type=bool)
+        self._deck_expanded = settings.value(self._SETTINGS_DECK_EXP, True, type=bool)
+        self._grave_expanded = settings.value(self._SETTINGS_GRAVE_EXP, True, type=bool)
+
+        # 恢复交互模式
+        self._interactive = settings.value(self._SETTINGS_INTERACTIVE, True, type=bool)
+
+    def _set_default_geometry(self):
+        """设置默认窗口位置（屏幕右侧）。"""
         screen = QApplication.primaryScreen()
         if screen:
             g = screen.availableGeometry()
@@ -622,6 +687,15 @@ class OverlayWindow(QWidget):
                 _W_DEFAULT,
                 min(_H_DEFAULT, g.height() - 160),
             )
+
+    def _save_geometry(self):
+        """保存当前窗口位置、大小和折叠状态。"""
+        settings = QSettings("HSAnalysis", "Overlay")
+        settings.setValue(self._SETTINGS_GEOM, self.geometry())
+        settings.setValue(self._SETTINGS_HAND_EXP, self._hand_expanded)
+        settings.setValue(self._SETTINGS_DECK_EXP, self._deck_expanded)
+        settings.setValue(self._SETTINGS_GRAVE_EXP, self._grave_expanded)
+        settings.setValue(self._SETTINGS_INTERACTIVE, self._interactive)
 
     # ── UI 构建 ──
 
@@ -638,6 +712,8 @@ class OverlayWindow(QWidget):
         self._hand_header.clicked.connect(self._toggle_hand)
         self._root.addWidget(self._hand_header)
         self._hand_list = _CardListArea(max_rows=10, row_height=self._row_height)
+        # 手牌区设置最小高度，避免窗口缩小时完全看不到
+        self._hand_list.setMinimumHeight(30)
         self._root.addWidget(self._hand_list, stretch=3)
 
         # 3. 卡组区
@@ -648,14 +724,33 @@ class OverlayWindow(QWidget):
         self._deck_tab.tab_changed.connect(self._switch_arch)
         self._root.addWidget(self._deck_tab)
         self._deck_list = _CardListArea(max_rows=35, row_height=self._row_height)
+        # 卡组区设置最小高度
+        self._deck_list.setMinimumHeight(40)
         self._root.addWidget(self._deck_list, stretch=4)
 
-        # 4. 墓地区
-        self._grave_header = _SectionHeader("墓地")
+        # 4. 墓地区 — 更显眼的设计
+        self._grave_header = _SectionHeader("墓地", is_grave=True)
         self._grave_header.clicked.connect(self._toggle_grave)
         self._root.addWidget(self._grave_header)
         self._grave_list = _CardListArea(max_rows=35, row_height=self._row_height)
+        # 墓地区设置最小高度，确保窗口缩小时仍能看到
+        self._grave_list.setMinimumHeight(30)
         self._root.addWidget(self._grave_list, stretch=3)
+
+        # ── 恢复折叠状态 ──
+        self._hand_header.set_expanded(self._hand_expanded)
+        self._hand_list.setVisible(self._hand_expanded)
+        self._deck_header.set_expanded(self._deck_expanded)
+        self._deck_tab.setVisible(self._deck_expanded)
+        self._deck_list.setVisible(self._deck_expanded)
+        self._grave_header.set_expanded(self._grave_expanded)
+        self._grave_list.setVisible(self._grave_expanded)
+
+        # ── 恢复交互模式 ──
+        if not self._interactive:
+            self.set_interactive(False)
+            self._interact_btn.setText("👁")
+            self._interact_btn.setToolTip("穿透模式(点击穿过到游戏)")
 
     # ── 标题栏 ──
 
@@ -728,17 +823,20 @@ class OverlayWindow(QWidget):
         self._hand_expanded = not self._hand_expanded
         self._hand_header.set_expanded(self._hand_expanded)
         self._hand_list.setVisible(self._hand_expanded)
+        self._save_geometry()
 
     def _toggle_deck(self):
         self._deck_expanded = not self._deck_expanded
         self._deck_header.set_expanded(self._deck_expanded)
         self._deck_tab.setVisible(self._deck_expanded)
         self._deck_list.setVisible(self._deck_expanded)
+        self._save_geometry()
 
     def _toggle_grave(self):
         self._grave_expanded = not self._grave_expanded
         self._grave_header.set_expanded(self._grave_expanded)
         self._grave_list.setVisible(self._grave_expanded)
+        self._save_geometry()
 
     # ── 卡组切换 ──
 
@@ -755,6 +853,7 @@ class OverlayWindow(QWidget):
         self._interact_btn.setToolTip(
             "交互模式" if self._interactive else "穿透模式(点击穿过到游戏)"
         )
+        self._save_geometry()
 
     def set_interactive(self, on: bool):
         self._interactive = on
@@ -1111,10 +1210,14 @@ class OverlayWindow(QWidget):
             self.move(e.globalPos() + self._drag_off)
 
     def mouseReleaseEvent(self, e):
+        was_dragging = self._drag_start is not None or self._resizing
         self._drag_start = None
         self._resizing = False
         self._resize_start = None
         self._resize_start_geo = None
+        # 拖拽/缩放结束后保存几何信息
+        if was_dragging:
+            self._save_geometry()
 
     def mouseDoubleClickEvent(self, e):
         """双击标题栏切换交互/穿透模式。"""
