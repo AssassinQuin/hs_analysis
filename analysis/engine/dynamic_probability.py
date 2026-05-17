@@ -234,11 +234,52 @@ class DynamicProbabilityEngine:
         self._revealed_hand = list(state_dict.get("known_hand", []))
         self._constraints = []
 
+        # Track discarded cards for probability exclusion
+        self._discarded_cards: set = set(state_dict.get("discarded_cards", []))
+
+        # Track deck peek cards — these are confirmed to be in opponent's deck
+        # Used to reduce uncertainty about deck composition
+        self._known_deck_cards: list = list(state_dict.get("known_deck_cards", []))
+
+        # Track hand transforms — original card_id no longer in original form
+        # Used to exclude transformed-from cards and include transformed-to cards
+        self._hand_transforms: list = list(state_dict.get("hand_transforms", []))
+
+        # Track confirmed hand cards (from copy effects like Mind Vision)
+        # These cards are 100% confirmed to be/was in opponent's hand
+        self._confirmed_hand_cards: list = list(state_dict.get("confirmed_hand_cards", []))
+
         for kc in state_dict.get("known_cards", []):
             ce = kc.get("conditional_evidence", "")
             triggered = kc.get("effect_triggered", False)
             if ce and triggered:
                 self._add_constraint_from_evidence(ce, kc)
+
+        # Add tutor type constraints from tracker rules
+        for tc in state_dict.get("hand_type_constraints", []):
+            ctype = tc.get("type", "")
+            value = tc.get("value", "")
+            if ctype == "card_type":
+                self._constraints.append(HandConstraint(
+                    constraint_type="holds_card_type",
+                    value=value,
+                    card_id=tc.get("card_id", ""),
+                    turn=tc.get("turn", 0),
+                ))
+            elif ctype == "race":
+                self._constraints.append(HandConstraint(
+                    constraint_type="holds_race",
+                    value=value,
+                    card_id=tc.get("card_id", ""),
+                    turn=tc.get("turn", 0),
+                ))
+            elif ctype == "spell_school":
+                self._constraints.append(HandConstraint(
+                    constraint_type="holds_school",
+                    value=value,
+                    card_id=tc.get("card_id", ""),
+                    turn=tc.get("turn", 0),
+                ))
 
     def _add_constraint_from_evidence(self, evidence_type: str, card_info: dict):
         rule = _CONDITIONAL_RULES.get(evidence_type.upper())
@@ -295,6 +336,27 @@ class DynamicProbabilityEngine:
                 cp = self._card_id_to_probability(card_id, 1.0, "revealed")
                 report.card_probabilities.append(cp)
                 revealed_set.add(card_id)
+
+        # 1b. 确认手牌（来自 Mind Vision 等复制效果）
+        # 这些卡已不在手牌（因为被复制走了），但确认了对手持有过
+        # 记录为高置信度参考信息
+        for card_id in self._confirmed_hand_cards:
+            if card_id and card_id not in revealed_set:
+                # 确认手牌的卡已被复制走，对手当前不一定还有
+                # 但贝叶斯权重应适度提升
+                pass  # 未来可作为贝叶斯先验调整
+
+        # 1c. 手牌变形 — 被变形的原始牌不应出现在概率中
+        # 收集所有被变形走的 old_card_id
+        transformed_from_ids: set = set()
+        transformed_to_ids: set = set()
+        for t in self._hand_transforms:
+            old_id = t.get("old_card_id", "")
+            new_id = t.get("new_card_id", "")
+            if old_id:
+                transformed_from_ids.add(old_id)
+            if new_id:
+                transformed_to_ids.add(new_id)
 
         # 2. 基于贝叶斯卡组的超几何分布概率
         bayesian_probs = self._compute_bayesian_hand_probabilities(
@@ -357,6 +419,14 @@ class DynamicProbabilityEngine:
 
                 # 衍生牌不算
                 if card_id in self._generated_cards:
+                    continue
+
+                # 已弃牌的卡牌不再可能在手牌中
+                if card_id in self._discarded_cards:
+                    continue
+
+                # 被变形走的卡牌不再以原始形式存在于手牌/牌库
+                if card_id in transformed_from_ids:
                     continue
 
                 # 已打出的张数
@@ -461,6 +531,40 @@ class DynamicProbabilityEngine:
                 for cp in school_cards:
                     cp.probability = min(1.0, cp.probability / p_holds_school)
                     cp.source = "inferred"
+
+            elif constraint.constraint_type == "holds_card_type":
+                # 导师效果: "draw a MINION" → 对手手牌必有该类型
+                target_type = constraint.value.upper()  # "MINION", "SPELL", etc.
+                type_cards = [
+                    cp for cp in report.card_probabilities
+                    if cp.card_type.upper() == target_type
+                ]
+                if not type_cards:
+                    continue
+
+                # P(holds_type) = 1 - Π(1 - P(c_i))
+                p_no_type = 1.0
+                for cp in type_cards:
+                    p_no_type *= (1.0 - cp.probability)
+                p_holds_type = 1.0 - p_no_type
+
+                if p_holds_type <= 0:
+                    continue
+
+                # 贝叶斯修正: P(c | holds_type) = P(c) / P(holds_type)
+                for cp in type_cards:
+                    cp.probability = min(1.0, cp.probability / p_holds_type)
+                    cp.source = "inferred"
+
+                # 非目标类型牌适度降低
+                non_type = [
+                    cp for cp in report.card_probabilities
+                    if cp.card_type.upper() != target_type
+                    and cp.source != "revealed"
+                ]
+                reduction = p_holds_type * 0.3
+                for cp in non_type:
+                    cp.probability = max(0.0, cp.probability * (1.0 - reduction))
 
     def _get_deck_cards(self, archetype_id: int) -> List[int]:
         try:

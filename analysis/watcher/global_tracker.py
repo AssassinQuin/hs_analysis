@@ -43,6 +43,9 @@ from analysis.watcher.tracker_types import (
 from analysis.watcher.tracker_rules import (
     TrackingContext, TrackerRuleDispatcher,
     ShuffleTrackerRule, CorruptTrackerRule, RevealTrackerRule,
+    TransformTrackerRule, DeckPeekTrackerRule,
+    DiscardTrackerRule, TutorConstraintTrackerRule,
+    GallywixTrackerRule,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,6 +135,11 @@ class GlobalTracker:
         self._rule_dispatcher.register(ShuffleTrackerRule())
         self._rule_dispatcher.register(CorruptTrackerRule())
         self._rule_dispatcher.register(RevealTrackerRule())
+        self._rule_dispatcher.register(TransformTrackerRule())
+        self._rule_dispatcher.register(DeckPeekTrackerRule())
+        self._rule_dispatcher.register(DiscardTrackerRule())
+        self._rule_dispatcher.register(TutorConstraintTrackerRule())
+        self._rule_dispatcher.register(GallywixTrackerRule())
 
         # 实体卡牌ID快照: entity_id → card_id (用于检测 ChangeEntity 变形)
         self._last_known_card_ids: Dict[int, str] = {}
@@ -158,6 +166,8 @@ class GlobalTracker:
         self.state.opp_hand_card_ids.clear()
         # 清理卡牌ID快照
         self._last_known_card_ids.clear()
+        # 通知所有 Rule 重置其 per-game 状态
+        self._rule_dispatcher.dispatch_game_start(self.state)
 
     # ---------------------------------------------------------------
     # 延迟加载卡牌数据库
@@ -769,6 +779,8 @@ class GlobalTracker:
                 self.state.cards_played_this_turn_opp.clear()
 
         self.state.current_turn = turn
+        # 分发回合变化事件到所有 TrackerRule
+        self._rule_dispatcher.dispatch_turn_change(turn, self.state)
 
     def on_corpse_change(self, controller: int, total_corpses: int):
         """残骸(Corpse)总量变化时调用"""

@@ -248,6 +248,28 @@ class GlobalGameState:
     player_shuffled_into_deck: List[str] = field(default_factory=list)
     """我方洗入牌库的已知 card_id"""
 
+    # ---- 对手牌库已知卡牌（窥探效果） ----
+    opp_known_deck_cards: List[Dict] = field(default_factory=list)
+    """窥探到的对手牌库卡牌 [{"card_id": str, "entity_id": int, "turn": int}, ...]"""
+
+    # ---- 手牌变形追踪 ----
+    opp_hand_transforms: List[Dict] = field(default_factory=list)
+    """对手手牌变形记录 [{"entity_id": int, "old_card_id": str, "new_card_id": str, "turn": int}, ...]"""
+
+    opp_discarded_cards: List[str] = field(default_factory=list)
+    """对手弃牌/爆牌时揭示的已知 card_id 列表"""
+
+    # ---- 手牌类型约束（导师效果等） ----
+    opp_hand_type_constraints: List[Dict] = field(default_factory=list)
+    """确认对手手牌类型 [{"type": str, "value": str, "card_id": str, "turn": int}, ...]
+    type: "card_type" | "race" | "spell_school"
+    value: "MINION" | "SPELL" | "DRAGON" | "FIRE" etc.
+    """
+
+    # ---- Gallywix 等效果追踪 ----
+    opp_confirmed_hand_cards: List[str] = field(default_factory=list)
+    """通过各种效果确认的对手手牌 card_id（对手打出法术时我们获得副本等）"""
+
     # ---- 腐蚀追踪 ----
     opp_corrupted_cards: List[str] = field(default_factory=list)
     """对手已腐蚀升级的原始 card_id 列表（升级前的card_id）"""

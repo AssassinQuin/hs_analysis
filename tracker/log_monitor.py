@@ -261,7 +261,7 @@ class CoreLogMonitor:
         # 实体区域快照 (entity_id → zone_int)，用于 diff 检测区域变化
         self._last_known_zones: Dict[int, int] = {}
 
-        # 实体卡牌ID快照 (entity_id → card_id)，用于检测 ChangeEntity 变形
+        # 实体 card_id 快照 (entity_id → card_id)，用于检测 ChangeEntity 变形和窥探揭示
         self._last_known_card_ids: Dict[int, str] = {}
 
         # FIRST_PLAYER 检测标记
@@ -798,6 +798,11 @@ class CoreLogMonitor:
             ],
             "generated_cards": list(gt_state.opp_generated_seen),
             "graveyard": list(gt_state.opp_graveyard_seen),
+            "known_deck_cards": list(gt_state.opp_known_deck_cards),
+            "hand_transforms": list(gt_state.opp_hand_transforms),
+            "discarded_cards": list(gt_state.opp_discarded_cards),
+            "hand_type_constraints": list(gt_state.opp_hand_type_constraints),
+            "confirmed_hand_cards": list(gt_state.opp_confirmed_hand_cards),
             "bayesian": bayesian,
             "secret_report": secret_report,
             "card_breakdown": card_breakdown,
@@ -934,8 +939,8 @@ class CoreLogMonitor:
                 is_coin_tag=fields.is_coin_tag,
             )
 
-            # 如果实体不在 DECK 区域（已揭示的牌），也调用 on_show_entity
-            if fields.zone != ZONE_DECK:
+            # 有 card_id 的实体均调用 on_show_entity（包括 DECK 区域的窥探揭示）
+            if fields.card_id:
                 gt.on_show_entity(
                     entity_id=entity_id,
                     card_id=fields.card_id,
@@ -946,24 +951,25 @@ class CoreLogMonitor:
                     is_coin_tag=fields.is_coin_tag,
                 )
 
-            # 记录实体当前区域，用于后续 TAG_CHANGE 区域变化检测
+            # 记录区域和初始 card_id，用于后续 ChangeEntity 变形和窥探揭示检测
             self._last_known_zones[entity_id] = fields.zone
-            # 记录初始 card_id，用于后续 ChangeEntity 变形检测
-            self._last_known_card_ids[entity_id] = fields.card_id
+            self._last_known_card_ids[entity_id] = fields.card_id or ""
 
             # 有 card_id 的实体标记为已桥接
             self._bridged_entities.add(entity_id)
         else:
-            # 无 card_id 的实体：只在 DECK 区域时标记已桥接
-            # （DECK 中的暗牌不会后续揭示 card_id）
+            # 无 card_id 的实体：只在 DECK 区域或 ENCHANTMENT 时标记已桥接
+            # DECK 中的暗牌可能后续通过窥探效果获得 card_id，
+            # 此时 _bridge_new_entities 的 card_id diff 会检测到并 dispatch on_show_entity
             # 非 DECK 区域的实体可能后续通过 SHOW_ENTITY 获得 card_id，
             # 不标记为已桥接以便后续重新处理
-            # 但 ENCHANTMENT 类型的无 card_id 实体（附魔）需要标记已桥接，
+            # ENCHANTMENT 类型的无 card_id 实体（附魔）需要标记已桥接，
             # 避免无限重复处理
             if fields.zone == ZONE_DECK or fields.card_type == CT_ENCHANTMENT:
                 self._bridged_entities.add(entity_id)
-            # 记录区域
+            # 记录区域和 card_id（空）
             self._last_known_zones[entity_id] = fields.zone
+            self._last_known_card_ids[entity_id] = ""
 
         return True
 
@@ -1000,7 +1006,7 @@ class CoreLogMonitor:
         new_count = 0
         for entity_id, ent_data in ec._entities.items():
             if entity_id in self._bridged_entities:
-                # 已桥接的实体——检查区域是否变化（TAG_CHANGE 可能更新了 cache）
+                # 已桥接的实体——检查区域或 card_id 是否变化
                 fields = _extract_entity_fields(ent_data)
                 old_zone = self._last_known_zones.get(entity_id)
                 if old_zone is not None and old_zone != fields.zone:
@@ -1014,6 +1020,23 @@ class CoreLogMonitor:
                         card_type=fields.card_type,
                     )
                     self._last_known_zones[entity_id] = fields.zone
+                # 检测 DECK 区域实体新获得 card_id（窥探揭示效果）
+                # 这类实体之前已在 DECK 中桥接，但当时没有 card_id
+                old_card_id = self._last_known_card_ids.get(entity_id)
+                if fields.card_id and old_card_id != fields.card_id:
+                    self.global_tracker.on_show_entity(
+                        entity_id=entity_id,
+                        card_id=fields.card_id,
+                        controller=fields.controller,
+                        zone=fields.zone,
+                        card_type=fields.card_type,
+                        cost=fields.cost,
+                        is_coin_tag=fields.is_coin_tag,
+                    )
+                    self._last_known_card_ids[entity_id] = fields.card_id
+                elif not fields.card_id and old_card_id is None:
+                    # 首次记录无 card_id 的实体
+                    self._last_known_card_ids[entity_id] = ""
                 continue
 
             # 使用统一的单实体桥接方法

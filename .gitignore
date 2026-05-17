@@ -27,6 +27,9 @@ Thumbs.db
 hs_cards/images/
 hs_cards/crops/
 
+# Debug screenshots (pasted from clipboard)
+upload/
+
 # External tool artifacts
 .swarm/
 SWARM_PLAN.*
