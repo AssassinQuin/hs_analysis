@@ -117,6 +117,9 @@ class GlobalGameState:
     opp_hand_card_ids: Dict[int, Tuple[str, int]] = field(default_factory=dict)
     """对手手牌 entity_id -> (card_id, zone)（SHOW_ENTITY 揭示的）"""
 
+    opp_hand_count: int = 0
+    """对手当前手牌数量（从实体区域计数）"""
+
     # ---- 对手牌库追踪 ----
     opp_deck_remaining: int = 0
     """对手牌库剩余（精确 ZONE_DECK 计数）"""

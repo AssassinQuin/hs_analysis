@@ -15,7 +15,6 @@ Data sources:
    - card_data/hsreplay_cache.db → meta_decks table (archetype signatures)
    - card_data/unified_standard.json → card name lookups
 """
-import sys
 import os
 import json
 import logging
@@ -32,17 +31,7 @@ from analysis.config import PROJECT_ROOT, HSREPLAY_CACHE_DB, UNIFIED_DB_PATH
 DB_PATH = str(HSREPLAY_CACHE_DB)
 UNIFIED_PATH = str(UNIFIED_DB_PATH)
 
-# Ensure UTF-8 stdout for Chinese output — save original before import
-# (fetch_hsreplay.py wraps stdout at import time; avoid double-wrap)
-try:
-    from analysis.data.fetch_hsreplay import init_db, get_meta_decks
-except ImportError:
-    # Fallback for before data layer migration
-    sys.path.insert(0, os.path.join(str(PROJECT_ROOT), "scripts"))
-    from fetch_hsreplay import init_db, get_meta_decks
-
-# After import, fetch_hsreplay has already wrapped stdout with UTF-8.
-# No further action needed — the encoding is already set.
+from analysis.data.fetch_hsreplay import init_db, get_meta_decks
 
 
 # ── Constants ──────────────────────────────────────
@@ -56,6 +45,41 @@ _AGGRO_KEYWORDS = {'face', 'aggro', 'rush', 'hyper', 'pirate', 'odd', 'murloc', 
 _CONTROL_KEYWORDS = {'control', 'reno', 'highlander', 'wall', 'greed', 'fatigue', 'soul', 'reason'}
 _COMBO_KEYWORDS = {'combo', 'otk', 'malygos', 'miracle', 'toggwaggle', 'mechathun', 'raleigh', 'soulfire'}
 _MIDRANGE_KEYWORDS = {'midrange', 'dragon', 'even', 'hand', 'bomb', 'ramp', 'menagerie'}
+
+# ── Card-ID-based playstyle classification (for decision_loop.py) ──
+_AGGRO_CARD_KEYWORDS = frozenset({
+    'FACE', 'AGGRO', 'RUSH', 'ZOO', 'PIRATE', 'MECH', 'MURLOC', 'DEMON',
+    'BURN', 'SMORC', 'TEMPO',
+})
+_CONTROL_CARD_KEYWORDS = frozenset({
+    'CONTROL', 'SLOW', 'WALL', 'HEAL', 'ARMOR', 'REMOVE', 'CLEAR',
+    'GRIND', 'FATIGUE',
+})
+
+
+def classify_card_playstyle(card_id: str) -> Optional[str]:
+    """Classify a card ID into a playstyle hint based on name tokens.
+
+    Used when archetype name is unavailable (e.g., real-time observation).
+    Scans the upper-cased card_id for playstyle-indicating keywords.
+
+    Args:
+        card_id: Hearthstone card ID like 'EX1_001', 'LOOT_353', etc.
+
+    Returns:
+        One of: 'aggro', 'control', or None (no hint).
+    """
+    if not card_id:
+        return None
+
+    cid_upper = card_id.upper()
+    for kw in _AGGRO_CARD_KEYWORDS:
+        if kw in cid_upper:
+            return 'aggro'
+    for kw in _CONTROL_CARD_KEYWORDS:
+        if kw in cid_upper:
+            return 'control'
+    return None
 
 
 def classify_playstyle(archetype_name: str) -> str:
@@ -497,17 +521,30 @@ class BayesianOpponentModel:
             result.append((aid, name, prob))
         return result
 
-    def predict_next_actions(self, n=3) -> list:
+    def predict_next_actions(self, n=10, hand_size: int = 0,
+                              deck_remaining: int = 0) -> list:
         """Predict cards the opponent might play next.
 
         Based on the locked deck (if available) or the top-probability deck,
-        returns signature cards not yet observed, ranked by likelihood.
+        returns signature cards not yet observed, with probabilities computed
+        using the hypergeometric distribution.
+
+        P(card_c in hand | deck_j) = 1 - C(pool - r, H) / C(pool, H)
+        where:
+            pool = hand_size + deck_remaining (total unknown cards)
+            r = remaining copies of card_c in deck_j
+            H = hand_size
+
+        When hand_size/deck_remaining are not provided, falls back to
+        using the deck confidence as a rough probability estimate.
 
         Args:
-            n: Number of predictions to return.
+            n: Number of predictions to return. Default 10.
+            hand_size: Opponent's current hand size (for hypergeometric calc).
+            deck_remaining: Opponent's deck remaining count.
 
         Returns:
-            list of dicts with keys: dbfId, probability, name
+            list of dicts with keys: dbfId, probability, name, cost
         """
         # Determine which deck to predict from
         if self.locked:
@@ -527,10 +564,10 @@ class BayesianOpponentModel:
 
         # Cards not yet seen
         # Count-aware: deck cards minus seen deck cards
-        deck_remaining = list(deck["cards"])
+        deck_remaining_list = list(deck["cards"])
         seen_copy = dict(self._seen_deck_cards)
         unseen = []
-        for dbf in deck_remaining:
+        for dbf in deck_remaining_list:
             if seen_copy.get(dbf, 0) > 0:
                 seen_copy[dbf] -= 1
             else:
@@ -538,13 +575,50 @@ class BayesianOpponentModel:
         if not unseen:
             return []
 
+        # Count remaining copies per dbfId
+        unseen_counter = Counter(unseen)
+
+        # Compute pool size for hypergeometric
+        pool = hand_size + deck_remaining if (hand_size > 0 and deck_remaining > 0) else 0
+
+        # Deduplicate and compute per-card probability
+        unseen_unique = []
+        seen_dbfs = set()
+        for dbf in unseen:
+            if dbf not in seen_dbfs:
+                seen_dbfs.add(dbf)
+                card_info = self.cards_by_dbf.get(dbf, {})
+                cost = card_info.get("cost", 5)
+                remaining = unseen_counter[dbf]
+
+                # Use hypergeometric distribution if pool info available
+                if pool > 0 and hand_size > 0:
+                    from analysis.engine.dynamic_probability import hypergeometric_at_least_one
+                    card_prob = hypergeometric_at_least_one(
+                        K=remaining,
+                        n=hand_size,
+                        N=pool,
+                    )
+                    # Weight by deck confidence
+                    card_prob *= target_prob
+                else:
+                    # Fallback: use deck confidence weighted by remaining ratio
+                    card_prob = target_prob * (remaining / max(len(unseen), 1))
+
+                unseen_unique.append((dbf, cost, card_prob, remaining))
+
+        # Sort by probability descending (most likely first)
+        unseen_unique.sort(key=lambda x: (-x[2], x[1]))
+
         predictions = []
-        for dbf in unseen[:n]:
+        for dbf, cost, prob, remaining in unseen_unique[:n]:
             card_info = self.cards_by_dbf.get(dbf, {})
             predictions.append({
                 "dbfId": dbf,
-                "probability": round(target_prob, 4),
+                "probability": round(prob, 4),
                 "name": card_info.get("name", f"Unknown({dbf})"),
+                "cost": cost,
+                "remaining": remaining,
             })
         return predictions
 

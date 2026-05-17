@@ -72,16 +72,29 @@ def _infer_trigger_event(card_id: str, card) -> str:
     except ImportError:
         pass
 
-    # Fallback: infer from card text
-    text = (card.description or '').lower()
-    if '攻击' in text or 'attack' in text or 'minion attacks' in text:
-        return 'on_attack'
-    if '施放' in text or 'cast' in text or 'spell' in text:
-        return 'on_spell_cast'
-    if '召唤' in text or 'summon' in text or 'play' in text:
-        return 'on_minion_play'
-    if '英雄' in text or 'hero' in text:
-        return 'on_hero_power'
+    # Primary: use mechanics tags for robust classification
+    mechanics = set(card.mechanics) if hasattr(card, 'mechanics') else set()
+    if 'TRIGGER_VISUAL' in mechanics or 'SECRET' in mechanics:
+        # Infer from card text (English first, then Chinese fallback)
+        text_en = (getattr(card, 'english_description', '') or '').lower()
+        text_zh = (card.description or '').lower()
+
+        # Attack-related triggers
+        if ('attack' in text_en or 'minion attacks' in text_en
+                or '攻击' in text_zh):
+            return 'on_attack'
+        # Spell-related triggers
+        if ('cast' in text_en or 'spell' in text_en
+                or '施放' in text_zh):
+            return 'on_spell_cast'
+        # Minion play/summon triggers
+        if ('summon' in text_en or 'play' in text_en
+                or '召唤' in text_zh):
+            return 'on_minion_play'
+        # Hero power triggers
+        if ('hero power' in text_en or '英雄' in text_zh):
+            return 'on_hero_power'
+
     return 'unknown'
 
 

@@ -3,8 +3,14 @@
 
 Validates the full pipeline: Power.log → GameTracker → StateBridge → Engine search → DecisionPresenter.
 Uses 3 diverse real games extracted from Hearthstone_2026_04_23_08_43_35.
+
+Optimizations:
+  - Session-scoped fixtures cache parsed games, turn states, and MCTS results
+  - CI_MCTS_BUDGET_MS env var reduces search budget in CI (default: 200)
+  - @pytest.mark.slow on tests >500ms for selective skipping
 """
 
+import os
 import pytest
 from pathlib import Path
 from io import StringIO
@@ -41,6 +47,10 @@ FIXTURE_GAMES = {
         "friendly_idx": 0,  # Player 1 (先手)
     },
 }
+
+# CI-configurable MCTS budget — set CI_MCTS_BUDGET_MS=50 for faster CI runs
+_CI_MCTS_BUDGET_MS = int(os.environ.get("CI_MCTS_BUDGET_MS", "200"))
+FAST_MCTS_PARAMS = {"time_budget_ms": _CI_MCTS_BUDGET_MS, "num_worlds": 2}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -118,17 +128,41 @@ def parsed_games():
 
 
 @pytest.fixture(scope="session")
-def game_states_for_search():
+def all_turn_states():
+    """Extract ALL turn states (min_turn=1) for every game once per session.
+
+    Returns dict of game_name → list[(turn_number, state)].
+    Tests can filter by min_turn from this cached data, avoiding re-parsing.
+    """
+    return {name: _extract_turn_states(name, min_turn=1) for name in FIXTURE_GAMES}
+
+
+@pytest.fixture(scope="session")
+def game_states_for_search(all_turn_states):
     """Extract mid-game states (turn >= 3) from each game for engine search tests."""
     states = {}
-    for name in FIXTURE_GAMES:
-        turn_states = _extract_turn_states(name, min_turn=3)
-        if turn_states:
-            # Use the first qualifying turn for search tests
-            _, state = turn_states[0]
+    for name, turn_states in all_turn_states.items():
+        qualifying = [(t, s) for t, s in turn_states if t >= 3]
+        if qualifying:
+            _, state = qualifying[0]
             load_scores_into_hand(state)
             states[name] = state
     return states
+
+
+@pytest.fixture(scope="session")
+def cached_search_results(game_states_for_search):
+    """Run MCTS search once per game and cache results for all search tests.
+
+    Returns dict of game_name → UnifiedSearchResult.
+    """
+    results = {}
+    for game_name, state in game_states_for_search.items():
+        engine_factory = create_engine("mcts", FAST_MCTS_PARAMS)
+        engine = engine_factory()
+        raw_result = engine.search(state)
+        results[game_name] = UnifiedSearchResult(raw_result)
+    return results
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -259,62 +293,49 @@ class TestStateConversion:
 # ════════════════════════════════════════════════════════════════════
 
 
+@pytest.mark.slow
 class TestEngineSearch:
-    """Run actual search on extracted game states with minimal budget."""
+    """Run actual search on extracted game states with minimal budget.
 
-    FAST_MCTS_PARAMS = {"time_budget_ms": 200, "num_worlds": 2}
+    Uses cached_search_results session fixture to avoid re-running MCTS
+    for each individual test method.
+    """
 
     @pytest.fixture(scope="class")
     def game_states(self, game_states_for_search):
         return game_states_for_search
 
-    def test_search_returns_result(self, game_states):
+    @pytest.fixture(scope="class")
+    def search_results(self, cached_search_results):
+        return cached_search_results
+
+    def test_search_returns_result(self, game_states, search_results):
         if not game_states:
             pytest.skip("No game states available for search")
 
-        state = next(iter(game_states.values()))
-        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
-        engine = engine_factory()
-        raw_result = engine.search(state)
-        result = UnifiedSearchResult(raw_result)
-
+        result = next(iter(search_results.values()))
         assert result is not None
         assert result.best_chromosome is not None
 
-    def test_best_sequence_not_empty(self, game_states):
+    def test_best_sequence_not_empty(self, game_states, search_results):
         if not game_states:
             pytest.skip("No game states available for search")
 
-        state = next(iter(game_states.values()))
-        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
-        engine = engine_factory()
-        raw_result = engine.search(state)
-        result = UnifiedSearchResult(raw_result)
-
+        result = next(iter(search_results.values()))
         assert len(result.best_chromosome) > 0
 
-    def test_sequence_ends_with_end_turn(self, game_states):
+    def test_sequence_ends_with_end_turn(self, game_states, search_results):
         if not game_states:
             pytest.skip("No game states available for search")
 
-        state = next(iter(game_states.values()))
-        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
-        engine = engine_factory()
-        raw_result = engine.search(state)
-        result = UnifiedSearchResult(raw_result)
-
+        result = next(iter(search_results.values()))
         assert result.best_chromosome[-1].action_type == ActionType.END_TURN
 
-    def test_search_on_all_games(self, game_states):
+    def test_search_on_all_games(self, game_states, search_results):
         if not game_states:
             pytest.skip("No game states available for search")
 
-        for game_name, state in game_states.items():
-            engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
-            engine = engine_factory()
-            raw_result = engine.search(state)
-            result = UnifiedSearchResult(raw_result)
-
+        for game_name, result in search_results.items():
             assert len(result.best_chromosome) > 0, (
                 f"MCTS on {game_name}: best_chromosome should not be empty"
             )
@@ -322,17 +343,12 @@ class TestEngineSearch:
                 f"MCTS on {game_name}: last action should be END_TURN"
             )
 
-    def test_best_fitness_is_finite(self, game_states):
+    def test_best_fitness_is_finite(self, game_states, search_results):
         if not game_states:
             pytest.skip("No game states available for search")
 
-        state = next(iter(game_states.values()))
-        engine_factory = create_engine("mcts", self.FAST_MCTS_PARAMS)
-        engine = engine_factory()
-        raw_result = engine.search(state)
-        result = UnifiedSearchResult(raw_result)
-
         import math
+        result = next(iter(search_results.values()))
         assert math.isfinite(result.best_fitness), (
             f"MCTS: best_fitness should be finite, got {result.best_fitness}"
         )
@@ -539,11 +555,14 @@ class TestDecisionPresenter:
 
 
 class TestLiveGameIntegration:
-    """End-to-end test: full game log → decisions for each turn."""
+    """End-to-end test: full game log → decisions for each turn.
 
-    def test_warrior_game_produces_decisions(self):
+    Uses all_turn_states session fixture to avoid re-parsing game logs.
+    """
+
+    def test_warrior_game_produces_decisions(self, all_turn_states):
         """Game 1: Warrior vs Warrior should produce decision states for our turns."""
-        turn_states = _extract_turn_states("warrior_vs_warrior", min_turn=1)
+        turn_states = all_turn_states["warrior_vs_warrior"]
         # Warrior game has 2 of our turns total
         assert len(turn_states) >= 1, (
             f"Warrior game should produce at least 1 decision state, got {len(turn_states)}"
@@ -554,9 +573,9 @@ class TestLiveGameIntegration:
             assert state.hero.hp > 0
             assert len(state.hand) >= 0
 
-    def test_dk_game_state_progression(self):
+    def test_dk_game_state_progression(self, all_turn_states):
         """Game 3: State should progress through turns correctly."""
-        turn_states = _extract_turn_states("dk_vs_rogue", min_turn=1)
+        turn_states = all_turn_states["dk_vs_rogue"]
         assert len(turn_states) >= 2, (
             f"DK game should produce at least 2 decision states, got {len(turn_states)}"
         )
@@ -569,9 +588,9 @@ class TestLiveGameIntegration:
             assert state.turn_number > 0
             prev_turn = turn_num
 
-    def test_rogue_game_handles_long_game(self):
+    def test_rogue_game_handles_long_game(self, all_turn_states):
         """Game 7: Should handle 7+ turns without errors."""
-        turn_states = _extract_turn_states("rogue_vs_priest", min_turn=1)
+        turn_states = all_turn_states["rogue_vs_priest"]
         assert len(turn_states) >= 3, (
             f"Rogue game should produce at least 3 decision states, got {len(turn_states)}"
         )
@@ -582,18 +601,17 @@ class TestLiveGameIntegration:
             assert 0 <= len(state.board) <= 7
             assert 0 <= len(state.hand) <= 10
 
-    def test_full_pipeline_with_search(self):
+    @pytest.mark.slow
+    def test_full_pipeline_with_search(self, all_turn_states):
         """Full pipeline: parse → state → search → present for one game."""
-        turn_states = _extract_turn_states("dk_vs_rogue", min_turn=3)
+        turn_states = [item for item in all_turn_states["dk_vs_rogue"] if item[0] >= 3]
         if not turn_states:
             pytest.skip("No qualifying turn states from dk_vs_rogue game")
 
         _, state = turn_states[0]
         load_scores_into_hand(state)
 
-        engine_factory = create_engine("mcts", {
-            "time_budget_ms": 200, "num_worlds": 2,
-        })
+        engine_factory = create_engine("mcts", FAST_MCTS_PARAMS)
         engine = engine_factory()
         raw_result = engine.search(state)
         result = UnifiedSearchResult(raw_result)
@@ -607,9 +625,10 @@ class TestLiveGameIntegration:
         assert "END_TURN" in text or "结束回合" in text
         assert "[场面]" in text
 
-    def test_full_pipeline_mcts(self):
+    @pytest.mark.slow
+    def test_full_pipeline_mcts(self, all_turn_states):
         """Full pipeline with MCTS engine for one game."""
-        turn_states = _extract_turn_states("rogue_vs_priest", min_turn=3)
+        turn_states = [item for item in all_turn_states["rogue_vs_priest"] if item[0] >= 3]
         if not turn_states:
             pytest.skip("No qualifying turn states from rogue_vs_priest game")
 
@@ -617,9 +636,7 @@ class TestLiveGameIntegration:
         load_scores_into_hand(state)
 
         # Run MCTS search
-        engine_factory = create_engine("mcts", {
-            "time_budget_ms": 200, "num_worlds": 2,
-        })
+        engine_factory = create_engine("mcts", FAST_MCTS_PARAMS)
         engine = engine_factory()
         raw_result = engine.search(state)
         result = UnifiedSearchResult(raw_result)

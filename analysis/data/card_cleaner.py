@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import DATA_DIR, PROJECT_ROOT
 from ..utils import load_json
+from ..constants.hs_enums import RACE_ZH_MAP, SCHOOL_ZH_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -37,33 +38,11 @@ ENUMS_PATH: Path = PROJECT_ROOT / "hearthstone_enums.json"
 #  SECTION 2 — Race / School / Rune normalization
 # --------------------------------------------------------------------------- #
 
-# 13 canonical minion races  (zh → enum id)
-RACE_ZH_MAP: Dict[str, str] = {
-    "野兽": "BEAST",
-    "恶魔": "DEMON",
-    "德莱尼": "DRAENEI",
-    "龙": "DRAGON",
-    "元素": "ELEMENTAL",
-    "机械": "MECHANICAL",
-    "鱼人": "MURLOC",
-    "纳迦": "NAGA",
-    "海盗": "PIRATE",
-    "野猪人": "QUILBOAR",
-    "图腾": "TOTEM",
-    "亡灵": "UNDEAD",
-    "全部": "ALL",
-}
+# 13 canonical minion races  (zh → enum id) — imported from hs_enums
+# RACE_ZH_MAP is now defined in analysis.constants.hs_enums
 
-# 7 spell schools  (zh → enum id)
-SCHOOL_ZH_MAP: Dict[str, str] = {
-    "奥术": "ARCANE",
-    "邪能": "FEL",
-    "火焰": "FIRE",
-    "冰霜": "FROST",
-    "神圣": "HOLY",
-    "自然": "NATURE",
-    "暗影": "SHADOW",
-}
+# 7 spell schools  (zh → enum id) — imported from hs_enums
+# SCHOOL_ZH_MAP is now defined in analysis.constants.hs_enums
 
 # Death Knight rune abbreviations (single-char tokens found in race field)
 RUNE_ZH_MAP: Dict[str, str] = {

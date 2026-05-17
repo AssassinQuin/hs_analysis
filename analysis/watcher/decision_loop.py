@@ -24,18 +24,9 @@ from analysis.watcher.state_bridge import StateBridge
 from analysis.search.abilities.actions import Action
 from analysis.search.engine_adapter import UnifiedSearchResult, create_engine
 from analysis.utils.score_provider import load_scores_into_hand
+from analysis.utils.bayesian_opponent import classify_card_playstyle
 
 log = logging.getLogger(__name__)
-
-
-_AGGRO_KEYWORDS = frozenset({
-    "FACE", "AGGRO", "RUSH", "ZOO", "PIRATE", "MECH", "MURLOC", "DEMON",
-    "BURN", "SMORC", "TEMPO",
-})
-_CONTROL_KEYWORDS = frozenset({
-    "CONTROL", "SLOW", "WALL", "HEAL", "ARMOR", "REMOVE", "CLEAR",
-    "GRIND", "FATIGUE", "COMBO", "OTK", "MIRACLE",
-})
 
 
 def _infer_opp_playstyle(state) -> str:
@@ -59,17 +50,14 @@ def _infer_opp_playstyle(state) -> str:
         cost = c.get("cost", 0)
         if isinstance(cost, int) and cost >= 0:
             costs.append(cost)
-        cid_upper = cid.upper()
         if "MINION" in str(c.get("card_type", "")):
             minion_count += 1
         else:
             spell_count += 1
-        for kw in _AGGRO_KEYWORDS:
-            if kw in cid_upper:
-                return "aggro"
-        for kw in _CONTROL_KEYWORDS:
-            if kw in cid_upper:
-                return "control"
+        # Use centralized classify_card_playstyle instead of local keywords
+        hint = classify_card_playstyle(cid)
+        if hint is not None:
+            return hint
 
     if not costs:
         return "unknown"
@@ -354,6 +342,7 @@ class DecisionLoop:
         show_probabilities: bool = True,
         show_mcts_detail: bool = True,
         file_log: Optional[TextIO] = None,
+        latest_game_only: bool = False,
     ):
         self.log_path = Path(log_path)
         self.engine_params = engine_params or {
@@ -382,6 +371,14 @@ class DecisionLoop:
         self._last_decision_signature: tuple | None = None
         self._last_replan_at = 0.0
         self._replan_cooldown_s = float(self.engine_params.get("replan_cooldown_s", 0.8))
+        self._latest_game_only = latest_game_only
+
+        # GlobalTracker for cross-turn state (used when latest_game_only=True)
+        self._global_tracker = None
+        if latest_game_only:
+            from analysis.watcher.global_tracker import GlobalTracker
+            self._global_tracker = GlobalTracker()
+            log.info("latest_game_only=True: GlobalTracker enabled for auto-reset on new game")
 
         self._deck_reloader = None
         deck_codes_path = Path(log_path).parent.parent / "deck_codes.txt"
@@ -476,6 +473,10 @@ class DecisionLoop:
             log.info("New game detected")
             self._last_turn = 0
             self._last_decision_signature = None
+            # Auto-reset GlobalTracker when latest_game_only=True
+            if self._global_tracker is not None:
+                self._global_tracker.on_game_start()
+                log.debug("latest_game_only: GlobalTracker auto-reset on game_start")
             self._display.present_status("新游戏开始!")
         elif event == "game_end":
             log.info("Game ended")

@@ -60,7 +60,7 @@ def get_effects(card: Card) -> CardEffects:
       3. Text-based fallback for damage/heal/draw when structured == 0
     """
     mechs = _mechanics_set(card)
-    text = card.text or ""
+    text = getattr(card, 'english_text', '') or card.text or ""
     eff = CardEffects()
 
     eff.overload = card.overload
@@ -106,7 +106,7 @@ _SUMMON_STATS_EN = re.compile(r"Summon\s*(?:a\s+)?(\d+)/(\d+)", re.IGNORECASE)
 _BUFF_ATK_CN = re.compile(r"\+\s*(\d+)\s*.*?攻击力")
 _BUFF_ATK_EN = re.compile(r"\+\s*(\d+)\s*Attack", re.IGNORECASE)
 _HAND_BUFF_CN = re.compile(r"手牌.*?\+(\d+)/\+(\d+)")
-_HAND_BUFF_EN = re.compile(r"")
+_HAND_BUFF_EN = re.compile(r"\+\s*(\d+)/\+\s*(\d+)\s+(?:in\s+)?(?:your\s+)?hand", re.IGNORECASE)
 _DISCARD_CN = re.compile(r"弃掉?\s*(\d+)\s*张")
 _DISCARD_EN = re.compile(r"Discard\s*(\d+)", re.IGNORECASE)
 _COST_REDUCE_CN = re.compile(r"法力值消耗.*?减少\s*(\d+)")
@@ -125,24 +125,24 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
         return
 
     is_aoe = False
-    m = _AOE_CN.search(text) or _AOE_EN.search(text)
+    m = _AOE_EN.search(text) or _AOE_CN.search(text)
     if m:
         eff.aoe_damage = int(m.group(1))
         is_aoe = True
 
     if not is_aoe:
-        m = _RANDOM_DMG_CN.search(text) or _RANDOM_DMG_EN.search(text)
+        m = _RANDOM_DMG_EN.search(text) or _RANDOM_DMG_CN.search(text)
         if m:
             eff.random_damage = int(m.group(1))
         else:
-            m = _DAMAGE_CN.search(text) or _DAMAGE_EN.search(text)
+            m = _DAMAGE_EN.search(text) or _DAMAGE_CN.search(text)
             if m:
                 eff.damage = int(m.group(1))
 
     eff.heal = max(_first_int(_HEAL_CN, text), _first_int(_HEAL_EN, text))
     eff.draw = max(_first_int(_DRAW_CN, text), _first_int(_DRAW_EN, text))
 
-    m = _SUMMON_STATS_CN.search(text) or _SUMMON_STATS_EN.search(text)
+    m = _SUMMON_STATS_EN.search(text) or _SUMMON_STATS_CN.search(text)
     if m:
         eff.summon_attack = int(m.group(1))
         eff.summon_health = int(m.group(2))
@@ -152,7 +152,7 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
 
     eff.buff_attack = max(_first_int(_BUFF_ATK_CN, text), _first_int(_BUFF_ATK_EN, text))
 
-    m = _HAND_BUFF_CN.search(text)
+    m = _HAND_BUFF_EN.search(text) or _HAND_BUFF_CN.search(text)
     if m:
         eff.buff_attack = int(m.group(1))
         eff.buff_health = int(m.group(2))
@@ -161,13 +161,9 @@ def _fill_spell_effects(text: str, eff: CardEffects, mechs: set) -> None:
     eff.cost_reduce = max(_first_int(_COST_REDUCE_CN, text), _first_int(_COST_REDUCE_EN, text))
 
     # Health cost detection
-    m = _HEALTH_COST_CN.search(text)
+    m = _HEALTH_COST_EN.search(text) or _HEALTH_COST_CN.search(text)
     if m:
         eff.health_cost = int(m.group(1) or m.group(2))
-    else:
-        m = _HEALTH_COST_EN.search(text)
-        if m:
-            eff.health_cost = int(m.group(1) or m.group(2))
 
     if "消灭" in text or "Destroy" in text:
         eff.has_destroy = True
@@ -189,7 +185,7 @@ def get_card_armor(card: Card) -> int:
     """Quick accessor: armor value from a card."""
     if card.armor > 0:
         return card.armor
-    text = card.text or ""
+    text = getattr(card, 'english_text', '') or card.text or ""
     return max(_first_int(_ARMOR_CN, text), _first_int(_ARMOR_EN, text))
 
 
@@ -197,8 +193,8 @@ def get_card_overload(card: Card) -> int:
     """Quick accessor: overload value — structured field first, text fallback."""
     if card.overload > 0:
         return card.overload
-    text = card.text or ""
-    m = re.search(r"过载[：:]\s*[（(]\s*(\d+)\s*[）)]", text)
+    text = getattr(card, 'english_text', '') or card.text or ""
+    m = re.search(r"Overload[：:]\s*\(?(\d+)\)?", text, re.IGNORECASE) or re.search(r"过载[：:]\s*[（(]\s*(\d+)\s*[）)]", text)
     return int(m.group(1)) if m else 0
 
 

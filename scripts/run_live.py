@@ -162,6 +162,9 @@ def main():
     show_probabilities = cp.getboolean("output", "show_probabilities", fallback=True) if cfg_loaded else True
     show_mcts_detail = cp.getboolean("output", "show_mcts_detail", fallback=True) if cfg_loaded else True
 
+    # Watcher settings from cfg
+    latest_game_only = cp.getboolean("watcher", "latest_game_only", fallback=False) if cfg_loaded else False
+
     if args.analyze:
         print(f"离线分析模式: {args.analyze} (engine={args.engine})")
         DecisionLoop.analyze_file(
@@ -189,6 +192,8 @@ def main():
                      f"budget={engine_params.get('time_budget_ms', 8000)}ms")
         print(f"监听 Power.log: {log_path}")
         print(f"MCTS 参数: {mcts_info}")
+        if latest_game_only:
+            print(f"仅追踪最新对局: latest_game_only=True")
         if cfg_loaded:
             print(f"使用配置: {cfg_path}")
         print("按 Ctrl+C 停止\n")
@@ -202,6 +207,7 @@ def main():
             show_board=show_board,
             show_probabilities=show_probabilities,
             show_mcts_detail=show_mcts_detail,
+            latest_game_only=latest_game_only,
         )
 
         try:

@@ -117,20 +117,7 @@ TARGET_PHRASES = {
 # Race name normalization (English text → standard race)
 # ──────────────────────────────────────────────────────────────
 
-RACE_NAMES = {
-    "dragon": "DRAGON",
-    "demon": "DEMON",
-    "beast": "BEAST",
-    "murloc": "MURLOC",
-    "pirate": "PIRATE",
-    "elemental": "ELEMENTAL",
-    "undead": "UNDEAD",
-    "totem": "TOTEM",
-    "mechanical": "MECHANICAL",
-    "mech": "MECHANICAL",
-    "naga": "NAGA",
-    "draenei": "DRAENEI",
-}
+from analysis.constants.hs_enums import RACE_EN_NORMALIZE as RACE_NAMES
 
 # ──────────────────────────────────────────────────────────────
 # Trigger timing keywords in text → AbilityTrigger

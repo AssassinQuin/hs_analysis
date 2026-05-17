@@ -183,7 +183,8 @@ class TestNespirahLocationScenario:
         s = apply_action(s, Action(action_type=ActionType.ACTIVATE_LOCATION, source_index=0))
         assert s.locations[0].durability == 1
         assert s.locations[0].cooldown_current == 1
-        assert s.opponent.hero.hp == 29
+        # Fel spell dealt 3 damage (from english_text), location dealt 1 → 30-3-1=26
+        assert s.opponent.hero.hp == 26
 
         # Step 3: END_TURN → tick cooldown 1→0
         s = apply_action(s, Action(action_type=ActionType.END_TURN))
@@ -193,7 +194,7 @@ class TestNespirahLocationScenario:
         s = apply_action(s, Action(action_type=ActionType.ACTIVATE_LOCATION, source_index=0))
         assert len(s.locations) == 0  # removed
         assert len(s.board) == 1  # token summoned
-        assert s.opponent.hero.hp == 28  # 2 total damage from 2 activations
+        assert s.opponent.hero.hp == 25  # 3 (Fel) + 2 (2 activations) = 5 total damage
 
     def test_deathrattle_detects_summon_text(self):
         """Nespirah's text contains deathrattle keyword."""

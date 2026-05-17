@@ -49,6 +49,8 @@ from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (
     normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
 )
+from analysis.constants.hs_enums import CARDTYPE_CN, CARDTYPE_EN, KEYWORD_CN_MAP
+from analysis.constants.i18n import card_type_display
 
 _PLAYABLE_CLASSES = {
     "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "HUNTER", "MAGE",
@@ -616,15 +618,15 @@ class PacketReplayer:
             for entity in our_entities:
                 if entity.zone == Zone.PLAY and entity.card_type == CardType.MINION:
                     keywords = []
-                    if entity.taunt: keywords.append("嘲讽")
-                    if entity.divine_shield: keywords.append("圣盾")
-                    if entity.charge: keywords.append("冲锋")
-                    if entity.rush: keywords.append("突袭")
-                    if entity.windfury: keywords.append("风怒")
-                    if entity.stealth: keywords.append("潜行")
-                    if entity.poisonous: keywords.append("剧毒")
-                    if entity.frozen: keywords.append("冻结")
-                    if entity.reborn: keywords.append("亡语")
+                    if entity.taunt: keywords.append(KEYWORD_CN_MAP['taunt'])
+                    if entity.divine_shield: keywords.append(KEYWORD_CN_MAP['divine_shield'])
+                    if entity.charge: keywords.append(KEYWORD_CN_MAP['charge'])
+                    if entity.rush: keywords.append(KEYWORD_CN_MAP['rush'])
+                    if entity.windfury: keywords.append(KEYWORD_CN_MAP['windfury'])
+                    if entity.stealth: keywords.append(KEYWORD_CN_MAP['stealth'])
+                    if entity.poisonous: keywords.append(KEYWORD_CN_MAP['poisonous'])
+                    if entity.frozen: keywords.append(KEYWORD_CN_MAP['frozen'])
+                    if entity.reborn: keywords.append(KEYWORD_CN_MAP['reborn'])
 
                     our_board.append({
                         'name': self._card_name(entity.card_id),
@@ -647,20 +649,7 @@ class PacketReplayer:
 
             for entity in our_entities:
                 if entity.zone == Zone.HAND:
-                    if entity.card_type == CardType.MINION:
-                        type_str = "随从"
-                    elif entity.card_type == CardType.SPELL:
-                        type_str = "法术"
-                    elif entity.card_type == CardType.WEAPON:
-                        type_str = "武器"
-                    elif entity.card_type == CardType.HERO:
-                        type_str = "英雄牌"
-                    elif entity.card_type == CardType.LOCATION:
-                        type_str = "地点"
-                    elif entity.card_type == CardType.HERO_POWER:
-                        type_str = "英雄技能"
-                    else:
-                        type_str = "未知"
+                    type_str = card_type_display(entity.card_type)
 
                     our_hand.append({
                         'name': self._card_name(entity.card_id),
@@ -1339,26 +1328,26 @@ class PacketReplayer:
     def _extract_effect_specs(self, text: str) -> List[Dict[str, Any]]:
         specs: List[Dict[str, Any]] = []
         tl = text.lower()
-        from_past_only = ("来自过去" in text or "from the past" in tl)
+        from_past_only = ("from the past" in tl or "来自过去" in text)
 
         class_mode = "own_or_neutral"
         if (
-            "其他职业" in text
-            or "另一职业" in text
-            or "other class" in tl
+            "other class" in tl
             or "another class" in tl
+            or "其他职业" in text
+            or "另一职业" in text
         ):
             class_mode = "other"
         elif (
-            "本职业" in text
+            "your class" in tl
+            or "本职业" in text
             or "你的职业" in text
-            or "your class" in tl
         ):
             class_mode = "own_only"
-        elif "不限" in text or "any class" in tl:
+        elif "any class" in tl or "不限" in text:
             class_mode = "unrestricted"
 
-        if "发现" in text or "discover" in tl:
+        if "discover" in tl or "发现" in text:
             c = _parse_discover_constraint(text)
             specs.append(
                 {
@@ -1376,26 +1365,26 @@ class PacketReplayer:
                 }
             )
 
-        is_random_gain = ("随机" in text or "random" in tl) and (
-            "获得" in text
+        is_random_gain = ("random" in tl or "随机" in text) and (
+            "add a random" in tl
+            or "获得" in text
             or "加入" in text
             or "置入" in text
-            or "add a random" in tl
         )
         if is_random_gain:
             c = _parse_discover_constraint(text)
             random_class_mode = "unrestricted"
             if (
-                "其他职业" in text
-                or "另一职业" in text
-                or "other class" in tl
+                "other class" in tl
                 or "another class" in tl
+                or "其他职业" in text
+                or "另一职业" in text
             ):
                 random_class_mode = "other"
             elif (
-                "本职业" in text
+                "your class" in tl
+                or "本职业" in text
                 or "你的职业" in text
-                or "your class" in tl
             ):
                 random_class_mode = "own_only"
             specs.append(
@@ -1414,7 +1403,7 @@ class PacketReplayer:
                 }
             )
 
-        if "抉择" in text or "choose one" in tl:
+        if "choose one" in tl or "抉择" in text:
             specs.append(
                 {
                     "effect_kind": "抉择",

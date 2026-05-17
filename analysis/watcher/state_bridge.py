@@ -242,17 +242,12 @@ class StateBridge:
                 if result:
                     return result
 
-        # --- Try 3: card_id prefix ---
+        # --- Try 3: card_id prefix lookup via canonical mapping ---
         card_id = getattr(hero_entity, 'card_id', '') or ''
-        hero_class_map = {
-            "HERO_01": "WARRIOR", "HERO_02": "SHAMAN", "HERO_03": "ROGUE",
-            "HERO_04": "PALADIN", "HERO_05": "HUNTER", "HERO_06": "DRUID",
-            "HERO_07": "WARLOCK", "HERO_08": "MAGE", "HERO_09": "PRIEST",
-            "HERO_10": "DEMONHUNTER", "HERO_11": "DEATHKNIGHT",
-        }
-        for prefix, cls_name in hero_class_map.items():
-            if card_id.startswith(prefix):
-                return cls_name
+        from analysis.utils.hero_class import hero_card_to_class
+        result = hero_card_to_class(card_id)
+        if result != "UNKNOWN":
+            return result
 
         return "UNKNOWN"
 

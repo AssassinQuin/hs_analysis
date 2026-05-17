@@ -4,6 +4,7 @@ Power.log loading is done via session-scoped fixtures from conftest.py
 to avoid redundant parsing across tests.
 """
 
+import os
 from io import StringIO
 
 import pytest
@@ -11,6 +12,9 @@ import pytest
 # Skip all tests if hslog not available
 pytest.importorskip("hslog")
 pytest.importorskip("hearthstone")
+
+# CI-configurable MCTS budget for slow integration tests
+_CI_MCTS_BUDGET_MS = int(os.environ.get("CI_MCTS_BUDGET_MS", "200"))
 
 
 class TestLogWatcher:
@@ -125,11 +129,12 @@ class TestStateBridge:
 class TestDecisionLoop:
     """Test DecisionLoop and DecisionPresenter."""
 
+    @pytest.mark.slow
     def test_analyze_file(self, power_log_path, capsys):
         """analyze_file runs without errors on test Power.log."""
         from analysis.watcher.decision_loop import DecisionLoop
 
-        DecisionLoop.analyze_file(power_log_path, time_budget_ms=200, num_worlds=2)
+        DecisionLoop.analyze_file(power_log_path, time_budget_ms=_CI_MCTS_BUDGET_MS, num_worlds=2)
 
         captured = capsys.readouterr()
 

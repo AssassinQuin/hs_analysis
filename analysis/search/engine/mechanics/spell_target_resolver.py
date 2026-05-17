@@ -204,12 +204,15 @@ _COND_TAUNT = [
 _COND_RACE_CN = re.compile(r"友方(龙|亡灵|野兽|恶魔|机械|元素|鱼人|海盗|图腾|精灵|树人)")
 _COND_RACE_EN = re.compile(r"friendly\s+(Dragon|Undead|Beast|Demon|Mechanical|Elemental|Murloc|Pirate|Totem|Elf|Treant)", re.IGNORECASE)
 
-# Race name mapping (CN → English race tag)
-_RACE_MAP_CN_EN = {
-    "龙": "DRAGON", "亡灵": "UNDEAD", "野兽": "BEAST", "恶魔": "DEMON",
-    "机械": "MECHANICAL", "元素": "ELEMENTAL", "鱼人": "MURLOC", "海盗": "PIRATE",
-    "图腾": "TOTEM", "精灵": "ELF", "树人": "TREANT",
-}
+# Race name mapping (CN → English race tag) — imported from hs_enums
+from analysis.constants.hs_enums import RACE_ZH_MAP
+
+# Additional races not in standard RACE_ZH_MAP (ELF, TREANT are CN-specific patterns)
+_RACE_MAP_CN_EN = dict(RACE_ZH_MAP)
+_RACE_MAP_CN_EN.update({
+    "精灵": "ELF",
+    "树人": "TREANT",
+})
 
 # --- Stat comparison patterns ---
 _COND_ATK_LE = re.compile(r"攻击力(?:小于等于?|≤|不超过)(\d+)")

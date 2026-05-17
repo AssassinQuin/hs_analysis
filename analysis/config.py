@@ -65,6 +65,48 @@ PHASE_PARAMS = {
     "late": {"pop_size": 60, "max_gens": 150, "max_chromosome_length": 6},
 }
 
+# ── Watcher config (loaded from cfg/live.cfg at runtime) ────────────────
+# Default: False for backward compatibility. Production cfg sets True.
+LATEST_GAME_ONLY = False
+
+
+def load_live_config(cfg_path: str | Path | None = None) -> dict:
+    """Load live.cfg and return parsed ConfigParser. Also sets module-level
+    LATEST_GAME_ONLY from the [watcher] section.
+
+    Args:
+        cfg_path: Path to config file. Defaults to cfg/live.cfg under PROJECT_ROOT.
+
+    Returns:
+        Dict with parsed config values for convenience.
+    """
+    import configparser
+
+    global LATEST_GAME_ONLY
+
+    if cfg_path is None:
+        cfg_path = PROJECT_ROOT / "cfg" / "live.cfg"
+    cfg_path = Path(cfg_path)
+
+    cp = configparser.ConfigParser(interpolation=None)
+    cfg_loaded = False
+    if cfg_path.exists():
+        try:
+            with cfg_path.open("r", encoding="utf-8") as f:
+                cp.read_file(f)
+            cfg_loaded = True
+        except Exception:
+            pass
+
+    if cfg_loaded:
+        LATEST_GAME_ONLY = cp.getboolean("watcher", "latest_game_only", fallback=False)
+
+    return {
+        "config_parser": cp,
+        "cfg_loaded": cfg_loaded,
+        "latest_game_only": LATEST_GAME_ONLY,
+    }
+
 
 def ensure_data_dir() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)

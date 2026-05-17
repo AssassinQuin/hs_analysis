@@ -22,6 +22,7 @@ from analysis.data.card_effects import (
     get_card_damage,
     get_card_health_cost,
 )
+from analysis.constants.hs_enums import COIN_CARD_IDS as _COIN_CARD_IDS
 from analysis.search.aura_engine import recompute_auras
 from analysis.search.battlecry_dispatcher import dispatch_battlecry
 from analysis.search.choose_one import is_choose_one, resolve_choose_one
@@ -49,7 +50,7 @@ from analysis.utils.spell_simulator import resolve_effects
 log = logging.getLogger(__name__)
 
 
-_COIN_CARD_IDS = frozenset({"GAME_005"})
+# Coin card IDs imported from hs_enums as _COIN_CARD_IDS
 _PREP_CARD_IDS = frozenset({"CS2_033"})
 _DEATH_SHADOW_CARD_IDS = frozenset({"CORE_RLK_567", "RLK_567"})
 

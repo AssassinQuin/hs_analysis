@@ -1,0 +1,411 @@
+# -*- coding: utf-8 -*-
+"""hand_predictor.py — 动态手牌预测引擎（重构版）
+
+使用 DynamicProbabilityEngine + CardEffectInferenceEngine，
+所有概率均基于超几何分布和贝叶斯推断动态计算，无写死概率。
+
+核心改进：
+1. 超几何分布计算 P(card in hand | observed)，替代写死的费用分布
+2. 条件证据贝叶斯修正，替代固定 70% 概率
+3. 多卡组假设加权，替代单一卡组等概率
+4. 衍生牌追踪与卡组牌区分
+5. 卡牌效果推断引擎集成
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import Counter
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set, Tuple
+
+from analysis.utils.hero_class import class_to_cn
+
+logger = logging.getLogger(__name__)
+
+
+# ── 数据结构 ──────────────────────────────────────────────────
+
+@dataclass
+class HandPrediction:
+    """单个手牌预测条目。"""
+    card_id: str = ""
+    name: str = ""
+    cost: int = 0
+    probability: float = 0.0
+    source: str = "deck"  # "deck" | "generated" | "revealed" | "inferred"
+    card_type: str = ""   # MINION | SPELL | WEAPON | HERO | LOCATION
+    race: str = ""
+    spell_school: str = ""
+    remaining_copies: int = 0  # 在锁定卡组中的剩余张数
+
+    @property
+    def display_text(self) -> str:
+        """UI 显示文字。"""
+        if self.probability >= 1.0:
+            return f"{self.name} (确认)"
+        elif self.probability >= 0.5:
+            return f"{self.name} ({self.probability:.0%})"
+        elif self.probability >= 0.01:
+            return f"{self.name} ({self.probability:.0%})"
+        else:
+            return "?"
+
+
+@dataclass
+class DeckPrediction:
+    """卡组预测条目。"""
+    card_id: str = ""
+    name: str = ""
+    cost: int = 0
+    quantity: int = 1
+    remaining: int = 1
+    source: str = "deck"  # "deck" | "generated"
+    in_hand: bool = False
+    played: bool = False
+    card_type: str = ""
+    race: str = ""
+    hand_probability: float = 0.0  # 在手牌中的概率
+
+
+@dataclass
+class PredictionResult:
+    """完整的预测结果。"""
+    hand_predictions: List[HandPrediction] = field(default_factory=list)
+    deck_predictions: List[DeckPrediction] = field(default_factory=list)
+    archetype_name: str = ""
+    archetype_confidence: float = 0.0
+    playstyle: str = "unknown"
+    top_archetypes: List[Tuple[str, float]] = field(default_factory=list)
+    revealed_cards: List[HandPrediction] = field(default_factory=list)
+    conditional_evidence: List[Dict] = field(default_factory=list)
+    derived_cards: List[Dict] = field(default_factory=list)
+
+
+# ── 条件效果规则 ──────────────────────────────────────────────
+
+from analysis.constants.hs_enums import CONDITIONAL_HOLDING_RULES as _CONDITIONAL_RULES
+
+
+# ── 动态手牌预测引擎 ──────────────────────────────────────────
+
+class HandPredictor:
+    """动态手牌预测引擎。
+
+    使用 DynamicProbabilityEngine 基于超几何分布计算概率，
+    使用 CardEffectInferenceEngine 推断条件效果和衍生牌。
+    所有概率均基于已有信息动态计算，无写死概率值。
+
+    预测优先级:
+    1. 已揭示手牌 (100% 概率) — SHOW_ENTITY 揭示到 HAND 区域
+    2. 超几何分布计算的手牌概率 — 基于贝叶斯卡组后验加权
+    3. 条件效果推断 (贝叶斯修正后概率) — "如果手持龙牌"效果触发
+    4. 未知手牌占位 (0% 概率) — 填充剩余手牌位置
+
+    用法::
+
+        predictor = HandPredictor()
+        result = predictor.predict(state_dict)
+        for hp in result.hand_predictions:
+            print(f"{hp.name} ({hp.probability:.0%}) - {hp.source}")
+    """
+
+    def __init__(self):
+        self._card_db = None
+        self._probability_engine = None
+        self._effect_engine = None
+
+    def _ensure_card_db(self):
+        if self._card_db is None:
+            try:
+                from analysis.data.card_data import get_db
+                self._card_db = get_db()
+            except Exception as e:
+                logger.warning("无法加载卡牌数据库: %s", e)
+
+    def _ensure_engines(self):
+        """延迟初始化概率引擎和效果引擎。"""
+        if self._probability_engine is None:
+            try:
+                from analysis.engine.dynamic_probability import DynamicProbabilityEngine
+                self._probability_engine = DynamicProbabilityEngine()
+            except Exception as e:
+                logger.warning("无法初始化概率引擎: %s", e)
+
+        if self._effect_engine is None:
+            try:
+                from analysis.engine.card_effect_inference import CardEffectInferenceEngine
+                self._effect_engine = CardEffectInferenceEngine()
+            except Exception as e:
+                logger.warning("无法初始化效果推断引擎: %s", e)
+
+    def predict(self, state_dict: dict) -> PredictionResult:
+        """根据游戏状态生成完整预测。
+
+        使用 DynamicProbabilityEngine 计算每张可能手牌的概率。
+        所有概率基于超几何分布和贝叶斯后验动态计算。
+
+        Args:
+            state_dict: 来自 LogMonitor.build_state_dict() 的状态字典
+
+        Returns:
+            PredictionResult 完整预测结果
+        """
+        self._ensure_card_db()
+        self._ensure_engines()
+
+        result = PredictionResult()
+
+        # 提取基础信息
+        bayesian = state_dict.get("bayesian", {})
+        result.archetype_name = bayesian.get("archetype_name", "") or ""
+        result.archetype_confidence = bayesian.get("deck_confidence", 0.0)
+        result.playstyle = bayesian.get("playstyle", "unknown")
+
+        top_decks = bayesian.get("top_decks", [])
+        result.top_archetypes = [
+            (name, prob) for _, name, prob in top_decks
+        ]
+
+        opp_hand_count = state_dict.get("opp_hand_count", 0)
+        opp_deck_count = state_dict.get("opp_deck_count", 0)
+        opp_class = state_dict.get("opp_class_en", "")
+
+        # ── 使用 DynamicProbabilityEngine 计算概率 ──
+        if self._probability_engine is not None:
+            self._probability_engine.update_from_state_dict(state_dict)
+            prob_report = self._probability_engine.compute_probabilities(
+                hand_size=opp_hand_count,
+                deck_remaining=opp_deck_count,
+                opp_class=opp_class,
+            )
+
+            # 转换 CardProbability → HandPrediction
+            for cp in prob_report.card_probabilities:
+                hp = HandPrediction(
+                    card_id=cp.card_id,
+                    name=cp.name,
+                    cost=cp.cost,
+                    probability=cp.probability,
+                    source=cp.source,
+                    card_type=cp.card_type,
+                    race=cp.race,
+                    spell_school=cp.spell_school,
+                    remaining_copies=cp.remaining_copies,
+                )
+                if hp.source == "revealed":
+                    result.revealed_cards.append(hp)
+                result.hand_predictions.append(hp)
+
+            result.conditional_evidence = prob_report.conditional_constraints
+
+            # 填充手牌位置
+            filled_count = len(result.hand_predictions)
+            remaining_slots = max(0, opp_hand_count - filled_count)
+
+            if remaining_slots > 0:
+                for i in range(remaining_slots):
+                    result.hand_predictions.append(HandPrediction(
+                        card_id="",
+                        name="?",
+                        cost=0,
+                        probability=0.0,
+                        source="unknown",
+                        card_type="UNKNOWN",
+                    ))
+        else:
+            # 回退到基础预测（概率引擎不可用时）
+            self._fallback_predict(state_dict, result, opp_hand_count)
+
+        # ── 使用 CardEffectInferenceEngine 获取推断 ──
+        if self._effect_engine is not None:
+            # 记录已打出的卡牌
+            self._effect_engine.reset()
+            for kc in state_dict.get("known_cards", []):
+                cid = kc.get("card_id", "")
+                if cid:
+                    self._effect_engine.record_card_played(
+                        card_id=cid,
+                        turn=kc.get("turn_seen", 0),
+                        source=kc.get("source", "deck"),
+                        card_type=kc.get("card_type", ""),
+                        cost=kc.get("cost", 0),
+                    )
+
+            # 记录已知手牌
+            for eid, card_id in state_dict.get("known_hand", []):
+                self._effect_engine.record_revealed_card(card_id, eid, 0)
+
+            # 获取衍生卡牌推断
+            derived_sources = self._effect_engine.get_derived_card_sources()
+            result.derived_cards = [
+                {
+                    "source_card_id": src,
+                    "derived_cards": [
+                        {
+                            "card_id": dc.card_id,
+                            "derive_type": dc.derive_type,
+                            "turn": dc.turn,
+                        }
+                        for dc in dcs
+                    ],
+                }
+                for src, dcs in derived_sources.items()
+            ]
+
+        # ── 卡组预测 ──
+        result.deck_predictions = self._predict_deck(state_dict, bayesian)
+
+        # ── 排序 ──
+        result.hand_predictions.sort(
+            key=lambda hp: (
+                0 if hp.source == "revealed" else 1,
+                -hp.probability,
+                hp.cost,
+            )
+        )
+
+        return result
+
+    def _fallback_predict(
+        self,
+        state_dict: dict,
+        result: PredictionResult,
+        opp_hand_count: int,
+    ):
+        """回退预测：当概率引擎不可用时使用基础逻辑。"""
+        # 已确认手牌
+        for eid, card_id in state_dict.get("known_hand", []):
+            hp = self._card_id_to_hand_prediction(card_id, 1.0, "revealed")
+            if hp:
+                result.revealed_cards.append(hp)
+                result.hand_predictions.append(hp)
+
+        # 填充未知
+        filled = len(result.hand_predictions)
+        remaining = max(0, opp_hand_count - filled)
+        for _ in range(remaining):
+            result.hand_predictions.append(HandPrediction(
+                card_id="",
+                name="?",
+                cost=0,
+                probability=0.0,
+                source="unknown",
+                card_type="UNKNOWN",
+            ))
+
+    def _card_id_to_hand_prediction(
+        self, card_id: str, probability: float, source: str
+    ) -> Optional[HandPrediction]:
+        if not card_id:
+            return None
+
+        hp = HandPrediction(
+            card_id=card_id,
+            probability=probability,
+            source=source,
+        )
+
+        if self._card_db is not None:
+            card_data = self._card_db.get_card(card_id)
+            if card_data:
+                hp.name = card_data.get("name", card_id)
+                hp.cost = card_data.get("cost", 0)
+                hp.card_type = card_data.get("type", "")
+                hp.race = card_data.get("race", "")
+                hp.spell_school = card_data.get("spellSchool", "")
+            else:
+                hp.name = card_id
+        else:
+            hp.name = card_id
+
+        return hp
+
+    def _predict_deck(self, state_dict: dict, bayesian: dict) -> List[DeckPrediction]:
+        """预测对手卡组构成，包含手牌概率。"""
+        deck_preds = []
+
+        top_decks = bayesian.get("top_decks", [])
+        if not top_decks:
+            return deck_preds
+
+        target_id = top_decks[0][0]
+
+        try:
+            from analysis.data.fetch_hsreplay import init_db, get_meta_decks
+            from analysis.config import HSREPLAY_CACHE_DB
+
+            conn = init_db(str(HSREPLAY_CACHE_DB))
+            try:
+                decks = get_meta_decks(conn)
+                target_deck = None
+                for d in decks:
+                    if d["archetype_id"] == target_id:
+                        target_deck = d
+                        break
+
+                if target_deck and target_deck.get("cards"):
+                    known_cards = state_dict.get("known_cards", [])
+                    played_count = Counter()
+                    for kc in known_cards:
+                        cid = kc.get("card_id", "")
+                        if cid and kc.get("source") == "deck":
+                            played_count[cid] += 1
+
+                    known_hand_ids = {cid for _, cid in state_dict.get("known_hand", [])}
+
+                    card_counts = Counter(target_deck["cards"])
+                    opp_hand_count = state_dict.get("opp_hand_count", 0)
+                    opp_deck_count = state_dict.get("opp_deck_count", 0)
+                    pool = opp_hand_count + opp_deck_count
+
+                    for dbf_id, count in card_counts.items():
+                        card_data = None
+                        if self._card_db is not None:
+                            card_data = self._card_db.get_by_dbf(dbf_id)
+
+                        if card_data:
+                            cid = card_data.get("cardId", card_data.get("id", ""))
+                            remaining = max(0, count - played_count.get(cid, 0))
+
+                            # 使用超几何分布计算手牌概率
+                            hand_prob = 0.0
+                            if pool > 0 and opp_hand_count > 0 and remaining > 0:
+                                from analysis.engine.dynamic_probability import hypergeometric_at_least_one
+                                hand_prob = hypergeometric_at_least_one(
+                                    K=remaining,
+                                    n=opp_hand_count,
+                                    N=pool,
+                                )
+
+                            dp = DeckPrediction(
+                                card_id=cid,
+                                name=card_data.get("name", ""),
+                                cost=card_data.get("cost", 0),
+                                quantity=count,
+                                remaining=remaining,
+                                source="deck",
+                                card_type=card_data.get("type", ""),
+                                race=card_data.get("race", ""),
+                                in_hand=cid in known_hand_ids,
+                                played=played_count.get(cid, 0) > 0,
+                                hand_probability=hand_prob,
+                            )
+                            deck_preds.append(dp)
+                        else:
+                            dp = DeckPrediction(
+                                card_id=f"dbf_{dbf_id}",
+                                name=f"卡牌#{dbf_id}",
+                                cost=0,
+                                quantity=count,
+                                remaining=count,
+                                source="deck",
+                            )
+                            deck_preds.append(dp)
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.debug("从贝叶斯构建卡组失败: %s", e)
+
+        deck_preds.sort(key=lambda dp: (dp.cost, dp.name))
+        return deck_preds

@@ -15,6 +15,7 @@ from typing import List, Optional
 from analysis.data.card_index import get_index
 from analysis.models.card import Card
 from analysis.utils.score_provider import ScoreProvider
+from analysis.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, RACE_EN_NORMALIZE as _RACE_EN_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -61,20 +62,8 @@ def get_discover_cost_reduction(source_card_text: str) -> int:
 
 
 # ===================================================================
-# Race name mapping (Chinese → JSON race value)
-# ===================================================================
-
-_RACE_MAP = {
-    '野兽': 'BEAST',
-    '龙': 'DRAGON',
-    '鱼人': 'MURLOC',
-    '恶魔': 'DEMON',
-    '元素': 'ELEMENTAL',
-    '海盗': 'PIRATE',
-    '机械': 'MECHANICAL',
-    '亡灵': 'UNDEAD',
-    '图腾': 'TOTEM',
-}
+# Race name mapping (Chinese → JSON race value) — imported from hs_enums
+# _RACE_MAP is now imported from analysis.constants.hs_enums
 
 _TYPE_NORMALIZE = {
     '装备': 'WEAPON',
@@ -85,17 +74,7 @@ _TYPE_NORMALIZE = {
     '地标': 'LOCATION',
 }
 
-_RACE_EN_MAP = {
-    'beast': 'BEAST',
-    'dragon': 'DRAGON',
-    'murloc': 'MURLOC',
-    'demon': 'DEMON',
-    'elemental': 'ELEMENTAL',
-    'pirate': 'PIRATE',
-    'mechanical': 'MECHANICAL',
-    'undead': 'UNDEAD',
-    'totem': 'TOTEM',
-}
+# English race normalization — imported from hs_enums as _RACE_EN_MAP
 
 
 # ===================================================================

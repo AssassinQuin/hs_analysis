@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import re
 
+from analysis.constants.hs_enums import RACE_ZH_MAP, SCHOOL_ZH_MAP
+
 
 # ═══════════════════════════════════════════════════════════════════
 # L2: 关键词层级 (Keyword Tiers)
@@ -53,8 +55,8 @@ TIER_BASES = {"power": 1.5, "mechanical": 0.75, "niche": 0.5}
 # L3: 文本效果模式 (Text Effect Patterns)
 # ═══════════════════════════════════════════════════════════════════
 
-RACE_NAMES = "龙|恶魔|野兽|鱼人|海盗|元素|亡灵|图腾|机械|纳迦|德莱尼"
-SCHOOL_NAMES = "火焰|冰霜|奥术|自然|暗影|神圣|邪能"
+RACE_NAMES = "|".join(RACE_ZH_MAP.keys())
+SCHOOL_NAMES = "|".join(SCHOOL_ZH_MAP.keys())
 
 EFFECT_PATTERNS = {
     "direct_damage":   (r"造成\s*(\d+)\s*点伤害",                    lambda m: int(m.group(1)) * 0.5),

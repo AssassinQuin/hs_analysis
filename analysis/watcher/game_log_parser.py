@@ -145,9 +145,55 @@ def _build_player_info(player_game, is_me: bool, db) -> PlayerInfo:
     return pi
 
 
-def parse_games(log_path: str) -> List[GameRecord]:
+# Pattern to detect CREATE_GAME boundaries in Power.log
+_RE_CREATE_GAME = re.compile(r"CREATE_GAME")
+
+
+def _find_last_create_game_offset(log_path: str) -> int:
+    """First pass: scan the file for CREATE_GAME markers.
+
+    Returns the byte offset of the last CREATE_GAME line, or -1 if none found.
+    """
+    last_offset = -1
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            while True:
+                offset = f.tell()
+                line = f.readline()
+                if not line:
+                    break
+                if _RE_CREATE_GAME.search(line):
+                    last_offset = offset
+    except OSError:
+        pass
+    return last_offset
+
+
+def parse_games(log_path: str, latest_game_only: bool = False) -> List[GameRecord]:
+    """Parse a Power.log file and return game records.
+
+    Args:
+        log_path: Path to Power.log
+        latest_game_only: If True, skip all games except the last one.
+                         This performs a two-pass approach: first scan for
+                         CREATE_GAME markers, then only parse from the last
+                         marker onwards. Default False for backward compatibility.
+    """
+    if latest_game_only:
+        last_offset = _find_last_create_game_offset(log_path)
+        if last_offset < 0:
+            # No CREATE_GAME found — fall back to normal parsing
+            latest_game_only = False
+        else:
+            log.info(
+                "latest_game_only=True: skipping to byte offset %d for last game",
+                last_offset,
+            )
+
     parser = LogParser()
     with open(log_path, "r", encoding="utf-8") as f:
+        if latest_game_only and last_offset >= 0:
+            f.seek(last_offset)
         for line in f:
             try:
                 parser.read_line(line)
@@ -237,7 +283,7 @@ def parse_log_dir(log_dir: str) -> dict:
     power_log = log_dir / "Power.log"
     games = []
     if power_log.exists():
-        games = parse_games(str(power_log))
+        games = parse_games(str(power_log), latest_game_only=False)
 
     if games and deck_entries:
         assign_decks(games, deck_entries)

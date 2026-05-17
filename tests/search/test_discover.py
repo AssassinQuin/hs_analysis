@@ -2,6 +2,10 @@
 """test_discover.py — Tests for the discover framework.
 
 Batch 5: Discover pool generation, resolution, and battlecry delegation.
+
+Optimizations:
+  - Session-scoped card_db_warmup fixture pre-loads CardDB singleton once
+  - @pytest.mark.slow on pool generation tests (involve full card DB load)
 """
 
 import pytest
@@ -13,6 +17,21 @@ from analysis.search.discover import (
     resolve_discover,
     _parse_discover_constraint,
 )
+
+
+# ===================================================================
+# Session-scoped fixtures — pre-warm card DB to avoid per-test load
+# ===================================================================
+
+@pytest.fixture(scope="session")
+def card_db_warmup():
+    """Pre-load the CardDB singleton once per session so pool generation
+    tests don't each pay the DB loading cost."""
+    from analysis.data.card_data import get_db
+    db = get_db(load_xml=False)
+    # Pre-warm the discover pool cache for MAGE (most common test class)
+    db.discover_pool("MAGE")
+    return db
 
 
 # ===================================================================
@@ -31,42 +50,43 @@ def fresh_state():
 # Tests: generate_discover_pool
 # ===================================================================
 
+@pytest.mark.slow
 class TestGenerateDiscoverPool:
 
-    def test_no_filter_returns_cards(self):
+    def test_no_filter_returns_cards(self, card_db_warmup):
         """Pool with no type/race filter returns non-empty list."""
         pool = generate_discover_pool('MAGE')
         assert isinstance(pool, list)
         assert len(pool) > 0
 
-    def test_spell_only(self):
+    def test_spell_only(self, card_db_warmup):
         """All returned cards are type SPELL."""
         pool = generate_discover_pool('MAGE', card_type='SPELL')
         assert len(pool) > 0
         for card in pool:
             assert card['type'] == 'SPELL', f'{card.get("name")} is {card["type"]}, not SPELL'
 
-    def test_minion_only(self):
+    def test_minion_only(self, card_db_warmup):
         """All returned cards are type MINION."""
         pool = generate_discover_pool('MAGE', card_type='MINION')
         assert len(pool) > 0
         for card in pool:
             assert card['type'] == 'MINION'
 
-    def test_by_race_beast(self):
+    def test_by_race_beast(self, card_db_warmup):
         """Race filter returns only beasts."""
         pool = generate_discover_pool('HUNTER', race='BEAST')
         assert len(pool) > 0
         for card in pool:
             assert 'BEAST' in (card.get('race') or '')
 
-    def test_excludes_hero_and_location(self):
+    def test_excludes_hero_and_location(self, card_db_warmup):
         """No HERO or LOCATION types in pool."""
         pool = generate_discover_pool('MAGE')
         for card in pool:
             assert card['type'] not in ('HERO', 'LOCATION')
 
-    def test_class_filter_includes_neutral(self):
+    def test_class_filter_includes_neutral(self, card_db_warmup):
         """Pool includes both class cards and NEUTRAL."""
         pool = generate_discover_pool('MAGE')
         classes = {c['cardClass'] for c in pool}
@@ -79,7 +99,7 @@ class TestGenerateDiscoverPool:
 
 class TestResolveDiscover:
 
-    def test_discover_spell(self, fresh_state):
+    def test_discover_spell(self, fresh_state, card_db_warmup):
         """Resolving '发现一张法术' adds a SPELL card to hand."""
         assert len(fresh_state.hand) == 0
         result = resolve_discover(fresh_state, '发现一张法术', 'MAGE')
@@ -88,18 +108,18 @@ class TestResolveDiscover:
         assert isinstance(added, Card)
         assert added.card_type == 'SPELL'
 
-    def test_discover_minion(self, fresh_state):
+    def test_discover_minion(self, fresh_state, card_db_warmup):
         """Resolving '发现一张随从' adds a MINION card to hand."""
         result = resolve_discover(fresh_state, '发现一张随从', 'MAGE')
         assert len(result.hand) == 1
         assert result.hand[0].card_type == 'MINION'
 
-    def test_discover_generic(self, fresh_state):
+    def test_discover_generic(self, fresh_state, card_db_warmup):
         """Plain '发现' with no type constraint adds a card to hand."""
         result = resolve_discover(fresh_state, '发现', 'MAGE')
         assert len(result.hand) >= 1
 
-    def test_discover_hand_full(self):
+    def test_discover_hand_full(self, card_db_warmup):
         """Hand at 10 cards — discover doesn't add (no crash)."""
         state = GameState(
             hero=HeroState(hp=30, hero_class='MAGE'),
@@ -125,7 +145,7 @@ class TestResolveDiscover:
         assert card.name == '发现的随从'
         assert card.cost == 1
 
-    def test_discover_uses_state_hero_class(self, fresh_state):
+    def test_discover_uses_state_hero_class(self, fresh_state, card_db_warmup):
         """If no hero_class passed, uses state.hero.hero_class."""
         result = resolve_discover(fresh_state, '发现一张法术')
         assert len(result.hand) >= 1

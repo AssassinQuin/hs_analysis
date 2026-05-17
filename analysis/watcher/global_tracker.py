@@ -33,6 +33,7 @@ from analysis.constants.hs_enums import (
     ZONE_SETASIDE, ZONE_SECRET,
     CT_HERO, CT_MINION, CT_SPELL, CT_ENCHANTMENT,
     CT_WEAPON, CT_HERO_POWER, CT_LOCATION,
+    CARDTYPE_EN, COIN_CARD_IDS,
 )
 from analysis.watcher.secret_probability import SecretProbabilityModel
 from analysis.watcher.tracker_types import (
@@ -81,8 +82,8 @@ class GlobalTracker:
     CT_HERO_POWER = CT_HERO_POWER
     CT_LOCATION = CT_LOCATION
 
-    # 已知的硬币卡牌ID
-    COIN_CARD_IDS = {"GAME_005", "TB_BlingBrawl_Coin", "NEW1_008t"}
+    # 已知的硬币卡牌ID (imported from hs_enums)
+    COIN_CARD_IDS = COIN_CARD_IDS
 
     # Standard deck rules: max copies per rarity
     _MAX_COPIES = {
@@ -90,10 +91,12 @@ class GlobalTracker:
         'LEGENDARY': 1, 'FREE': 2,
     }
 
-    def __init__(self, our_controller: int = 0, opp_controller: int = 0):
+    def __init__(self, our_controller: int = 0, opp_controller: int = 0,
+                 latest_game_only: bool = False):
         self.state = GlobalGameState()
         self.our_controller = our_controller
         self.opp_controller = opp_controller
+        self._latest_game_only = latest_game_only
 
         # 实体出生追踪 — 记录实体首次出现的时机和位置
         self._entity_birth: Dict[int, _EntityBirth] = {}
@@ -133,7 +136,12 @@ class GlobalTracker:
         self.opp_controller = opp
 
     def on_game_start(self):
-        """为新游戏重置状态"""
+        """为新游戏重置状态。
+
+        When ``latest_game_only=True``, this is called automatically
+        by the DecisionLoop when a new CREATE_GAME is detected,
+        ensuring the old game state is cleared without manual intervention.
+        """
         self.state = GlobalGameState()
         self._entity_birth.clear()
         self._card_db = None
@@ -487,13 +495,11 @@ class GlobalTracker:
         rarity = meta.get('rarity', 'COMMON').upper()
         max_copies = self._MAX_COPIES.get(rarity, 2)
         
-        return count >= max_copies
+        return count > max_copies
 
     def _card_type_name(self, card_type: int) -> str:
         """将数字卡牌类型转换为字符串"""
-        _map = {4: "MINION", 5: "SPELL", 7: "WEAPON", 3: "HERO",
-                6: "LOCATION", 10: "HERO_POWER"}
-        return _map.get(card_type, "UNKNOWN")
+        return CARDTYPE_EN.get(card_type, "UNKNOWN")
 
     def _update_play_stats(self, stats: SideStats, card_id: str,
                            card_type: int, source: CardSource, meta: Dict):
@@ -586,6 +592,12 @@ class GlobalTracker:
         """统计对手在DECK区域的实体数"""
         count = sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_DECK)
         self.state.opp_deck_remaining = count
+        return count
+
+    def count_opp_hand(self, opp_entities: list) -> int:
+        """统计对手在HAND区域的实体数（真实手牌数量）"""
+        count = sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_HAND)
+        self.state.opp_hand_count = count
         return count
 
     def count_player_deck(self, our_entities: list) -> int:
@@ -709,11 +721,11 @@ class GlobalTracker:
             "total_played": len(state.opp_known_cards),
             "total_generated": len(state.opp_generated_seen),
             "type_counts": {
-                "随从": stats.minions_played,
-                "法术": stats.spells_played,
-                "武器": stats.weapons_played,
-                "英雄": stats.heroes_played,
-                "地点": stats.locations_played,
+                "MINION": stats.minions_played,
+                "SPELL": stats.spells_played,
+                "WEAPON": stats.weapons_played,
+                "HERO": stats.heroes_played,
+                "LOCATION": stats.locations_played,
             },
             "school_counts": dict(stats.spell_schools),
             "race_counts": dict(stats.races_played),
@@ -862,7 +874,11 @@ class GlobalTracker:
 
         locked = self._bayesian_model.locked
         top = self._bayesian_model.get_top_decks(3)
-        preds = self._bayesian_model.predict_next_actions(3)
+        preds = self._bayesian_model.predict_next_actions(
+            3,
+            hand_size=self.state.opp_hand_count or len(self.state.opp_hand_card_ids),
+            deck_remaining=self.state.opp_deck_remaining,
+        )
 
         from analysis.utils.bayesian_opponent import classify_playstyle
         archetype_name = self._bayesian_model._deck_name(locked[0]) if locked else None

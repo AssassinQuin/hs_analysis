@@ -24,27 +24,41 @@ logger = logging.getLogger(__name__)
 
 SECRET_DEFS = {
     # --- Hunter ---
-    "EXPLOSIVE_TRAP": ("on_attack_hero", "aoe_friendly_2"),
-    "FREEZING_TRAP": ("on_attack_minion", "return_attacker"),
-    "WANDERING_MONSTER": ("on_attack_hero", "summon_3_3"),
-    "PACK_TACTICS": ("on_minion_survives_damage", "copy_minion"),
+    "EX1_610": ("on_attack_hero", "aoe_friendly_2"),        # Explosive Trap
+    "EX1_611": ("on_attack_minion", "return_attacker"),     # Freezing Trap
+    "EX1_616": ("on_attack_hero", "summon_3_3"),            # Wandering Monster
+    "BT_203": ("on_minion_survives_damage", "copy_minion"), # Pack Tactics
     # --- Mage ---
-    "ICE_BARRIER": ("on_attack_hero", "gain_armor_8"),
-    "VAPORIZE": ("on_attack_hero", "destroy_attacker"),
-    "ICE_BLOCK": ("on_hero_lethal", "hero_immune"),
-    "RINGING_IN_THE_EARS": ("on_play_minion", "add_mana_2"),
+    "EX1_289": ("on_attack_hero", "gain_armor_8"),          # Ice Barrier
+    "EX1_594": ("on_attack_hero", "destroy_attacker"),      # Vaporize
+    "EX1_612": ("on_hero_lethal", "hero_immune"),           # Ice Block
+    "ULD_727": ("on_play_minion", "add_mana_2"),            # Rigging the Game / Ringing in the Ears
     # --- Paladin ---
-    "NOBLE_SACRIFICE": ("on_attack_hero", "summon_defender_2_1"),
-    "REDEMPTION": ("on_minion_dies", "resummon_1_hp"),
-    "REPENTANCE": ("on_play_minion", "halve_minion_health"),
+    "EX1_132": ("on_attack_hero", "summon_defender_2_1"),   # Noble Sacrifice
+    "EX1_136": ("on_minion_dies", "resummon_1_hp"),         # Redemption
+    "EX1_379": ("on_play_minion", "halve_minion_health"),   # Repentance
     # --- Rogue ---
-    "AMBUSH": ("on_attack_hero", "summon_2_2"),
-    "BAMBOZLE": ("on_minion_survives_damage", "transform_random"),
-    "SUDDEN_BETRAYAL": ("on_attack_hero", "copy_attack_to_attacker"),
-    # --- Generic (Chinese names from data) ---
-    "爆炸陷阱": ("on_attack_hero", "aoe_friendly_2"),
-    "冰冻陷阱": ("on_attack_minion", "return_attacker"),
-    "寒冰屏障": ("on_hero_lethal", "hero_immune"),
+    "EX1_134": ("on_attack_hero", "summon_2_2"),           # Ambush
+    "DAL_739": ("on_minion_survives_damage", "transform_random"), # Bamboozle
+    "DAL_733": ("on_attack_hero", "copy_attack_to_attacker"),     # Sudden Betrayal
+}
+
+# Backward-compatible alias map: card_id → display name (for logging/UI)
+SECRET_NAME_MAP = {
+    "EX1_610": "Explosive Trap",
+    "EX1_611": "Freezing Trap",
+    "EX1_616": "Wandering Monster",
+    "BT_203": "Pack Tactics",
+    "EX1_289": "Ice Barrier",
+    "EX1_594": "Vaporize",
+    "EX1_612": "Ice Block",
+    "ULD_727": "Rigging the Game",
+    "EX1_132": "Noble Sacrifice",
+    "EX1_136": "Redemption",
+    "EX1_379": "Repentance",
+    "EX1_134": "Ambush",
+    "DAL_739": "Bamboozle",
+    "DAL_733": "Sudden Betrayal",
 }
 
 
@@ -69,19 +83,24 @@ def check_secrets(
     context = context or {}
     triggered = []
 
-    for i, secret_name in enumerate(state.opponent.secrets):
-        defn = SECRET_DEFS.get(secret_name.upper().replace(" ", "_"), None)
+    for i, secret_id in enumerate(state.opponent.secrets):
+        # Try card_id lookup first (new ID-based approach),
+        # then fall back to upper-case name (backward compat)
+        defn = SECRET_DEFS.get(secret_id, None)
+        if defn is None:
+            defn = SECRET_DEFS.get(secret_id.upper().replace(" ", "_"), None)
         if defn is None:
             continue
         trigger_event, effect_key = defn
         if trigger_event == event:
-            triggered.append((i, secret_name, effect_key))
+            triggered.append((i, secret_id, effect_key))
             break  # Only one secret triggers per event
 
-    for idx, name, effect_key in reversed(triggered):
+    for idx, secret_id, effect_key in reversed(triggered):
         state.opponent.secrets.pop(idx)
         state = _apply_secret_effect(state, effect_key, context)
-        logger.debug("Secret triggered: %s → %s", name, effect_key)
+        display = SECRET_NAME_MAP.get(secret_id, secret_id)
+        logger.debug("Secret triggered: %s → %s", display, effect_key)
 
     return state
 
