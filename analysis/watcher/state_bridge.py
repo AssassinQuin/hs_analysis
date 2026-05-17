@@ -195,8 +195,11 @@ class StateBridge:
                 return HeroState()
 
             # Extract hero stats
+            # HEALTH = current HP after damage; DAMAGE = total damage taken
+            # max_hp = HEALTH + DAMAGE (original max, before any damage)
             current_health = hero.tags.get(GameTag.HEALTH, 0)
-            max_health = hero.tags.get(GameTag.HEALTH, current_health)
+            damage = hero.tags.get(GameTag.DAMAGE, 0)
+            max_health = current_health + damage
             armor = hero.tags.get(GameTag.ARMOR, 0)
 
             # Extract weapon if present

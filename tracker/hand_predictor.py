@@ -116,6 +116,13 @@ class HandPredictor:
         self._probability_engine = None
         self._effect_engine = None
         self._db_conn = None  # 缓存 HSReplay DB 连接，避免每帧开关
+        self._last_effect_inputs_hash = None  # cache key for effect engine inputs
+
+        # Turn-based TTL cache for multi-deck predictions (P2 #30)
+        self._multi_deck_cache: List[Tuple[str, float, List[DeckPrediction]]] = []
+        self._multi_deck_cache_turn: int = -1
+        self._multi_deck_cache_opp_hand: int = -1
+        self._multi_deck_cache_opp_deck: int = -1
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -235,24 +242,34 @@ class HandPredictor:
 
         # ── 使用 CardEffectInferenceEngine 获取推断 ──
         if self._effect_engine is not None:
-            # 记录已打出的卡牌
-            self._effect_engine.reset()
-            for kc in state_dict.get("known_cards", []):
-                cid = kc.get("card_id", "")
-                if cid:
-                    self._effect_engine.record_card_played(
-                        card_id=cid,
-                        turn=kc.get("turn_seen", 0),
-                        source=kc.get("source", "deck"),
-                        card_type=kc.get("card_type", ""),
-                        cost=kc.get("cost", 0),
-                    )
+            # Compute a cheap hash of inputs to detect changes and avoid
+            # redundant reset() + re-feeding when state hasn't changed.
+            known_cards_tuple = tuple(
+                (kc.get("card_id", ""), kc.get("turn_seen", 0))
+                for kc in state_dict.get("known_cards", [])
+            )
+            known_hand_tuple = tuple(state_dict.get("known_hand", []))
+            input_hash = (known_cards_tuple, known_hand_tuple)
 
-            # 记录已知手牌
-            for eid, card_id in state_dict.get("known_hand", []):
-                self._effect_engine.record_revealed_card(card_id, eid, 0)
+            if input_hash != self._last_effect_inputs_hash:
+                self._last_effect_inputs_hash = input_hash
+                self._effect_engine.reset()
+                for kc in state_dict.get("known_cards", []):
+                    cid = kc.get("card_id", "")
+                    if cid:
+                        self._effect_engine.record_card_played(
+                            card_id=cid,
+                            turn=kc.get("turn_seen", 0),
+                            source=kc.get("source", "deck"),
+                            card_type=kc.get("card_type", ""),
+                            cost=kc.get("cost", 0),
+                        )
 
-            # 获取衍生卡牌推断
+                # 记录已知手牌
+                for eid, card_id in state_dict.get("known_hand", []):
+                    self._effect_engine.record_revealed_card(card_id, eid, 0)
+
+            # 获取衍生卡牌推断 (from cached or freshly built state)
             derived_sources = self._effect_engine.get_derived_card_sources()
             result.derived_cards = [
                 {
@@ -453,11 +470,32 @@ class HandPredictor:
         return []
 
     def _predict_multi_deck(self, state_dict: dict, bayesian: dict) -> List[Tuple[str, float, List[DeckPrediction]]]:
-        """预测 Top 3 卡组，每套含完整卡牌列表与概率。"""
+        """预测 Top 3 卡组，每套含完整卡牌列表与概率。
+
+        Uses a turn-based TTL cache to avoid rebuilding the expensive
+        multi-deck prediction list on every frame. The cache is
+        invalidated when the turn, hand count, or deck count changes.
+        """
         top_decks = bayesian.get("top_decks", [])
         if not top_decks:
+            self._multi_deck_cache = []
             return []
 
+        # Compute cache key from turn + hand/deck counts
+        current_turn = state_dict.get("turn", 0)
+        current_opp_hand = state_dict.get("opp_hand_count", -1)
+        current_opp_deck = state_dict.get("opp_deck_count", -1)
+
+        cache_key = (current_turn, current_opp_hand, current_opp_deck)
+        cached_key = (
+            self._multi_deck_cache_turn,
+            self._multi_deck_cache_opp_hand,
+            self._multi_deck_cache_opp_deck,
+        )
+        if cache_key == cached_key and self._multi_deck_cache:
+            return self._multi_deck_cache
+
+        # Cache miss — rebuild
         known_cards = state_dict.get("known_cards", [])
         played_count = Counter()
         for kc in known_cards:
@@ -476,6 +514,7 @@ class HandPredictor:
         result = []
         conn = self._get_db_conn()
         if conn is None:
+            self._multi_deck_cache = []
             return result
 
         try:
@@ -532,5 +571,11 @@ class HandPredictor:
                 result.append((arch_name, prob, deck_preds))
         except Exception as e:
             logger.debug("构建多卡组预测失败: %s", e)
+
+        # Update cache
+        self._multi_deck_cache = result
+        self._multi_deck_cache_turn = current_turn
+        self._multi_deck_cache_opp_hand = current_opp_hand
+        self._multi_deck_cache_opp_deck = current_opp_deck
 
         return result

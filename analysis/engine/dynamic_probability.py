@@ -347,13 +347,12 @@ class DynamicProbabilityEngine:
                 revealed_set.add(card_id)
 
         # 1b. 确认手牌（来自 Mind Vision 等复制效果）
-        # 这些卡已不在手牌（因为被复制走了），但确认了对手持有过
-        # 记录为高置信度参考信息
+        # 这些卡已被复制走，对手当前不一定还有，但作为贝叶斯先验适度提升
+        confirmed_boost = {}  # card_id → boosted probability
         for card_id in self._confirmed_hand_cards:
             if card_id and card_id not in revealed_set:
-                # 确认手牌的卡已被复制走，对手当前不一定还有
-                # 但贝叶斯权重应适度提升
-                pass  # 未来可作为贝叶斯先验调整
+                # 对手持有过的牌，给予 0.15 的基础概率作为先验
+                confirmed_boost[card_id] = 0.15
 
         # 1c. 手牌变形 — 被变形的原始牌不应出现在概率中
         # 收集所有被变形走的 old_card_id
@@ -379,7 +378,14 @@ class DynamicProbabilityEngine:
         # 3. 条件证据修正
         self._apply_conditional_modifiers(report)
 
-        # 4. 排序
+        # 4. 应用确认手牌先验提升（在条件修正之后，确保不被覆盖）
+        for cp in report.card_probabilities:
+            if cp.card_id in confirmed_boost and cp.source != "revealed":
+                cp.probability = max(cp.probability, confirmed_boost[cp.card_id])
+                if cp.source != "inferred":
+                    cp.source = "confirmed_prior"
+
+        # 5. 排序
         report.card_probabilities.sort(
             key=lambda cp: (
                 0 if cp.source == "revealed" else 1,
@@ -543,6 +549,16 @@ class DynamicProbabilityEngine:
                 for cp in school_cards:
                     cp.probability = min(1.0, cp.probability / p_holds_school)
                     cp.source = "inferred"
+
+                # 非目标学派牌适度降低（与 holds_race / holds_card_type 对称）
+                non_school = [
+                    cp for cp in report.card_probabilities
+                    if cp.spell_school.upper() != constraint.value.upper()
+                    and cp.source != "revealed"
+                ]
+                reduction = p_holds_school * 0.3
+                for cp in non_school:
+                    cp.probability = max(0.0, cp.probability * (1.0 - reduction))
 
             elif constraint.constraint_type == "holds_card_type":
                 # 导师效果: "draw a MINION" → 对手手牌必有该类型

@@ -181,6 +181,36 @@ class GlobalGameState:
     player_minions_died: List[str] = field(default_factory=list)
     """我方死亡随从的 card_id 列表"""
 
+    # 我方手牌/卡组追踪
+    player_hand_card_ids: Dict[int, Tuple[str, int]] = field(default_factory=dict)
+    """我方手牌 entity_id -> (card_id, zone)"""
+
+    player_deck_remaining: int = 0
+    """我方牌库剩余数量"""
+
+    player_initial_deck_size: int = 0
+    """我方初始牌库大小"""
+
+    player_hand_count: int = 0
+    """我方当前手牌数量"""
+
+    player_weapon: str = ""
+    """我方当前武器 card_id"""
+    player_weapon_atk: int = 0
+    player_weapon_durability: int = 0
+
+    player_locations: List[str] = field(default_factory=list)
+    """我方当前地点 card_id 列表"""
+
+    player_secrets: List[str] = field(default_factory=list)
+    """我方当前奥秘 card_id 列表"""
+
+    player_board_minions: List[Dict] = field(default_factory=list)
+    """我方场上随从列表 [{card_id, entity_id, attack, health}, ...]"""
+
+    player_graveyard_seen: List[str] = field(default_factory=list)
+    """我方已进入墓地的已知 card_id 列表"""
+
     # ---- 先后手 (§1.7) ----
     is_first_player: bool = True
     """我方是否先手"""
@@ -203,6 +233,9 @@ class GlobalGameState:
 
     opp_locations: List[str] = field(default_factory=list)
     """对手当前地点 card_id 列表"""
+
+    opp_board_minions: List[Dict] = field(default_factory=list)
+    """对手场上随从列表 [{card_id, entity_id, card_type}, ...]"""
 
     # ---- 残骸 (DK Corpse) ----
     player_corpses: int = 0

@@ -345,7 +345,7 @@ class RevealTrackerRule:
 
         # 对手卡牌揭示到 HAND 区域：这是看对手手牌的情况
         if zone == self._ZONE_HAND:
-            # P1 #7: 移除 current_turn > 0 的守卫，让 Mulligan 阶段的揭示也被追踪
+            # 让 Mulligan 阶段的揭示也被追踪
             record = CardRevealRecord(
                 card_id=card_id,
                 reveal_type=CardRevealType.HAND_REVEAL,
@@ -356,19 +356,7 @@ class RevealTrackerRule:
             )
             state.opp_revealed_hand_cards.append(record)
 
-        # 对手卡牌揭示到 DECK 区域：这是看对手卡组的情况
-        elif zone == self._ZONE_DECK:
-            record = CardRevealRecord(
-                card_id=card_id,
-                reveal_type=CardRevealType.DECK_PEEK,
-                turn=state.current_turn,
-                entity_id=entity_id,
-                details="shown_in_deck",
-                is_opp=True,
-            )
-            state.opp_revealed_deck_cards.append(record)
-            # 确认该牌在对手卡组中
-            state.opp_known_deck_cards[card_id] = True
+        # DECK zone 的窥探已由 DeckPeekTrackerRule 统一处理，此处不再重复
 
         elif zone in (self._ZONE_PLAY, self._ZONE_SECRET):
             self._check_tutor_constraints(card_id, state)
@@ -512,6 +500,8 @@ class DeckPeekTrackerRule:
             "entity_id": entity_id,
             "turn": state.current_turn,
         })
+        # 确认该牌在对手卡组中（唯一写入点，避免与 RevealTrackerRule 重复）
+        state.opp_known_deck_cards[card_id] = True
 
         logger.info(
             "窥探对手牌库: %s (entity=%d, turn=%d)",

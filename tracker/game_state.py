@@ -234,7 +234,7 @@ class GameStateManager:
         gs.coin_used = state_dict.get("coin_used", False)
 
         # 更新对手状态
-        self._update_opponent(gs, state_dict)
+        self._update_opponent(gs, state_dict, prediction_result)
 
         # 更新我方状态
         self._update_player(gs, state_dict)
@@ -319,7 +319,8 @@ class GameStateManager:
                 for name, prob, cards in multi
             ]
 
-    def _update_opponent(self, gs: CompleteGameState, state_dict: dict):
+    def _update_opponent(self, gs: CompleteGameState, state_dict: dict,
+                            prediction_result=None):
         """更新对手状态。"""
         opp = gs.opponent
 
@@ -355,11 +356,46 @@ class GameStateManager:
         opp.fatigue_damage = opp_stats.get("fatigue_damage", 0)
         opp.overload_next = opp_stats.get("overload_next", 0)
 
-        # 已知手牌
+        # 已知手牌 (revealed + predicted)
         opp.hand = self._build_known_hand(state_dict)
+
+        # Append predicted hand cards from HandPredictor (if available)
+        if prediction_result is not None:
+            known_ids = {h.card_id for h in opp.hand if h.card_id}
+            for hp in prediction_result.hand_predictions:
+                if hp.card_id and hp.card_id not in known_ids and hp.source != "unknown":
+                    cih = CardInHand(
+                        card_id=hp.card_id,
+                        name=hp.name,
+                        cost=hp.cost,
+                        probability=hp.probability,
+                        source=hp.source,
+                        card_type=hp.card_type,
+                        race=getattr(hp, 'race', ''),
+                    )
+                    opp.hand.append(cih)
+                    known_ids.add(hp.card_id)
 
         # 统计
         opp.stats = state_dict.get("opp_stats", {})
+
+        # 对手棋盘随从
+        opp.board = []
+        for bm in state_dict.get("opp_board_minions", []):
+            cid = bm.get("card_id", "")
+            ms = MinionState(
+                card_id=cid,
+                entity_id=bm.get("entity_id", 0),
+                owner="enemy",
+            )
+            if self._card_db is not None and cid:
+                card = self._card_db.get_card(cid)
+                if card:
+                    ms.name = card.get("name", cid)
+                    ms.cost = card.get("cost", 0)
+            if not ms.name and cid:
+                ms.name = cid
+            opp.board.append(ms)
 
         # 已打出/已知卡牌 → 构建牌库列表
         opp.deck = self._build_opponent_deck(state_dict)
@@ -372,6 +408,50 @@ class GameStateManager:
         player_class = state_dict.get("player_class_en", "UNKNOWN")
         player.hero.hero_class = player_class
         player.hero.hero_class_cn = state_dict.get("player_class", "未知")
+
+        # 手牌/牌库计数
+        player.hand_count = state_dict.get("player_hand_count", 0)
+        player.deck_remaining = state_dict.get("player_deck_count", 0)
+        player.initial_deck_size = state_dict.get("player_initial_deck_size", 30)
+
+        # 武器
+        player_weapon_id = state_dict.get("player_weapon", "")
+        if player_weapon_id:
+            player.weapon = WeaponState(
+                card_id=player_weapon_id,
+                attack=state_dict.get("player_weapon_atk", 0),
+                durability=state_dict.get("player_weapon_durability", 0),
+            )
+            if self._card_db is not None:
+                card = self._card_db.get_card(player_weapon_id)
+                if card:
+                    player.weapon.name = card.get("name", player_weapon_id)
+        else:
+            player.weapon = None
+
+        # 地点
+        player.locations = [
+            self._build_location(cid)
+            for cid in state_dict.get("player_locations", [])
+        ]
+
+        # 棋盘随从
+        player.board = []
+        for bm in state_dict.get("player_board_minions", []):
+            cid = bm.get("card_id", "")
+            ms = MinionState(
+                card_id=cid,
+                entity_id=bm.get("entity_id", 0),
+                owner="friendly",
+            )
+            if self._card_db is not None and cid:
+                card = self._card_db.get_card(cid)
+                if card:
+                    ms.name = card.get("name", cid)
+                    ms.cost = card.get("cost", 0)
+            if not ms.name and cid:
+                ms.name = cid
+            player.board.append(ms)
 
         # 残骸
         player.corpses = state_dict.get("player_corpses", 0)
@@ -477,6 +557,7 @@ class GameStateManager:
         deck = []
         known_cards = state_dict.get("known_cards", [])
         generated = state_dict.get("generated_cards", set())
+        shuffled_into_deck = state_dict.get("opp_shuffled_into_deck", [])
 
         # 统计每张牌的打出数量
         from collections import Counter
@@ -517,6 +598,30 @@ class GameStateManager:
                     max_copies = 1 if rarity == "LEGENDARY" else 2
                     cideck.quantity = max_copies
                     cideck.remaining = max(0, max_copies - played_count.get(cid, 0))
+            if not cideck.name:
+                cideck.name = cid
+            deck.append(cideck)
+
+        # Include shuffled-into-deck cards (known but not yet played/drawn)
+        shuffled_seen = set()
+        for cid in shuffled_into_deck:
+            if not cid or cid in seen or cid in shuffled_seen:
+                continue
+            shuffled_seen.add(cid)
+            cideck = CardInDeck(
+                card_id=cid,
+                source="generated",
+                played=False,
+            )
+            if self._card_db is not None:
+                card = self._card_db.get_card(cid)
+                if card:
+                    cideck.name = card.get("name", cid)
+                    cideck.cost = card.get("cost", 0)
+                    cideck.card_type = card.get("type", "")
+                    cideck.race = card.get("race", "")
+                    cideck.quantity = 1
+                    cideck.remaining = 1
             if not cideck.name:
                 cideck.name = cid
             deck.append(cideck)

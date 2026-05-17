@@ -151,6 +151,22 @@ class EntityCache:
         """清空缓存（游戏结束时调用）。"""
         self._entities.clear()
 
+    def items(self) -> 'ItemsView[int, Dict[str, Any]]':
+        """返回 (entity_id, entity_data) 的公共迭代接口。
+
+        替代外部直接访问 _entities 私有属性。
+        """
+        return self._entities.items()
+
+    def __len__(self) -> int:
+        return len(self._entities)
+
+    def __contains__(self, entity_id: int) -> bool:
+        return entity_id in self._entities
+
+    def __iter__(self):
+        return iter(self._entities)
+
 
 class GameTracker:
     """通过增量解析Power.log追踪炉石游戏状态。
@@ -254,11 +270,16 @@ class GameTracker:
 
             # 检测游戏结束
             if self._in_game:
-                if "Entity=GameEntity" in line and "tag=STATE value=COMPLETE" in line:
-                    self._in_game = False
-                    self._last_step = "UNKNOWN"
-                    self._last_event_type = "game_end"
-                    return "game_end"
+                state_match = (
+                    "Entity=GameEntity" in line
+                    and "tag=STATE value=" in line
+                )
+                if state_match:
+                    if "value=COMPLETE" in line or "value=LOST" in line or "value=WON" in line:
+                        self._in_game = False
+                        self._last_step = "UNKNOWN"
+                        self._last_event_type = "game_end"
+                        return "game_end"
 
                 # 跟踪 TURN 编号 (不触发事件，只记录)
                 if "Entity=GameEntity" in line and "tag=TURN value=" in line:

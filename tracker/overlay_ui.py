@@ -795,8 +795,8 @@ class OverlayWindow(QWidget):
         # 按概率降序
         hand_cards.sort(key=lambda c: -c.get("probability", 0))
 
-        # 增量刷新
-        h_hash = str([(c["card_id"], c["probability"]) for c in hand_cards])
+        # 增量刷新 — 使用 frozenset 避免字符串拼接顺序敏感性
+        h_hash = frozenset((c["card_id"], c["probability"]) for c in hand_cards)
         if h_hash == self._hand_hash:
             return
         self._hand_hash = h_hash
@@ -847,8 +847,8 @@ class OverlayWindow(QWidget):
             # 按费用排序
             deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
 
-            # 增量刷新 — 使用全部卡牌计算哈希，不仅前10张
-            d_hash = str(self._sel_arch) + str([(c["card_id"], c["remaining"]) for c in deck_cards])
+            # 增量刷新 — 使用 frozenset + arch index 避免字符串拼接顺序敏感性
+            d_hash = (self._sel_arch, frozenset((c["card_id"], c["remaining"]) for c in deck_cards))
             if d_hash != self._deck_hash:
                 self._deck_hash = d_hash
                 self._deck_header.set_title(
@@ -876,7 +876,7 @@ class OverlayWindow(QWidget):
                     })
             deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
 
-            d_hash = str([(c["card_id"], c["remaining"]) for c in deck_cards])
+            d_hash = frozenset((c["card_id"], c["remaining"]) for c in deck_cards)
             if d_hash != self._deck_hash:
                 self._deck_hash = d_hash
                 self._deck_header.set_title("对手卡组", len(deck_cards))
@@ -927,8 +927,8 @@ class OverlayWindow(QWidget):
         # 排序：卡组来源优先，然后按费用
         grave_cards.sort(key=lambda c: (0 if c.get("source") == "deck" else 1, c["cost"], c["name"]))
 
-        # 增量刷新 — 使用全部卡牌计算哈希
-        g_hash = str([(c["card_id"], c.get("source", "")) for c in grave_cards])
+        # 增量刷新 — 使用 frozenset 避免字符串拼接顺序敏感性
+        g_hash = frozenset((c["card_id"], c.get("source", "")) for c in grave_cards)
         if g_hash == self._grave_hash:
             return
         self._grave_hash = g_hash

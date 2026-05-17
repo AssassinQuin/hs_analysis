@@ -45,7 +45,6 @@ from analysis.watcher.tracker_rules import (
     ShuffleTrackerRule, CorruptTrackerRule, RevealTrackerRule,
     TransformTrackerRule, DeckPeekTrackerRule,
     DiscardTrackerRule, TutorConstraintTrackerRule,
-    GallywixTrackerRule,
 )
 
 logger = logging.getLogger(__name__)
@@ -143,7 +142,8 @@ class GlobalTracker:
         self._rule_dispatcher.register(DeckPeekTrackerRule())
         self._rule_dispatcher.register(DiscardTrackerRule())
         self._rule_dispatcher.register(TutorConstraintTrackerRule())
-        self._rule_dispatcher.register(GallywixTrackerRule())
+        # GallywixTrackerRule is a structural placeholder — not yet implemented.
+        # Kept in tracker_rules.py for future activation.
 
         # 实体卡牌ID快照: entity_id → card_id (用于检测 ChangeEntity 变形)
         self._last_known_card_ids: Dict[int, str] = {}
@@ -162,6 +162,11 @@ class GlobalTracker:
         by the DecisionLoop when a new CREATE_GAME is detected,
         ensuring the old game state is cleared without manual intervention.
         """
+        # 重置 controller 为无效值，强制调用方必须 set_controllers()
+        # 避免跨游戏复用旧 controller 导致 is_opp 判断全部反
+        self.our_controller = 0
+        self.opp_controller = 0
+
         self.state = GlobalGameState()
         self._entity_birth.clear()
         self._card_db = None
@@ -169,8 +174,6 @@ class GlobalTracker:
         self._bayesian_initialized = False
         self._secret_model = None
         self._opp_card_play_count.clear()
-        # 清理对手手牌追踪（修复内存泄漏：opp_hand_card_ids 从不清理）
-        self.state.opp_hand_card_ids.clear()
         # 清理卡牌ID快照
         self._last_known_card_ids.clear()
         # 清理已打出实体集合（P0 #1）
@@ -235,10 +238,18 @@ class GlobalTracker:
         )
         self._entity_birth[entity_id] = birth
 
-        # 追踪对手初始牌库大小（P2 #13: 仅计数有效卡牌类型）
-        if controller == self.opp_controller and zone == self.ZONE_DECK:
-            if card_type in (self.CT_MINION, self.CT_SPELL, self.CT_WEAPON, self.CT_LOCATION):
+        # 追踪双方初始牌库大小
+        # 使用白名单：只计入实际可打出的卡牌类型，排除 GAME/PLAYER/ITEM 等非卡牌实体
+        _PLAYABLE_CARD_TYPES = (
+            self.CT_MINION, self.CT_SPELL, self.CT_WEAPON,
+            self.CT_HERO, self.CT_HERO_POWER, self.CT_LOCATION,
+            self.CT_ENCHANTMENT,
+        )
+        if zone == self.ZONE_DECK and card_type in _PLAYABLE_CARD_TYPES:
+            if controller == self.opp_controller:
                 self.state.opp_initial_deck_size += 1
+            elif controller == self.our_controller:
+                self.state.player_initial_deck_size += 1
 
         # 从英雄实体检测英雄职业
         if card_type == self.CT_HERO and card_id:
@@ -296,6 +307,13 @@ class GlobalTracker:
                 # 检测洗入牌库的牌被打出 → 标记为 GENERATED
                 if card_id and card_id in self.state.opp_shuffled_into_deck:
                     self._mark_shuffled_card_played(card_id)
+                # Track opponent board minion
+                if card_id and card_type not in (self.CT_WEAPON, self.CT_LOCATION, self.CT_HERO_POWER):
+                    self.state.opp_board_minions.append({
+                        "card_id": card_id,
+                        "entity_id": entity_id,
+                        "card_type": card_type,
+                    })
             elif zone == self.ZONE_SECRET:
                 # 奥秘注册统一入口：仅在此处添加（show_entity 是对手奥秘唯一的揭示路径）
                 # _on_zone_hand_to_secret 不再重复添加，仅负责触发 _on_card_played
@@ -337,6 +355,23 @@ class GlobalTracker:
                 # 记录已知手牌（无论来源，用于 Determinizer 采样）
                 self._record_known_hand_card(card_id)
 
+        # 我方卡牌追踪
+        if controller == self.our_controller and card_id:
+            self.state.player_hand_card_ids[entity_id] = (card_id, zone)
+            # 我方手牌进入记录
+            if zone == self.ZONE_HAND:
+                pass  # 可扩展：记录我方已知手牌
+            elif zone == self.ZONE_PLAY:
+                if card_type not in (self.CT_ENCHANTMENT,):
+                    self.state.player_board_minions.append({
+                        "card_id": card_id,
+                        "entity_id": entity_id,
+                        "card_type": card_type,
+                    })
+            elif zone == self.ZONE_SECRET:
+                if card_id not in self.state.player_secrets:
+                    self.state.player_secrets.append(card_id)
+
         if entity_id in self._entity_birth:
             self._entity_birth[entity_id].card_id = card_id
 
@@ -377,11 +412,16 @@ class GlobalTracker:
         # （例如对手卡牌在回合开始时转移到玩家牌库）
         if entity_id in self.state.opp_hand_card_ids:
             tracked_card_id = self.state.opp_hand_card_ids[entity_id][0]
-            self.state.opp_hand_card_ids[entity_id] = (tracked_card_id, new_zone)
-            # 仅在日志未提供 card_id 时使用追踪值作为回退
-            # 不盲目覆写——变形后的 ChangeEntity 会先更新 card_id
-            if not card_id:
-                card_id = tracked_card_id
+            # 卡片离开 HAND/DECK 后清除条目（避免无限增长 + 过期 card_id fallback）
+            # 保留在 DECK 和 HAND 区域的条目（仍需要追踪）
+            if new_zone not in (self.ZONE_HAND, self.ZONE_DECK, self.ZONE_SECRET):
+                del self.state.opp_hand_card_ids[entity_id]
+            else:
+                self.state.opp_hand_card_ids[entity_id] = (tracked_card_id, new_zone)
+                # 仅在日志未提供 card_id 时使用追踪值作为回退
+                # 不盲目覆写——变形后的 ChangeEntity 会先更新 card_id
+                if not card_id:
+                    card_id = tracked_card_id
 
         # 区域转换分发
         handler = self._zone_handlers.get((old_zone, new_zone))
@@ -582,11 +622,38 @@ class GlobalTracker:
             self.state.opp_graveyard_seen.append(card_id)
         if not is_opp and card_id:
             self.state.player_minions_died.append(card_id)
+        # Remove from board minion lists
+        if is_opp:
+            self.state.opp_board_minions = [
+                m for m in self.state.opp_board_minions
+                if m.get("entity_id") != entity_id
+            ]
+        else:
+            self.state.player_board_minions = [
+                m for m in self.state.player_board_minions
+                if m.get("entity_id") != entity_id
+            ]
 
     def _on_zone_return_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
         """打出的卡牌回手（弹回/召回）: PLAY/SECRET -> HAND"""
         if is_opp and card_id:
             self.state.opp_returned_to_hand_seen.append(card_id)
+            # Remove from opp board minions (card returned to hand)
+            self.state.opp_board_minions = [
+                m for m in self.state.opp_board_minions
+                if m.get("entity_id") != entity_id
+            ]
+        elif is_opp and not card_id:
+            # PLAY→HAND 时 card_id 不应为空（之前已揭示），回退查 opp_hand_card_ids
+            entry = self.state.opp_hand_card_ids.get(entity_id)
+            if entry and entry[0]:
+                self.state.opp_returned_to_hand_seen.append(entry[0])
+
+    def _on_zone_deck_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
+        """抽牌: DECK -> HAND"""
+        # 对手抽牌时 card_id 通常为空（隐藏信息），但 _extract_tutor_constraints
+        # 等后续逻辑需要知道抽牌发生了。card_id fallback 已在 on_zone_change 中处理。
+        pass
 
     def _on_zone_hand_to_secret(self, entity_id, controller, card_id, card_type, is_opp):
         """打出奥秘: HAND -> SECRET (§7)
@@ -623,7 +690,7 @@ class GlobalTracker:
     def _on_zone_secret_resolved(self, entity_id, controller, card_id, card_type, is_opp):
         """奥秘触发/过期: SECRET -> GRAVEYARD/SETASIDE"""
         if is_opp and card_id:
-            # P2 #17: 移除所有匹配的奥秘条目（而非仅第一个）
+            # 移除所有匹配的奥秘条目（而非仅第一个）
             self.state.opp_secrets = [s for s in self.state.opp_secrets if s != card_id]
             self.state.opp_secrets_triggered.append(KnownCard(
                 card_id=card_id,
@@ -699,6 +766,10 @@ class GlobalTracker:
            - 硬币卡牌出生在HAND → 牌库牌（后手硬币是牌库的一部分）
         4. 查卡牌数据库：非可收集 = 衍生
         """
+        # 窥探确认：如果卡牌已被确认存在于对手牌库中，则必定是牌库牌
+        if card_id and card_id in self.state.opp_known_deck_cards:
+            return CardSource.DECK
+
         birth = self._entity_birth.get(entity_id)
         if birth:
             if birth.initial_zone == self.ZONE_DECK:
@@ -736,9 +807,12 @@ class GlobalTracker:
             self.state.opp_shuffled_into_deck.remove(card_id)
         # Remove from known shuffled cards
         self.state.opp_shuffled_known_cards.pop(card_id, None)
+        # Reset play count so _is_over_copy_limit doesn't falsely flag
+        # the original deck copies as GENERATED when a shuffled copy is played
+        self._opp_card_play_count[card_id] = 0
         
         logger.debug(
-            "Shuffled card played (marked GENERATED): %s",
+            "Shuffled card played (marked GENERATED, play count reset): %s",
             card_id,
         )
 
@@ -1211,18 +1285,39 @@ class GlobalTracker:
         }
 
     def update_opp_weapon(self, opp_entities: list):
-        """从PLAY区域更新对手武器状态"""
+        """从PLAY区域更新对手武器状态。
+
+        当对手装备新武器时，如果之前已有不同的武器，
+        将旧武器记录为已消耗（进入墓地）。
+        """
+        new_weapon_id = ""
+        new_weapon_atk = 0
+        new_weapon_dur = 0
         for e in opp_entities:
             if (getattr(e, 'zone', 0) == self.ZONE_PLAY and
                 getattr(e, 'card_type', 0) == self.CT_WEAPON):
-                self.state.opp_weapon = getattr(e, 'card_id', '')
-                self.state.opp_weapon_atk = getattr(e, 'atk', 0)
-                self.state.opp_weapon_durability = getattr(e, 'health', 0)
-                return
-        # 未找到武器——清除
-        self.state.opp_weapon = ""
-        self.state.opp_weapon_atk = 0
-        self.state.opp_weapon_durability = 0
+                new_weapon_id = getattr(e, 'card_id', '')
+                new_weapon_atk = getattr(e, 'atk', 0)
+                new_weapon_dur = getattr(e, 'health', 0)
+                break
+
+        # Detect weapon replacement: old weapon consumed when new one appears
+        if new_weapon_id and self.state.opp_weapon and new_weapon_id != self.state.opp_weapon:
+            logger.info(
+                "对手武器替换: %s → %s（旧武器记录为消耗）",
+                self.state.opp_weapon, new_weapon_id,
+            )
+            self.state.opp_graveyard_seen.append(self.state.opp_weapon)
+
+        if new_weapon_id:
+            self.state.opp_weapon = new_weapon_id
+            self.state.opp_weapon_atk = new_weapon_atk
+            self.state.opp_weapon_durability = new_weapon_dur
+        else:
+            # 未找到武器——清除
+            self.state.opp_weapon = ""
+            self.state.opp_weapon_atk = 0
+            self.state.opp_weapon_durability = 0
 
     def update_opp_locations(self, opp_entities: list):
         """从PLAY区域更新对手地点状态"""

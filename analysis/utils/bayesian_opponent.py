@@ -279,6 +279,12 @@ class BayesianOpponentModel:
                 return dict(self.posteriors)
 
         unnormalized = {}
+        # 张数衰减：同一张牌第2次见到的信息量低于第1次
+        # 第N次见到时，likelihood 从 SIGNATURE_LIKELIHOOD 线性衰减到 EPSILON
+        seen_count = self._seen_deck_cards.get(seen_card_dbfId, 0)
+        decay = max(0.0, 1.0 - (seen_count - 1) * 0.3)  # 1st=1.0, 2nd=0.7, 3rd=0.4, 4th+=0.1
+        effective_sig = EPSILON_LIKELIHOOD + (SIGNATURE_LIKELIHOOD - EPSILON_LIKELIHOOD) * decay
+
         for deck in self.decks:
             aid = deck["archetype_id"]
             prior = self.posteriors.get(aid, 0.0)
@@ -286,9 +292,9 @@ class BayesianOpponentModel:
                 unnormalized[aid] = 0.0
                 continue
 
-            # Compute likelihood
+            # Compute likelihood (with count-based decay)
             if seen_card_dbfId in deck["cards"]:
-                likelihood = SIGNATURE_LIKELIHOOD
+                likelihood = effective_sig
             else:
                 likelihood = EPSILON_LIKELIHOOD
 
@@ -310,6 +316,9 @@ class BayesianOpponentModel:
     def update_batch(self, seen_cards: list) -> dict:
         """Sequential Bayesian update for multiple observed cards.
 
+        Early terminates if the model becomes locked during batch processing,
+        since subsequent updates would not change posteriors meaningfully.
+
         Args:
             seen_cards: List of dbfId integers.
 
@@ -318,6 +327,10 @@ class BayesianOpponentModel:
         """
         for dbf in seen_cards:
             self.update(dbf)
+            if self.locked is not None:
+                # Once locked, remaining cards won't shift posteriors
+                # (update() already handles unlock checks internally)
+                break
         return dict(self.posteriors)
 
     def update_from_hand(self, seen_card_dbfId: int) -> dict:
@@ -525,7 +538,7 @@ class BayesianOpponentModel:
                               deck_remaining: int = 0) -> list:
         """Predict cards the opponent might play next.
 
-        Based on the locked deck (if available) or the top-probability deck,
+        Based on the locked deck (if available) or weighted top-N decks,
         returns signature cards not yet observed, with probabilities computed
         using the hypergeometric distribution.
 
@@ -535,8 +548,8 @@ class BayesianOpponentModel:
             r = remaining copies of card_c in deck_j
             H = hand_size
 
-        When hand_size/deck_remaining are not provided, falls back to
-        using the deck confidence as a rough probability estimate.
+        When not locked, predictions are weighted across top-3 decks by
+        their posterior probability, giving a more robust estimate.
 
         Args:
             n: Number of predictions to return. Default 10.
@@ -546,24 +559,51 @@ class BayesianOpponentModel:
         Returns:
             list of dicts with keys: dbfId, probability, name, cost
         """
-        # Determine which deck to predict from
+        # When locked, use single deck (high confidence)
         if self.locked:
-            target_id = self.locked[0]
-            target_prob = self.locked[1]
-        else:
-            top = self.get_top_decks(1)
-            if not top:
-                return []
-            target_id = top[0][0]
-            target_prob = top[0][2]
+            return self._predict_from_deck(
+                self.locked[0], self.locked[1], n,
+                hand_size, deck_remaining,
+            )
 
-        # Find the deck's signature cards
+        # When not locked, aggregate across top-3 decks weighted by posterior
+        top_decks = self.get_top_decks(3)
+        if not top_decks:
+            return []
+
+        # Aggregate predictions from each deck, weighted by deck probability
+        aggregated = {}  # dbfId -> {prob, cost, remaining, name}
+        for target_id, _, target_prob in top_decks:
+            deck_preds = self._predict_from_deck_raw(
+                target_id, target_prob, hand_size, deck_remaining,
+            )
+            for pred in deck_preds:
+                dbf = pred["dbfId"]
+                if dbf in aggregated:
+                    aggregated[dbf]["probability"] += pred["probability"]
+                else:
+                    aggregated[dbf] = pred
+
+        # Sort by probability descending
+        ranked = sorted(aggregated.values(), key=lambda x: -x["probability"])
+        return ranked[:n]
+
+    def _predict_from_deck(self, target_id: int, target_prob: float, n: int,
+                            hand_size: int, deck_remaining: int) -> list:
+        """Predict next actions from a single deck, returning top-n formatted."""
+        raw = self._predict_from_deck_raw(target_id, target_prob,
+                                          hand_size, deck_remaining)
+        raw.sort(key=lambda x: (-x["probability"], x["cost"]))
+        return raw[:n]
+
+    def _predict_from_deck_raw(self, target_id: int, target_prob: float,
+                                hand_size: int, deck_remaining: int) -> list:
+        """Compute per-card probabilities from a single deck (unsorted, unbounded)."""
         deck = self._find_deck(target_id)
         if not deck:
             return []
 
-        # Cards not yet seen
-        # Count-aware: deck cards minus seen deck cards
+        # Cards not yet seen (count-aware: deck cards minus seen deck cards)
         deck_remaining_list = list(deck["cards"])
         seen_copy = dict(self._seen_deck_cards)
         unseen = []
@@ -582,7 +622,7 @@ class BayesianOpponentModel:
         pool = hand_size + deck_remaining if (hand_size > 0 and deck_remaining > 0) else 0
 
         # Deduplicate and compute per-card probability
-        unseen_unique = []
+        predictions = []
         seen_dbfs = set()
         for dbf in unseen:
             if dbf not in seen_dbfs:
@@ -605,21 +645,14 @@ class BayesianOpponentModel:
                     # Fallback: use deck confidence weighted by remaining ratio
                     card_prob = target_prob * (remaining / max(len(unseen), 1))
 
-                unseen_unique.append((dbf, cost, card_prob, remaining))
+                predictions.append({
+                    "dbfId": dbf,
+                    "probability": round(card_prob, 4),
+                    "name": card_info.get("name", f"Unknown({dbf})"),
+                    "cost": cost,
+                    "remaining": remaining,
+                })
 
-        # Sort by probability descending (most likely first)
-        unseen_unique.sort(key=lambda x: (-x[2], x[1]))
-
-        predictions = []
-        for dbf, cost, prob, remaining in unseen_unique[:n]:
-            card_info = self.cards_by_dbf.get(dbf, {})
-            predictions.append({
-                "dbfId": dbf,
-                "probability": round(prob, 4),
-                "name": card_info.get("name", f"Unknown({dbf})"),
-                "cost": cost,
-                "remaining": remaining,
-            })
         return predictions
 
     def reset(self):

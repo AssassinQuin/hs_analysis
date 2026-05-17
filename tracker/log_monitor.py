@@ -341,7 +341,17 @@ class CoreLogMonitor:
         if current_ino != self._file_ino or current_size < self._file_pos:
             self._file_pos = 0
             self._file_ino = current_ino
-            logger.info("检测到日志轮转，重置读取位置")
+            logger.info("检测到日志轮转，重置读取位置及追踪状态")
+            # 日志轮转意味着新 session 开始，需清空残留状态
+            # 避免旧游戏的实体泄漏到新 session
+            self._bridged_entities.clear()
+            self._last_known_zones.clear()
+            self._last_known_card_ids.clear()
+            self._first_player_detected = False
+            self._player_names.clear()
+            self._game_lifecycle = GameLifecycle.IDLE
+            self.game_tracker.reset()
+            self.global_tracker.on_game_start()
 
         if current_size <= self._file_pos:
             return
@@ -396,6 +406,7 @@ class CoreLogMonitor:
 
         判定规则（按优先级）:
           1. 从 _player_names 匹配：名字含 '#' 的 BattleTag 用户是本地玩家
+             当双方都有 '#' 时，优先选与上次已知的我方 controller 一致的那个
           2. 从 hslog player.name 匹配：名字含 '#' 的是本地玩家
           3. 都不含 '#' 时默认 players[0] 为我方
 
@@ -420,19 +431,43 @@ class CoreLogMonitor:
                 pass
             name0 = self._player_names.get(pid0, '')
             name1 = self._player_names.get(pid1, '')
-            if name1 and '#' in name1 and ('#' not in name0 or name0 == 'UNKNOWN HUMAN PLAYER'):
+
+            has_tag0 = bool(name0 and '#' in name0 and name0 != 'UNKNOWN HUMAN PLAYER')
+            has_tag1 = bool(name1 and '#' in name1 and name1 != 'UNKNOWN HUMAN PLAYER')
+
+            if has_tag0 and has_tag1:
+                # 双方都有 BattleTag：用已知的 controller 匹配上局
+                try:
+                    c0 = players[0].tags.get(GameTag.CONTROLLER, 0)
+                    c1 = players[1].tags.get(GameTag.CONTROLLER, 0)
+                    if c0 == self.global_tracker.our_controller:
+                        my_idx = 0
+                    elif c1 == self.global_tracker.our_controller:
+                        my_idx = 1
+                    else:
+                        # 无法匹配，默认 0（首次游戏）
+                        my_idx = 0
+                except Exception:
+                    my_idx = 0
+                logger.debug("玩家检测(_player_names, dual BattleTag): 我方=players[%d] name=%s",
+                             my_idx, [name0, name1][my_idx])
+                return my_idx
+
+            if has_tag1:
                 my_idx = 1
                 logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
                              my_idx, name1, 1 - my_idx, name0)
                 return my_idx
-            if name0 and '#' in name0 and ('#' not in name1 or name1 == 'UNKNOWN HUMAN PLAYER'):
+            if has_tag0:
                 my_idx = 0
                 logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
                              my_idx, name0, 1 - my_idx, name1)
                 return my_idx
 
         # 回退: 使用 hslog player.name
-        if '#' in n1 and ('#' not in n0 or n0 == 'UNKNOWN HUMAN PLAYER'):
+        has_tag0 = '#' in n0 and n0 != 'UNKNOWN HUMAN PLAYER'
+        has_tag1 = '#' in n1 and n1 != 'UNKNOWN HUMAN PLAYER'
+        if has_tag1 and not has_tag0:
             my_idx = 1
 
         logger.debug("玩家检测(fallback): 我方=players[%d], n0=%r, n1=%r", my_idx, n0, n1)
@@ -463,7 +498,7 @@ class CoreLogMonitor:
         同时检测 card_id 变化（ChangeEntity 事件），例如腐蚀升级、变形术等。
         """
         ec = self.game_tracker.entity_cache
-        for entity_id, ent_data in ec._entities.items():
+        for entity_id, ent_data in ec.items():
             new_zone = _zone_to_int(ent_data.get("tags", {}).get(GameTag.ZONE, 0))
             old_zone = self._last_known_zones.get(entity_id)
             new_card_id = ent_data.get("card_id", "")
@@ -486,17 +521,21 @@ class CoreLogMonitor:
             if new_card_id:
                 self._last_known_card_ids[entity_id] = new_card_id
 
+            # 区域变化检测：只对未桥接实体执行，避免与 _bridge_new_entities() 双重桥接
+            # 已桥接实体的区域变化由 _bridge_new_entities() 负责（在同一轮 _process_lines 中先于本方法被调用会延迟一拍，但 _process_lines 末尾的 _bridge_new_entities 会在下一轮补上）
+            # 未桥接实体的区域变化需要在这里处理，因为 _bridge_single_entity 只在首次桥接时记录 zone，不触发 on_zone_change
             if old_zone is not None and old_zone != new_zone:
-                # 区域确实发生变化，桥接到 GlobalTracker
-                fields = _extract_entity_fields(ent_data)
-                self.global_tracker.on_zone_change(
-                    entity_id=entity_id,
-                    controller=fields.controller,
-                    old_zone=old_zone,
-                    new_zone=new_zone,
-                    card_id=fields.card_id,
-                    card_type=fields.card_type,
-                )
+                if entity_id not in self._bridged_entities:
+                    # 未桥接实体的区域变化——桥接到 GlobalTracker
+                    fields = _extract_entity_fields(ent_data)
+                    self.global_tracker.on_zone_change(
+                        entity_id=entity_id,
+                        controller=fields.controller,
+                        old_zone=old_zone,
+                        new_zone=new_zone,
+                        card_id=fields.card_id,
+                        card_type=fields.card_type,
+                    )
 
             # 更新快照（zone=0 也记录，避免首次变化被静默忽略）
             # zone=0 表示 INVALID/未分配区域，但实体后续会变到有效区域
@@ -513,7 +552,7 @@ class CoreLogMonitor:
             return
 
         ec = self.game_tracker.entity_cache
-        for entity_id, ent_data in ec._entities.items():
+        for entity_id, ent_data in ec.items():
             tags = ent_data.get("tags", {})
             if tags.get(GameTag.FIRST_PLAYER, 0) == 1:
                 controller = _safe_int(tags.get(GameTag.CONTROLLER, 0))
@@ -670,11 +709,12 @@ class CoreLogMonitor:
         self._player_names.clear()
         self._game_lifecycle = GameLifecycle.STARTING
 
-        game = self.game_tracker.current_game
+        # 先重置 GlobalTracker 状态（清空旧游戏数据）
+        self.global_tracker.on_game_start()
+
+        # 尝试获取初始 controller 分配
         our_controller = 1
         opp_controller = 2
-
-        # 尝试从 hslog 包树获取玩家信息
         try:
             exporter = self.game_tracker.export_entities()
             if exporter is not None and hasattr(exporter, 'players') and len(exporter.players) >= 2:
@@ -687,32 +727,27 @@ class CoreLogMonitor:
         except Exception as e:
             logger.debug("检测玩家 controller 失败: %s", e)
 
-        self.global_tracker.on_game_start()
         self.global_tracker.set_controllers(our_controller, opp_controller)
 
-        # 桥接实体事件到 GlobalTracker
-        self._bridge_entities_to_global_tracker()
+        # 在桥接之前尝试补充玩家信息，确定最终 controller
+        # 避免先桥接后发现 controller 不对，需要重置再重新桥接的问题
+        enriched = self._enrich_player_info_core(re_bridge=False, re_emit=False)
+        if enriched is not None:
+            our_controller, opp_controller = enriched
+            self.global_tracker.set_controllers(our_controller, opp_controller)
 
-        # 增量桥接：扫描 entity_cache 中尚未桥接的新实体
+        # 桥接实体事件到 GlobalTracker（在 controller 确定之后）
+        self._bridge_entities_to_global_tracker()
         self._bridge_new_entities()
 
-        # 尝试补充玩家信息（可能在 FULL_ENTITY 中已有英雄职业）
-        self._try_enrich_player_info()
-
-        # 发送 game_started 信号
         # 如果职业已完整则直接进入 READY，否则留在 STARTING
-        # 注意：如果 _try_enrich_player_info 已经将生命周期推进到 READY
-        # 并发送了 game_started 信号，则不再重复发送
+        # 后续 _try_enrich_player_info 会继续补充信息并在完整时推进到 READY
         state = self.global_tracker.state
         if state.player_hero_class and state.opp_hero_class:
-            if self._game_lifecycle == GameLifecycle.STARTING:
-                # 只在 STARTING 状态下才推进到 READY 并发送信号
-                self._game_lifecycle = GameLifecycle.READY
-                self._emit_game_started(our_controller, opp_controller)
-            # 如果已经是 READY（由 _try_enrich_player_info 设置），信号已发送，跳过
-        else:
-            # 职业信息不完整，发送初始信号（UI 可能显示"未知"）
+            self._game_lifecycle = GameLifecycle.READY
             self._emit_game_started(our_controller, opp_controller)
+        else:
+            # 职业信息不完整，留在 STARTING，由 _try_enrich_player_info 补全后推进
 
         self._notify_state_update()
 
@@ -754,7 +789,7 @@ class CoreLogMonitor:
         gt_state = self.global_tracker.state
         gt = self.global_tracker
 
-        opp_hand_count = gt_state.opp_hand_count or len(gt_state.opp_hand_card_ids)
+        opp_hand_count = gt_state.opp_hand_count
         opp_deck_count = gt_state.opp_deck_remaining
 
         bayesian = gt.get_bayesian_state()
@@ -781,6 +816,16 @@ class CoreLogMonitor:
             "opp_corpses": gt_state.opp_corpses,
             "opp_herald_count": gt_state.opp_herald_count,
             "player_corpses": gt_state.player_corpses,
+            "player_hand_count": gt_state.player_hand_count,
+            "player_deck_count": gt_state.player_deck_remaining,
+            "player_initial_deck_size": gt_state.player_initial_deck_size,
+            "player_weapon": gt_state.player_weapon,
+            "player_weapon_atk": gt_state.player_weapon_atk,
+            "player_weapon_durability": gt_state.player_weapon_durability,
+            "player_locations": list(gt_state.player_locations),
+            "player_board_minions": list(gt_state.player_board_minions),
+            "opp_board_minions": list(gt_state.opp_board_minions),
+            "opp_shuffled_into_deck": list(gt_state.opp_shuffled_into_deck),
             "is_first_player": gt_state.is_first_player,
             "coin_used": gt_state.coin_used,
             "known_hand": [(eid, cid) for eid, cid in known_hand],
@@ -907,7 +952,7 @@ class CoreLogMonitor:
         """
         ec = self.game_tracker.entity_cache
 
-        for entity_id, ent_data in ec._entities.items():
+        for entity_id, ent_data in ec.items():
             self._bridge_single_entity(entity_id, ent_data)
 
         # 更新牌库计数
@@ -1025,7 +1070,7 @@ class CoreLogMonitor:
         ec = self.game_tracker.entity_cache
 
         new_count = 0
-        for entity_id, ent_data in ec._entities.items():
+        for entity_id, ent_data in ec.items():
             if entity_id in self._bridged_entities:
                 # 已桥接的实体——检查区域或 card_id 是否变化
                 fields = _extract_entity_fields(ent_data)

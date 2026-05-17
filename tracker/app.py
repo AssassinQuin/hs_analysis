@@ -379,6 +379,8 @@ class TrackerApp:
         logger.info("游戏开始: %s vs %s", info.get("player_class"), info.get("opp_class"))
         # 重置游戏状态
         self._game_state_manager.reset()
+        # 立即同步新状态到 overlay，避免窗口引用旧实例
+        self._overlay.update_state(self._game_state_manager.state)
 
     def _on_game_ended(self):
         """游戏结束。"""
