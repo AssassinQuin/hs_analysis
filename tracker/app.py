@@ -4,23 +4,137 @@
 初始化所有组件、启动 Power.log 监控、HSReplay 更新器，
 创建并显示叠加 UI，运行主事件循环。
 
+日志路径优先级:
+    1. 命令行 --log / --offline 参数
+    2. cfg/live.cfg [log] paths 配置
+    3. 自动检测 (%LOCALAPPDATA%/Blizzard/Hearthstone/Logs 等)
+    4. 项目根目录下的 Power.log / Hearthstone_*/ 子目录
+
 用法:
-    python -m tracker.app
-    python tracker/app.py
-    python tracker/app.py --log /path/to/Power.log
-    python tracker/app.py --offline /path/to/Power.log
+    python -m tracker.app                          # 实时模式，从 cfg/live.cfg 或自动检测
+    python tracker/app.py                          # 同上
+    python tracker/app.py --log /path/to/Power.log # 指定 Power.log
+    python tracker/app.py --offline /path/to/Power.log  # 离线分析
 """
 
 from __future__ import annotations
 
 import argparse
+import configparser
 import logging
+import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
+
+# ── 配置文件日志路径解析 ──────────────────────────────────────
+
+def _resolve_log_paths_from_config() -> List[Path]:
+    """从 cfg/live.cfg [log] paths 中解析候选日志路径。
+
+    配置格式见 cfg/live.cfg 中的注释，支持:
+      - Power.log 文件路径
+      - 含 Power.log 的目录路径
+      - Logs 根目录（自动选最新一局）
+
+    Returns:
+        按优先级排列的 Path 列表（只包含存在的路径）
+    """
+    project_root = Path(__file__).resolve().parent.parent
+    cfg_path = project_root / "cfg" / "live.cfg"
+
+    if not cfg_path.exists():
+        return []
+
+    cp = configparser.ConfigParser(interpolation=None)
+    try:
+        with cfg_path.open("r", encoding="utf-8") as f:
+            cp.read_file(f)
+    except Exception:
+        return []
+
+    if not cp.has_section("log") or not cp.has_option("log", "paths"):
+        return []
+
+    raw = cp.get("log", "paths")
+    candidates: List[Path] = []
+
+    for line in raw.replace(";", "\n").replace(",", "\n").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        # 展开 ~ 和环境变量
+        line = os.path.expanduser(line)
+        line = os.path.expandvars(line)
+        p = Path(line)
+
+        if not p.exists():
+            continue
+
+        if p.is_file() and p.name.lower() == "power.log":
+            # 直接是 Power.log 文件
+            candidates.append(p)
+        elif p.is_dir():
+            power_log = p / "Power.log"
+            if power_log.exists():
+                # 目录内有 Power.log
+                candidates.append(power_log)
+            else:
+                # 可能是 Logs 根目录，找最新子目录
+                sub_dirs = sorted(
+                    [d for d in p.iterdir() if d.is_dir() and (d / "Power.log").exists()],
+                    key=lambda d: d.stat().st_mtime,
+                    reverse=True,
+                )
+                if sub_dirs:
+                    candidates.append(sub_dirs[0] / "Power.log")
+
+    return candidates
+
+
+def _find_power_log(cli_path: Optional[str] = None) -> Optional[Path]:
+    """按优先级查找 Power.log。
+
+    优先级:
+        1. 命令行指定路径
+        2. cfg/live.cfg [log] paths
+        3. 自动检测（Windows/macOS/Linux 标准位置）
+        4. 项目根目录下的 Power.log / Hearthstone_*/ 子目录
+
+    Returns:
+        Power.log 的 Path 或 None
+    """
+    # 1. 命令行指定
+    if cli_path:
+        p = Path(cli_path)
+        if p.exists():
+            return p
+        logger.warning("命令行指定的路径不存在: %s", cli_path)
+
+    # 2. cfg/live.cfg 配置
+    config_paths = _resolve_log_paths_from_config()
+    if config_paths:
+        logger.info("从 cfg/live.cfg 找到日志路径: %s", config_paths[0])
+        return config_paths[0]
+
+    # 3. 自动检测
+    try:
+        from tracker.log_monitor import find_power_log_path
+        detected = find_power_log_path()
+        if detected:
+            logger.info("自动检测到日志路径: %s", detected)
+            return detected
+    except Exception:
+        pass
+
+    return None
+
+
+# ── 追踪器主应用 ──────────────────────────────────────────────
 
 class TrackerApp:
     """追踪器主应用。
@@ -61,6 +175,7 @@ class TrackerApp:
     def run(self):
         """运行主应用。"""
         self._setup_logging()
+        self._load_config()
 
         logger.info("=" * 50)
         logger.info("炉石传说追踪器 v1.0")
@@ -76,6 +191,17 @@ class TrackerApp:
         # 创建 Qt 应用
         self._qt_app = QApplication(sys.argv)
         self._qt_app.setQuitOnLastWindowClosed(True)
+
+        # 解析日志路径
+        resolved = _find_power_log(self._log_path or self._offline_path)
+        if resolved:
+            logger.info("使用日志路径: %s", resolved)
+            if self._offline_path:
+                self._offline_path = str(resolved)
+            else:
+                self._log_path = str(resolved)
+        else:
+            logger.warning("未找到 Power.log，将在游戏启动后自动检测")
 
         # 初始化组件
         self._init_components()
@@ -107,6 +233,16 @@ class TrackerApp:
             datefmt="%H:%M:%S",
         )
 
+    def _load_config(self):
+        """加载 cfg/live.cfg 配置。"""
+        try:
+            from analysis.config import load_live_config
+            cfg = load_live_config()
+            if cfg.get("cfg_loaded"):
+                logger.info("配置已加载: latest_game_only=%s", cfg.get("latest_game_only"))
+        except Exception as e:
+            logger.debug("加载配置文件失败: %s", e)
+
     def _init_components(self):
         """初始化所有组件。"""
         logger.info("初始化组件…")
@@ -123,7 +259,7 @@ class TrackerApp:
         from tracker.hand_predictor import HandPredictor
         self._hand_predictor = HandPredictor()
 
-        # 4. 日志监控器
+        # 4. 日志监控器 — 使用解析后的日志路径
         from tracker.log_monitor import LogMonitor
         self._log_monitor = LogMonitor(
             log_path=self._log_path,
@@ -189,6 +325,7 @@ class TrackerApp:
         state_dict = self._log_monitor.build_state_dict()
         prediction = self._hand_predictor.predict(state_dict)
         self._game_state_manager.update(state_dict, prediction)
+        self._overlay.update_state(self._game_state_manager.state)
         self._overlay._refresh()
 
         logger.info("离线分析完成")
@@ -256,10 +393,22 @@ def main():
     parser = argparse.ArgumentParser(
         description="炉石传说追踪器 — 对手手牌预测叠加工具",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+日志路径查找优先级:
+  1. --log / --offline 命令行参数
+  2. cfg/live.cfg [log] paths 配置
+  3. 自动检测系统标准位置 (Windows/macOS/Linux)
+  4. 项目根目录下的 Power.log
+
+示例:
+  python -m tracker.app                          # 实时模式
+  python -m tracker.app --offline Power.log      # 离线分析
+  python -m tracker.app --log "E:\\battle\\Hearthstone\\Logs\\Power.log"
+        """,
     )
     parser.add_argument(
         "--log", "-l",
-        help="Power.log 文件路径（自动检测则不需要指定）",
+        help="Power.log 文件路径（不指定则从 cfg/live.cfg 或自动检测）",
     )
     parser.add_argument(
         "--offline", "-o",
