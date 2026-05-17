@@ -27,6 +27,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional, List
+from PyQt5.QtCore import QTimer
 
 logger = logging.getLogger(__name__)
 

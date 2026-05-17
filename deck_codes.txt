@@ -1,6 +1,9 @@
 ### 铺场德
 AAECAZICBMODB6+HB7ifB+DABw2unwSB1ASIgweuhweSlweUlwfXlwfanQeqrwfXwAfbwAfswAf2wQcAAA==
 
+### companion-hunter
+AAECAR8InaAEqYEHw4MHmacHmqcHm6cHy7YH5MQHC6mfBInUBOKJB6+SB+6fB7vAB97EB+DEB+PEB/nEB6H9BwAA
+
 ### 铺场德
 AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwfanQe4nweqrwfXwAfbwAfswAf2wQcAAA==
 
@@ -66,3 +69,43 @@ AAECAf0EBu/8BsODB7OHB6ebB/KyB5PaBwyb8gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4Aec
 
 ### 龙战
 AAECAQcCi6AEj7EHDuPmBqr8Bqv8BveDB+iHB9KXB7etB+yyB4S9B7XAB5XCB5vCB5zCB/nDBwAA
+
+### 兆示蛋术
+AAECAf0GBNGCB/WYB+ybB9edBw2PnwSxnwSRoATnoATTngbrhAepiAeEmQfgnQeTvgfXvgfYvgfgvgcAAA==
+
+### 拉法姆术
+AAECAf0GEIOgBNGeBqn1BsODB4OKB4KYB4ilB4mlB4qlB5GlB5OlB5SlB5WlB5alB5elB5qlBwyPnwSCoATnoATRggfZggeEmQfenQfhnQeqrQfQsgeNvgfXvgcAAA==
+
+### 兆示蛋术
+AAECAf0GBsSeBoeWB/WYB+ybB9edB+C+BwyPnwTnoATrhAepiAeEmQfenQfgnQfhnQeNvgeTvgfXvgfYvgcAAA==
+
+### 艾萨拉德
+AAECAZICCqn1BsODB6+HB6yIB/ioB/moB/qoB+ixB9bEB93EBwqunwSIgweqrwesrwe4sge+sgfXwAffwAfZxAfJxwcAAA==
+
+### hostage-druid
+AAECAZICCqn1BqGBB5KDB8ODB6+HB+GIB4KYB/WYB4GuB5mxBwqunwSIgweqrwesrwfosQe4sge+sgfXwAfZxAeT8QcAAA==
+
+### 麦琳德
+AAECAZICDs2eBqn1BqGBB5KDB8ODB6+HB6yIB4KYB+ixB7iyB+DAB+LAB93EB+XEBwiunwSIgweqrwesrwe+sgeEvQfXwAfYwAcAAA==
+
+### 麦琳德
+AAECAZICDM2eBqn1BqGBB5KDB8ODB6+HB6yIB4KYB+DAB+LAB93EB+XEBwmunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAcAAA==
+
+### 麦琳德
+AAECAZICDM2eBqn1BqGBB5KDB8ODB6+HB6yIB4KYB+DAB+LAB93EB+XEBwmunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAcAAA==
+
+### 控制牧
+AAECAa0GBqiWB/ypB4CqB4SqB+SyB4O/BwzwnwTLoASg+wbD/waFhgedrQfLtgeFvwebvweixAeyxQeW/AcAAA==
+
+### 控制牧
+AAECAa0GEISfBPCfBM2eBqn1Bpb9BpKDB6iWB4KYB/ypB4CqB4SqB4utB6ytB+SyB4O/B5b8Bweg+wbD/waFhgedrQeixAeyxQfJxwcAAA==
+
+### 控制牧
+AAECAa0GEISfBPCfBKn1Bpb9BpKDB8WUB6iWB4KYB/ypB4CqB4SqB4utB6ytB+SyB4O/B5b8Bweg+wbD/waFhgedrQeixAeyxQfJxwcAAA==
+
+### 控制牧
+AAECAa0GDM2eBsP/BoOKB8WUB6iWB/ypB4CqB4SqB6ytB5GuB+SyB4O/BwmEnwTwnwSg+wb3gQeFhgedrQeixAeyxQeW/AcAAA==
+
+### companion-hunter
+AAECAR8InaAEidQEqYEHmacHmqcHm6cHxbEH5MQHC6mfBOKJB6+SB+6fB8u2B7vAB97EB+DEB+PEB/nEB6H9BwAA
+
