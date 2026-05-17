@@ -1094,16 +1094,19 @@ class OverlayWindow(QWidget):
                 for c in opp.deck
             ]
 
-        # 构建显示数据
+        # 构建显示数据（排除衍生牌：卡组区只显示牌库来源的牌）
         display = []
         for c in deck_cards:
+            source = c.get("source", "deck")
+            if source == "generated":
+                continue  # 衍生牌不显示在卡组区，只在墓地区显示
             display.append({
                 "card_id": c.get("card_id", ""),
                 "name": c.get("name", ""),
                 "cost": c.get("cost", 0),
                 "quantity": c.get("quantity", 1),
                 "remaining": c.get("remaining", 1),
-                "source": c.get("source", "deck"),
+                "source": source,
                 "played": c.get("played", False),
                 "in_hand": c.get("in_hand", False),
                 "rarity": c.get("rarity", ""),
