@@ -151,6 +151,9 @@ class GlobalTracker:
         # P0 #1: 防止同一实体重复记录为打出（zone_change + show_entity 双路径）
         self._entity_played_set: Set[int] = set()
 
+        # 延迟贝叶斯证据缓存：职业未知时暂时缓存观察到的卡牌
+        self._pending_bayesian_evidence: List[Tuple[str, str]] = []  # (card_id, evidence_type)
+
     def set_controllers(self, our: int, opp: int):
         self.our_controller = our
         self.opp_controller = opp
@@ -178,6 +181,8 @@ class GlobalTracker:
         self._last_known_card_ids.clear()
         # 清理已打出实体集合（P0 #1）
         self._entity_played_set.clear()
+        # 清理延迟贝叶斯证据缓存
+        self._pending_bayesian_evidence.clear()
         # 通知所有 Rule 重置其 per-game 状态
         self._rule_dispatcher.dispatch_game_start(self.state)
 
@@ -335,13 +340,19 @@ class GlobalTracker:
                 is_generated = (card_source == CardSource.GENERATED 
                                or self._is_over_copy_limit(card_id))
                 if not self._bayesian_initialized:
-                    self._init_bayesian_model(self.state.opp_hero_class)
-                if is_generated:
-                    # 衍生牌：记录但不更新后验
-                    self.feed_bayesian_generated_update(card_id)
+                    # 延迟初始化：只初始化不喂入（_init_bayesian_model 返回 False 时跳过）
+                    if self._init_bayesian_model(self.state.opp_hero_class):
+                        # 首次初始化成功 — 延迟喂入积压证据
+                        self._replay_pending_bayesian_evidence()
+                if self._bayesian_model is not None:
+                    if is_generated:
+                        self.feed_bayesian_generated_update(card_id)
+                    else:
+                        self.feed_bayesian_update(card_id)
                 else:
-                    # 牌库牌：正常更新后验
-                    self.feed_bayesian_update(card_id)
+                    # 模型未初始化（职业未知），缓存证据等待后续
+                    self._pending_bayesian_evidence.append(
+                        (card_id, 'generated' if is_generated else 'play'))
 
             # 为对手揭示到HAND的卡牌喂入贝叶斯模型 (Tracking/发现效果/Mulligan)
             # 同样需要区分来源和张数限制
@@ -350,11 +361,16 @@ class GlobalTracker:
                 is_generated = (card_source == CardSource.GENERATED
                                or self._is_over_copy_limit(card_id))
                 if not self._bayesian_initialized:
-                    self._init_bayesian_model(self.state.opp_hero_class)
-                if is_generated:
-                    self.feed_bayesian_generated_update(card_id)
+                    if self._init_bayesian_model(self.state.opp_hero_class):
+                        self._replay_pending_bayesian_evidence()
+                if self._bayesian_model is not None:
+                    if is_generated:
+                        self.feed_bayesian_generated_update(card_id)
+                    else:
+                        self.feed_bayesian_hand_update(card_id)
                 else:
-                    self.feed_bayesian_hand_update(card_id)
+                    self._pending_bayesian_evidence.append(
+                        (card_id, 'generated' if is_generated else 'hand'))
                 # 记录已知手牌（无论来源，用于 Determinizer 采样）
                 self._record_known_hand_card(card_id)
 
@@ -388,6 +404,10 @@ class GlobalTracker:
             elif controller == self.opp_controller:
                 if not self.state.opp_hero_class:
                     self.state.opp_hero_class = hero_class
+                    # 首次检测到对手职业 — 尝试初始化贝叶斯模型并回放积压证据
+                    if self._pending_bayesian_evidence and not self._bayesian_initialized:
+                        if self._init_bayesian_model(hero_class):
+                            self._replay_pending_bayesian_evidence()
                 elif self.state.opp_hero_class != hero_class and self._bayesian_initialized:
                     # 对手职业被修正（如 controller 修正后），重新初始化贝叶斯模型
                     # 保存已知的对手卡牌证据，重新喂入新模型
@@ -405,6 +425,7 @@ class GlobalTracker:
                                 self.feed_bayesian_update(kc.card_id)
                             elif kc.source == CardSource.GENERATED and kc.card_id:
                                 self.feed_bayesian_generated_update(kc.card_id)
+                        self._replay_pending_bayesian_evidence()
 
     def on_zone_change(self, entity_id: int, controller: int,
                        old_zone: int, new_zone: int,
@@ -1154,14 +1175,24 @@ class GlobalTracker:
         if opp_cls:
             self._secret_model = SecretProbabilityModel(opp_cls)
 
-    def _init_bayesian_model(self, opponent_class: str = None):
+    def _init_bayesian_model(self, opponent_class: str = None) -> bool:
         """Initialize Bayesian opponent model from HSReplay cache or deck_codes.txt.
 
         Args:
             opponent_class: Optional class filter (e.g. 'ROGUE', 'WARLOCK')
+
+        Returns:
+            True if model was successfully initialized, False otherwise.
         """
         if self._bayesian_initialized:
-            return
+            return self._bayesian_model is not None
+
+        # 延迟初始化：如果对手职业未知，不要加载全职业卡组
+        # 否则会把其他职业的卡牌概率混入手牌预测
+        if not opponent_class or opponent_class == "UNKNOWN":
+            logger.debug("延迟贝叶斯模型初始化: 对手职业未知 (%s)", opponent_class)
+            return False
+
         self._bayesian_initialized = True
 
         try:
@@ -1191,9 +1222,35 @@ class GlobalTracker:
 
             self._bayesian_model = BayesianOpponentModel(player_class=opponent_class)
             if not self._bayesian_model.decks:
-                self._bayesian_model = None  # No data available
-        except Exception:
+                logger.warning("贝叶斯模型初始化: 无匹配卡组 (class=%s)", opponent_class)
+                self._bayesian_model = None
+                return False
+            logger.info("贝叶斯模型初始化成功: %d 个卡组 (class=%s)",
+                        len(self._bayesian_model.decks), opponent_class)
+            return True
+        except Exception as e:
+            logger.error("贝叶斯模型初始化失败: %s", e)
             self._bayesian_model = None
+            return False
+
+    def _replay_pending_bayesian_evidence(self):
+        """回放积压的贝叶斯证据到已初始化的模型。
+
+        当对手职业未知时，观察到的卡牌被缓存在 _pending_bayesian_evidence 中。
+        一旦职业确认并成功初始化模型后，调用此方法回放所有积压证据。
+        """
+        if not self._pending_bayesian_evidence or self._bayesian_model is None:
+            return
+        count = len(self._pending_bayesian_evidence)
+        for card_id, evidence_type in self._pending_bayesian_evidence:
+            if evidence_type == 'play':
+                self.feed_bayesian_update(card_id)
+            elif evidence_type == 'hand':
+                self.feed_bayesian_hand_update(card_id)
+            elif evidence_type == 'generated':
+                self.feed_bayesian_generated_update(card_id)
+        self._pending_bayesian_evidence.clear()
+        logger.info("回放积压贝叶斯证据: %d 条", count)
 
     def feed_bayesian_update(self, card_id: str):
         """Feed an observed opponent card to the Bayesian model.

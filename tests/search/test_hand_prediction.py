@@ -294,7 +294,9 @@ class TestHandPredictorIntegration:
         }
 
         result = predictor.predict(state_dict)
-        assert len(result.hand_predictions) == 5  # 5个未知占位
+        # 空状态无预测数据，hand_predictions 为空
+        # UI 层根据 opp_hand_count 显示 "??" 占位符
+        assert len(result.hand_predictions) == 0
 
     def test_hand_predictor_revealed_cards(self):
         """已知手牌应为100%概率。"""
@@ -316,14 +318,12 @@ class TestHandPredictorIntegration:
         }
 
         result = predictor.predict(state_dict)
-        # 应有1张确认手牌和2个未知占位
+        # 应有1张确认手牌，不再生成 "??" 未知占位符（UI 层处理）
         revealed = [hp for hp in result.hand_predictions if hp.source == "revealed"]
-        unknown = [hp for hp in result.hand_predictions if hp.source == "unknown"]
 
         assert len(revealed) >= 1
         for hp in revealed:
             assert hp.probability == 1.0
-        assert len(result.hand_predictions) == 3
 
     def test_hand_predictor_deck_predictions_have_probabilities(self):
         """卡组预测应包含手牌概率。"""

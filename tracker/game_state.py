@@ -655,13 +655,25 @@ class GameStateManager:
 
         数据来源：
         1. opp_graveyard_seen: 直接区域变化检测到的卡牌（最可靠）
-        2. known_cards 中 source=deck 且已打出的卡牌
-        3. generated_cards 中的衍生牌
+        2. known_cards 中已打出的卡牌（排除仍在场上的随从/武器/地点）
 
         每条记录包含: card_id, name, cost, source("deck"/"generated"), rarity
         """
         graveyard = []
         seen_ids = set()
+
+        # 收集仍在场上的卡牌（不应出现在墓地）
+        on_board_ids = set()
+        for bm in state_dict.get("opp_board_minions", []):
+            cid = bm.get("card_id", "")
+            if cid:
+                on_board_ids.add(cid)
+        opp_weapon = state_dict.get("opp_weapon", "")
+        if opp_weapon:
+            on_board_ids.add(opp_weapon)
+        for loc in state_dict.get("opp_locations", []):
+            if loc:
+                on_board_ids.add(loc)
 
         # 来源1: opp_graveyard_seen（区域变化 PLAY/HAND/SECRET→GRAVEYARD）
         raw_graveyard = state_dict.get("graveyard", [])
@@ -679,12 +691,19 @@ class GameStateManager:
             graveyard.append(entry)
 
         # 来源2: known_cards（已被揭示且打出的卡牌）
+        # 排除仍在场上的随从/武器/地点 —— 它们还没进墓地
         generated_set = state_dict.get("generated_cards", set())
+        # 奥秘仍在场不算墓地
+        active_secrets = set(state_dict.get("opp_secrets", []))
         for kc in state_dict.get("known_cards", []):
             cid = kc.get("card_id", "")
             if not cid or cid in seen_ids:
                 continue
+            # 跳过仍在场上的卡牌
+            if cid in on_board_ids or cid in active_secrets:
+                continue
             source = kc.get("source", "unknown")
+            card_type = kc.get("card_type", "")
             is_generated = cid in generated_set or source == "generated"
             seen_ids.add(cid)
             entry = {
@@ -693,6 +712,7 @@ class GameStateManager:
                 "name": cid,
                 "cost": kc.get("cost", 0),
                 "rarity": kc.get("rarity", ""),
+                "card_type": card_type,
             }
             if self._card_db is not None:
                 card = self._card_db.get_card(cid)

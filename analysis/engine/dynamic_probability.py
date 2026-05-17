@@ -368,7 +368,7 @@ class DynamicProbabilityEngine:
 
         # 2. 基于贝叶斯卡组的超几何分布概率
         bayesian_probs = self._compute_bayesian_hand_probabilities(
-            hand_size, deck_remaining, transformed_from_ids
+            hand_size, deck_remaining, transformed_from_ids, opp_class
         )
         for cp in bayesian_probs:
             if cp.card_id not in revealed_set:
@@ -399,6 +399,7 @@ class DynamicProbabilityEngine:
     def _compute_bayesian_hand_probabilities(
         self, hand_size: int, deck_remaining: int,
         transformed_from_ids: set | None = None,
+        opp_class: str = "",
     ) -> List[CardProbability]:
         """基于贝叶斯后验 + 超几何分布计算每张卡牌的手牌概率。
 
@@ -442,6 +443,15 @@ class DynamicProbabilityEngine:
                 # 已弃牌的卡牌不再可能在手牌中
                 if card_id in self._discarded_cards:
                     continue
+
+                # 职业过滤：只显示对手职业或中立卡牌的概率
+                # 防止其他职业卡组卡牌泄漏到手牌预测中
+                if opp_class and self._card_db is not None:
+                    card = self._card_db.get_card(card_id)
+                    if card:
+                        card_class = card.get("cardClass", "").upper()
+                        if card_class not in ("NEUTRAL", opp_class.upper()):
+                            continue
 
                 # 被变形走的卡牌不再以原始形式存在于手牌/牌库
                 if card_id in transformed_from_ids:

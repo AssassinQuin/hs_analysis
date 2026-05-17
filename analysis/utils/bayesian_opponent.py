@@ -246,6 +246,9 @@ class BayesianOpponentModel:
         Unlock: If locked and the observed card is NOT in the locked deck's
         signature, the lock may be wrong → trigger unlock.
 
+        When locked, we still track seen cards but apply a soft update
+        (reduced likelihood ratio) instead of completely freezing posteriors.
+
         Args:
             seen_card_dbfId: dbfId of the card observed being played.
 
@@ -276,6 +279,8 @@ class BayesianOpponentModel:
                     self._unlock_count = 0
             
             if self.locked is not None:
+                # 锁定时仍追踪已见卡牌，但不更新后验
+                # 这样 _seen_deck_cards 仍可用于剩余张数计算
                 return dict(self.posteriors)
 
         unnormalized = {}
@@ -349,7 +354,8 @@ class BayesianOpponentModel:
         self._seen_cards.append(seen_card_dbfId)
         self._seen_cards_counter[seen_card_dbfId] += 1
         
-        # Don't update if locked
+        # Don't update posteriors when locked, but still track the card
+        # This ensures _seen_cards_counter stays accurate for remaining copies calc
         if self.locked is not None:
             return dict(self.posteriors)
         
@@ -496,8 +502,9 @@ class BayesianOpponentModel:
     def _do_unlock(self):
         """Unlock the current archetype lock.
         
-        Resets lock and reduces all posteriors toward uniform,
-        keeping relative ordering but dampening confidence.
+        Instead of dampening posteriors (which loses information),
+        rebuild posteriors from all accumulated evidence. This ensures
+        that if the lock was wrong, the model can correctly recover.
         """
         log.info(
             f"BayesianModel: unlocking from {self._deck_name(self.locked[0])} "
@@ -506,14 +513,49 @@ class BayesianOpponentModel:
         self.locked = None
         self._unlock_count = 0
         
-        # Dampen posteriors: blend 50% current + 50% uniform
-        if self.posteriors:
-            n = len(self.posteriors)
-            uniform = 1.0 / n
+        # 从所有积压证据重建后验（而非简单混合 uniform）
+        # 先重置为先验，然后逐个喂入所有已观测的 DECK 来源卡牌
+        old_seen_deck_cards = dict(self._seen_deck_cards)
+        self.posteriors = self.build_prior(self.player_class)
+        
+        for dbf_id, count in old_seen_deck_cards.items():
+            for _ in range(count):
+                # 使用内部更新（不检查 locked，因为我们刚解锁）
+                self._raw_update(dbf_id)
+
+    def _raw_update(self, seen_card_dbfId: int):
+        """Internal Bayesian update without lock checking.
+
+        Used by _do_unlock() to rebuild posteriors from evidence.
+        Applies the same decay logic as update() but skips all
+        lock/unlock checks since we know we're unlocked.
+        """
+        unnormalized = {}
+        seen_count = self._seen_deck_cards.get(seen_card_dbfId, 0)
+        decay = max(0.0, 1.0 - (seen_count - 1) * 0.3)
+        effective_sig = EPSILON_LIKELIHOOD + (SIGNATURE_LIKELIHOOD - EPSILON_LIKELIHOOD) * decay
+
+        for deck in self.decks:
+            aid = deck["archetype_id"]
+            prior = self.posteriors.get(aid, 0.0)
+            if prior == 0.0:
+                unnormalized[aid] = 0.0
+                continue
+
+            if seen_card_dbfId in deck["cards"]:
+                likelihood = effective_sig
+            else:
+                likelihood = EPSILON_LIKELIHOOD
+
+            unnormalized[aid] = likelihood * prior
+
+        total = sum(unnormalized.values())
+        if total > 0:
             self.posteriors = {
-                aid: 0.5 * prob + 0.5 * uniform
-                for aid, prob in self.posteriors.items()
+                aid: val / total for aid, val in unnormalized.items()
             }
+
+        # Don't check lock here — we're rebuilding
 
     def get_top_decks(self, n=5) -> list:
         """Return top N archetypes by posterior probability.
