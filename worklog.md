@@ -1,22 +1,35 @@
-# Work Log
-
 ---
 Task ID: 1
-Agent: main
-Task: 修复对手打出手牌后卡组概率不更新 + 新增卡组不同步 + 衍生牌误入卡组
+Agent: Main Agent
+Task: Fix 3 bugs in hs_analysis Hearthstone tracker plugin
 
 Work Log:
-- 分析用户反馈：对手出牌后卡组概率/卡组列表不更新，后续新增卡组也不同步
-- 诊断根因1：`_check_deck_codes_update` 只更新 DeckProvider，不重建贝叶斯模型
-- 诊断根因2：`_predict_multi_deck` 的 `played_count` 统计所有打出牌，衍生牌误减 remaining
-- 修复1：连接 DeckHotReloader 到 `_check_deck_codes_update`，热更新时重建 DB + 刷新贝叶斯模型
-- 修复2：`played_count` 只统计 `source=='deck'` 的牌，跳过 `source=='generated'`
-- 修复自检：发现 `generated_set` card_id 级排除会误伤同 card_id 牌库来源记录，改用 source 字段判断
-- 新增 7 个回归测试
-- 829 测试全通过
-- commit: c8308b8
+- Analyzed uploaded screenshot showing opponent 5 hand cards display issue
+- Cloned GitHub repo and performed comprehensive codebase exploration
+- Identified 3 root causes for the reported issues:
+  1. COIN_CARD_IDS missing current coin card IDs (BAR_COIN1, MUDAN_COIN1)
+  2. FIRST_PLAYER tag not bridged in CoreLogMonitor
+  3. TAG_CHANGE zone transitions not bridged in CoreLogMonitor
+  4. Coin detection only used card_id matching, not COIN_CARD GameTag
+  5. deck_codes.txt was stale (missing 2026 Beetle Year decks)
+
+Fixes Applied:
+1. Updated COIN_CARD_IDS in hs_enums.py to include BAR_COIN1 and MUDAN_COIN1
+2. Added is_coin parameter to on_full_entity() and on_show_entity() in global_tracker.py
+3. Added COIN_CARD GameTag detection in _bridge_new_entities() and _bridge_entities_to_global_tracker()
+4. Added coin in HAND zone → auto-detect opponent is going second (后手)
+5. Enhanced coin_used detection to also check coin_entity_id (not just card_id matching)
+6. Added _parse_tag_change_zone() method to CoreLogMonitor for real-time zone change bridging
+7. Added _parse_tag_change_first_player() method to CoreLogMonitor for FIRST_PLAYER detection
+8. Added entity zone tracking (_entity_zones dict) for zone change detection
+9. Fixed log.debug → logger.debug bug in _mark_shuffled_card_played()
+10. Updated deck_codes.txt with 10 new 2026 Beetle Year meta decks
+11. Reset new tracking state in _on_game_start()
 
 Stage Summary:
-- tracker/app.py: `_check_deck_codes_update` 重写，连接 DeckHotReloader
-- tracker/hand_predictor.py: `_predict_multi_deck` 衍生牌排除逻辑
-- tests/watcher/test_watcher.py: 新增 TestGeneratedCardDeckExclusion 测试类（7个测试）
+- All 11 existing unit tests pass
+- Coin detection now works with BAR_COIN1 and MUDAN_COIN1
+- FIRST_PLAYER tag is now bridged from Power.log to GlobalTracker
+- TAG_CHANGE ZONE events are now bridged (enables coin use detection, card return to hand, etc.)
+- deck_codes.txt updated with 10 new 2026 meta decks + existing decks preserved
+- Files modified: hs_enums.py, global_tracker.py, log_monitor.py, deck_codes.txt
