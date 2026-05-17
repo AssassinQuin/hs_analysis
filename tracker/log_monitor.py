@@ -128,7 +128,7 @@ _ZONE_MAP = {
 _CARD_TYPE_MAP = {
     "INVALID": 0, "GAME": 1, "PLAYER": 2, "HERO": 3,
     "MINION": 4, "SPELL": 5, "ENCHANTMENT": 6, "WEAPON": 7,
-    "ITEM": 8, "LOCATION": 6, "HERO_POWER": 10,
+    "ITEM": 8, "LOCATION": 39, "HERO_POWER": 10,
 }
 
 
@@ -308,6 +308,25 @@ class CoreLogMonitor:
                     self._notify_state_update()
                     self._last_notify_time = now
 
+    def _detect_my_idx(self, players) -> int:
+        """确定哪个玩家是本地玩家（我方）。
+
+        判定规则:
+          1. 名字包含 '#' 的是 BattleTag 用户（本地玩家）
+          2. 名字为 'UNKNOWN HUMAN PLAYER' 的是 AI
+          3. 都不含 '#' 时默认 players[0] 为我方
+
+        Returns:
+            我方在 players 列表中的索引 (0 或 1)
+        """
+        my_idx = 0
+        if len(players) >= 2:
+            n0 = getattr(players[0], 'name', '') or ''
+            n1 = getattr(players[1], 'name', '') or ''
+            if '#' in n1 and ('#' not in n0 or n0 == 'UNKNOWN HUMAN PLAYER'):
+                my_idx = 1
+        return my_idx
+
     def _on_game_start(self):
         """游戏开始事件处理。"""
         logger.info("游戏开始")
@@ -323,10 +342,13 @@ class CoreLogMonitor:
             try:
                 players = list(game.players)
                 if len(players) >= 2:
-                    our_controller = players[0].tags.get(GameTag.CONTROLLER, 1)
-                    opp_controller = players[1].tags.get(GameTag.CONTROLLER, 2)
-            except Exception:
-                pass
+                    my_idx = self._detect_my_idx(players)
+                    our_controller = players[my_idx].tags.get(GameTag.CONTROLLER, my_idx + 1)
+                    opp_controller = players[1 - my_idx].tags.get(GameTag.CONTROLLER, 2 - my_idx)
+                    logger.info("玩家检测: 我方=players[%d](controller=%d), 对手=players[%d](controller=%d)",
+                                my_idx, our_controller, 1 - my_idx, opp_controller)
+            except Exception as e:
+                logger.debug("检测玩家 controller 失败: %s", e)
 
         self.global_tracker.on_game_start()
         self.global_tracker.set_controllers(our_controller, opp_controller)
@@ -517,8 +539,9 @@ class CoreLogMonitor:
                 if exporter is not None:
                     players = list(exporter.players)
                     if len(players) >= 2:
-                        our_player = players[0]
-                        opp_player = players[1]
+                        my_idx = self._detect_my_idx(players)
+                        opp_player = players[1 - my_idx]
+                        our_player = players[my_idx]
                         opp_entities = list(opp_player.entities)
                         our_entities = list(our_player.entities)
 
@@ -605,11 +628,7 @@ class CoreLogMonitor:
                     if exporter is not None:
                         players = list(exporter.players)
                         if len(players) >= 2:
-                            my_idx = 0
-                            n0 = getattr(players[0], 'name', '') or ''
-                            n1 = getattr(players[1], 'name', '') or ''
-                            if '#' in n1 and ('#' not in n0 or n0 == 'UNKNOWN HUMAN PLAYER'):
-                                my_idx = 1
+                            my_idx = self._detect_my_idx(players)
                             opp_player = players[1 - my_idx]
                             opp_entities = list(opp_player.entities)
                             gt.count_opp_deck(opp_entities)
@@ -646,11 +665,24 @@ class CoreLogMonitor:
             logger.error("加载日志失败: %s", e)
 
         # 补充：使用 game_log_parser 提取完整玩家信息
+        old_our_ctrl = self.global_tracker.our_controller
+        old_opp_ctrl = self.global_tracker.opp_controller
         self._enrich_player_info(str(path))
 
-        # 重要: _enrich_player_info 可能修正了 controller，需要重新桥接
-        # 所有尚未桥接的新实体（此时 controller 已正确设置）
-        self._bridge_new_entities()
+        # 如果 controller 被修正了，需要重新桥接所有实体
+        new_our_ctrl = self.global_tracker.our_controller
+        new_opp_ctrl = self.global_tracker.opp_controller
+        if old_our_ctrl != new_our_ctrl or old_opp_ctrl != new_opp_ctrl:
+            logger.info("Controller 修正: our %d→%d, opp %d→%d — 重新桥接所有实体",
+                        old_our_ctrl, new_our_ctrl, old_opp_ctrl, new_opp_ctrl)
+            # 重置 GlobalTracker 状态并重新桥接
+            self.global_tracker.on_game_start()
+            self.global_tracker.set_controllers(new_our_ctrl, new_opp_ctrl)
+            self._bridged_entities.clear()
+            self._bridge_entities_to_global_tracker()
+            self._bridge_new_entities()
+        else:
+            self._bridge_new_entities()
 
         logger.info("日志加载完成")
 
@@ -666,20 +698,15 @@ class CoreLogMonitor:
                 return
 
             from hearthstone.enums import GameTag
-            p0, p1 = game.players[0], game.players[1]
+            players = list(game.players)
 
-            # 检测我方/对手
-            n0 = getattr(p0, 'name', '') or ''
-            n1 = getattr(p1, 'name', '') or ''
-            my_idx = 0
-            if '#' in n1 and ('#' not in n0 or n0 == 'UNKNOWN HUMAN PLAYER'):
-                my_idx = 1
+            # 使用统一的玩家检测逻辑
+            my_idx = self._detect_my_idx(players)
+            our_player = players[my_idx]
+            opp_player = players[1 - my_idx]
 
-            our_player = game.players[my_idx]
-            opp_player = game.players[1 - my_idx]
-
-            our_controller = our_player.tags.get(GameTag.CONTROLLER, 1)
-            opp_controller = opp_player.tags.get(GameTag.CONTROLLER, 2)
+            our_controller = our_player.tags.get(GameTag.CONTROLLER, my_idx + 1)
+            opp_controller = opp_player.tags.get(GameTag.CONTROLLER, 2 - my_idx)
             self.global_tracker.set_controllers(our_controller, opp_controller)
 
             # 从对手的实体中检测职业
@@ -700,7 +727,6 @@ class CoreLogMonitor:
 
             # 更新牌库/武器/地点计数
             opp_entities = list(opp_player.entities)
-            our_entities = list(our_player.entities)
             self.global_tracker.count_opp_deck(opp_entities)
             self.global_tracker.count_opp_hand(opp_entities)
             self.global_tracker.update_opp_weapon(opp_entities)

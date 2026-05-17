@@ -536,6 +536,11 @@ class OverlayWindow(QWidget):
         self._timer.timeout.connect(self._refresh)
         self._timer.setInterval(150)
 
+        # 缩放手柄
+        self._resizing = False
+        self._resize_start = None
+        self._resize_start_geo = None
+
     # ── 窗口初始化 ──
 
     def _init_window(self):
@@ -928,15 +933,31 @@ class OverlayWindow(QWidget):
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
-            self._drag_start = e.globalPos()
-            self._drag_off = self.pos() - e.globalPos()
+            # 检测是否点击右下角缩放区域
+            r = self.rect()
+            grip_zone = QRect(r.right() - _GRIP_SIZE, r.bottom() - _GRIP_SIZE, _GRIP_SIZE, _GRIP_SIZE)
+            if grip_zone.contains(e.pos()):
+                self._resizing = True
+                self._resize_start = e.globalPos()
+                self._resize_start_geo = self.geometry()
+            else:
+                self._drag_start = e.globalPos()
+                self._drag_off = self.pos() - e.globalPos()
 
     def mouseMoveEvent(self, e):
-        if self._drag_start is not None and e.buttons() & Qt.LeftButton:
+        if self._resizing and self._resize_start is not None:
+            delta = e.globalPos() - self._resize_start
+            new_w = max(_W_MIN, self._resize_start_geo.width() + delta.x())
+            new_h = max(_H_MIN, self._resize_start_geo.height() + delta.y())
+            self.setGeometry(self._resize_start_geo.x(), self._resize_start_geo.y(), new_w, new_h)
+        elif self._drag_start is not None and e.buttons() & Qt.LeftButton:
             self.move(e.globalPos() + self._drag_off)
 
     def mouseReleaseEvent(self, e):
         self._drag_start = None
+        self._resizing = False
+        self._resize_start = None
+        self._resize_start_geo = None
 
     def mouseDoubleClickEvent(self, e):
         """双击标题栏切换交互/穿透模式。"""
@@ -983,15 +1004,12 @@ class OverlayWindow(QWidget):
         super().resizeEvent(e)
         # 根据窗口大小动态调整行高
         h = self.height()
-        global _ROW_H
         if h < 400:
             new_h = 20
         elif h < 600:
             new_h = 22
         else:
             new_h = 24
-        if new_h != _ROW_H:
-            _ROW_H = new_h
-            for row_list in [self._hand_list, self._deck_list, self._grave_list]:
-                for row in row_list._rows:
-                    row.setFixedHeight(_ROW_H)
+        for row_list in [self._hand_list, self._deck_list, self._grave_list]:
+            for row in row_list._rows:
+                row.setFixedHeight(new_h)

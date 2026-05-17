@@ -279,10 +279,20 @@ class GlobalTracker:
         if card_type == self.CT_HERO and card_id:
             meta = self._card_metadata(card_id)
             hero_class = meta.get("cardClass", "")
-            if controller == self.our_controller and not self.state.player_hero_class:
-                self.state.player_hero_class = hero_class
-            elif controller == self.opp_controller and not self.state.opp_hero_class:
-                self.state.opp_hero_class = hero_class
+            if controller == self.our_controller:
+                if not self.state.player_hero_class:
+                    self.state.player_hero_class = hero_class
+            elif controller == self.opp_controller:
+                if not self.state.opp_hero_class:
+                    self.state.opp_hero_class = hero_class
+                elif self.state.opp_hero_class != hero_class and self._bayesian_initialized:
+                    # 对手职业被修正（如 controller 修正后），重新初始化贝叶斯模型
+                    logger.info("对手职业修正: %s → %s，重新初始化贝叶斯模型",
+                                self.state.opp_hero_class, hero_class)
+                    self.state.opp_hero_class = hero_class
+                    self._bayesian_model = None
+                    self._bayesian_initialized = False
+                    self._secret_model = None
 
     def on_zone_change(self, entity_id: int, controller: int,
                        old_zone: int, new_zone: int,
