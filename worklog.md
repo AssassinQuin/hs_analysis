@@ -54,3 +54,27 @@ Stage Summary:
 - 封装问题 4个：直接访问ec._entities私有属性(#1-4)
 - 功能缺失：我方卡牌追踪几乎为空(#35)
 - 审计报告已输出给用户
+
+---
+Task ID: hand-ui-refactor
+Agent: main
+Task: 修复对手手牌一直10张且全部已确认的问题，重构手牌UI
+
+Work Log:
+- 拉取最新远程代码（git pull，合并了13个文件的更新）
+- 确认 GameTracker.reset() 已在最新代码中修复（第434行）
+- 用VLM分析用户上传的UI参考图片
+- 定位根因：overlay_ui._refresh_hand 将所有 gs.opponent.hand 卡牌硬编码为 probability=1.0
+- hand_predictor.predict() 填充了 opp_hand_count 数量的未知占位符('?')
+- game_state._update_opponent 未过滤低概率预测
+
+修复内容：
+1. overlay_ui._refresh_hand：使用卡牌自身 probability、只显示 >50% 预测、最多5张、标题显示实际手牌数、添加概率条
+2. hand_predictor.predict：移除未知占位符填充、_apply_tutor_constraints 改为添加类型约束标记
+3. game_state._update_opponent：过滤 probability <= 0.05 的预测
+4. 窗口高度增大（620→720），最小高度增大（280→400），支持向下拉长
+
+Stage Summary:
+- 修改文件: tracker/overlay_ui.py, tracker/hand_predictor.py, tracker/game_state.py
+- 3 个文件语法检查通过
+- 已提交 898a229 并推送到 GitHub
