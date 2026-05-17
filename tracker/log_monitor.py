@@ -202,6 +202,14 @@ class CoreLogMonitor:
         # 增量实体桥接追踪
         self._bridged_entities: set = set()  # 已桥接到 GlobalTracker 的 entity_id 集合
 
+        # 玩家名称追踪 (PlayerID → name)
+        self._player_names: Dict[int, str] = {}  # player_id → player_name
+        self._re_player_name = re.compile(r"PlayerID=(\d+),\s*PlayerName=(.+)")
+
+        # 游戏开始信号是否已发送（且包含正确的职业信息）
+        self._game_started_emitted = False
+        self._game_started_with_classes = False  # 是否已发送含职业信息的 game_started
+
     @property
     def log_path(self) -> Optional[Path]:
         return self._log_path
@@ -292,6 +300,9 @@ class CoreLogMonitor:
             if not line.strip():
                 continue
 
+            # 解析 PlayerName 行（在 DebugPrintGame() 中）
+            self._parse_player_name_line(line)
+
             event = self.game_tracker.feed_line(line)
             if event is None:
                 continue
@@ -308,24 +319,155 @@ class CoreLogMonitor:
                     self._notify_state_update()
                     self._last_notify_time = now
 
+        # 处理完一批行后，检查是否需要更新玩家信息
+        self._try_enrich_player_info()
+
     def _detect_my_idx(self, players) -> int:
         """确定哪个玩家是本地玩家（我方）。
 
-        判定规则:
-          1. 名字包含 '#' 的是 BattleTag 用户（本地玩家）
-          2. 名字为 'UNKNOWN HUMAN PLAYER' 的是 AI
+        判定规则（按优先级）:
+          1. 从 _player_names 匹配：名字含 '#' 的 BattleTag 用户是本地玩家
+          2. 从 hslog player.name 匹配：名字含 '#' 的是本地玩家
           3. 都不含 '#' 时默认 players[0] 为我方
 
         Returns:
             我方在 players 列表中的索引 (0 或 1)
         """
         my_idx = 0
-        if len(players) >= 2:
-            n0 = getattr(players[0], 'name', '') or ''
-            n1 = getattr(players[1], 'name', '') or ''
-            if '#' in n1 and ('#' not in n0 or n0 == 'UNKNOWN HUMAN PLAYER'):
+        if len(players) < 2:
+            return my_idx
+
+        n0 = getattr(players[0], 'name', '') or ''
+        n1 = getattr(players[1], 'name', '') or ''
+
+        # 优先使用 _player_names（从 DebugPrintGame() 解析的玩家名）
+        if self._player_names:
+            pid0 = 0
+            pid1 = 0
+            try:
+                pid0 = players[0].tags.get(GameTag.PLAYER_ID, 0)
+                pid1 = players[1].tags.get(GameTag.PLAYER_ID, 0)
+            except (AttributeError, TypeError):
+                pass
+            name0 = self._player_names.get(pid0, '')
+            name1 = self._player_names.get(pid1, '')
+            if name1 and '#' in name1 and ('#' not in name0 or name0 == 'UNKNOWN HUMAN PLAYER'):
                 my_idx = 1
+                logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
+                             my_idx, name1, 1 - my_idx, name0)
+                return my_idx
+            if name0 and '#' in name0 and ('#' not in name1 or name1 == 'UNKNOWN HUMAN PLAYER'):
+                my_idx = 0
+                logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
+                             my_idx, name0, 1 - my_idx, name1)
+                return my_idx
+
+        # 回退: 使用 hslog player.name
+        if '#' in n1 and ('#' not in n0 or n0 == 'UNKNOWN HUMAN PLAYER'):
+            my_idx = 1
+
+        logger.debug("玩家检测(fallback): 我方=players[%d], n0=%r, n1=%r", my_idx, n0, n1)
         return my_idx
+
+    def _parse_player_name_line(self, line: str):
+        """从 DebugPrintGame() 行中解析 PlayerID 和 PlayerName。
+
+        格式: PlayerID=N, PlayerName=NAME
+        例如: PlayerID=2, PlayerName=湫然#51704
+        """
+        if 'PlayerName=' not in line:
+            return
+        m = self._re_player_name.search(line)
+        if m:
+            pid = int(m.group(1))
+            name = m.group(2).strip()
+            self._player_names[pid] = name
+            logger.debug("解析到玩家名: PlayerID=%d, Name=%s", pid, name)
+
+    def _try_enrich_player_info(self):
+        """尝试补充玩家信息（职业、controller）。在以下时机调用:
+        - _process_lines() 处理完一批行后
+        - _notify_state_update() 检测到职业仍未知时
+
+        只在信息不完整时执行，且每局游戏最多执行一次修正。
+        """
+        state = self.global_tracker.state
+        # 如果两个职业都已知且已通知过，无需补充
+        if state.player_hero_class and state.opp_hero_class and self._game_started_with_classes:
+            return
+
+        try:
+            game = self.game_tracker.export_entities()
+            if game is None or not hasattr(game, 'players') or len(game.players) < 2:
+                return
+
+            players = list(game.players)
+            my_idx = self._detect_my_idx(players)
+            our_player = players[my_idx]
+            opp_player = players[1 - my_idx]
+
+            our_controller = our_player.tags.get(GameTag.CONTROLLER, my_idx + 1)
+            opp_controller = opp_player.tags.get(GameTag.CONTROLLER, 2 - my_idx)
+
+            old_our = self.global_tracker.our_controller
+            old_opp = self.global_tracker.opp_controller
+
+            # 如果 controller 被修正，需要重新桥接所有实体
+            if old_our != our_controller or old_opp != opp_controller:
+                logger.info("Controller 修正: our %d→%d, opp %d→%d",
+                            old_our, our_controller, old_opp, opp_controller)
+                self.global_tracker.on_game_start()
+                self.global_tracker.set_controllers(our_controller, opp_controller)
+                self._bridged_entities.clear()
+                self._bridge_entities_to_global_tracker()
+                self._bridge_new_entities()
+                # 重新获取 state（on_game_start() 会创建新的 state 对象）
+                state = self.global_tracker.state
+            else:
+                self.global_tracker.set_controllers(our_controller, opp_controller)
+
+            # 从对手的实体中检测职业
+            from analysis.watcher.game_log_parser import _get_hero_card_id
+            opp_hero_id = _get_hero_card_id(opp_player)
+            if opp_hero_id:
+                meta = self.global_tracker._card_metadata(opp_hero_id)
+                opp_class = meta.get('cardClass', '')
+                if opp_class:
+                    self.global_tracker.state.opp_hero_class = opp_class
+
+            our_hero_id = _get_hero_card_id(our_player)
+            if our_hero_id:
+                meta = self.global_tracker._card_metadata(our_hero_id)
+                our_class = meta.get('cardClass', '')
+                if our_class:
+                    self.global_tracker.state.player_hero_class = our_class
+
+            # 更新牌库/武器/地点计数
+            opp_entities = list(opp_player.entities)
+            self.global_tracker.count_opp_deck(opp_entities)
+            self.global_tracker.count_opp_hand(opp_entities)
+            self.global_tracker.update_opp_weapon(opp_entities)
+            self.global_tracker.update_opp_locations(opp_entities)
+
+            # 如果职业信息有更新且 game_started 已发送，重新发送
+            if self._game_started_emitted and not self._game_started_with_classes:
+                from analysis.utils.hero_class import class_to_cn
+                info = {
+                    "player_class": class_to_cn(state.player_hero_class) if state.player_hero_class else "未知",
+                    "opp_class": class_to_cn(state.opp_hero_class) if state.opp_hero_class else "未知",
+                    "player_class_en": state.player_hero_class or "UNKNOWN",
+                    "opp_class_en": state.opp_hero_class or "UNKNOWN",
+                    "turn": self.game_tracker.get_current_turn(),
+                    "our_controller": our_controller,
+                    "opp_controller": opp_controller,
+                }
+                if state.player_hero_class and state.opp_hero_class:
+                    self._game_started_with_classes = True
+                if self.on_game_started:
+                    self.on_game_started(info)
+
+        except Exception as e:
+            logger.debug("补充玩家信息失败: %s", e)
 
     def _on_game_start(self):
         """游戏开始事件处理。"""
@@ -333,22 +475,26 @@ class CoreLogMonitor:
 
         # 重置增量桥接追踪
         self._bridged_entities.clear()
+        self._player_names.clear()
+        self._game_started_emitted = False
+        self._game_started_with_classes = False
 
         game = self.game_tracker.current_game
         our_controller = 1
         opp_controller = 2
 
-        if game is not None:
-            try:
-                players = list(game.players)
-                if len(players) >= 2:
-                    my_idx = self._detect_my_idx(players)
-                    our_controller = players[my_idx].tags.get(GameTag.CONTROLLER, my_idx + 1)
-                    opp_controller = players[1 - my_idx].tags.get(GameTag.CONTROLLER, 2 - my_idx)
-                    logger.info("玩家检测: 我方=players[%d](controller=%d), 对手=players[%d](controller=%d)",
-                                my_idx, our_controller, 1 - my_idx, opp_controller)
-            except Exception as e:
-                logger.debug("检测玩家 controller 失败: %s", e)
+        # 尝试从 hslog 包树获取玩家信息
+        try:
+            exporter = self.game_tracker.export_entities()
+            if exporter is not None and hasattr(exporter, 'players') and len(exporter.players) >= 2:
+                players = list(exporter.players)
+                my_idx = self._detect_my_idx(players)
+                our_controller = players[my_idx].tags.get(GameTag.CONTROLLER, my_idx + 1)
+                opp_controller = players[1 - my_idx].tags.get(GameTag.CONTROLLER, 2 - my_idx)
+                logger.info("玩家检测: 我方=players[%d](controller=%d), 对手=players[%d](controller=%d)",
+                            my_idx, our_controller, 1 - my_idx, opp_controller)
+        except Exception as e:
+            logger.debug("检测玩家 controller 失败: %s", e)
 
         self.global_tracker.on_game_start()
         self.global_tracker.set_controllers(our_controller, opp_controller)
@@ -358,6 +504,9 @@ class CoreLogMonitor:
 
         # 增量桥接：扫描 entity_cache 中尚未桥接的新实体
         self._bridge_new_entities()
+
+        # 尝试补充玩家信息（可能在 FULL_ENTITY 中已有英雄职业）
+        self._try_enrich_player_info()
 
         state = self.global_tracker.state
         from analysis.utils.hero_class import class_to_cn
@@ -372,6 +521,8 @@ class CoreLogMonitor:
             "opp_controller": opp_controller,
         }
 
+        self._game_started_emitted = True
+        self._game_started_with_classes = bool(state.player_hero_class and state.opp_hero_class)
         if self.on_game_started:
             self.on_game_started(info)
         self._notify_state_update()
@@ -397,6 +548,8 @@ class CoreLogMonitor:
         """通知 UI 更新游戏状态。"""
         # 先桥接新实体，确保 GlobalTracker 状态最新
         self._bridge_new_entities()
+        # 如果职业信息不完整，尝试补充
+        self._try_enrich_player_info()
         state = self.build_state_dict()
         if self.on_state_updated:
             self.on_state_updated(state)
@@ -616,7 +769,17 @@ class CoreLogMonitor:
                 # 检测区域变化（如果之前已桥接过且区域不同）
                 # 这处理 TAG_CHANGE 引起的区域迁移
 
-            self._bridged_entities.add(entity_id)
+                # 有 card_id 的实体标记为已桥接
+                self._bridged_entities.add(entity_id)
+            else:
+                # 无 card_id 的实体：只在 DECK 区域时标记已桥接
+                # （DECK 中的暗牌不会后续揭示 card_id）
+                # 非 DECK 区域的实体可能后续通过 SHOW_ENTITY 获得 card_id，
+                # 不标记为已桥接以便后续重新处理
+                if zone == ZONE_DECK:
+                    self._bridged_entities.add(entity_id)
+                # 其他区域（如 PLAY/HAND 中的空 card_id 实体）留待下次处理
+
             new_count += 1
 
         # 更新牌库/手牌计数（如果有新实体）
