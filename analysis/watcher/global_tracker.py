@@ -244,13 +244,13 @@ class GlobalTracker:
         self._entity_birth[entity_id] = birth
 
         # 追踪双方初始牌库大小
-        # 使用白名单：只计入实际可打出的卡牌类型，排除 GAME/PLAYER/ITEM 等非卡牌实体
-        _PLAYABLE_CARD_TYPES = (
+        # 使用白名单：只计入牌库中的卡牌类型
+        # 排除 HERO_POWER（英雄技能不在牌库中）和 ENCHANTMENT（附魔不算卡牌）
+        _DECK_CARD_TYPES = (
             self.CT_MINION, self.CT_SPELL, self.CT_WEAPON,
-            self.CT_HERO, self.CT_HERO_POWER, self.CT_LOCATION,
-            self.CT_ENCHANTMENT,
+            self.CT_HERO, self.CT_LOCATION,
         )
-        if zone == self.ZONE_DECK and card_type in _PLAYABLE_CARD_TYPES:
+        if zone == self.ZONE_DECK and card_type in _DECK_CARD_TYPES:
             if controller == self.opp_controller:
                 self.state.opp_initial_deck_size += 1
             elif controller == self.our_controller:
@@ -309,8 +309,9 @@ class GlobalTracker:
 
             # 将对手揭示到PLAY/SECRET的卡牌追踪为"已打出"
             # 对手的HAND→PLAY不可见，直接通过SHOW_ENTITY出现在最终区域
-            if zone == self.ZONE_PLAY and card_type not in (self.CT_ENCHANTMENT,):
+            if zone == self.ZONE_PLAY and card_type not in (self.CT_ENCHANTMENT, self.CT_HERO_POWER):
                 # 跳过附魔（type 6）— 它们是增益效果，不是打出的卡牌
+                # 跳过英雄技能（type 10）— 技能不是从手牌打出的卡牌
                 self._on_card_played(entity_id, controller, card_id, card_type)
                 # 检测洗入牌库的牌被打出 → 标记为 GENERATED
                 if card_id and card_id in self.state.opp_shuffled_into_deck:
@@ -334,8 +335,9 @@ class GlobalTracker:
                     self._secret_model.exclude(card_id)
 
             # 为对手揭示到PLAY/SECRET的卡牌喂入贝叶斯模型
+            # 英雄技能不是卡牌，不应影响贝叶斯推断
             # 检测衍生牌：来源为GENERATED 或 超过标准牌库张数限制
-            if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id:
+            if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id and card_type != self.CT_HERO_POWER:
                 card_source = self._classify_source(entity_id, card_id)
                 is_generated = (card_source == CardSource.GENERATED 
                                or self._is_over_copy_limit(card_id))
@@ -355,8 +357,9 @@ class GlobalTracker:
                         (card_id, 'generated' if is_generated else 'play'))
 
             # 为对手揭示到HAND的卡牌喂入贝叶斯模型 (Tracking/发现效果/Mulligan)
+            # 英雄技能不是卡牌，不应影响贝叶斯推断
             # 同样需要区分来源和张数限制
-            if zone == self.ZONE_HAND and card_id:
+            if zone == self.ZONE_HAND and card_id and card_type != self.CT_HERO_POWER:
                 card_source = self._classify_source(entity_id, card_id)
                 is_generated = (card_source == CardSource.GENERATED
                                or self._is_over_copy_limit(card_id))
@@ -438,6 +441,34 @@ class GlobalTracker:
         - HAND -> * (硬币): 硬币使用检测
         """
         is_opp = (controller == self.opp_controller)
+
+        # ── 实时手牌计数更新 ──
+        # 对手手牌数是 UI 的核心数据，不能依赖延迟的实体枚举刷新
+        # 每次 HAND 区域变化时立即增减计数
+        if is_opp:
+            if old_zone == self.ZONE_HAND and new_zone != self.ZONE_HAND:
+                self.state.opp_hand_count = max(0, self.state.opp_hand_count - 1)
+            elif old_zone != self.ZONE_HAND and new_zone == self.ZONE_HAND:
+                self.state.opp_hand_count += 1
+        # 我方手牌也实时追踪
+        elif controller == self.our_controller:
+            if old_zone == self.ZONE_HAND and new_zone != self.ZONE_HAND:
+                self.state.player_hand_count = max(0, self.state.player_hand_count - 1)
+            elif old_zone != self.ZONE_HAND and new_zone == self.ZONE_HAND:
+                self.state.player_hand_count += 1
+
+        # ── 实时牌库计数更新 ──
+        # 同理，牌库计数也需要实时追踪
+        if is_opp:
+            if old_zone == self.ZONE_DECK and new_zone != self.ZONE_DECK:
+                self.state.opp_deck_remaining = max(0, self.state.opp_deck_remaining - 1)
+            elif old_zone != self.ZONE_DECK and new_zone == self.ZONE_DECK:
+                self.state.opp_deck_remaining += 1
+        elif controller == self.our_controller:
+            if old_zone == self.ZONE_DECK and new_zone != self.ZONE_DECK:
+                self.state.player_deck_remaining = max(0, self.state.player_deck_remaining - 1)
+            elif old_zone != self.ZONE_DECK and new_zone == self.ZONE_DECK:
+                self.state.player_deck_remaining += 1
 
         # 区域变化时更新opp_hand_card_ids中的zone
         # 保留card_id但更新zone，以便get_opp_known_hand()能正确过滤
@@ -807,6 +838,7 @@ class GlobalTracker:
         """判断卡牌来源是牌库还是衍生。
 
         启发式规则：
+        0. 英雄技能 → 不属于任何来源，调用方应跳过
         1. 实体出生在DECK区域 → 牌库牌
         2. 实体出生在SETASIDE → 衍生牌
         3. 实体出生在HAND区域 → 区分初始手牌 vs 衍生到手牌
@@ -815,11 +847,22 @@ class GlobalTracker:
            - 硬币卡牌出生在HAND → 牌库牌（后手硬币是牌库的一部分）
         4. 查卡牌数据库：非可收集 = 衍生
         """
+        # 英雄技能不是从牌库或衍生来的卡牌，应被调用方完全跳过
+        birth = self._entity_birth.get(entity_id)
+        if birth and birth.card_type == self.CT_HERO_POWER:
+            return CardSource.GENERATED  # 标记为衍生以排除贝叶斯，但调用方应已跳过
+
+        # 查卡牌元数据（后续多处复用）
+        meta = self._card_metadata(card_id) if card_id else {}
+
+        # 兜底：card_id 查库判断是否是英雄技能
+        if meta and meta.get("type", "").upper() == "HERO_POWER":
+            return CardSource.GENERATED
+
         # 窥探确认：如果卡牌已被确认存在于对手牌库中，则必定是牌库牌
         if card_id and card_id in self.state.opp_known_deck_cards:
             return CardSource.DECK
 
-        birth = self._entity_birth.get(entity_id)
         if birth:
             if birth.initial_zone == self.ZONE_DECK:
                 return CardSource.DECK
@@ -836,16 +879,14 @@ class GlobalTracker:
 
         # 兜底：无出生记录时，不可收集=衍生，可收集=未知
         # 不再默认可收集卡牌=DECK，因为发现的牌也可以是可收集的
-        if card_id:
-            meta = self._card_metadata(card_id)
-            if meta:
-                if not meta.get("collectible", False):
-                    return CardSource.GENERATED
-                # 可收集但无出生记录，无法确定来源
-                # 如果对手已打出超过牌库限制，则判断为衍生
-                if self._is_over_copy_limit(card_id):
-                    return CardSource.GENERATED
-                return CardSource.UNKNOWN
+        if meta:
+            if not meta.get("collectible", False):
+                return CardSource.GENERATED
+            # 可收集但无出生记录，无法确定来源
+            # 如果对手已打出超过牌库限制，则判断为衍生
+            if self._is_over_copy_limit(card_id):
+                return CardSource.GENERATED
+            return CardSource.UNKNOWN
 
         return CardSource.UNKNOWN
 

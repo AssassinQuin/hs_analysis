@@ -440,18 +440,21 @@ class DynamicProbabilityEngine:
                 if card_id in self._generated_cards:
                     continue
 
+                # 英雄技能不算手牌
+                card_data = self._card_db.get_card(card_id) if self._card_db else None
+                if card_data and card_data.get("type", "").upper() == "HERO_POWER":
+                    continue
+
                 # 已弃牌的卡牌不再可能在手牌中
                 if card_id in self._discarded_cards:
                     continue
 
                 # 职业过滤：只显示对手职业或中立卡牌的概率
                 # 防止其他职业卡组卡牌泄漏到手牌预测中
-                if opp_class and self._card_db is not None:
-                    card = self._card_db.get_card(card_id)
-                    if card:
-                        card_class = card.get("cardClass", "").upper()
-                        if card_class not in ("NEUTRAL", opp_class.upper()):
-                            continue
+                if opp_class and card_data:
+                    card_class = card_data.get("cardClass", "").upper()
+                    if card_class not in ("NEUTRAL", opp_class.upper()):
+                        continue
 
                 # 被变形走的卡牌不再以原始形式存在于手牌/牌库
                 if card_id in transformed_from_ids:
@@ -480,10 +483,8 @@ class DynamicProbabilityEngine:
                 else:
                     card_weighted_probs[card_id] = weighted
 
-                if card_id not in card_info and self._card_db is not None:
-                    card = self._card_db.get_card(card_id)
-                    if card:
-                        card_info[card_id] = card
+                if card_id not in card_info and card_data:
+                    card_info[card_id] = card_data
 
         for card_id, prob in card_weighted_probs.items():
             info = card_info.get(card_id, {})

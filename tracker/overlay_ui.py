@@ -970,6 +970,9 @@ class OverlayWindow(QWidget):
                 continue
             if cid.startswith("_unk_"):
                 continue
+            # 跳过英雄技能 — 不是手牌
+            if h.get("card_type", "").upper() == "HERO_POWER":
+                continue
 
             # 已确认的上面已处理
             if src == "revealed" or prob >= 1.0:

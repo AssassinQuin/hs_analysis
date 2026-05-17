@@ -598,6 +598,9 @@ class GameStateManager:
             cid = kc.get("card_id", "")
             if not cid or cid in seen:
                 continue
+            # 跳过英雄技能 — 不是卡牌
+            if kc.get("card_type", "").upper() == "HERO_POWER":
+                continue
             seen.add(cid)
 
             source = kc.get("source", "unknown")
@@ -702,8 +705,11 @@ class GameStateManager:
             # 跳过仍在场上的卡牌
             if cid in on_board_ids or cid in active_secrets:
                 continue
-            source = kc.get("source", "unknown")
+            # 跳过英雄技能 — 不是卡牌，不属于墓地
             card_type = kc.get("card_type", "")
+            if card_type.upper() == "HERO_POWER":
+                continue
+            source = kc.get("source", "unknown")
             is_generated = cid in generated_set or source == "generated"
             seen_ids.add(cid)
             entry = {

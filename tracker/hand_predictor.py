@@ -123,6 +123,7 @@ class HandPredictor:
         self._multi_deck_cache_turn: int = -1
         self._multi_deck_cache_opp_hand: int = -1
         self._multi_deck_cache_opp_deck: int = -1
+        self._multi_deck_cache_known_count: int = -1
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -462,16 +463,19 @@ class HandPredictor:
             self._multi_deck_cache = []
             return []
 
-        # Compute cache key from turn + hand/deck counts
+        # Compute cache key from turn + hand/deck counts + known card count
+        # known_card_count ensures cache invalidates when opponent plays a card
         current_turn = state_dict.get("turn", 0)
         current_opp_hand = state_dict.get("opp_hand_count", -1)
         current_opp_deck = state_dict.get("opp_deck_count", -1)
+        known_card_count = len(state_dict.get("known_cards", []))
 
-        cache_key = (current_turn, current_opp_hand, current_opp_deck)
+        cache_key = (current_turn, current_opp_hand, current_opp_deck, known_card_count)
         cached_key = (
             self._multi_deck_cache_turn,
             self._multi_deck_cache_opp_hand,
             self._multi_deck_cache_opp_deck,
+            self._multi_deck_cache_known_count,
         )
         if cache_key == cached_key and self._multi_deck_cache:
             return self._multi_deck_cache
@@ -558,5 +562,6 @@ class HandPredictor:
         self._multi_deck_cache_turn = current_turn
         self._multi_deck_cache_opp_hand = current_opp_hand
         self._multi_deck_cache_opp_deck = current_opp_deck
+        self._multi_deck_cache_known_count = known_card_count
 
         return result
