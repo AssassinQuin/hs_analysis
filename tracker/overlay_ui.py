@@ -1,395 +1,705 @@
 # -*- coding: utf-8 -*-
 """overlay_ui.py — 炉石传说对手追踪叠加窗口 (PyQt5)
 
-半透明浮动侧栏叠加 UI，内容点击穿透到游戏。
+参考 Firestone(火石) UI 设计：
+  - 三段式布局：手牌区 → 卡组区(A/B/C切换) → 墓地区(卡组/衍生牌分区)
+  - 深色半透明背景，蓝色法力水晶，稀有度颜色编码
+  - 可折叠/展开的 section，可切换的卡组标签
+  - 动态可缩放窗口，拖拽移动
+  - 鼠标穿透/交互模式切换
 """
 
 from __future__ import annotations
 
 import logging
-import math
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QSizePolicy, QPushButton, QSizeGrip, QApplication, QToolTip,
+    QScrollArea, QSizePolicy, QPushButton, QApplication,
 )
-from PyQt5.QtCore import Qt, QPoint, QTimer, pyqtSignal, QRect
+from PyQt5.QtCore import Qt, QPoint, QTimer, pyqtSignal, QRect, QSize
 from PyQt5.QtGui import (
     QPainter, QColor, QFont, QPen, QBrush, QFontMetrics, QCursor,
+    QLinearGradient, QPainterPath,
 )
 
 from tracker.game_state import CompleteGameState
 
 logger = logging.getLogger(__name__)
 
-# ── 颜色 ────────────────────────────────────────────────────────
-_BG = QColor(16, 18, 26, 215)
-_BORDER = QColor(50, 55, 70, 150)
-_HDR_BG = QColor(26, 29, 40, 235)
-_SECT_BG = QColor(22, 25, 35, 160)
-_TEXT = QColor(220, 225, 235)
-_TEXT_DIM = QColor(130, 135, 155)
-_TEXT_ACC = QColor(80, 190, 255)
-_P_CONFIRM = QColor(60, 220, 100)
-_P_HIGH = QColor(80, 200, 120)
-_P_MID = QColor(255, 200, 60)
-_P_LOW = QColor(180, 80, 80)
-_COLORS = [QColor(180,180,180),QColor(200,200,200),QColor(170,210,255),
-           QColor(100,180,255),QColor(80,160,230),QColor(255,200,80),
-           QColor(255,170,50),QColor(255,120,50),QColor(255,80,80),
-           QColor(220,60,120),QColor(180,80,220)]
-_CLASS_ICO = {"WARRIOR":"⚔","SHAMAN":"⚡","ROGUE":"🗡","PALADIN":"🛡",
-              "HUNTER":"🏹","WARLOCK":"😈","MAGE":"🔮","PRIEST":"✝",
-              "DRUID":"🌿","DEMONHUNTER":"👁","DEATHKNIGHT":"💀","UNKNOWN":"?"}
-_ROW_H, _HAND_MAX = 18, 50
-_W, _H = 260, 480
-_MIN_W, _MIN_H = 180, 200
-_GRIP = 10
+# ═══════════════════════════════════════════════════════════════
+#  设计常量 (参考 Firestone 风格)
+# ═══════════════════════════════════════════════════════════════
 
-def _c(c): return f"rgba({c.red()},{c.green()},{c.blue()},{c.alphaF():.2f})"
-def _cost_c(c): return _COLORS[min(c, len(_COLORS)-1)]
-def _prob_c(p):
-    if p >= 1.0: return _P_CONFIRM
-    if p >= 0.7: return _P_HIGH
-    if p >= 0.5: return _P_MID
-    return _P_LOW
+# ── 窗口 ──
+_W_DEFAULT, _H_DEFAULT = 268, 620
+_W_MIN, _H_MIN = 180, 280
+_GRIP_SIZE = 12
+_HDR_H = 30
+_SEC_HDR_H = 26
+_ROW_H = 24
+_TAB_H = 24
 
-# ── 卡组行 ────────────────────────────────────────────────────
+# ── 颜色 ──
+_C_BG         = QColor(10, 12, 20, 220)     # 主背景
+_C_BG_SEC     = QColor(14, 16, 28, 180)     # section 背景
+_C_BORDER     = QColor(40, 48, 72, 160)     # 边框
+_C_HDR_BG     = QColor(18, 22, 38, 240)     # 标题栏背景
+_C_SEC_HDR    = QColor(22, 26, 44, 220)     # section header 背景
+_C_TEXT        = QColor(200, 210, 230)       # 主文字
+_C_TEXT_DIM    = QColor(100, 110, 135)       # 次要文字
+_C_TEXT_ACC    = QColor(70, 175, 255)        # 强调色 (蓝)
+_C_TEXT_WARN   = QColor(255, 190, 50)        # 警告色 (黄)
+_C_CONFIRM     = QColor(50, 210, 100)        # 已确认 (绿)
+_C_PROB_HIGH   = QColor(70, 200, 120)        # 高概率
+_C_PROB_MID    = QColor(240, 190, 50)        # 中概率
+_C_PROB_LOW    = QColor(200, 70, 70)         # 低概率
+_C_MANA_GEM    = QColor(40, 120, 230)        # 法力水晶蓝
+_C_MANA_BORDER = QColor(20, 70, 160)         # 水晶边框
+_C_ROW_EVEN    = QColor(18, 22, 38, 100)     # 偶数行
+_C_ROW_ODD     = QColor(24, 28, 48, 100)     # 奇数行
+_C_ROW_PLAYED  = QColor(35, 35, 45, 120)     # 已打出
+_C_ROW_HAND    = QColor(30, 55, 85, 120)     # 在手
+_C_TAB_ACT     = QColor(50, 130, 230, 200)   # 激活 tab
+_C_TAB_INACT   = QColor(35, 40, 58, 180)     # 非激活 tab
+_C_TAB_HOVER   = QColor(55, 65, 90, 200)     # hover tab
+_C_CHEVRON     = QColor(130, 140, 170)       # 折叠箭头
+_C_SRC_DECK    = QColor(180, 190, 210)       # 卡组来源牌标签
+_C_SRC_GEN     = QColor(255, 170, 60)        # 衍生牌标签
 
-class _DeckRow(QWidget):
-    def __init__(self, data: dict, parent=None):
+# ── 稀有度颜色 ──
+_RARITY_FREE       = QColor(160, 165, 180)
+_RARITY_COMMON     = QColor(210, 215, 225)
+_RARITY_RARE       = QColor(50, 120, 230)
+_RARITY_EPIC       = QColor(160, 60, 220)
+_RARITY_LEGENDARY  = QColor(255, 160, 20)
+
+# ── 职业图标 ──
+_CLASS_ICO = {
+    "WARRIOR": "W", "SHAMAN": "S", "ROGUE": "R", "PALADIN": "P",
+    "HUNTER": "H", "WARLOCK": "L", "MAGE": "M", "PRIEST": "Pr",
+    "DRUID": "D", "DEMONHUNTER": "DH", "DEATHKNIGHT": "DK", "UNKNOWN": "?",
+}
+_CLASS_CLR = {
+    "WARRIOR": QColor(200, 155, 75), "SHAMAN": QColor(0, 155, 225),
+    "ROGUE": QColor(255, 240, 105), "PALADIN": QColor(245, 200, 155),
+    "HUNTER": QColor(170, 210, 80), "WARLOCK": QColor(150, 100, 210),
+    "MAGE": QColor(105, 185, 255), "PRIEST": QColor(235, 235, 235),
+    "DRUID": QColor(255, 125, 10), "DEMONHUNTER": QColor(165, 45, 210),
+    "DEATHKNIGHT": QColor(195, 215, 230), "UNKNOWN": QColor(140, 145, 165),
+}
+
+
+def _rgba(c: QColor) -> str:
+    return f"rgba({c.red()},{c.green()},{c.blue()},{c.alphaF():.2f})"
+
+def _rarity_color(rarity: str) -> QColor:
+    r = (rarity or "").upper()
+    return {
+        "FREE": _RARITY_FREE, "COMMON": _RARITY_COMMON,
+        "RARE": _RARITY_RARE, "EPIC": _RARITY_EPIC,
+        "LEGENDARY": _RARITY_LEGENDARY,
+    }.get(r, _RARITY_COMMON)
+
+def _prob_color(p: float) -> QColor:
+    if p >= 1.0: return _C_CONFIRM
+    if p >= 0.6: return _C_PROB_HIGH
+    if p >= 0.3: return _C_PROB_MID
+    return _C_PROB_LOW
+
+
+# ═══════════════════════════════════════════════════════════════
+#  卡牌行组件 — 自绘法力水晶 + 卡名 + 数量/概率
+# ═══════════════════════════════════════════════════════════════
+
+class _CardRow(QWidget):
+    """单行卡牌：[法力水晶] [卡名(稀有度色)] [数量/概率]"""
+
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.d = data
         self.setFixedHeight(_ROW_H)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._d: dict = {}
+        self._mode = "deck"  # "deck" | "hand" | "grave"
 
-    def set_data(self, d):
-        self.d = d; self.update()
+    def set_data(self, d: dict, mode: str = "deck"):
+        self._d = d or {}
+        self._mode = mode
+        self.update()
+
+    def paintEvent(self, _):
+        d = self._d
+        if not d:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+
+        # 行背景
+        idx = d.get("_idx", 0)
+        played = d.get("played", False)
+        in_hand = d.get("in_hand", False)
+        if played:
+            bg = _C_ROW_PLAYED
+        elif in_hand:
+            bg = _C_ROW_HAND
+        elif idx % 2 == 0:
+            bg = _C_ROW_EVEN
+        else:
+            bg = _C_ROW_ODD
+        p.fillRect(0, 0, w, h, bg)
+
+        # 已打出：删除线标记
+        if played:
+            p.setPen(QPen(QColor(180, 60, 60, 100), 1))
+            p.drawLine(0, h // 2, w, h // 2)
+
+        x = 4
+        gem_sz = min(h - 6, 16)
+
+        # ── 法力水晶 ──
+        cost = d.get("cost", 0)
+        cx, cy = x + gem_sz // 2, h // 2
+        self._draw_mana_gem(p, cx, cy, gem_sz, cost)
+        x += gem_sz + 6
+
+        # ── 卡名 ──
+        rarity = d.get("rarity", "")
+        name_color = _rarity_color(rarity) if not played else _C_TEXT_DIM
+        name = d.get("name", "???")
+        max_name_w = w - x - 60
+        p.setPen(QPen(name_color))
+        ft = QFont("Microsoft YaHei", 8)
+        p.setFont(ft)
+        fm = QFontMetrics(ft)
+        dn = fm.elidedText(name, Qt.ElideRight, max_name_w)
+        p.drawText(QRect(x, 0, max_name_w, h), Qt.AlignVCenter | Qt.AlignLeft, dn)
+
+        # ── 右侧信息 ──
+        x_right = w - 4
+        p.setFont(QFont("Arial", 7))
+        mode = self._mode
+
+        if mode == "grave":
+            # 墓地：来源标记
+            source = d.get("source", "deck")
+            src_text = "衍生" if source == "generated" else "卡组"
+            src_color = _C_SRC_GEN if source == "generated" else _C_SRC_DECK
+            p.setPen(QPen(src_color))
+            tw = fm.horizontalAdvance(src_text) + 4
+            x_right -= tw
+            p.drawText(QRect(x_right, 0, tw, h), Qt.AlignVCenter | Qt.AlignRight, src_text)
+
+        elif mode == "hand":
+            # 手牌：概率
+            prob = d.get("probability", 1.0)
+            src = d.get("source", "revealed")
+            if src == "revealed" or prob >= 1.0:
+                prob_text = "确认"
+                prob_color = _C_CONFIRM
+            else:
+                prob_text = f"{prob:.0%}"
+                prob_color = _prob_color(prob)
+            p.setPen(QPen(prob_color))
+            tw = max(fm.horizontalAdvance(prob_text), 28) + 4
+            x_right -= tw
+            p.drawText(QRect(x_right, 0, tw, h), Qt.AlignVCenter | Qt.AlignRight, prob_text)
+
+        else:
+            # 卡组：数量 x N + 剩余
+            qty = d.get("quantity", 1)
+            rem = d.get("remaining", 0)
+            if rem > 0:
+                info = f"x{rem}"
+                info_color = _C_TEXT_ACC
+            else:
+                info = f"0/{qty}"
+                info_color = _C_TEXT_DIM
+            p.setPen(QPen(info_color))
+            tw = max(fm.horizontalAdvance(info), 20) + 4
+            x_right -= tw
+            p.drawText(QRect(x_right, 0, tw, h), Qt.AlignVCenter | Qt.AlignRight, info)
+
+            # 手牌概率条
+            hp = d.get("hand_probability", 0.0)
+            if hp > 0.02 and rem > 0:
+                bar_w = int(min(hp, 1.0) * 30)
+                bar_h = 3
+                bar_x = x_right - bar_w - 6
+                bar_y = h - 4
+                p.setPen(Qt.NoPen)
+                p.setBrush(QBrush(_prob_color(hp)))
+                p.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 1, 1)
+
+        p.end()
+
+    @staticmethod
+    def _draw_mana_gem(p: QPainter, cx: int, cy: int, sz: int, cost: int):
+        """绘制菱形法力水晶。"""
+        r = sz // 2
+        path = QPainterPath()
+        path.moveTo(cx, cy - r)      # 顶
+        path.lineTo(cx + r, cy)      # 右
+        path.lineTo(cx, cy + r)      # 底
+        path.lineTo(cx - r, cy)      # 左
+        path.closeSubpath()
+
+        # 渐变填充
+        grad = QLinearGradient(cx, cy - r, cx, cy + r)
+        grad.setColorAt(0, QColor(80, 180, 255))
+        grad.setColorAt(1, QColor(20, 80, 200))
+        p.setPen(QPen(_C_MANA_BORDER, 1))
+        p.setBrush(QBrush(grad))
+        p.drawPath(path)
+
+        # 费用数字
+        p.setPen(QPen(QColor(255, 255, 255)))
+        ft = QFont("Arial", max(sz // 3, 7), QFont.Bold)
+        p.setFont(ft)
+        text = str(cost) if cost <= 10 else "10+"
+        p.drawText(QRect(cx - r, cy - r, sz, sz), Qt.AlignCenter, text)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Section Header — 可折叠 section 标题栏
+# ═══════════════════════════════════════════════════════════════
+
+class _SectionHeader(QWidget):
+    """可点击折叠的 section 标题：[名称] (数量) [▼/▶]"""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, title: str = "", parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(_SEC_HDR_H)
+        self._title = title
+        self._count = 0
+        self._expanded = True
+        self._hover = False
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+
+    def set_title(self, title: str, count: int = 0):
+        self._title = title
+        self._count = count
+        self.update()
+
+    def set_expanded(self, on: bool):
+        self._expanded = on
+        self.update()
+
+    @property
+    def expanded(self) -> bool:
+        return self._expanded
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self._expanded = not self._expanded
+            self.clicked.emit()
+            self.update()
+
+    def enterEvent(self, e):
+        self._hover = True; self.update()
+
+    def leaveEvent(self, e):
+        self._hover = False; self.update()
 
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        d = self.d
-        cost, name = d.get("cost",0), d.get("name","???")
-        qty, rem = d.get("quantity",1), d.get("remaining",1)
-        played, hand = d.get("played",False), d.get("in_hand",False)
-        hp = d.get("hand_probability",0.0)
         w, h = self.width(), self.height()
 
-        bg = QColor(40,60,85,100) if hand else QColor(25,25,30,60) if played else QColor(22,25,35,40)
+        # 背景
+        bg = QColor(28, 34, 56, 220) if self._hover else _C_SEC_HDR
         p.fillRect(0, 0, w, h, bg)
 
-        # 费用
-        cc = _cost_c(cost)
-        p.setPen(Qt.NoPen); p.setBrush(QBrush(cc))
-        p.drawEllipse(4, h//2-6, 12, 12)
-        p.setPen(QPen(QColor(0,0,0)))
-        ft = QFont("Arial", 6, QFont.Bold); p.setFont(ft)
-        p.drawText(QRect(4, h//2-6, 12, 12), Qt.AlignCenter, str(cost) if cost<=10 else "10+")
+        # 底部分割线
+        p.setPen(QPen(_C_BORDER, 0.5))
+        p.drawLine(0, h - 1, w, h - 1)
 
-        # 名称
-        p.setPen(QPen(_TEXT if not played else _TEXT_DIM))
-        ft = QFont("Microsoft YaHei", 8); p.setFont(ft)
-        nw = w - 76
-        dn = name[:14]+"…" if len(name)>14 else name
-        p.drawText(QRect(19, 0, nw, h), Qt.AlignVCenter|Qt.AlignLeft, dn)
-        if played:
-            fm = QFontMetrics(ft); tw = fm.horizontalAdvance(dn)
-            p.setPen(QPen(QColor(200,80,80,160),1))
-            p.drawLine(19, h//2, 19+min(tw,nw), h//2)
+        # 标题
+        p.setPen(QPen(_C_TEXT))
+        p.setFont(QFont("Microsoft YaHei", 9, QFont.Bold))
+        p.drawText(QRect(8, 0, w - 60, h), Qt.AlignVCenter | Qt.AlignLeft, self._title)
 
-        # 统计
-        pc = qty - rem
-        info = f"{pc}/{qty}"
-        if rem > 0: info += f" 剩{rem}"
-        if hp > 0.05: info += f" {hp:.0%}"
-        p.setPen(QPen(_TEXT_ACC if rem>0 else _TEXT_DIM))
-        ft = QFont("Arial", 7); p.setFont(ft)
-        p.drawText(QRect(w-72, 0, 68, h), Qt.AlignVCenter|Qt.AlignRight, info)
+        # 数量
+        if self._count > 0:
+            p.setPen(QPen(_C_TEXT_ACC))
+            p.setFont(QFont("Arial", 8))
+            cnt_text = f"({self._count})"
+            p.drawText(QRect(w - 50, 0, 30, h), Qt.AlignVCenter | Qt.AlignRight, cnt_text)
+
+        # 箭头
+        arrow = "▼" if self._expanded else "▶"
+        p.setPen(QPen(_C_CHEVRON))
+        p.setFont(QFont("Arial", 9))
+        p.drawText(QRect(w - 20, 0, 16, h), Qt.AlignVCenter | Qt.AlignRight, arrow)
+
         p.end()
 
-# ── 主窗口 ──────────────────────────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════════
+#  卡组切换标签栏 — A/B/C
+# ═══════════════════════════════════════════════════════════════
+
+class _DeckTabBar(QWidget):
+    """卡组切换标签栏：[A: 卡组1 60%] [B: 卡组2 30%] [C: 卡组3 10%]"""
+
+    tab_changed = pyqtSignal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(_TAB_H)
+        self._tabs: List[dict] = []
+        self._active = 0
+        self._hover_idx = -1
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+
+    def set_tabs(self, tabs: List[dict]):
+        """tabs: [{name, probability}]"""
+        self._tabs = tabs
+        self._hover_idx = -1
+        if self._active >= len(tabs):
+            self._active = 0
+        self.update()
+
+    def set_active(self, idx: int):
+        self._active = idx
+        self.update()
+
+    @property
+    def active_index(self) -> int:
+        return self._active
+
+    def _hit_test(self, pos) -> int:
+        n = len(self._tabs)
+        if n == 0 or self.width() == 0:
+            return -1
+        tab_w = self.width() / n
+        idx = int(pos.x() / tab_w)
+        return idx if 0 <= idx < n else -1
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            idx = self._hit_test(e.pos())
+            if idx >= 0:
+                self._active = idx
+                self.tab_changed.emit(idx)
+                self.update()
+
+    def mouseMoveEvent(self, e):
+        idx = self._hit_test(e.pos())
+        if idx != self._hover_idx:
+            self._hover_idx = idx
+            self.update()
+
+    def leaveEvent(self, e):
+        self._hover_idx = -1
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        n = len(self._tabs)
+
+        if n == 0:
+            p.end()
+            return
+
+        tab_w = w / n
+        labels = "ABCDEFGH"
+        for i, tab in enumerate(self._tabs):
+            x = int(i * tab_w)
+            tw = int(tab_w)
+
+            # 背景
+            if i == self._active:
+                bg = _C_TAB_ACT
+            elif i == self._hover_idx:
+                bg = _C_TAB_HOVER
+            else:
+                bg = _C_TAB_INACT
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(bg))
+            p.drawRoundedRect(x + 1, 1, tw - 2, h - 2, 3, 3)
+
+            # 文字
+            name = tab.get("name", "?")
+            prob = tab.get("probability", 0)
+            label = labels[i] if i < len(labels) else str(i)
+            text = f"{label}: {name}"
+            if prob > 0:
+                text += f" {prob:.0%}"
+
+            color = QColor(255, 255, 255) if i == self._active else _C_TEXT_DIM
+            p.setPen(QPen(color))
+            p.setFont(QFont("Microsoft YaHei", 7, QFont.Bold if i == self._active else QFont.Normal))
+            p.drawText(QRect(x + 4, 0, tw - 8, h), Qt.AlignVCenter | Qt.AlignLeft, text)
+
+        p.end()
+
+
+# ═══════════════════════════════════════════════════════════════
+#  卡牌列表区域 — 可滚动卡牌行列表
+# ═══════════════════════════════════════════════════════════════
+
+class _CardListArea(QScrollArea):
+    """可滚动的卡牌行列表区域。"""
+
+    def __init__(self, max_rows: int = 35, parent=None):
+        super().__init__(parent)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+
+        self._container = QWidget()
+        self._container.setStyleSheet("background:transparent;")
+        self._container.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._layout = QVBoxLayout(self._container)
+        self._layout.setContentsMargins(2, 1, 2, 1)
+        self._layout.setSpacing(0)
+        self._layout.addStretch()
+
+        self._rows: List[_CardRow] = []
+        for _ in range(max_rows):
+            r = _CardRow(self._container)
+            r.hide()
+            self._layout.insertWidget(self._layout.count() - 1, r)
+            self._rows.append(r)
+
+        self.setWidget(self._container)
+
+    def update_cards(self, cards: List[dict], mode: str = "deck"):
+        """更新卡牌列表。cards 中每个 dict 传入 _CardRow.set_data()"""
+        for i, row in enumerate(self._rows):
+            if i < len(cards):
+                d = dict(cards[i])
+                d["_idx"] = i
+                row.set_data(d, mode)
+                row.show()
+            else:
+                row.hide()
+
+        # 隐藏多余行
+        for i in range(len(cards), len(self._rows)):
+            self._rows[i].hide()
+
+
+# ═══════════════════════════════════════════════════════════════
+#  主窗口 — 叠加层
+# ═══════════════════════════════════════════════════════════════
 
 class OverlayWindow(QWidget):
-    toggle_mode = pyqtSignal()
+    """炉石传说对手追踪叠加窗口。
+
+    三段式布局 (从上到下)：
+      1. 手牌区 — 对手手牌概率最高预测
+      2. 卡组区 — 最可能卡组 A/B/C 切换 + 卡牌列表
+      3. 墓地区 — 区分卡组来源牌和衍生牌
+
+    特性：
+      - 拖拽移动 (标题栏)
+      - 右下角缩放手柄
+      - 鼠标穿透/交互模式切换 (双击标题栏)
+      - 折叠/展开各 section
+      - 动态自适应窗口大小
+    """
+
     close_requested = pyqtSignal()
     settings_requested = pyqtSignal()
 
     def __init__(self, image_manager=None, parent=None):
         super().__init__(parent)
         self._gs = CompleteGameState()
-        self._compact = False
         self._interactive = True
         self._drag_start = None
-        self._drag_off = QPoint(0,0)
-        self._hand_rows: list[QLabel] = []
-        self._deck_rows: list[_DeckRow] = []
+        self._drag_off = QPoint(0, 0)
+
+        # 卡组选择
+        self._sel_arch = 0
+
+        # section 折叠状态
+        self._hand_expanded = True
+        self._deck_expanded = True
+        self._grave_expanded = True
+
+        # 增量刷新哈希
         self._hand_hash = ""
         self._deck_hash = ""
-        self._sel_arch = 0
-        self._deck_remaining = 0
-        self._deck_total = 30
+        self._grave_hash = ""
 
         self._init_window()
         self._build_ui()
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh)
-        self._timer.setInterval(100)
+        self._timer.setInterval(150)
+
+    # ── 窗口初始化 ──
 
     def _init_window(self):
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
+        )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
-        self.setMinimumSize(_MIN_W, _MIN_H)
+        self.setMinimumSize(_W_MIN, _H_MIN)
         screen = QApplication.primaryScreen()
         if screen:
             g = screen.availableGeometry()
-            self.setGeometry(g.right()-_W-16, g.top()+80, _W, min(_H, g.height()-160))
+            self.setGeometry(
+                g.right() - _W_DEFAULT - 16,
+                g.top() + 80,
+                _W_DEFAULT,
+                min(_H_DEFAULT, g.height() - 160),
+            )
+
+    # ── UI 构建 ──
 
     def _build_ui(self):
         self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(3,3,3,3)
-        self._root.setSpacing(2)
+        self._root.setContentsMargins(2, 2, 2, 2)
+        self._root.setSpacing(0)
 
-        # 标题栏
+        # 1. 标题栏
         self._root.addWidget(self._build_header())
-        # 手牌区（竖排）
-        self._hand_sec = self._build_hand_section()
-        self._root.addWidget(self._hand_sec)
-        # 卡组区
-        self._deck_sec = self._build_deck_section()
-        self._root.addWidget(self._deck_sec, stretch=1)
-        # 底部
-        self._footer = self._build_footer()
-        self._root.addWidget(self._footer)
-        # 缩放手柄
-        g = QSizeGrip(self)
-        g.setFixedSize(_GRIP, _GRIP)
-        g.setStyleSheet("QSizeGrip{background:transparent;}")
 
-    # ── 标题栏 ──────────────────────────────────────────────
+        # 2. 手牌区
+        self._hand_header = _SectionHeader("对手手牌")
+        self._hand_header.clicked.connect(self._toggle_hand)
+        self._root.addWidget(self._hand_header)
+        self._hand_list = _CardListArea(max_rows=10)
+        self._root.addWidget(self._hand_list, stretch=2)
+
+        # 3. 卡组区
+        self._deck_header = _SectionHeader("对手卡组")
+        self._deck_header.clicked.connect(self._toggle_deck)
+        self._root.addWidget(self._deck_header)
+        self._deck_tab = _DeckTabBar()
+        self._deck_tab.tab_changed.connect(self._switch_arch)
+        self._root.addWidget(self._deck_tab)
+        self._deck_list = _CardListArea(max_rows=35)
+        self._root.addWidget(self._deck_list, stretch=4)
+
+        # 4. 墓地区
+        self._grave_header = _SectionHeader("墓地")
+        self._grave_header.clicked.connect(self._toggle_grave)
+        self._root.addWidget(self._grave_header)
+        self._grave_list = _CardListArea(max_rows=35)
+        self._root.addWidget(self._grave_list, stretch=3)
+
+    # ── 标题栏 ──
 
     def _build_header(self) -> QWidget:
         w = QWidget()
-        w.setFixedHeight(28)
+        w.setFixedHeight(_HDR_H)
         w.setCursor(QCursor(Qt.SizeAllCursor))
-        lay = QHBoxLayout(w); lay.setContentsMargins(6,0,4,0); lay.setSpacing(4)
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(6, 0, 4, 0)
+        lay.setSpacing(4)
 
+        # 职业图标
         self._ico = QLabel("?")
-        self._ico.setFixedSize(18,18); self._ico.setAlignment(Qt.AlignCenter)
-        self._ico.setFont(QFont("Arial",12)); self._ico.setStyleSheet("color:white;")
+        self._ico.setFixedSize(20, 20)
+        self._ico.setAlignment(Qt.AlignCenter)
+        self._ico.setFont(QFont("Arial", 9, QFont.Bold))
+        self._ico.setStyleSheet("color:white;")
         self._ico.setAttribute(Qt.WA_TransparentForMouseEvents)
         lay.addWidget(self._ico)
 
+        # 职业名
         self._class_lbl = QLabel("等待对战")
-        self._class_lbl.setStyleSheet(f"color:{_c(_TEXT)};font-weight:bold;")
-        self._class_lbl.setFont(QFont("Microsoft YaHei",9,QFont.Bold))
+        self._class_lbl.setStyleSheet(f"color:{_rgba(_C_TEXT)};font-weight:bold;")
+        self._class_lbl.setFont(QFont("Microsoft YaHei", 9, QFont.Bold))
         self._class_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
         lay.addWidget(self._class_lbl)
 
         lay.addStretch()
 
+        # 回合
         self._turn_lbl = QLabel("")
-        self._turn_lbl.setStyleSheet(f"color:{_c(_TEXT_ACC)};")
-        self._turn_lbl.setFont(QFont("Microsoft YaHei",8))
+        self._turn_lbl.setStyleSheet(f"color:{_rgba(_C_TEXT_ACC)};")
+        self._turn_lbl.setFont(QFont("Arial", 8))
         self._turn_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
         lay.addWidget(self._turn_lbl)
 
-        self._hand_lbl = QLabel("")
-        self._hand_lbl.setStyleSheet(f"color:{_c(_TEXT_DIM)};")
-        self._hand_lbl.setFont(QFont("Microsoft YaHei",8))
-        self._hand_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
-        lay.addWidget(self._hand_lbl)
+        # 手牌计数
+        self._hand_count_lbl = QLabel("")
+        self._hand_count_lbl.setStyleSheet(f"color:{_rgba(_C_TEXT_DIM)};")
+        self._hand_count_lbl.setFont(QFont("Arial", 8))
+        self._hand_count_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
+        lay.addWidget(self._hand_count_lbl)
 
-        self._close_btn = QPushButton("×")
-        self._close_btn.setFixedSize(18,18)
-        self._close_btn.setStyleSheet("QPushButton{background:transparent;color:#a55;border:none;font-size:14px;}"
-                                       "QPushButton:hover{color:#f77;background:rgba(200,50,50,80);border-radius:2px;}")
+        # 交互切换按钮 (📌/👁)
+        self._interact_btn = QPushButton("📌")
+        self._interact_btn.setFixedSize(20, 20)
+        self._interact_btn.setStyleSheet(
+            "QPushButton{background:transparent;border:none;font-size:11px;}"
+            "QPushButton:hover{background:rgba(80,90,120,100);border-radius:3px;}"
+        )
+        self._interact_btn.clicked.connect(self._toggle_interactive)
+        self._interact_btn.setToolTip("切换交互/穿透模式")
+        lay.addWidget(self._interact_btn)
+
+        # 关闭按钮
+        self._close_btn = QPushButton("x")
+        self._close_btn.setFixedSize(20, 20)
+        self._close_btn.setStyleSheet(
+            "QPushButton{background:transparent;color:#955;border:none;font-size:12px;font-weight:bold;}"
+            "QPushButton:hover{color:#f77;background:rgba(200,50,50,80);border-radius:3px;}"
+        )
         self._close_btn.clicked.connect(self.hide)
         lay.addWidget(self._close_btn)
 
         return w
 
-    # ── 手牌区（竖排） ─────────────────────────────────────────
+    # ── 折叠/展开 ──
 
-    def _build_hand_section(self) -> QWidget:
-        w = QWidget()
-        w.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._hand_vlay = QVBoxLayout(w)
-        self._hand_vlay.setContentsMargins(4,2,4,2)
-        self._hand_vlay.setSpacing(1)
+    def _toggle_hand(self):
+        self._hand_expanded = not self._hand_expanded
+        self._hand_header.set_expanded(self._hand_expanded)
+        self._hand_list.setVisible(self._hand_expanded)
 
-        # 预创建50行手牌标签
-        for _ in range(_HAND_MAX):
-            lbl = QLabel()
-            lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
-            lbl.setStyleSheet(f"color:{_c(_TEXT)};font-size:9px;")
-            lbl.setFont(QFont("Microsoft YaHei",8))
-            lbl.setWordWrap(False)
-            lbl.hide()
-            self._hand_vlay.addWidget(lbl)
-            self._hand_rows.append(lbl)
+    def _toggle_deck(self):
+        self._deck_expanded = not self._deck_expanded
+        self._deck_header.set_expanded(self._deck_expanded)
+        self._deck_tab.setVisible(self._deck_expanded)
+        self._deck_list.setVisible(self._deck_expanded)
 
-        # 占位符
-        self._hand_empty = QLabel("等待游戏开始…")
-        self._hand_empty.setStyleSheet(f"color:{_c(_TEXT_DIM)};font-size:9px;")
-        self._hand_empty.setFont(QFont("Microsoft YaHei",8))
-        self._hand_empty.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._hand_vlay.addWidget(self._hand_empty)
+    def _toggle_grave(self):
+        self._grave_expanded = not self._grave_expanded
+        self._grave_header.set_expanded(self._grave_expanded)
+        self._grave_list.setVisible(self._grave_expanded)
 
-        return w
+    # ── 卡组切换 ──
 
-    def _upd_hand(self, gs):
-        preds = gs.hand_predictions
-        dp = gs.deck_predictions
-
-        # 分类
-        rev = [h for h in preds if h.get("source")=="revealed"]
-        uk = [h for h in preds if h.get("source")=="unknown"]
-        prob = [h for h in preds if h not in rev and h not in uk]
-        prob.sort(key=lambda h: -h.get("probability",0))
-
-        # 组合：已揭示 → 高概率(>30%) → 其他
-        shown = []
-        for h in rev:
-            nm = h.get("name", h.get("card_id","?"))
-            c = h.get("cost",0)
-            shown.append(f"[{c}]{nm}")
-
-        for h in prob:
-            if h.get("probability",0) >= 0.3:
-                nm = h.get("name", h.get("card_id","?"))
-                c = h.get("cost",0)
-                p = h.get("probability",0)
-                shown.append(f"[{c}]{nm} {p:.0%}")
-
-        # 卡组概率
-        dr = [d for d in dp if d.get("remaining",0)>0 and not d.get("in_hand") and not d.get("played")]
-        dr.sort(key=lambda d: -d.get("hand_probability",0))
-        deck_cards = []
-        for d in dr[:_HAND_MAX]:
-            nm = d.get("name", d.get("card_id","?"))
-            c = d.get("cost",0)
-            hp = d.get("hand_probability",0)
-            deck_cards.append(f"[{c}]{nm} {hp:.0%}")
-
-        # 超出50张不显示
-        total = len(shown) + len(deck_cards)
-        if total > _HAND_MAX:
-            return
-
-        # 填充行
-        all_items = shown + ["───"] + deck_cards if deck_cards else shown
-        n = len(all_items)
-        for i, lbl in enumerate(self._hand_rows):
-            if i < n:
-                lbl.setText(all_items[i])
-                lbl.show()
-            else:
-                lbl.hide()
-
-        # 手牌计数标签
-        self._hand_lbl.setText(f"手{gs.opponent.hand_count} {len(rev)}确 {len(prob)}?")
-
-    # ── 卡组区 ──────────────────────────────────────────────
-
-    def _build_deck_section(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w); lay.setContentsMargins(0,0,0,0); lay.setSpacing(0)
-
-        # 标题行
-        self._deck_title = QWidget()
-        self._deck_title.setFixedHeight(20)
-        self._deck_title.setAttribute(Qt.WA_TransparentForMouseEvents)
-        lay.addWidget(self._deck_title)
-
-        # 卡组切换标签
-        self._arch_row = QWidget()
-        self._arch_row.setFixedHeight(0)
-        self._arch_row.hide()
-        self._arch_lay = QHBoxLayout(self._arch_row)
-        self._arch_lay.setContentsMargins(4,0,4,0); self._arch_lay.setSpacing(2)
-        self._arch_btns: list[QPushButton] = []
-        lay.addWidget(self._arch_row)
-
-        # 滚动区
-        sc = QScrollArea()
-        sc.setWidgetResizable(True)
-        sc.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        sc.setAttribute(Qt.WA_TransparentForMouseEvents)
-        sc.setStyleSheet("QScrollArea{background:transparent;border:none;}")
-        dc = QWidget(); dc.setAttribute(Qt.WA_TransparentForMouseEvents); dc.setStyleSheet("background:transparent;")
-        self._dl = QVBoxLayout(dc); self._dl.setContentsMargins(0,0,0,0); self._dl.setSpacing(1); self._dl.addStretch()
-        for _ in range(30):
-            r = _DeckRow({"cost":0,"name":"","remaining":0,"quantity":0})
-            r.hide(); self._dl.insertWidget(self._dl.count()-1, r); self._deck_rows.append(r)
-        sc.setWidget(dc)
-        lay.addWidget(sc, stretch=1)
-
-        self._deck_exp = False
-        return w
-
-    def _tog_exp(self):
-        self._deck_exp = not self._deck_exp
-        sc = self.findChild(QScrollArea)
-        if sc: sc.setFixedHeight(400 if self._deck_exp else 60)
-
-    def _sw_arch(self, idx):
+    def _switch_arch(self, idx: int):
         self._sel_arch = idx
-        self._upd_deck(self._gs)
+        self._deck_hash = ""  # 强制刷新
 
-    def _upd_deck(self, gs):
-        for r in self._deck_rows: r.hide()
-        for b in self._arch_btns: b.deleteLater()
-        self._arch_btns.clear()
-        self._arch_row.hide()
-        self._arch_row.setFixedHeight(0)
+    # ── 交互模式 ──
 
-        multi = gs.multi_deck_predictions
-        if multi:
-            if self._sel_arch >= len(multi):
-                self._sel_arch = 0
-            self._arch_row.show()
-            self._arch_row.setFixedHeight(22)
-            for i, md in enumerate(multi):
-                nm = md.get("archetype_name","未知"); pb = md.get("probability",0)
-                b = QPushButton(f"{nm} {pb:.0%}")
-                b.setFixedHeight(18); b.setFont(QFont("Microsoft YaHei",7))
-                act = i==self._sel_arch
-                b.setStyleSheet("QPushButton{background:"+("rgba(80,160,255,140)" if act else "rgba(60,65,80,150)")+
-                                ";color:"+("white" if act else "#aaa")+";border:none;border-radius:3px;padding:0 4px;}"
-                                "QPushButton:hover{background:rgba(80,90,120,180);color:white;}")
-                b.clicked.connect(lambda _,x=i: self._sw_arch(x))
-                self._arch_lay.addWidget(b); self._arch_btns.append(b)
+    def _toggle_interactive(self):
+        self._interactive = not self._interactive
+        self.set_interactive(self._interactive)
+        self._interact_btn.setText("📌" if self._interactive else "👁")
+        self._interact_btn.setToolTip(
+            "交互模式" if self._interactive else "穿透模式(点击穿过到游戏)"
+        )
 
-            sel = multi[self._sel_arch]
-            cards = sel.get("cards",[])
-            self._deck_remaining = sum(c.get("remaining",0) for c in cards)
-            self._deck_total = gs.opponent.initial_deck_size or 30
-            for j, c in enumerate(cards):
-                if j < len(self._deck_rows):
-                    self._deck_rows[j].set_data(c); self._deck_rows[j].show()
+    def set_interactive(self, on: bool):
+        self._interactive = on
+        # 内容区域：穿透/交互
+        for w in [self._hand_list, self._deck_list, self._grave_list]:
+            w.setAttribute(Qt.WA_TransparentForMouseEvents, not on)
+        # header/tab 始终可交互
+        for w in [self._hand_header, self._deck_header, self._grave_header, self._deck_tab]:
+            w.setAttribute(Qt.WA_TransparentForMouseEvents, False)
 
-    # ── 底部 ──────────────────────────────────────────────
+    # ── 公开接口 ──
 
-    def _build_footer(self) -> QWidget:
-        w = QWidget()
-        w.setFixedHeight(22)
-        w.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._arch_lbl = QLabel("")
-        self._arch_lbl.setStyleSheet(f"color:{_c(_TEXT_ACC)};")
-        self._arch_lbl.setFont(QFont("Microsoft YaHei",8))
-        self._arch_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
-        lay = QHBoxLayout(w); lay.setContentsMargins(8,2,8,2)
-        lay.addWidget(self._arch_lbl)
-        return w
-
-    # ── 公开接口 ───────────────────────────────────────────────
-
-    def update_state(self, gs):
+    def update_state(self, gs: CompleteGameState):
         self._gs = gs
 
     def start_refresh(self):
@@ -398,110 +708,290 @@ class OverlayWindow(QWidget):
     def stop_refresh(self):
         self._timer.stop()
 
-    # ── 核心刷新 ─────────────────────────────────────────────
+    # ── 核心刷新 ──
 
     def _refresh(self):
         gs = self._gs
 
-        # 标题栏
-        cls_en = getattr(gs.opponent.hero,'hero_class_en',gs.opponent.hero.hero_class)
-        self._ico.setText(_CLASS_ICO.get(cls_en,"?"))
-        self._class_lbl.setText(gs.opponent.hero.hero_class_cn or "未知")
+        # ── 标题栏 ──
+        cls_en = getattr(gs.opponent.hero, 'hero_class_en', gs.opponent.hero.hero_class)
+        cls_cn = gs.opponent.hero.hero_class_cn or "未知"
+        self._ico.setText(_CLASS_ICO.get(cls_en, "?"))
+        cls_color = _CLASS_CLR.get(cls_en, _C_TEXT)
+        self._ico.setStyleSheet(f"color:{_rgba(cls_color)};font-weight:bold;font-size:11px;")
+        self._class_lbl.setText(cls_cn)
+        self._class_lbl.setStyleSheet(f"color:{_rgba(cls_color)};font-weight:bold;")
         self._turn_lbl.setText(f"T{gs.turn}" if gs.turn else "")
 
-        # 手牌
-        self._upd_hand(gs)
+        # 手牌/牌库计数
+        opp = gs.opponent
+        self._hand_count_lbl.setText(f"手{opp.hand_count} 库{opp.deck_remaining}")
 
-        # 卡组
-        self._upd_deck(gs)
+        # ── 手牌区 ──
+        self._refresh_hand(gs)
 
-        # 底部
-        if gs.archetype_name:
-            conf = f" ({gs.archetype_confidence:.0%})" if gs.archetype_confidence>0 else ""
-            self._arch_lbl.setText(f"{gs.archetype_name}{conf}")
+        # ── 卡组区 ──
+        self._refresh_deck(gs)
+
+        # ── 墓地区 ──
+        self._refresh_grave(gs)
+
+    def _refresh_hand(self, gs: CompleteGameState):
+        """刷新手牌区 — 显示概率最高预测。"""
+        preds = gs.hand_predictions
+        if not preds and not gs.opponent.hand:
+            self._hand_header.set_title("对手手牌", 0)
+            self._hand_list.update_cards([], "hand")
+            return
+
+        # 合并已知手牌 + 预测
+        hand_cards = []
+
+        # 已知手牌 (source=revealed)
+        for h in gs.opponent.hand:
+            hand_cards.append({
+                "card_id": h.card_id,
+                "name": h.name,
+                "cost": h.cost,
+                "probability": 1.0,
+                "source": "revealed",
+                "rarity": "",
+            })
+
+        # 预测手牌
+        for h in preds:
+            src = h.get("source", "predicted")
+            if src == "revealed":
+                continue  # 已在上面
+            prob = h.get("probability", 0)
+            if prob < 0.05:
+                continue  # 跳过低概率
+            hand_cards.append({
+                "card_id": h.get("card_id", ""),
+                "name": h.get("name", "?"),
+                "cost": h.get("cost", 0),
+                "probability": prob,
+                "source": src,
+                "rarity": h.get("rarity", ""),
+            })
+
+        # 按概率降序
+        hand_cards.sort(key=lambda c: -c.get("probability", 0))
+
+        # 增量刷新
+        h_hash = str([(c["card_id"], c["probability"]) for c in hand_cards])
+        if h_hash == self._hand_hash:
+            return
+        self._hand_hash = h_hash
+
+        self._hand_header.set_title("对手手牌", len(hand_cards))
+        self._hand_list.update_cards(hand_cards, "hand")
+
+    def _refresh_deck(self, gs: CompleteGameState):
+        """刷新卡组区 — 显示最可能卡组 A/B/C 切换。"""
+        multi = gs.multi_deck_predictions
+
+        # 更新标签栏
+        tabs = []
+        for md in multi:
+            tabs.append({
+                "name": md.get("archetype_name", "未知"),
+                "probability": md.get("probability", 0),
+            })
+        self._deck_tab.set_tabs(tabs)
+        self._deck_tab.set_active(self._sel_arch)
+        self._deck_tab.setVisible(len(tabs) > 1)
+
+        # 获取当前选中卡组
+        if multi:
+            if self._sel_arch >= len(multi):
+                self._sel_arch = 0
+            sel = multi[self._sel_arch]
+            cards = sel.get("cards", [])
+
+            # 只显示剩余 > 0 或未打出的
+            deck_cards = []
+            for c in cards:
+                rem = c.get("remaining", 0)
+                if rem > 0:
+                    deck_cards.append({
+                        "card_id": c.get("card_id", ""),
+                        "name": c.get("name", "?"),
+                        "cost": c.get("cost", 0),
+                        "quantity": c.get("quantity", 1),
+                        "remaining": rem,
+                        "source": c.get("source", "deck"),
+                        "in_hand": c.get("in_hand", False),
+                        "played": c.get("played", False),
+                        "hand_probability": c.get("hand_probability", 0),
+                        "rarity": c.get("rarity", ""),
+                    })
+
+            # 按费用排序
+            deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
+
+            # 增量刷新
+            d_hash = str(self._sel_arch) + str([(c["card_id"], c["remaining"]) for c in deck_cards[:10]])
+            if d_hash != self._deck_hash:
+                self._deck_hash = d_hash
+                self._deck_header.set_title(
+                    sel.get("archetype_name", "对手卡组"),
+                    sum(c["remaining"] for c in deck_cards),
+                )
+                self._deck_list.update_cards(deck_cards, "deck")
         else:
-            self._arch_lbl.setText("推断中…")
+            # 无多卡组预测时使用 deck_predictions
+            dp = gs.deck_predictions
+            deck_cards = []
+            for c in dp:
+                if c.get("remaining", 0) > 0:
+                    deck_cards.append({
+                        "card_id": c.get("card_id", ""),
+                        "name": c.get("name", "?"),
+                        "cost": c.get("cost", 0),
+                        "quantity": c.get("quantity", 1),
+                        "remaining": c.get("remaining", 0),
+                        "source": c.get("source", "deck"),
+                        "in_hand": c.get("in_hand", False),
+                        "played": c.get("played", False),
+                        "hand_probability": c.get("hand_probability", 0),
+                        "rarity": c.get("rarity", ""),
+                    })
+            deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
 
-        # 重绘
-        self._deck_title.update()
-        self._footer.update()
+            d_hash = str([(c["card_id"], c["remaining"]) for c in deck_cards[:10]])
+            if d_hash != self._deck_hash:
+                self._deck_hash = d_hash
+                self._deck_header.set_title("对手卡组", len(deck_cards))
+                self._deck_list.update_cards(deck_cards, "deck")
 
-    # ── 鼠标事件 ───────────────────────────────────────────
+            self._deck_tab.setVisible(False)
 
-    def set_interactive(self, on: bool):
-        self._interactive = on
-        for w in [self._hand_sec, self._deck_sec, self._footer]:
-            w.setAttribute(Qt.WA_TransparentForMouseEvents, not on)
+    def _refresh_grave(self, gs: CompleteGameState):
+        """刷新墓地区 — 区分卡组来源牌和衍生牌。"""
+        # 从对手已打出的卡牌获取墓地信息
+        # 已打出的牌：played=True 或 remaining=0
+        grave_cards = []
+
+        # 优先从 multi_deck_predictions 获取
+        multi = gs.multi_deck_predictions
+        if multi:
+            if self._sel_arch >= len(multi):
+                sel = multi[0]
+            else:
+                sel = multi[self._sel_arch]
+            for c in sel.get("cards", []):
+                if c.get("played", False) or c.get("remaining", 0) <= 0:
+                    grave_cards.append({
+                        "card_id": c.get("card_id", ""),
+                        "name": c.get("name", "?"),
+                        "cost": c.get("cost", 0),
+                        "quantity": c.get("quantity", 1),
+                        "remaining": c.get("remaining", 0),
+                        "source": c.get("source", "deck"),
+                        "played": True,
+                        "rarity": c.get("rarity", ""),
+                    })
+        else:
+            # 从 deck_predictions 获取
+            for c in gs.deck_predictions:
+                if c.get("played", False) or c.get("remaining", 0) <= 0:
+                    grave_cards.append({
+                        "card_id": c.get("card_id", ""),
+                        "name": c.get("name", "?"),
+                        "cost": c.get("cost", 0),
+                        "quantity": c.get("quantity", 1),
+                        "remaining": c.get("remaining", 0),
+                        "source": c.get("source", "deck"),
+                        "played": True,
+                        "rarity": c.get("rarity", ""),
+                    })
+
+        # 排序：卡组来源优先，然后按费用
+        grave_cards.sort(key=lambda c: (0 if c.get("source") == "deck" else 1, c["cost"], c["name"]))
+
+        # 增量刷新
+        g_hash = str([(c["card_id"], c.get("source", "")) for c in grave_cards[:10]])
+        if g_hash == self._grave_hash:
+            return
+        self._grave_hash = g_hash
+
+        deck_count = sum(1 for c in grave_cards if c.get("source") == "deck")
+        gen_count = len(grave_cards) - deck_count
+        title = f"墓地"
+        if gen_count > 0:
+            title = f"墓地 (卡组{deck_count} / 衍生{gen_count})"
+        self._grave_header.set_title(title, len(grave_cards))
+        self._grave_list.update_cards(grave_cards, "grave")
+
+    # ── 鼠标事件 ──
 
     def mousePressEvent(self, e):
-        if not self._interactive: return
-        if e.button()==Qt.LeftButton:
+        if e.button() == Qt.LeftButton:
             self._drag_start = e.globalPos()
             self._drag_off = self.pos() - e.globalPos()
 
     def mouseMoveEvent(self, e):
-        if self._drag_start is not None and e.buttons()&Qt.LeftButton:
-            self.move(e.globalPos()+self._drag_off)
+        if self._drag_start is not None and e.buttons() & Qt.LeftButton:
+            self.move(e.globalPos() + self._drag_off)
 
     def mouseReleaseEvent(self, e):
         self._drag_start = None
+
+    def mouseDoubleClickEvent(self, e):
+        """双击标题栏切换交互/穿透模式。"""
+        if e.pos().y() < _HDR_H:
+            self._toggle_interactive()
+
+    # ── 绘制 ──
 
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = self.rect()
-        p.setPen(Qt.NoPen); p.setBrush(QBrush(_BG))
-        p.drawRoundedRect(r, 5,5)
-        p.setPen(QPen(_BORDER, 0.8)); p.setBrush(Qt.NoBrush)
-        p.drawRoundedRect(r.adjusted(0,0,-1,-1), 5,5)
 
-        # 缩放手柄
-        gx, gy = r.right()-4, r.bottom()-4
-        p.setPen(Qt.NoPen); p.setBrush(QBrush(QColor(100,105,125,120)))
-        for dy in range(0,7,3):
-            for dx in range(0,7,3):
-                if dx+dy>=3: p.drawEllipse(gx-dx-2, gy-dy-2,2,2)
+        # 主背景 — 圆角
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(_C_BG))
+        p.drawRoundedRect(r, 6, 6)
+
+        # 边框
+        p.setPen(QPen(_C_BORDER, 1))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(r.adjusted(0, 0, -1, -1), 6, 6)
+
+        # 标题栏背景
+        hdr_rect = QRect(2, 2, r.width() - 4, _HDR_H)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(_C_HDR_BG))
+        p.drawRoundedRect(hdr_rect, 4, 4)
+
+        # 缩放手柄 (右下角三行点)
+        gx, gy = r.right() - 4, r.bottom() - 4
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(QColor(90, 100, 130, 140)))
+        for dy in range(0, 9, 3):
+            for dx in range(0, 9, 3):
+                if dx + dy >= 3:
+                    p.drawEllipse(gx - dx - 2, gy - dy - 2, 2, 2)
+
         p.end()
 
-    # ── 标题自绘 ───────────────────────────────────────────
+    # ── 缩放支持 ──
 
-    def _deck_title_paintEvent(self, _):
-        p = QPainter(self._deck_title)
-        p.setRenderHint(QPainter.Antialiasing)
-        w, h = self._deck_title.width(), self._deck_title.height()
-        p.setPen(QPen(_TEXT_DIM))
-        p.setFont(QFont("Microsoft YaHei",8))
-        p.drawText(QRect(4,0,60,h), Qt.AlignVCenter, "对手卡组")
-        rem = getattr(self,'_deck_remaining',0)
-        total = getattr(self,'_deck_total',30)
-        p.setPen(QPen(_TEXT_ACC if rem>0 else _TEXT_DIM))
-        p.setFont(QFont("Arial",8))
-        p.drawText(QRect(w-50,0,46,h), Qt.AlignVCenter|Qt.AlignRight, f"{rem}/{total}")
-        p.end()
-
-    def _footer_paintEvent(self, _):
-        p = QPainter(self._footer)
-        p.setRenderHint(QPainter.Antialiasing)
-        w, h = self._footer.width(), self._footer.height()
-        p.setPen(Qt.NoPen); p.setBrush(QBrush(QColor(26,29,40,230)))
-        p.drawRoundedRect(0,0,w,h,3,3)
-        p.end()
-
-    # ── 事件过滤 ───────────────────────────────────────────
-
-    def eventFilter(self, obj, event):
-        t = event.type()
-        if t == event.Paint:
-            if obj is self._deck_title: self._deck_title_paintEvent(event)
-            elif obj is self._footer: self._footer_paintEvent(event)
-        return super().eventFilter(obj, event)
-
-    def showEvent(self, e):
-        super().showEvent(e)
-        self._deck_title.installEventFilter(self)
-        self._footer.installEventFilter(self)
-
-    def hideEvent(self, e):
-        self._deck_title.removeEventFilter(self)
-        self._footer.removeEventFilter(self)
-        super().hideEvent(e)
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        # 根据窗口大小动态调整行高
+        h = self.height()
+        global _ROW_H
+        if h < 400:
+            new_h = 20
+        elif h < 600:
+            new_h = 22
+        else:
+            new_h = 24
+        if new_h != _ROW_H:
+            _ROW_H = new_h
+            for row_list in [self._hand_list, self._deck_list, self._grave_list]:
+                for row in row_list._rows:
+                    row.setFixedHeight(_ROW_H)
