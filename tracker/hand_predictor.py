@@ -485,10 +485,18 @@ class HandPredictor:
         played_count = Counter()
         for kc in known_cards:
             cid = kc.get("card_id", "")
-            if cid:
-                # 统计所有打出的卡牌（不仅 source=="deck"），
-                # 因为发现/衍生获得的卡组内牌打出后也应减少 remaining
-                played_count[cid] += 1
+            if not cid:
+                continue
+            source = kc.get("source", "unknown")
+            # 衍生牌（Discover/创造/洗入）不计入已打出数量，
+            # 因为衍生牌不是从原始牌库打出的，牌库中的原牌仍在。
+            # 只统计来源为牌库（source=="deck"）的卡牌。
+            # 注意：不使用 generated_set 做 card_id 级排除，
+            # 因为同一张牌可能同时存在于牌库和被衍生（例如牌库有火球术+发现火球术），
+            # card_id 级排除会误伤牌库来源的打出记录。
+            if source == "generated":
+                continue
+            played_count[cid] += 1
         known_hand_ids = {cid for _, cid in state_dict.get("known_hand", [])}
         opp_hand_count = state_dict.get("opp_hand_count", 0)
         opp_deck_count = state_dict.get("opp_deck_count", 0)

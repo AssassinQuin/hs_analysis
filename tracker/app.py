@@ -435,7 +435,13 @@ class TrackerApp:
         logger.warning("HSReplay 更新失败: %s", error_msg)
 
     def _check_deck_codes_update(self):
-        """定时检查 deck_codes.txt 是否更新，如有变化则重新加载卡组数据。"""
+        """定时检查 deck_codes.txt 是否更新，如有变化则重新加载卡组数据。
+
+        检测到文件变化后执行两步操作：
+        1. 重建 HSReplay archetype DB（从 deck_codes.txt 解析卡组数据）
+        2. 热刷新贝叶斯模型（重新加载卡组 + 保留已观察证据 + 重算后验）
+        同时更新 DeckProvider 供 game_tracker 使用。
+        """
         try:
             deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
             if not deck_codes_path.exists():
@@ -445,16 +451,52 @@ class TrackerApp:
                 return
             self._deck_codes_mtime = mtime
             logger.info("检测到 deck_codes.txt 更新，重新加载卡组数据")
-            # 重新加载 DeckProvider 的卡组数据
+
+            # 1. 重建 archetype DB + 热刷新贝叶斯模型
+            if hasattr(self, '_log_monitor'):
+                gt = self._log_monitor.global_tracker
+                bayesian_model = gt._bayesian_model
+                if bayesian_model is not None:
+                    # 使用 DeckHotReloader 重建 DB 并刷新贝叶斯模型
+                    from analysis.watcher.deck_hot_reloader import DeckHotReloader
+                    reloader = DeckHotReloader(str(deck_codes_path))
+                    reloader._last_mtime = 0  # 强制重载
+                    reloaded = reloader.check_and_reload(bayesian_model)
+                    if reloaded:
+                        logger.info("贝叶斯模型热刷新完成")
+                    else:
+                        logger.warning("贝叶斯模型热刷新失败，尝试完全重建")
+                        # 回退：完全重建贝叶斯模型
+                        gt._bayesian_initialized = False
+                        gt._bayesian_model = None
+                        if gt._init_bayesian_model(gt.state.opp_hero_class):
+                            logger.info("贝叶斯模型完全重建成功")
+                else:
+                    # 贝叶斯模型尚未初始化（游戏未开始或职业未知），
+                    # 仅重建 DB，下次初始化时会自动加载新数据
+                    from analysis.data.fetch_hsreplay import (
+                        init_db, build_archetype_db_from_deck_codes,
+                    )
+                    from analysis.config import HSREPLAY_CACHE_DB
+                    import os
+                    if os.path.exists(str(HSREPLAY_CACHE_DB)):
+                        conn = init_db(str(HSREPLAY_CACHE_DB))
+                        try:
+                            stored = build_archetype_db_from_deck_codes(conn)
+                            logger.info("archetype DB 重建完成（%d 个卡组）", stored)
+                        finally:
+                            conn.close()
+
+            # 2. 更新 DeckProvider 供 game_tracker 使用
             from analysis.data.deck_provider import DeckProvider
             if hasattr(self, '_log_monitor') and hasattr(self._log_monitor, 'game_tracker'):
-                old_provider = self._log_monitor.game_tracker.deck_provider
                 new_provider = DeckProvider()
                 new_provider.load_deck_codes(str(deck_codes_path))
                 self._log_monitor.game_tracker.deck_provider = new_provider
-                logger.info("卡组数据热更新完成，加载 %d 个卡组", len(new_provider._decks) if hasattr(new_provider, '_decks') else 0)
+                logger.info("卡组数据热更新完成，加载 %d 个卡组",
+                            len(new_provider._decks) if hasattr(new_provider, '_decks') else 0)
         except Exception as e:
-            logger.debug("卡组热更新检查失败: %s", e)
+            logger.warning("卡组热更新检查失败: %s", e)
 
     # ── 清理 ───────────────────────────────────────────────────
 
