@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════
 
 # ── 窗口 ──
-_W_DEFAULT, _H_DEFAULT = 268, 620
-_W_MIN, _H_MIN = 180, 280
+_W_DEFAULT, _H_DEFAULT = 268, 720
+_W_MIN, _H_MIN = 180, 400
 _GRIP_SIZE = 12
 _HDR_H = 30
 _SEC_HDR_H = 26
@@ -165,8 +165,15 @@ class _CardRow(QWidget):
 
         # ── 卡名 ──
         rarity = d.get("rarity", "")
-        name_color = _rarity_color(rarity) if not played else _C_TEXT_DIM
         name = d.get("name", "???")
+        src = d.get("source", "")
+        if played:
+            name_color = _C_TEXT_DIM
+        elif name.startswith("[") or src == "inferred":
+            # 类型约束标记或推断卡牌使用强调色
+            name_color = _C_TEXT_ACC
+        else:
+            name_color = _rarity_color(rarity)
         max_name_w = w - x - 60
         p.setPen(QPen(name_color))
         ft = QFont("Microsoft YaHei", 8)
@@ -196,7 +203,7 @@ class _CardRow(QWidget):
             p.drawText(QRect(x_right, 0, tw, h), Qt.AlignVCenter | Qt.AlignRight, src_text)
 
         elif mode == "hand":
-            # 手牌：概率
+            # 手牌：概率条 + 概率文本
             prob = d.get("probability", 1.0)
             src = d.get("source", "revealed")
             if src == "revealed" or prob >= 1.0:
@@ -205,8 +212,28 @@ class _CardRow(QWidget):
             else:
                 prob_text = f"{prob:.0%}"
                 prob_color = _prob_color(prob)
+
+            # 概率条（在右侧概率文本左侧）
+            if prob > 0 and prob < 1.0:
+                bar_max_w = 40
+                bar_h = 4
+                bar_w = int(min(prob, 1.0) * bar_max_w)
+                bar_x = x_right - bar_max_w - 4
+                bar_y = (h - bar_h) // 2
+                # 背景条
+                p.setPen(Qt.NoPen)
+                p.setBrush(QBrush(QColor(40, 45, 65, 150)))
+                p.drawRoundedRect(bar_x, bar_y, bar_max_w, bar_h, 2, 2)
+                # 前景条
+                p.setBrush(QBrush(prob_color))
+                p.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 2, 2)
+                x_right = bar_x - 4
+
+            # 概率文本
             p.setPen(QPen(prob_color))
-            tw = max(fm.horizontalAdvance(prob_text), 28) + 4
+            p.setFont(QFont("Arial", 7))
+            fm_prob = QFontMetrics(QFont("Arial", 7))
+            tw = max(fm_prob.horizontalAdvance(prob_text), 28) + 4
             x_right -= tw
             p.drawText(QRect(x_right, 0, tw, h), Qt.AlignVCenter | Qt.AlignRight, prob_text)
 
@@ -582,7 +609,7 @@ class OverlayWindow(QWidget):
         self._hand_header = _SectionHeader("对手手牌")
         self._hand_header.clicked.connect(self._toggle_hand)
         self._root.addWidget(self._hand_header)
-        self._hand_list = _CardListArea(max_rows=10, row_height=self._row_height)
+        self._hand_list = _CardListArea(max_rows=5, row_height=self._row_height)
         self._root.addWidget(self._hand_list, stretch=2)
 
         # 3. 卡组区
@@ -754,54 +781,96 @@ class OverlayWindow(QWidget):
         self._refresh_grave(gs)
 
     def _refresh_hand(self, gs: CompleteGameState):
-        """刷新手牌区 — 显示概率最高预测。"""
+        """刷新手牌区 — 显示概率最高的预测，最多5张概率>50%的卡牌。
+
+        设计原则：
+        - 不显示无意义的"?"占位符（概率0%的未知卡牌）
+        - 只显示有实际预测价值的卡牌（概率 > 50%）
+        - 已确认手牌（source=revealed）始终显示
+        - 概率 < 50% 的预测只在 section header 显示手牌总数
+        """
+        opp = gs.opponent
         preds = gs.hand_predictions
-        if not preds and not gs.opponent.hand:
-            self._hand_header.set_title("对手手牌", 0)
+        hand_count = opp.hand_count  # 对手实际手牌数（来自 ZONE 计数）
+
+        if not preds and not opp.hand:
+            self._hand_header.set_title(f"对手手牌 ({hand_count})" if hand_count else "对手手牌", 0)
             self._hand_list.update_cards([], "hand")
             return
 
-        # 合并已知手牌 + 预测
+        # 合并已知手牌 + 预测，使用卡片自身存储的概率
+        seen_ids = set()
         hand_cards = []
 
-        # 已知手牌 (source=revealed)
-        for h in gs.opponent.hand:
+        # 已知手牌 (来自 gs.opponent.hand，使用其自身 probability)
+        for h in opp.hand:
+            prob = getattr(h, 'probability', 1.0)
+            src = getattr(h, 'source', 'revealed')
+            # 只显示已确认或概率 > 50% 的卡牌
+            if src == "revealed" or prob >= 1.0:
+                src = "revealed"
+                prob = 1.0
+            elif prob < 0.5:
+                continue  # 跳过低概率预测
+            cid = h.card_id or f"_unk_{id(h)}"
+            if cid in seen_ids:
+                continue
+            seen_ids.add(cid)
             hand_cards.append({
                 "card_id": h.card_id,
                 "name": h.name,
                 "cost": h.cost,
-                "probability": 1.0,
-                "source": "revealed",
-                "rarity": "",
+                "probability": prob,
+                "source": src,
+                "rarity": getattr(h, 'race', '') or "",
+                "race": getattr(h, 'race', ''),
             })
 
-        # 预测手牌
+        # 预测手牌（补充 gs.opponent.hand 中没有的预测）
         for h in preds:
             src = h.get("source", "predicted")
-            if src == "revealed":
-                continue  # 已在上面
             prob = h.get("probability", 0)
-            if prob < 0.05:
-                continue  # 跳过低概率
+            cid = h.get("card_id", "")
+
+            # 跳过：已确认（上面已处理）、未知占位符、低概率
+            if src == "revealed" or prob >= 1.0:
+                continue  # 已在上面
+            if not cid:
+                continue  # 无 card_id
+            if cid.startswith("_unk_"):
+                continue  # 跳过未知占位符（但保留 _type_ 前缀的类型约束）
+            if prob < 0.5 and not cid.startswith("_type_"):
+                continue  # 跳过低概率预测（类型约束 50% 保留）
+            if cid in seen_ids:
+                continue
+            seen_ids.add(cid)
             hand_cards.append({
-                "card_id": h.get("card_id", ""),
+                "card_id": cid,
                 "name": h.get("name", "?"),
                 "cost": h.get("cost", 0),
                 "probability": prob,
                 "source": src,
                 "rarity": h.get("rarity", ""),
+                "race": h.get("race", ""),
             })
 
-        # 按概率降序
-        hand_cards.sort(key=lambda c: -c.get("probability", 0))
+        # 按概率降序，已确认优先
+        hand_cards.sort(key=lambda c: (0 if c["source"] == "revealed" else 1, -c.get("probability", 0)))
+
+        # 最多显示5张有意义的预测
+        max_show = 5
+        hand_cards = hand_cards[:max_show]
 
         # 增量刷新 — 使用 tuple（保留顺序和重复项）避免 frozenset 去重问题
-        h_hash = tuple((c["card_id"], c["probability"]) for c in hand_cards)
-        if h_hash == self._hand_hash:
+        h_hash = tuple((c["card_id"], c.get("probability", 0)) for c in hand_cards)
+        if h_hash == self._hand_hash and hand_count == getattr(self, '_hand_count_cache', -1):
             return
         self._hand_hash = h_hash
+        self._hand_count_cache = hand_count
 
-        self._hand_header.set_title("对手手牌", len(hand_cards))
+        # 标题显示手牌总数（来自 ZONE 计数，而非预测数量）
+        title = f"对手手牌 ({hand_count})" if hand_count else "对手手牌"
+        self._hand_header.set_title(title, len(hand_cards))
         self._hand_list.update_cards(hand_cards, "hand")
 
     def _refresh_deck(self, gs: CompleteGameState):

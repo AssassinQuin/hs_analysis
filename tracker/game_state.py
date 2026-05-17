@@ -364,7 +364,11 @@ class GameStateManager:
         if prediction_result is not None:
             known_ids = {h.card_id for h in opp.hand if h.card_id}
             for hp in prediction_result.hand_predictions:
-                if hp.card_id and hp.card_id not in known_ids and hp.source != "unknown":
+                # 只添加有实际预测价值的卡牌：有 card_id、非未知来源、概率 > 5%
+                if (hp.card_id
+                    and hp.card_id not in known_ids
+                    and hp.source not in ("unknown", "")
+                    and hp.probability > 0.05):
                     cih = CardInHand(
                         card_id=hp.card_id,
                         name=hp.name,

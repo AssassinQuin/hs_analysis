@@ -222,20 +222,8 @@ class HandPredictor:
 
             result.conditional_evidence = prob_report.conditional_constraints
 
-            # 填充手牌位置
-            filled_count = len(result.hand_predictions)
-            remaining_slots = max(0, opp_hand_count - filled_count)
-
-            if remaining_slots > 0:
-                for i in range(remaining_slots):
-                    result.hand_predictions.append(HandPrediction(
-                        card_id="",
-                        name="?",
-                        cost=0,
-                        probability=0.0,
-                        source="unknown",
-                        card_type="UNKNOWN",
-                    ))
+            # 不再填充未知占位符——UI 层根据 opp_hand_count 显示手牌总数，
+            # 只展示有实际预测价值的卡牌（概率 > 50%），避免显示 10 张无意义的 "?"
         else:
             # 回退到基础预测（概率引擎不可用时）
             self._fallback_predict(state_dict, result, opp_hand_count)
@@ -336,7 +324,7 @@ class HandPredictor:
 
         1. 提升匹配类型的手牌预测概率
         2. 降低不匹配类型的手牌预测概率
-        3. 将未知占位符替换为类型约束占位符
+        3. 添加类型约束标记条目（如"[龙]"占位符）
 
         Args:
             result: 当前预测结果（会被就地修改）
@@ -363,18 +351,22 @@ class HandPredictor:
                     hp.probability = min(1.0, hp.probability * 1.5)
                     hp.source = "inferred"
 
-            # 将第一个未知占位符替换为类型约束占位符
-            for hp in result.hand_predictions:
-                if hp.source == "unknown" and hp.card_id == "":
-                    type_label = race or school or "特定类型"
-                    hp.name = f"[{type_label}]"
-                    hp.source = "inferred"
-                    hp.probability = 0.0
-                    if race:
-                        hp.race = race
-                    if school:
-                        hp.spell_school = school
-                    break  # 每个约束只替换一个占位符
+            # 添加类型约束标记（如 "[龙]" ）作为独立条目
+            # 检查是否已存在同类型约束
+            type_label = race or school or "特定类型"
+            existing_labels = {hp.name for hp in result.hand_predictions if hp.name.startswith("[")}
+            constraint_label = f"[{type_label}]"
+            if constraint_label not in existing_labels:
+                result.hand_predictions.append(HandPrediction(
+                    card_id=f"_type_{type_label}",
+                    name=constraint_label,
+                    cost=0,
+                    probability=0.5,  # 类型约束：50% 概率（保守估计）
+                    source="inferred",
+                    card_type="UNKNOWN",
+                    race=race,
+                    spell_school=school,
+                ))
 
     def _fallback_predict(
         self,
@@ -390,18 +382,7 @@ class HandPredictor:
                 result.revealed_cards.append(hp)
                 result.hand_predictions.append(hp)
 
-        # 填充未知
-        filled = len(result.hand_predictions)
-        remaining = max(0, opp_hand_count - filled)
-        for _ in range(remaining):
-            result.hand_predictions.append(HandPrediction(
-                card_id="",
-                name="?",
-                cost=0,
-                probability=0.0,
-                source="unknown",
-                card_type="UNKNOWN",
-            ))
+        # 不再填充未知占位符——UI 层会根据 opp_hand_count 显示手牌总数
 
     def _card_id_to_hand_prediction(
         self, card_id: str, probability: float, source: str
