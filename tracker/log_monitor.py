@@ -444,15 +444,19 @@ class CoreLogMonitor:
         # 检查是否需要更新玩家信息（追赶模式下也执行，以便恢复正确状态）
         self._try_enrich_player_info()
 
-    def _detect_my_idx(self, players) -> int:
+    def _detect_my_idx(self, players, saved_our_controller: int = 0) -> int:
         """确定哪个玩家是本地玩家（我方）。
 
         判定规则（按优先级）:
           1. AI_MAKES_DECISIONS_FOR_PLAYER 标签：AI 玩家标签=1，我方=0
           2. 从 _player_names 匹配：名字含 '#' 的 BattleTag 用户是本地玩家
-             当双方都有 '#' 时，优先选与上次已知的我方 controller 一致的那个
+             当双方都有 '#' 时，用 saved_our_controller（上局 controller）匹配
           3. 从 hslog player.name 匹配：名字含 '#' 的是本地玩家
           4. 都不含 '#' 时默认 players[0] 为我方
+
+        Args:
+            players: hslog 导出的玩家实体列表（按 EntityID 排序）
+            saved_our_controller: 上局的我方 controller（0 表示无历史记录）
 
         Returns:
             我方在 players 列表中的索引 (0 或 1)
@@ -501,21 +505,32 @@ class CoreLogMonitor:
             has_tag1 = bool(name1 and '#' in name1 and name1 != 'UNKNOWN HUMAN PLAYER')
 
             if has_tag0 and has_tag1:
-                # 双方都有 BattleTag：用已知的 controller 匹配上局
+                # 双方都有 BattleTag：用上局 controller 匹配
+                # saved_our_controller 是 on_game_start 之前保存的值，
+                # 不受 global_tracker.on_game_start() 重置为 0 的影响
                 try:
                     c0 = players[0].tags.get(GameTag.CONTROLLER, 0)
                     c1 = players[1].tags.get(GameTag.CONTROLLER, 0)
-                    if c0 == self.global_tracker.our_controller:
+                    if saved_our_controller and c0 == saved_our_controller:
                         my_idx = 0
-                    elif c1 == self.global_tracker.our_controller:
+                    elif saved_our_controller and c1 == saved_our_controller:
                         my_idx = 1
                     else:
-                        # 无法匹配，默认 0（首次游戏）
+                        # 首次游戏 / 无法匹配：用 FIRST_PLAYER 验证
+                        # 检测 entity_cache 中的 FIRST_PLAYER 标签
+                        first_pid = self._detect_first_player_pid()
+                        if first_pid:
+                            # FIRST_PLAYER 的 PlayerID 对应的玩家 → 先手
+                            # 在炉石中，先手玩家拿到先手优势但后手拿硬币
+                            # 先手玩家的 PlayerID 可能是 1 或 2（不固定）
+                            # 这里仅做日志记录，不改变 my_idx（需要更多信息）
+                            logger.debug("玩家检测(FIRST_PLAYER辅助): first_player PID=%d, 默认 my_idx=0",
+                                         first_pid)
                         my_idx = 0
                 except Exception:
                     my_idx = 0
-                logger.debug("玩家检测(_player_names, dual BattleTag): 我方=players[%d] name=%s",
-                             my_idx, [name0, name1][my_idx])
+                logger.debug("玩家检测(_player_names, dual BattleTag): 我方=players[%d] name=%s, saved_ctrl=%d",
+                             my_idx, [name0, name1][my_idx], saved_our_controller)
                 return my_idx
 
             if has_tag1:
@@ -537,6 +552,26 @@ class CoreLogMonitor:
 
         logger.debug("玩家检测(fallback): 我方=players[%d], n0=%r, n1=%r", my_idx, n0, n1)
         return my_idx
+
+    def _detect_first_player_pid(self) -> Optional[int]:
+        """从 entity_cache 检测先手玩家的 PlayerID。
+
+        遍历 entity_cache 查找带有 FIRST_PLAYER=1 标签的 Player 实体，
+        返回其 PlayerID。如果未找到则返回 None。
+        """
+        from hearthstone.enums import CardType
+        ec = self.game_tracker.entity_cache
+        for entity_id, ent_data in ec.items():
+            tags = ent_data.get("tags", {})
+            card_type = tags.get(GameTag.CARDTYPE, 0)
+            if card_type != CardType.PLAYER.value:
+                continue
+            if tags.get(GameTag.FIRST_PLAYER, 0) == 1:
+                try:
+                    return int(tags.get(GameTag.PLAYER_ID, 0))
+                except (ValueError, TypeError):
+                    pass
+        return None
 
     def _parse_player_name_line(self, line: str):
         """从 DebugPrintGame() 行中解析 PlayerID 和 PlayerName。
@@ -657,7 +692,12 @@ class CoreLogMonitor:
                 return None
 
             players = list(game.players)
-            my_idx = self._detect_my_idx(players)
+            # 传入当前 global_tracker 的 our_controller 作为 saved 值，
+            # 与 _on_game_start 中的逻辑一致
+            my_idx = self._detect_my_idx(
+                players,
+                saved_our_controller=self.global_tracker.our_controller,
+            )
             our_player = players[my_idx]
             opp_player = players[1 - my_idx]
 
@@ -765,6 +805,13 @@ class CoreLogMonitor:
         """游戏开始事件处理。"""
         logger.info("游戏开始")
 
+        # 保存上局 controller 值（在重置之前），用于玩家身份检测。
+        # 关键修复：global_tracker.on_game_start() 会将 controller 重置为 0，
+        # 导致 _detect_my_idx 在 PvP 双方都有 BattleTag 时无法匹配，
+        # 默认 my_idx=0 导致 50% 概率把对手识别为"我方"。
+        saved_our_controller = self.global_tracker.our_controller
+        saved_opp_controller = self.global_tracker.opp_controller
+
         # 重置增量桥接追踪
         self._bridged_entities.clear()
         self._last_known_zones.clear()
@@ -773,7 +820,7 @@ class CoreLogMonitor:
         self._player_names.clear()
         self._game_lifecycle = GameLifecycle.STARTING
 
-        # 先重置 GlobalTracker 状态（清空旧游戏数据）
+        # 重置 GlobalTracker 状态（清空旧游戏数据）
         self.global_tracker.on_game_start()
 
         # 尝试获取初始 controller 分配
@@ -783,11 +830,13 @@ class CoreLogMonitor:
             exporter = self.game_tracker.export_entities()
             if exporter is not None and hasattr(exporter, 'players') and len(exporter.players) >= 2:
                 players = list(exporter.players)
-                my_idx = self._detect_my_idx(players)
+                # 传入上局 controller 用于匹配（解决 PvP 双 BattleTag 识别问题）
+                my_idx = self._detect_my_idx(players, saved_our_controller=saved_our_controller)
                 our_controller = players[my_idx].tags.get(GameTag.CONTROLLER, my_idx + 1)
                 opp_controller = players[1 - my_idx].tags.get(GameTag.CONTROLLER, 2 - my_idx)
-                logger.info("玩家检测: 我方=players[%d](controller=%d), 对手=players[%d](controller=%d)",
-                            my_idx, our_controller, 1 - my_idx, opp_controller)
+                logger.info("玩家检测: 我方=players[%d](controller=%d), 对手=players[%d](controller=%d), saved_ctrl=(%d,%d)",
+                            my_idx, our_controller, 1 - my_idx, opp_controller,
+                            saved_our_controller, saved_opp_controller)
         except Exception as e:
             logger.debug("检测玩家 controller 失败: %s", e)
 
@@ -804,14 +853,9 @@ class CoreLogMonitor:
         self._bridge_entities_to_global_tracker()
         self._bridge_new_entities()
 
-        # 如果职业已完整则直接进入 READY，否则留在 STARTING
-        # 后续 _try_enrich_player_info 会继续补充信息并在完整时推进到 READY
-        state = self.global_tracker.state
-        if state.player_hero_class and state.opp_hero_class:
-            self._game_lifecycle = GameLifecycle.READY
-            self._emit_game_started(our_controller, opp_controller)
-        else:
-            pass
+        # 不在此处设置 _game_lifecycle = READY，
+        # 让 _try_enrich_player_info 处理完整的生命周期转换。
+        # 这样即使初始检测有误，后续 _player_names 填充后仍可修正。
 
         self._notify_state_update()
 
