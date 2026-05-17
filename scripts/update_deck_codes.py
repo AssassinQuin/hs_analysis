@@ -116,45 +116,18 @@ def guess_archetype(deck_name: str) -> str:
 
 
 def _fetch_via_zai_sdk(url: str) -> Optional[str]:
-    """使用 z-ai-web-dev-sdk 的 page_reader 获取页面 HTML。
+    """使用 z-ai-web-dev-sdk CLI (z-ai function page_reader) 获取页面 HTML。
 
-    通过 CLI 工具调用，避免在 Python 中导入 Node.js SDK。
+    通过 z-ai CLI 工具调用 page_reader，能绕过 Cloudflare 保护。
     """
-    try:
-        result = subprocess.run(
-            [
-                sys.executable, "-m", "z_ai_cli",
-                "function", "-n", "page_reader",
-                "-a", json.dumps({"url": url}),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            # 尝试直接用 z-ai CLI
-            result = subprocess.run(
-                [
-                    "z-ai", "function",
-                    "-n", "page_reader",
-                    "-a", json.dumps({"url": url}),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        if result.returncode == 0 and result.stdout.strip():
-            data = json.loads(result.stdout.strip())
-            html = data.get("data", {}).get("html", "")
-            if html and len(html) > 1000:
-                return html
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
-        pass
-
-    # 回退：直接调用 z-ai function 并输出到临时文件
     import tempfile
+
+    # 方式 1: z-ai CLI + 输出到临时文件
+    tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as tmp:
+        with tempfile.NamedTemporaryFile(
+            suffix=".json", delete=False, mode="w", prefix="zai_page_"
+        ) as tmp:
             tmp_path = tmp.name
 
         result = subprocess.run(
@@ -166,19 +139,44 @@ def _fetch_via_zai_sdk(url: str) -> Optional[str]:
             ],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
         )
         if result.returncode == 0 and os.path.exists(tmp_path):
-            with open(tmp_path, "r") as f:
+            with open(tmp_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            os.unlink(tmp_path)
             html = data.get("data", {}).get("html", "")
-            if html and len(html) > 1000:
+            if html and len(html) > 500:
                 return html
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
-        pass
+        else:
+            log.debug("z-ai CLI 失败: %s", (result.stderr or "")[:200])
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError) as e:
+        log.debug("z-ai CLI 调用异常: %s", e)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    # 方式 2: z-ai CLI 输出到 stdout
+    try:
+        result = subprocess.run(
+            [
+                "z-ai", "function",
+                "-n", "page_reader",
+                "-a", json.dumps({"url": url}),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout.strip())
+            html = data.get("data", {}).get("html", "")
+            if html and len(html) > 500:
+                return html
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError) as e:
+        log.debug("z-ai CLI (stdout) 调用异常: %s", e)
 
     return None
 
@@ -244,59 +242,94 @@ def parse_deck_list(html: str) -> List[Tuple[str, str]]:
     """从 HSReplay 卡组列表页解析卡组 ID 和名称。
 
     支持多种 HTML 结构（HSReplay 经常改版），按优先级尝试：
-    1. 新版结构：data-deck-id 属性 + deck-name 元素
-    2. 中版结构：/decks/ID/ 链接 + 邻近的 deck-name
-    3. 宽松匹配：所有 /decks/ID/ 链接（名称从 href 推断）
-    4. JSON 数据：嵌入在 script 标签中的卡组列表
+    1. 2025+ 结构：id="deck-tile" + href 含 /decks/ID/ + data-card-class
+    2. 旧版结构：data-deck-id 属性 + deck-name 元素
+    3. /decks/ID/ 链接 + id="deck-name" 或 class deck-name
+    4. 宽松匹配：所有 /decks/ID/ 链接（名称从 href slug 推断）
+    5. JSON 数据：嵌入在 script 标签中的卡组列表
 
     Returns:
-        [(deck_id, deck_name), ...] 去重后的列表
+        [(deck_id, deck_name, deck_class), ...] 去重后的列表
+        deck_class 可能为 None
     """
     seen_ids = set()
-    result = []
+    result: List[Tuple[str, str, Optional[str]]] = []
 
-    # ── 方式 1: data-deck-id + deck-name ──
-    pattern1 = re.compile(
-        r'data-deck-id="([a-zA-Z0-9]{10,})"[^>]*>.*?deck-name[^>]*>([^<]+)<',
+    # ── 方式 1 (2025+): id="deck-tile" 含 href="/decks/ID/" 和 data-card-class ──
+    # 页面结构：<a id="deck-tile" href="/decks/{ID}/#gameType=RANKED_STANDARD" data-card-class="{CLASS}">
+    #   ... <h3 id="deck-name">{NAME}</h3> ...
+    # </a>
+    # ID 格式：字母数字混合，通常 8-12 位（如 eCYcbHqZBCGZmfEafbcfae）
+    # 策略：先匹配整个 <a id="deck-tile" ...>...</a> 块，再从块内提取各字段
+    tile_block_pattern = re.compile(
+        r'<a\s[^>]*id="deck-tile"[^>]*>(.*?)</a>',
         re.DOTALL,
     )
-    for m in pattern1.finditer(html):
-        deck_id, name = m.group(1), m.group(2).strip()
-        if deck_id not in seen_ids:
-            seen_ids.add(deck_id)
-            result.append((deck_id, name))
+    href_pattern = re.compile(r'href="/decks/([a-zA-Z0-9]{6,})[/%?"]')
+    class_in_tag = re.compile(r'data-card-class="([A-Z]+)"')
+    name_in_tile = re.compile(r'<h3[^>]*id="deck-name"[^>]*>([^<]+)</h3>')
 
-    # ── 方式 2: /decks/ID/ + deck-name（宽松距离） ──
+    for m in tile_block_pattern.finditer(html):
+        full_tag = m.group(0)  # 包含 <a ...> 开标签
+        tile_inner = m.group(1)
+
+        # 从开标签中提取 deck ID
+        href_match = href_pattern.search(full_tag)
+        if not href_match:
+            continue
+        deck_id = href_match.group(1)
+        if deck_id in seen_ids:
+            continue
+        seen_ids.add(deck_id)
+
+        # 从开标签中提取职业
+        class_match = class_in_tag.search(full_tag)
+        deck_class = class_match.group(1) if class_match else None
+
+        # 从内部 HTML 提取名称
+        name_match = name_in_tile.search(tile_inner)
+        name = name_match.group(1).strip() if name_match else f"Deck-{deck_id[:8]}"
+        result.append((deck_id, name, deck_class))
+
+    # ── 方式 2: 旧版 data-deck-id + deck-name ──
     if not result:
-        # 先找所有 /decks/ID/ 链接
-        deck_link_pattern = re.compile(r'/decks/([a-zA-Z0-9]{10,})/')
-        # 再找所有 deck-name 元素
-        name_pattern = re.compile(r'deck-name[^>]*>([^<]+)<')
+        pattern1 = re.compile(
+            r'data-deck-id="([a-zA-Z0-9]{6,})"[^>]*>.*?deck-name[^>]*>([^<]+)<',
+            re.DOTALL,
+        )
+        for m in pattern1.finditer(html):
+            deck_id, name = m.group(1), m.group(2).strip()
+            if deck_id not in seen_ids:
+                seen_ids.add(deck_id)
+                result.append((deck_id, name, None))
+
+    # ── 方式 3: /decks/ID/ + id="deck-name" 或 class deck-name（宽松距离） ──
+    if not result:
+        deck_link_pattern = re.compile(r'/decks/([a-zA-Z0-9]{6,})/')
+        name_pattern = re.compile(r'(?:id|class)="deck-name"[^>]*>([^<]+)<')
 
         deck_ids = [m.group(1) for m in deck_link_pattern.finditer(html)]
         names = [m.group(1).strip() for m in name_pattern.finditer(html)]
 
-        # 按出现顺序配对（假设它们是 1:1 对应的）
         for i, deck_id in enumerate(deck_ids):
             if deck_id not in seen_ids:
                 name = names[i] if i < len(names) else f"Deck-{deck_id[:8]}"
                 seen_ids.add(deck_id)
-                result.append((deck_id, name))
+                result.append((deck_id, name, None))
 
-    # ── 方式 3: 仅 /decks/ID/ 链接，名称从 URL slug 推断 ──
+    # ── 方式 4: 仅 /decks/ID/ 链接，名称从 URL slug 推断 ──
     if not result:
-        slug_pattern = re.compile(r'/decks/([a-zA-Z0-9]{10,})/([a-z0-9-]+)')
+        slug_pattern = re.compile(r'/decks/([a-zA-Z0-9]{6,})/([a-z0-9-]+)')
         for m in slug_pattern.finditer(html):
             deck_id, slug = m.group(1), m.group(2)
             if deck_id not in seen_ids:
                 seen_ids.add(deck_id)
-                # Convert slug to readable name: "aggro-hunter" → "Aggro Hunter"
                 name = slug.replace("-", " ").title()
-                result.append((deck_id, name))
+                result.append((deck_id, name, None))
 
-    # ── 方式 4: 从嵌入的 JSON 数据提取 ──
+    # ── 方式 5: 从嵌入的 JSON 数据提取 ──
     if not result:
-        json_pattern = re.compile(r'"deck_id"\s*:\s*"([a-zA-Z0-9]{10,})"')
+        json_pattern = re.compile(r'"deck_id"\s*:\s*"([a-zA-Z0-9]{6,})"')
         json_name_pattern = re.compile(r'"name"\s*:\s*"([^"]+)"')
         deck_ids_json = [m.group(1) for m in json_pattern.finditer(html)]
         names_json = [m.group(1).strip() for m in json_name_pattern.finditer(html)]
@@ -305,16 +338,16 @@ def parse_deck_list(html: str) -> List[Tuple[str, str]]:
             if deck_id not in seen_ids:
                 name = names_json[i] if i < len(names_json) else f"Deck-{deck_id[:8]}"
                 seen_ids.add(deck_id)
-                result.append((deck_id, name))
+                result.append((deck_id, name, None))
 
-    # ── 方式 5: 最宽松——任何 /decks/ID/ 链接 ──
+    # ── 方式 6: 最宽松——任何 /decks/ID/ 链接 ──
     if not result:
-        basic_pattern = re.compile(r'/decks/([a-zA-Z0-9]{10,})/')
+        basic_pattern = re.compile(r'/decks/([a-zA-Z0-9]{6,})/')
         for m in basic_pattern.finditer(html):
             deck_id = m.group(1)
             if deck_id not in seen_ids:
                 seen_ids.add(deck_id)
-                result.append((deck_id, f"Deck-{deck_id[:8]}"))
+                result.append((deck_id, f"Deck-{deck_id[:8]}", None))
 
     return result
 
@@ -361,16 +394,37 @@ def parse_deck_detail(html: str) -> Optional[str]:
 
 def parse_deck_class_from_detail(html: str) -> Optional[str]:
     """从详情页 HTML 解析卡组职业（英文名）。"""
-    # 查找卡组详情页中的职业信息
-    # 通常在页面中有 class="card-class" 或类似的标记
+    # 方式 1: data-card-class 属性
     match = re.search(r'data-card-class="([A-Z]+)"', html)
     if match:
         return match.group(1)
 
-    # 回退：从 meta 标签或页面标题推断
+    # 方式 2: 从 <title> 或页面标题推断职业
+    # 例如 "Dragon Warrior - Hearthstone Decks - HSReplay.net"
+    class_keywords = {
+        "Warrior": "WARRIOR", "Shaman": "SHAMAN", "Rogue": "ROGUE",
+        "Paladin": "PALADIN", "Hunter": "HUNTER", "Warlock": "WARLOCK",
+        "Mage": "MAGE", "Priest": "PRIEST", "Druid": "DRUID",
+        "Demon Hunter": "DEMONHUNTER", "Death Knight": "DEATHKNIGHT",
+    }
+    title_match = re.search(r'<title>([^<]+)</title>', html)
+    if title_match:
+        title = title_match.group(1)
+        for keyword, class_enum in class_keywords.items():
+            if keyword in title:
+                return class_enum
+
+    # 方式 3: 从 class-name 相关属性推断
     match = re.search(r'class-name["\s:]+([A-Z]+)', html, re.I)
     if match:
         return match.group(1).upper()
+
+    # 方式 4: 从 CSS class 或图标推断（如 icon-warrior 等）
+    icon_match = re.search(r'icon-([a-z]+)', html, re.I)
+    if icon_match:
+        icon_name = icon_match.group(1).upper()
+        if icon_name in CLASS_ZH_MAP:
+            return icon_name
 
     return None
 
@@ -492,6 +546,7 @@ def format_deck_codes_txt(
 
 def update_deck_codes(
     max_per_class: int = 7,
+    max_decks: int = 0,
     dry_run: bool = False,
     backup: bool = True,
 ) -> bool:
@@ -499,6 +554,7 @@ def update_deck_codes(
 
     Args:
         max_per_class: 每个职业最多获取的卡组数量
+        max_decks: 最多获取的卡组总数（0 = 不限制）
         dry_run: 仅预览，不写文件
         backup: 是否备份旧文件
 
@@ -520,11 +576,17 @@ def update_deck_codes(
 
     log.info("列表页解析到 %d 个卡组，将逐个获取详情", len(deck_list))
 
+    # 限制获取数量
+    if max_decks > 0:
+        deck_list = deck_list[:max_decks]
+        log.info("限制获取前 %d 个卡组", max_decks)
+
     # 2. 逐个获取详情页并提取卡组代码
     all_decks: List[Tuple[str, str, str, Optional[str]]] = []  # (name, arch, deckstring, class)
     failed = 0
 
-    for i, (deck_id, deck_name) in enumerate(deck_list):
+    for i, deck_entry in enumerate(deck_list):
+        deck_id, deck_name, list_class = deck_entry[0], deck_entry[1], deck_entry[2] if len(deck_entry) > 2 else None
         detail_url = HSREPLAY_DECK_DETAIL_URL.format(deck_id=deck_id)
         log.info("[%d/%d] 获取: %s (%s)", i + 1, len(deck_list), deck_name, deck_id)
 
@@ -540,8 +602,8 @@ def update_deck_codes(
             failed += 1
             continue
 
-        # 确定职业
-        deck_class = parse_deck_class_from_detail(detail_html)
+        # 确定职业：优先用列表页的 data-card-class，再回退到详情页解析
+        deck_class = list_class or parse_deck_class_from_detail(detail_html)
         if not deck_class:
             deck_class = decode_deck_class(deckstring)
 
@@ -631,6 +693,12 @@ def main():
         help="每个职业最多获取的卡组数量（默认 7）",
     )
     parser.add_argument(
+        "--max-decks", "-d",
+        type=int,
+        default=0,
+        help="最多获取的卡组总数（0 = 不限制，默认 0）",
+    )
+    parser.add_argument(
         "--no-backup",
         action="store_true",
         help="不备份旧文件",
@@ -648,6 +716,7 @@ def main():
 
     success = update_deck_codes(
         max_per_class=args.max_per_class,
+        max_decks=args.max_decks,
         dry_run=args.dry_run,
         backup=not args.no_backup,
     )

@@ -307,7 +307,7 @@ class TrackerApp:
         def _do_update():
             try:
                 from scripts.update_deck_codes import update_deck_codes
-                success = update_deck_codes(max_per_class=7, backup=True)
+                success = update_deck_codes(max_per_class=7, max_decks=21, backup=True)
                 if success:
                     update_flag.write_text(str(time.time()))
                     logger.info("卡组代码更新完成")
