@@ -276,6 +276,10 @@ class CoreLogMonitor:
         # 游戏生命周期状态（替代 _game_started_emitted 标志对）
         self._game_lifecycle = GameLifecycle.IDLE
 
+        # 初始追赶标记：启动/日志轮转后读取已有数据时抑制事件回调
+        # 避免「读到旧日志的 game_start + game_end → UI 闪烁」问题
+        self._catching_up: bool = False
+
     @property
     def log_path(self) -> Optional[Path]:
         return self._log_path
@@ -359,6 +363,8 @@ class CoreLogMonitor:
             # 如果有已知 controller，恢复它们（等待真正的 game_start 重新设置）
             if old_our and old_opp:
                 self.global_tracker.set_controllers(old_our, old_opp)
+            # 标记为追赶模式：读取已有日志时不触发 UI 事件
+            self._catching_up = True
 
         if current_size <= self._file_pos:
             return
@@ -377,8 +383,26 @@ class CoreLogMonitor:
         lines = new_text.splitlines()
         self._process_lines(lines)
 
+        # 追赶模式结束：如果之前是首次读取旧日志，现在处理完毕
+        # 检查当前游戏状态，若仍在游戏中则正常触发 game_start
+        if self._catching_up:
+            self._catching_up = False
+            if self.game_tracker.in_game:
+                # 旧日志中有一局正在进行中的游戏 → 补触发生命周期
+                logger.info("追赶完毕，检测到进行中的游戏，补触发 game_start")
+                self._on_game_start()
+            else:
+                # 旧日志中的游戏已结束 → 不触发任何事件，静默等待新游戏
+                logger.info("追赶完毕，旧游戏已结束，静默等待新游戏")
+
     def _process_lines(self, lines: list[str]):
-        """处理新行，喂入 GameTracker 并分发事件。"""
+        """处理新行，喂入 GameTracker 并分发事件。
+
+        追赶模式(_catching_up=True)时，仍然将所有行喂入 GameTracker
+        以维护正确的内部状态（game_count、in_game 等），但跳过
+        UI 事件回调，避免读到旧日志的 game_start + game_end
+        导致 UI 闪烁「游戏开始 → 立即结束」。
+        """
         for line in lines:
             if not line.strip():
                 continue
@@ -388,6 +412,17 @@ class CoreLogMonitor:
 
             event = self.game_tracker.feed_line(line)
             if event is None:
+                continue
+
+            if self._catching_up:
+                # 追赶模式：只更新内部状态，不触发 UI 事件
+                # 但仍需维护桥接状态，以便追赶结束后状态正确
+                if event == "game_start":
+                    self._bridged_entities.clear()
+                    self._last_known_zones.clear()
+                    self._last_known_card_ids.clear()
+                    self._first_player_detected = False
+                    self._player_names.clear()
                 continue
 
             if event == "game_start":
@@ -403,9 +438,10 @@ class CoreLogMonitor:
                     self._last_notify_time = now
 
         # 处理完一批行后，从 entity_cache diff 检测区域变化和 FIRST_PLAYER
+        # 追赶模式下也需要桥接实体，以便追赶结束后状态正确
         self._detect_zone_changes_from_cache()
         self._detect_first_player_from_cache()
-        # 检查是否需要更新玩家信息
+        # 检查是否需要更新玩家信息（追赶模式下也执行，以便恢复正确状态）
         self._try_enrich_player_info()
 
     def _detect_my_idx(self, players) -> int:

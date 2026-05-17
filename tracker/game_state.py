@@ -126,8 +126,8 @@ class CardInHand:
     card_id: str = ""
     name: str = ""
     cost: int = 0
-    probability: float = 1.0
-    source: str = "revealed"  # "revealed" | "predicted" | "inferred"
+    probability: float = 0.0  # 默认 0.0（未知），仅真正揭示的牌才设 1.0
+    source: str = "unknown"  # "revealed" | "predicted" | "inferred" | "unknown"
     card_type: str = ""
     race: str = ""
     entity_id: int = 0
@@ -499,11 +499,21 @@ class GameStateManager:
         return ls
 
     def _build_known_hand(self, state_dict: dict) -> List[CardInHand]:
-        """构建已知手牌列表。"""
+        """构建已知手牌列表。
+
+        只有通过 SHOW_ENTITY 真正揭示到 HAND 区域的卡牌才标记为
+        probability=1.0 / source="revealed"（100% 确认）。
+        其他未知手牌不在 opp.hand 中创建条目——UI 层根据
+        opp.hand_count 显示"？？"占位符。
+        """
         hand = []
         known_hand = state_dict.get("known_hand", [])
 
         for eid, card_id in known_hand:
+            # 只有有真实 card_id 的牌才是「已确认」的
+            # card_id 为空意味着我们知道该实体在手牌区域，但不知道具体是什么牌
+            if not card_id:
+                continue
             cih = CardInHand(
                 card_id=card_id,
                 probability=1.0,

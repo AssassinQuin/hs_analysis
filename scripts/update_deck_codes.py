@@ -243,23 +243,78 @@ def fetch_page(url: str) -> Optional[str]:
 def parse_deck_list(html: str) -> List[Tuple[str, str]]:
     """从 HSReplay 卡组列表页解析卡组 ID 和名称。
 
+    支持多种 HTML 结构（HSReplay 经常改版），按优先级尝试：
+    1. 新版结构：data-deck-id 属性 + deck-name 元素
+    2. 中版结构：/decks/ID/ 链接 + 邻近的 deck-name
+    3. 宽松匹配：所有 /decks/ID/ 链接（名称从 href 推断）
+    4. JSON 数据：嵌入在 script 标签中的卡组列表
+
     Returns:
         [(deck_id, deck_name), ...] 去重后的列表
     """
-    # 匹配 /decks/DECK_ID/ 后面跟着的 deck-name
-    # 注意：同一 deck_id 可能出现在不同 tab 中，需要按出现顺序去重
-    pattern = re.compile(
-        r'/decks/([a-zA-Z0-9]{20,})/.*?id="deck-name"[^>]*>([^<]+)<',
-        re.DOTALL,
-    )
-    matches = pattern.findall(html)
-
     seen_ids = set()
     result = []
-    for deck_id, name in matches:
+
+    # ── 方式 1: data-deck-id + deck-name ──
+    pattern1 = re.compile(
+        r'data-deck-id="([a-zA-Z0-9]{10,})"[^>]*>.*?deck-name[^>]*>([^<]+)<',
+        re.DOTALL,
+    )
+    for m in pattern1.finditer(html):
+        deck_id, name = m.group(1), m.group(2).strip()
         if deck_id not in seen_ids:
             seen_ids.add(deck_id)
-            result.append((deck_id, name.strip()))
+            result.append((deck_id, name))
+
+    # ── 方式 2: /decks/ID/ + deck-name（宽松距离） ──
+    if not result:
+        # 先找所有 /decks/ID/ 链接
+        deck_link_pattern = re.compile(r'/decks/([a-zA-Z0-9]{10,})/')
+        # 再找所有 deck-name 元素
+        name_pattern = re.compile(r'deck-name[^>]*>([^<]+)<')
+
+        deck_ids = [m.group(1) for m in deck_link_pattern.finditer(html)]
+        names = [m.group(1).strip() for m in name_pattern.finditer(html)]
+
+        # 按出现顺序配对（假设它们是 1:1 对应的）
+        for i, deck_id in enumerate(deck_ids):
+            if deck_id not in seen_ids:
+                name = names[i] if i < len(names) else f"Deck-{deck_id[:8]}"
+                seen_ids.add(deck_id)
+                result.append((deck_id, name))
+
+    # ── 方式 3: 仅 /decks/ID/ 链接，名称从 URL slug 推断 ──
+    if not result:
+        slug_pattern = re.compile(r'/decks/([a-zA-Z0-9]{10,})/([a-z0-9-]+)')
+        for m in slug_pattern.finditer(html):
+            deck_id, slug = m.group(1), m.group(2)
+            if deck_id not in seen_ids:
+                seen_ids.add(deck_id)
+                # Convert slug to readable name: "aggro-hunter" → "Aggro Hunter"
+                name = slug.replace("-", " ").title()
+                result.append((deck_id, name))
+
+    # ── 方式 4: 从嵌入的 JSON 数据提取 ──
+    if not result:
+        json_pattern = re.compile(r'"deck_id"\s*:\s*"([a-zA-Z0-9]{10,})"')
+        json_name_pattern = re.compile(r'"name"\s*:\s*"([^"]+)"')
+        deck_ids_json = [m.group(1) for m in json_pattern.finditer(html)]
+        names_json = [m.group(1).strip() for m in json_name_pattern.finditer(html)]
+
+        for i, deck_id in enumerate(deck_ids_json):
+            if deck_id not in seen_ids:
+                name = names_json[i] if i < len(names_json) else f"Deck-{deck_id[:8]}"
+                seen_ids.add(deck_id)
+                result.append((deck_id, name))
+
+    # ── 方式 5: 最宽松——任何 /decks/ID/ 链接 ──
+    if not result:
+        basic_pattern = re.compile(r'/decks/([a-zA-Z0-9]{10,})/')
+        for m in basic_pattern.finditer(html):
+            deck_id = m.group(1)
+            if deck_id not in seen_ids:
+                seen_ids.add(deck_id)
+                result.append((deck_id, f"Deck-{deck_id[:8]}"))
 
     return result
 
@@ -268,6 +323,7 @@ def parse_deck_detail(html: str) -> Optional[str]:
     """从 HSReplay 卡组详情页解析卡组代码。
 
     查找 <meta property="x-hearthstone:deck:deckstring" content="AAECA...">
+    也尝试从嵌入的 JSON 数据和其他位置提取。
     """
     # 方式 1: 标准属性顺序
     match = re.search(
@@ -277,16 +333,26 @@ def parse_deck_detail(html: str) -> Optional[str]:
     if match:
         return match.group(1).strip()
 
-    # 方式 2: 反向属性顺序
+    # 方式 1b: 反向属性顺序
     match = re.search(
-        r'content="(AAECA[A-Za-z0-9+/=]+)"[^>]*x-hearthstone:deck:deckstring',
+        r'content="([^"]+)"[^>]*x-hearthstone:deck:deckstring',
         html,
     )
     if match:
         return match.group(1).strip()
 
-    # 方式 3: 任何包含 AAECA 的 content 属性（最宽松）
+    # 方式 2: 任何包含 AAECA 的 content 属性（宽松匹配）
     match = re.search(r'content="(AAECA[A-Za-z0-9+/=]{30,})"', html)
+    if match:
+        return match.group(1).strip()
+
+    # 方式 3: JSON 数据中的 deckstring 字段
+    match = re.search(r'"deckstring"\s*:\s*"(AAECA[A-Za-z0-9+/=]{30,})"', html)
+    if match:
+        return match.group(1).strip()
+
+    # 方式 4: 从 JavaScript 变量提取
+    match = re.search(r'deckstring\s*=\s*["\']?(AAECA[A-Za-z0-9+/=]{30,})["\']?', html)
     if match:
         return match.group(1).strip()
 

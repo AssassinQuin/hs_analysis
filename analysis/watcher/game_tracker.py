@@ -217,19 +217,6 @@ class GameTracker:
         # Deck provider
         self.deck_provider = deck_provider
 
-    def reset(self) -> None:
-        self._parser.reset()
-        self._game_count = 0
-        self._in_game = False
-        self._current_game_entities = None
-        self._last_event_type = None
-        self._last_turn = 0
-        self._fired_turn = -1
-        self._last_step = "UNKNOWN"
-        self._game_start_timestamp = None
-        self.entity_cache = EntityCache()
-        self._current_block_entity_id = None
-
     def feed_line(self, line: str) -> Optional[str]:
         """喂入一行Power.log内容，返回事件类型或None。
 
