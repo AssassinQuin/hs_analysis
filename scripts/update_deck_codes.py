@@ -425,14 +425,14 @@ def format_deck_codes_txt(
 
 
 def update_deck_codes(
-    max_decks: int = 25,
+    max_per_class: int = 7,
     dry_run: bool = False,
     backup: bool = True,
 ) -> bool:
     """从 HSReplay 获取最新卡组代码并更新 deck_codes.txt。
 
     Args:
-        max_decks: 最多获取的卡组数量
+        max_per_class: 每个职业最多获取的卡组数量
         dry_run: 仅预览，不写文件
         backup: 是否备份旧文件
 
@@ -452,11 +452,10 @@ def update_deck_codes(
         log.error("列表页未解析到任何卡组，跳过更新")
         return False
 
-    log.info("列表页解析到 %d 个卡组，将获取前 %d 个", len(deck_list), max_decks)
-    deck_list = deck_list[:max_decks]
+    log.info("列表页解析到 %d 个卡组，将逐个获取详情", len(deck_list))
 
     # 2. 逐个获取详情页并提取卡组代码
-    new_decks: List[Tuple[str, str, str]] = []
+    all_decks: List[Tuple[str, str, str, Optional[str]]] = []  # (name, arch, deckstring, class)
     failed = 0
 
     for i, (deck_id, deck_name) in enumerate(deck_list):
@@ -488,18 +487,34 @@ def update_deck_codes(
             full_name = deck_name
 
         arch = guess_archetype(deck_name)
-        new_decks.append((full_name, arch, deckstring))
-        log.info("  ✓ %s [%s] → %s...", full_name, arch, deckstring[:40])
+        all_decks.append((full_name, arch, deckstring, deck_class))
+        log.info("  ✓ %s [%s] [%s] → %s...", full_name, arch, deck_class or "?", deckstring[:40])
 
         # 避免请求过快
         if i < len(deck_list) - 1:
             time.sleep(0.5)
 
-    if not new_decks:
+    if not all_decks:
         log.error("未获取到任何有效卡组代码")
         return False
 
-    log.info("成功获取 %d 个卡组代码（失败 %d 个）", len(new_decks), failed)
+    log.info("成功获取 %d 个卡组代码（失败 %d 个）", len(all_decks), failed)
+
+    # 3. 按职业分组，每个职业取前 max_per_class 个
+    from collections import OrderedDict
+    class_decks: Dict[str, List[Tuple[str, str, str]]] = OrderedDict()
+    for name, arch, deckstring, deck_class in all_decks:
+        key = deck_class or "UNKNOWN"
+        if key not in class_decks:
+            class_decks[key] = []
+        class_decks[key].append((name, arch, deckstring))
+
+    new_decks: List[Tuple[str, str, str]] = []
+    for cls, decks in class_decks.items():
+        selected = decks[:max_per_class]
+        class_zh = CLASS_ZH_MAP.get(cls, cls)
+        log.info("  %s: %d 个卡组，选取前 %d 个", class_zh, len(decks), len(selected))
+        new_decks.extend(selected)
 
     # 3. 读取现有文件
     old_decks = parse_existing_deck_codes(DECK_CODES_PATH)
@@ -544,10 +559,10 @@ def main():
         help="仅预览，不写文件",
     )
     parser.add_argument(
-        "--max-decks", "-m",
+        "--max-per-class", "-m",
         type=int,
-        default=25,
-        help="最多获取的卡组数量（默认 25）",
+        default=7,
+        help="每个职业最多获取的卡组数量（默认 7）",
     )
     parser.add_argument(
         "--no-backup",
@@ -566,7 +581,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     success = update_deck_codes(
-        max_decks=args.max_decks,
+        max_per_class=args.max_per_class,
         dry_run=args.dry_run,
         backup=not args.no_backup,
     )

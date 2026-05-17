@@ -534,20 +534,20 @@ class OverlayWindow(QWidget):
         self._deck_hash = ""
         self._grave_hash = ""
 
-        self._init_window()
-        self._build_ui()
-
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._refresh)
-        self._timer.setInterval(150)
+        # 动态行高（实例级控制，初始值来自模块常量）
+        self._row_height: int = _ROW_H_DEFAULT
 
         # 缩放手柄
         self._resizing = False
         self._resize_start = None
         self._resize_start_geo = None
 
-        # 动态行高（实例级控制，初始值来自模块常量）
-        self._row_height: int = _ROW_H_DEFAULT
+        self._init_window()
+        self._build_ui()
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._refresh)
+        self._timer.setInterval(150)
 
     # ── 窗口初始化 ──
 

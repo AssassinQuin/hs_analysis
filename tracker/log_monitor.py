@@ -747,7 +747,7 @@ class CoreLogMonitor:
             self._game_lifecycle = GameLifecycle.READY
             self._emit_game_started(our_controller, opp_controller)
         else:
-            # 职业信息不完整，留在 STARTING，由 _try_enrich_player_info 补全后推进
+            pass
 
         self._notify_state_update()
 
