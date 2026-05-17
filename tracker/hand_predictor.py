@@ -147,6 +147,12 @@ class HandPredictor:
         使用 DynamicProbabilityEngine 计算每张可能手牌的概率。
         所有概率基于超几何分布和贝叶斯后验动态计算。
 
+        信息揭示追踪增强：
+        - opp_known_deck_cards: 确认对手卡组中的牌 → 约束贝叶斯后验
+        - opp_known_hand_types: 对手手牌类型约束 → 缩小预测空间
+        - opp_revealed_hand_cards: 已揭示的手牌 → 100%确认
+        - opp_transform_events: 变形事件 → 修正卡组推断
+
         Args:
             state_dict: 来自 LogMonitor.build_state_dict() 的状态字典
 
@@ -172,6 +178,14 @@ class HandPredictor:
         opp_hand_count = state_dict.get("opp_hand_count", 0)
         opp_deck_count = state_dict.get("opp_deck_count", 0)
         opp_class = state_dict.get("opp_class_en", "")
+
+        # ── 提取信息揭示追踪数据 ──
+        reveal_info = state_dict.get("reveal_info", {})
+        known_deck_cards = reveal_info.get("known_deck_cards", {})
+        known_hand_types = reveal_info.get("known_hand_types", [])
+        revealed_hand_cards = reveal_info.get("revealed_hand_cards", [])
+        transform_events = reveal_info.get("transform_events", [])
+        tutor_evidence = reveal_info.get("tutor_evidence", [])
 
         # ── 使用 DynamicProbabilityEngine 计算概率 ──
         if self._probability_engine is not None:
@@ -259,6 +273,32 @@ class HandPredictor:
         result.deck_predictions = self._predict_deck(state_dict, bayesian)
         result.multi_deck_predictions = self._predict_multi_deck(state_dict, bayesian)
 
+        # ── 信息揭示追踪增强：定向检索约束 ──
+        # 对手通过定向检索获得的牌，我们知道其种族/学派类型
+        # 这极大缩小了手牌预测空间
+        if known_hand_types:
+            self._apply_tutor_constraints(result, known_hand_types)
+
+        # ── 信息揭示追踪增强：已揭示的手牌补充 ──
+        # 将通过 HAND_REVEAL 效果看到的对手手牌加入确认列表
+        if revealed_hand_cards:
+            existing_ids = {hp.card_id for hp in result.hand_predictions if hp.card_id}
+            for rec in revealed_hand_cards:
+                if rec["card_id"] and rec["card_id"] not in existing_ids:
+                    hp = self._card_id_to_hand_prediction(rec["card_id"], 1.0, "inferred")
+                    if hp:
+                        hp.source = "inferred"
+                        result.hand_predictions.append(hp)
+                        existing_ids.add(rec["card_id"])
+
+        # ── 信息揭示追踪增强：变形事件修正 ──
+        # 变形产物不在原始卡组中，标记为 generated
+        if transform_events:
+            transformed_ids = {rec["card_id"] for rec in transform_events if rec.get("card_id")}
+            for dp in result.deck_predictions:
+                if dp.card_id in transformed_ids:
+                    dp.source = "generated"
+
         # ── 排序 ──
         result.hand_predictions.sort(
             key=lambda hp: (
@@ -269,6 +309,55 @@ class HandPredictor:
         )
 
         return result
+
+    def _apply_tutor_constraints(self, result: PredictionResult,
+                                 known_hand_types: List[Dict]) -> None:
+        """根据定向检索约束修正手牌预测。
+
+        当对手通过定向检索（如"抽一张龙牌"）获得卡牌时，
+        我们知道该卡牌的种族/学派类型。这允许我们：
+
+        1. 提升匹配类型的手牌预测概率
+        2. 降低不匹配类型的手牌预测概率
+        3. 将未知占位符替换为类型约束占位符
+
+        Args:
+            result: 当前预测结果（会被就地修改）
+            known_hand_types: 类型约束列表，每项包含
+                entity_id, turn, race, spell_school 等
+        """
+        for constraint in known_hand_types:
+            race = constraint.get("race", "")
+            school = constraint.get("spell_school", "")
+            if not race and not school:
+                continue
+
+            # 提升匹配类型的已有预测的概率
+            for hp in result.hand_predictions:
+                if hp.probability <= 0 or hp.probability >= 1.0:
+                    continue
+                # 检查是否匹配约束类型
+                if race and hp.race and race.upper() == hp.race.upper():
+                    # 匹配种族：提升概率（贝叶斯修正）
+                    hp.probability = min(1.0, hp.probability * 1.5)
+                    hp.source = "inferred"
+                elif school and hp.spell_school and school.upper() == hp.spell_school.upper():
+                    # 匹配学派：提升概率
+                    hp.probability = min(1.0, hp.probability * 1.5)
+                    hp.source = "inferred"
+
+            # 将第一个未知占位符替换为类型约束占位符
+            for hp in result.hand_predictions:
+                if hp.source == "unknown" and hp.card_id == "":
+                    type_label = race or school or "特定类型"
+                    hp.name = f"[{type_label}]"
+                    hp.source = "inferred"
+                    hp.probability = 0.0
+                    if race:
+                        hp.race = race
+                    if school:
+                        hp.spell_school = school
+                    break  # 每个约束只替换一个占位符
 
     def _fallback_predict(
         self,

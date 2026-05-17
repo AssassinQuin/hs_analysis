@@ -261,6 +261,9 @@ class CoreLogMonitor:
         # 实体区域快照 (entity_id → zone_int)，用于 diff 检测区域变化
         self._last_known_zones: Dict[int, int] = {}
 
+        # 实体卡牌ID快照 (entity_id → card_id)，用于检测 ChangeEntity 变形
+        self._last_known_card_ids: Dict[int, str] = {}
+
         # FIRST_PLAYER 检测标记
         self._first_player_detected: bool = False
 
@@ -449,16 +452,37 @@ class CoreLogMonitor:
             logger.debug("解析到玩家名: PlayerID=%d, Name=%s", pid, name)
 
     def _detect_zone_changes_from_cache(self):
-        """从 entity_cache diff 检测区域变化并桥接到 GlobalTracker。
+        """从 entity_cache diff 检测区域变化和卡牌变形，并桥接到 GlobalTracker。
 
         替代原先的正则匹配 TAG_CHANGE 方案：hslog 的 GameTracker.feed_line()
         已将 TAG_CHANGE 事件处理并更新到 entity_cache，我们只需 diff cache
         中的 ZONE 值即可检测区域变化，无需重复解析日志行。
+
+        同时检测 card_id 变化（ChangeEntity 事件），例如腐蚀升级、变形术等。
         """
         ec = self.game_tracker.entity_cache
         for entity_id, ent_data in ec._entities.items():
             new_zone = _zone_to_int(ent_data.get("tags", {}).get(GameTag.ZONE, 0))
             old_zone = self._last_known_zones.get(entity_id)
+            new_card_id = ent_data.get("card_id", "")
+            old_card_id = self._last_known_card_ids.get(entity_id, "")
+
+            # 检测卡牌变形（ChangeEntity）：已桥接实体的 card_id 发生变化
+            if (entity_id in self._bridged_entities
+                    and old_card_id and new_card_id
+                    and old_card_id != new_card_id):
+                fields = _extract_entity_fields(ent_data)
+                self.global_tracker.on_card_transformed(
+                    entity_id=entity_id,
+                    old_card_id=old_card_id,
+                    new_card_id=new_card_id,
+                    controller=fields.controller,
+                    zone=new_zone,
+                )
+
+            # 更新卡牌ID快照
+            if new_card_id:
+                self._last_known_card_ids[entity_id] = new_card_id
 
             if old_zone is not None and old_zone != new_zone:
                 # 区域确实发生变化，桥接到 GlobalTracker
@@ -639,6 +663,7 @@ class CoreLogMonitor:
         # 重置增量桥接追踪
         self._bridged_entities.clear()
         self._last_known_zones.clear()
+        self._last_known_card_ids.clear()
         self._first_player_detected = False
         self._player_names.clear()
         self._game_lifecycle = GameLifecycle.STARTING
@@ -795,6 +820,75 @@ class CoreLogMonitor:
                 "cards_drawn": gt_state.opp_stats.cards_drawn,
                 "cards_milled": gt_state.opp_stats.cards_milled,
             },
+            # ── 信息揭示追踪数据 ──
+            "reveal_info": {
+                "known_deck_cards": dict(gt_state.opp_known_deck_cards),
+                "known_hand_types": [
+                    {
+                        "entity_id": ht.get("entity_id", 0),
+                        "turn": ht.get("turn", 0),
+                        "race": ht.get("race", ""),
+                        "spell_school": ht.get("spell_school", ""),
+                        "search_type": ht.get("search_type", ""),
+                    }
+                    for ht in gt_state.opp_known_hand_types
+                ],
+                "revealed_hand_cards": [
+                    {
+                        "card_id": rec.card_id,
+                        "reveal_type": rec.reveal_type.value if hasattr(rec.reveal_type, "value") else str(rec.reveal_type),
+                        "turn": rec.turn,
+                        "entity_id": rec.entity_id,
+                        "details": rec.details,
+                    }
+                    for rec in gt_state.opp_revealed_hand_cards
+                ],
+                "revealed_deck_cards": [
+                    {
+                        "card_id": rec.card_id,
+                        "reveal_type": rec.reveal_type.value if hasattr(rec.reveal_type, "value") else str(rec.reveal_type),
+                        "turn": rec.turn,
+                        "entity_id": rec.entity_id,
+                        "details": rec.details,
+                    }
+                    for rec in gt_state.opp_revealed_deck_cards
+                ],
+                "transform_events": [
+                    {
+                        "card_id": rec.card_id,
+                        "source_card_id": rec.source_card_id,
+                        "reveal_type": rec.reveal_type.value if hasattr(rec.reveal_type, "value") else str(rec.reveal_type),
+                        "turn": rec.turn,
+                        "entity_id": rec.entity_id,
+                        "details": rec.details,
+                    }
+                    for rec in gt_state.opp_transform_events
+                ],
+                "tutor_evidence": [
+                    {
+                        "card_id": rec.card_id,
+                        "reveal_type": rec.reveal_type.value if hasattr(rec.reveal_type, "value") else str(rec.reveal_type),
+                        "turn": rec.turn,
+                        "entity_id": rec.entity_id,
+                        "details": rec.details,
+                    }
+                    for rec in gt_state.opp_tutor_evidence
+                ],
+                "deck_insert_events": [
+                    {
+                        "card_id": rec.card_id,
+                        "reveal_type": rec.reveal_type.value if hasattr(rec.reveal_type, "value") else str(rec.reveal_type),
+                        "turn": rec.turn,
+                        "entity_id": rec.entity_id,
+                        "details": rec.details,
+                    }
+                    for rec in gt_state.opp_deck_insert_events
+                ],
+                "entity_transforms": {
+                    str(eid): f"{old}→{new}"
+                    for eid, (old, new) in gt_state.opp_entity_transforms.items()
+                },
+            },
         }
 
     def _bridge_entities_to_global_tracker(self):
@@ -854,6 +948,8 @@ class CoreLogMonitor:
 
             # 记录实体当前区域，用于后续 TAG_CHANGE 区域变化检测
             self._last_known_zones[entity_id] = fields.zone
+            # 记录初始 card_id，用于后续 ChangeEntity 变形检测
+            self._last_known_card_ids[entity_id] = fields.card_id
 
             # 有 card_id 的实体标记为已桥接
             self._bridged_entities.add(entity_id)

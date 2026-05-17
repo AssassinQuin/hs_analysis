@@ -28,6 +28,41 @@ class CardSource(str, Enum):
     UNKNOWN = "unknown"      # 无法判断来源
 
 
+class CardRevealType(str, Enum):
+    """卡牌信息揭示的类型
+
+    对应炉石中5类信息揭示型卡牌效果：
+    1. DECK_PEEK    — 看对手卡组中的牌（洞察、窃取等）
+    2. HAND_REVEAL  — 看对手手牌（精神视界、追踪术等）
+    3. TRANSFORM    — 变化手牌（腐蚀、变形等）
+    4. DECK_INSERT  — 往对手卡组塞牌（瘟疫、诅咒等）
+    5. TUTOR        — 定向检索（抽特定类型的牌）
+    """
+    DECK_PEEK = "deck_peek"        # 看到对手卡组中的牌
+    HAND_REVEAL = "hand_reveal"    # 看到对手手牌
+    TRANSFORM = "transform"        # 卡牌变形（含腐蚀升级）
+    DECK_INSERT = "deck_insert"    # 往对手卡组塞牌
+    TUTOR = "tutor"                # 定向检索（知道抽到的牌类型）
+
+
+@dataclass
+class CardRevealRecord:
+    """卡牌信息揭示记录。
+
+    记录一次信息揭示事件的完整上下文，用于：
+    - 贝叶斯推断：确认信息提升后验概率
+    - 手牌预测：已知信息约束预测空间
+    - UI展示：向用户展示信息来源
+    """
+    card_id: str = ""            # 被揭示的卡牌ID
+    reveal_type: CardRevealType = CardRevealType.DECK_PEEK
+    turn: int = 0               # 揭示发生的回合
+    entity_id: int = 0          # 相关实体ID
+    source_card_id: str = ""    # 触发揭示的卡牌（如"洞察"本身）
+    details: str = ""           # 额外信息（如定向检索的类型"DRAGON"）
+    is_opp: bool = True         # 是否是对手的牌被揭示
+
+
 # ---------------------------------------------------------------------------
 # 已知卡牌记录（用于对手手牌追踪）
 # ---------------------------------------------------------------------------
@@ -223,6 +258,32 @@ class GlobalGameState:
     # ---- 统计 ----
     player_stats: SideStats = field(default_factory=SideStats)
     opp_stats: SideStats = field(default_factory=SideStats)
+
+    # ---- 卡牌信息揭示追踪 ----
+    opp_revealed_deck_cards: List[CardRevealRecord] = field(default_factory=list)
+    """对手卡组中被揭示的牌（DECK_PEEK类型，100%确认在卡组中）"""
+
+    opp_revealed_hand_cards: List[CardRevealRecord] = field(default_factory=list)
+    """对手手牌中被揭示的牌（HAND_REVEAL类型，100%确认在手牌中）"""
+
+    opp_transform_events: List[CardRevealRecord] = field(default_factory=list)
+    """对手卡牌变形事件（TRANSFORM类型，原始卡→新卡）"""
+
+    opp_tutor_evidence: List[CardRevealRecord] = field(default_factory=list)
+    """对手定向检索证据（TUTOR类型，知道抽到牌的类型/种族/学派）"""
+
+    opp_deck_insert_events: List[CardRevealRecord] = field(default_factory=list)
+    """对手卡组塞牌事件（DECK_INSERT类型，卡组数量变化）"""
+
+    opp_known_deck_cards: Dict[str, bool] = field(default_factory=dict)
+    """对手卡组中确认存在的牌: card_id → True（用于贝叶斯约束）"""
+
+    opp_known_hand_types: List[Dict] = field(default_factory=list)
+    """对手手牌中已知类型约束: [{'entity_id': int, 'race': str, 'school': str}]"""
+
+    # ---- 变形追踪（entity级别） ----
+    opp_entity_transforms: Dict[int, Tuple[str, str]] = field(default_factory=dict)
+    """对手实体变形映射: entity_id → (old_card_id, new_card_id)"""
 
     # ---- 回合数 ----
     current_turn: int = 0

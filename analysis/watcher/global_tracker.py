@@ -37,11 +37,12 @@ from analysis.constants.hs_enums import (
 )
 from analysis.watcher.secret_probability import SecretProbabilityModel
 from analysis.watcher.tracker_types import (
-    CardSource, KnownCard, OppHandIntel, SideStats, GlobalGameState,
+    CardSource, CardRevealType, CardRevealRecord,
+    KnownCard, OppHandIntel, SideStats, GlobalGameState,
 )
 from analysis.watcher.tracker_rules import (
     TrackingContext, TrackerRuleDispatcher,
-    ShuffleTrackerRule, CorruptTrackerRule,
+    ShuffleTrackerRule, CorruptTrackerRule, RevealTrackerRule,
 )
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,10 @@ class GlobalTracker:
         self._rule_dispatcher = TrackerRuleDispatcher()
         self._rule_dispatcher.register(ShuffleTrackerRule())
         self._rule_dispatcher.register(CorruptTrackerRule())
+        self._rule_dispatcher.register(RevealTrackerRule())
+
+        # 实体卡牌ID快照: entity_id → card_id (用于检测 ChangeEntity 变形)
+        self._last_known_card_ids: Dict[int, str] = {}
 
     def set_controllers(self, our: int, opp: int):
         self.our_controller = our
@@ -151,6 +156,8 @@ class GlobalTracker:
         self._opp_card_play_count.clear()
         # 清理对手手牌追踪（修复内存泄漏：opp_hand_card_ids 从不清理）
         self.state.opp_hand_card_ids.clear()
+        # 清理卡牌ID快照
+        self._last_known_card_ids.clear()
 
     # ---------------------------------------------------------------
     # 延迟加载卡牌数据库
@@ -247,6 +254,10 @@ class GlobalTracker:
                 if controller == self.opp_controller:
                     self.state.is_first_player = False
                     logger.info("检测到对手揭示硬币 → 对手后手")
+
+        # 记录卡牌ID快照（用于后续 ChangeEntity 检测）
+        old_card_id = self._last_known_card_ids.get(entity_id, "")
+        self._last_known_card_ids[entity_id] = card_id
 
         if controller == self.opp_controller:
             # 追踪规则分发（Corrupt升级检测等由 CorruptTrackerRule 处理）
@@ -364,6 +375,154 @@ class GlobalTracker:
             self.state.coin_used = True
             who = "对手" if is_opp else "我方"
             logger.info("检测到%s使用硬币 (entity_id=%d, card_id=%s)", who, entity_id, card_id)
+
+    # ── 卡牌变形/控制器变化事件 ──────────────────────────────────
+
+    def on_card_transformed(self, entity_id: int, old_card_id: str, new_card_id: str,
+                            controller: int, zone: int = 0):
+        """实体卡牌ID变化（ChangeEntity）时调用。
+
+        炉石中 ChangeEntity 事件表示一张卡牌变形为另一张卡牌，
+        常见于：腐蚀升级、变形术、奖品等效果。
+        此事件对贝叶斯推断至关重要——原始卡已不存在，
+        新卡是衍生牌，不应影响卡组推断。
+
+        Args:
+            entity_id: 实体ID
+            old_card_id: 变形前的卡牌ID
+            new_card_id: 变形后的卡牌ID
+            controller: 控制者
+            zone: 当前区域
+        """
+        is_opp = (controller == self.opp_controller)
+        self._last_known_card_ids[entity_id] = new_card_id
+
+        if is_opp and old_card_id and new_card_id and old_card_id != new_card_id:
+            # 记录变形映射
+            self.state.opp_entity_transforms[entity_id] = (old_card_id, new_card_id)
+
+            # 记录变形揭示事件
+            record = CardRevealRecord(
+                card_id=new_card_id,
+                reveal_type=CardRevealType.TRANSFORM,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                source_card_id=old_card_id,
+                details=f"{old_card_id} → {new_card_id}",
+                is_opp=True,
+            )
+            self.state.opp_transform_events.append(record)
+
+            # 通知追踪规则
+            ctx = TrackingContext(
+                entity_id=entity_id, controller=controller,
+                old_zone=zone, new_zone=zone,
+                card_id=new_card_id, card_type=0,
+                is_opp=is_opp, state=self.state,
+            )
+            self._rule_dispatcher.dispatch_card_transformed(ctx, old_card_id, new_card_id)
+
+            logger.info("对手卡牌变形: entity=%d, %s → %s (zone=%d)",
+                        entity_id, old_card_id, new_card_id, zone)
+
+    def on_controller_change(self, entity_id: int, old_controller: int,
+                             new_controller: int, card_id: str = "",
+                             zone: int = 0):
+        """实体控制器变化（偷取/操控权转移）时调用。
+
+        当对手的牌被我们偷取（精神控制、卑劣的脏鼠等），
+        或我们的牌被对手偷取时，需要更新追踪。
+
+        Args:
+            entity_id: 实体ID
+            old_controller: 原控制器
+            new_controller: 新控制器
+            card_id: 卡牌ID（可能为空）
+            zone: 当前区域
+        """
+        was_opp = (old_controller == self.opp_controller)
+        now_opp = (new_controller == self.opp_controller)
+
+        # 对手的牌被我们偷取：从对手追踪中移除
+        if was_opp and not now_opp:
+            if entity_id in self.state.opp_hand_card_ids:
+                old_info = self.state.opp_hand_card_ids.pop(entity_id)
+                logger.info("对手卡牌被我方偷取: entity=%d, card_id=%s",
+                            entity_id, old_info[0] if old_info else card_id)
+
+        # 我们的牌被对手偷取：加入对手追踪
+        if not was_opp and now_opp and card_id:
+            self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
+            record = CardRevealRecord(
+                card_id=card_id,
+                reveal_type=CardRevealType.HAND_REVEAL,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                details="controller_change: stolen",
+                is_opp=True,
+            )
+            self.state.opp_revealed_hand_cards.append(record)
+            logger.info("我方卡牌被对手偷取: entity=%d, card_id=%s", entity_id, card_id)
+
+    def on_tutor_draw(self, entity_id: int, card_id: str, controller: int,
+                      search_type: str = "", race: str = "", spell_school: str = ""):
+        """定向检索事件——对手搜索特定类型的牌时调用。
+
+        当对手使用定向检索效果（如"抽一张龙牌"、"发现一张火焰法术"），
+        我们虽然看不到具体抽到的牌，但可以知道抽到牌的类型约束。
+        这极大缩小了手牌预测空间——某张手牌一定是某个种族/学派。
+
+        Args:
+            entity_id: 被抽到的实体ID
+            card_id: 被抽到的卡牌ID（如可见则提供）
+            controller: 控制者
+            search_type: 搜索类型描述 (如 "HOLDING_DRAGON")
+            race: 搜索的种族约束 (如 "DRAGON", "BEAST")
+            spell_school: 搜索的学派约束 (如 "FIRE", "FROST")
+        """
+        is_opp = (controller == self.opp_controller)
+        if not is_opp:
+            return
+
+        # 如果能确定具体牌（card_id 可见），直接记录
+        if card_id:
+            record = CardRevealRecord(
+                card_id=card_id,
+                reveal_type=CardRevealType.TUTOR,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                details=search_type or race or spell_school,
+                is_opp=True,
+            )
+            self.state.opp_tutor_evidence.append(record)
+            # 已知手牌中也记录
+            self._record_known_hand_card(card_id)
+            logger.info("对手定向检索(已知牌): entity=%d, card_id=%s, type=%s",
+                        entity_id, card_id, search_type or race)
+        else:
+            # 只知道类型，不知道具体牌——记录类型约束
+            constraint = {
+                "entity_id": entity_id,
+                "turn": self.state.current_turn,
+                "search_type": search_type,
+            }
+            if race:
+                constraint["race"] = race
+            if spell_school:
+                constraint["spell_school"] = spell_school
+            self.state.opp_known_hand_types.append(constraint)
+
+            record = CardRevealRecord(
+                card_id="",
+                reveal_type=CardRevealType.TUTOR,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                details=search_type or race or spell_school,
+                is_opp=True,
+            )
+            self.state.opp_tutor_evidence.append(record)
+            logger.info("对手定向检索(类型约束): entity=%d, race=%s, school=%s",
+                        entity_id, race, spell_school)
 
     # ── 区域转换处理器 ─────────────────────────────────────────
 

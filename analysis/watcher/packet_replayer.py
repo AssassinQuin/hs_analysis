@@ -279,10 +279,21 @@ class PacketReplayer:
         elif isinstance(packet, packets.ChangeEntity):
             entity_id = self._resolve_id(packet.entity)
             if entity_id in self.entities:
+                old_card_id = self.entities[entity_id].card_id
                 if packet.card_id:
                     self.entities[entity_id].card_id = packet.card_id
                 for tag, value in packet.tags:
                     self._apply_tag(self.entities[entity_id], tag, value)
+                # 通知 GlobalTracker 卡牌变形事件
+                new_card_id = packet.card_id or self.entities[entity_id].card_id
+                if old_card_id and new_card_id and old_card_id != new_card_id:
+                    self.global_tracker.on_card_transformed(
+                        entity_id=entity_id,
+                        old_card_id=old_card_id,
+                        new_card_id=new_card_id,
+                        controller=self.entities[entity_id].controller,
+                        zone=self.entities[entity_id].zone,
+                    )
         elif isinstance(packet, packets.HideEntity):
             entity_id = self._resolve_id(packet.entity)
             if entity_id in self.entities:
@@ -486,6 +497,7 @@ class PacketReplayer:
         if eid in self.entities:
             entity = self.entities[eid]
             old_zone = entity.zone
+            old_controller = entity.controller
             self._apply_tag(entity, tag, value)
 
             # Zone change notification
@@ -497,6 +509,16 @@ class PacketReplayer:
                     new_zone=entity.zone,
                     card_id=entity.card_id,
                     card_type=entity.card_type,
+                )
+
+            # Controller change notification (steal/mind control effects)
+            if tag == GameTag.CONTROLLER and old_controller != entity.controller:
+                self.global_tracker.on_controller_change(
+                    entity_id=eid,
+                    old_controller=old_controller,
+                    new_controller=entity.controller,
+                    card_id=entity.card_id,
+                    zone=entity.zone,
                 )
 
     def _resolve_id(self, entity_ref) -> int:
