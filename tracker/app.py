@@ -368,7 +368,7 @@ class TrackerApp:
         prediction = self._hand_predictor.predict(state_dict)
         self._game_state_manager.update(state_dict, prediction)
         self._overlay.update_state(self._game_state_manager.state)
-        self._overlay._refresh()
+        # 不直接调用 _refresh()，定时器已启动会自动刷新
 
         logger.info("离线分析完成")
 
@@ -394,7 +394,8 @@ class TrackerApp:
             prediction = self._hand_predictor.predict(state_dict)
             self._game_state_manager.update(state_dict, prediction)
             self._overlay.update_state(self._game_state_manager.state)
-            self._overlay._refresh()
+            # 不直接调用 _refresh()，因为 start_refresh() 已启动定时器
+            # 定时器会自动触发 _refresh()，此处只需更新数据源
         except Exception as e:
             logger.exception("状态更新失败: %s", e)
 

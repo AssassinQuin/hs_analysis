@@ -472,9 +472,9 @@ class CoreLogMonitor:
                     card_type=fields.card_type,
                 )
 
-            # 更新快照
-            if new_zone != 0:
-                self._last_known_zones[entity_id] = new_zone
+            # 更新快照（zone=0 也记录，避免首次变化被静默忽略）
+            # zone=0 表示 INVALID/未分配区域，但实体后续会变到有效区域
+            self._last_known_zones[entity_id] = new_zone
 
     def _detect_first_player_from_cache(self):
         """从 entity_cache 检测 FIRST_PLAYER 标签并桥接到 GlobalTracker。
@@ -674,11 +674,19 @@ class CoreLogMonitor:
 
         # 发送 game_started 信号
         # 如果职业已完整则直接进入 READY，否则留在 STARTING
+        # 注意：如果 _try_enrich_player_info 已经将生命周期推进到 READY
+        # 并发送了 game_started 信号，则不再重复发送
         state = self.global_tracker.state
         if state.player_hero_class and state.opp_hero_class:
-            self._game_lifecycle = GameLifecycle.READY
+            if self._game_lifecycle == GameLifecycle.STARTING:
+                # 只在 STARTING 状态下才推进到 READY 并发送信号
+                self._game_lifecycle = GameLifecycle.READY
+                self._emit_game_started(our_controller, opp_controller)
+            # 如果已经是 READY（由 _try_enrich_player_info 设置），信号已发送，跳过
+        else:
+            # 职业信息不完整，发送初始信号（UI 可能显示"未知"）
+            self._emit_game_started(our_controller, opp_controller)
 
-        self._emit_game_started(our_controller, opp_controller)
         self._notify_state_update()
 
     def _on_game_end(self):
@@ -854,7 +862,9 @@ class CoreLogMonitor:
             # （DECK 中的暗牌不会后续揭示 card_id）
             # 非 DECK 区域的实体可能后续通过 SHOW_ENTITY 获得 card_id，
             # 不标记为已桥接以便后续重新处理
-            if fields.zone == ZONE_DECK:
+            # 但 ENCHANTMENT 类型的无 card_id 实体（附魔）需要标记已桥接，
+            # 避免无限重复处理
+            if fields.zone == ZONE_DECK or fields.card_type == CT_ENCHANTMENT:
                 self._bridged_entities.add(entity_id)
             # 记录区域
             self._last_known_zones[entity_id] = fields.zone
@@ -885,6 +895,9 @@ class CoreLogMonitor:
         每次调用只处理自上次桥接以来新增的实体，避免重复处理。
         这确保了对手打出的牌、区域变化等事件能实时反映到 GlobalTracker，
         从而驱动贝叶斯推断和手牌预测。
+
+        对于已桥接的实体，如果其区域发生了变化（TAG_CHANGE 更新了 cache），
+        也会桥接 zone_change 事件到 GlobalTracker。
         """
         ec = self.game_tracker.entity_cache
 
@@ -892,10 +905,19 @@ class CoreLogMonitor:
         for entity_id, ent_data in ec._entities.items():
             if entity_id in self._bridged_entities:
                 # 已桥接的实体——检查区域是否变化（TAG_CHANGE 可能更新了 cache）
-                zone = _zone_to_int(ent_data.get("tags", {}).get(GameTag.ZONE, 0))
+                fields = _extract_entity_fields(ent_data)
                 old_zone = self._last_known_zones.get(entity_id)
-                if old_zone is not None and old_zone != zone:
-                    self._last_known_zones[entity_id] = zone
+                if old_zone is not None and old_zone != fields.zone:
+                    # 区域变化，桥接到 GlobalTracker
+                    self.global_tracker.on_zone_change(
+                        entity_id=entity_id,
+                        controller=fields.controller,
+                        old_zone=old_zone,
+                        new_zone=fields.zone,
+                        card_id=fields.card_id,
+                        card_type=fields.card_type,
+                    )
+                    self._last_known_zones[entity_id] = fields.zone
                 continue
 
             # 使用统一的单实体桥接方法

@@ -271,6 +271,8 @@ class GameStateManager:
                     "probability": hp.probability,
                     "source": hp.source,
                     "card_type": hp.card_type,
+                    "rarity": getattr(hp, 'rarity', ''),
+                    "race": getattr(hp, 'race', ''),
                 }
                 for hp in prediction_result.hand_predictions
             ]
@@ -285,6 +287,8 @@ class GameStateManager:
                     "in_hand": dp.in_hand,
                     "played": dp.played,
                     "card_type": dp.card_type,
+                    "race": getattr(dp, 'race', ''),
+                    "hand_probability": getattr(dp, 'hand_probability', 0.0),
                 }
                 for dp in prediction_result.deck_predictions
             ]

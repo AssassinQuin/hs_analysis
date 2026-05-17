@@ -74,6 +74,9 @@ def hypergeometric_at_least_one(K: int, n: int, N: int) -> float:
     """
     if N <= 0 or n <= 0 or K <= 0:
         return 0.0
+    # 边界校验：K 不应超过 N（remaining > pool 是数据不一致）
+    if K > N:
+        K = N
     if K >= N:
         return 1.0
     if n >= N:

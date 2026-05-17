@@ -208,6 +208,7 @@ KEYWORD_BOOL_FIELDS = [
     ('windfury', 'WINDFURY'),
     ('stealth', 'STEALTH'),
     ('poisonous', 'POISONOUS'),
+    ('lifesteal', 'LIFESTEAL'),
     ('frozen', 'FROZEN'),
     ('reborn', 'REBORN'),
 ]
@@ -220,8 +221,9 @@ KEYWORD_CN_MAP = {
     'windfury': "风怒",
     'stealth': "潜行",
     'poisonous': "剧毒",
+    'lifesteal': "吸血",
     'frozen': "冻结",
-    'reborn': "亡语",
+    'reborn': "重生",
 }
 
 # ═══════════════════════════════════════════════════════════════

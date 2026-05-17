@@ -45,7 +45,7 @@ class HandPrediction:
         if self.probability >= 1.0:
             return f"{self.name} (确认)"
         elif self.probability >= 0.5:
-            return f"{self.name} ({self.probability:.0%})"
+            return f"{self.name} ({self.probability:.0%}很可能)"
         elif self.probability >= 0.01:
             return f"{self.name} ({self.probability:.0%})"
         else:
@@ -115,6 +115,7 @@ class HandPredictor:
         self._card_db = None
         self._probability_engine = None
         self._effect_engine = None
+        self._db_conn = None  # 缓存 HSReplay DB 连接，避免每帧开关
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -323,6 +324,38 @@ class HandPredictor:
 
         return hp
 
+    def _get_db_conn(self):
+        """获取缓存的 HSReplay DB 连接，避免每帧开关连接。"""
+        if self._db_conn is not None:
+            try:
+                # 测试连接是否可用
+                self._db_conn.execute("SELECT 1")
+                return self._db_conn
+            except Exception:
+                try:
+                    self._db_conn.close()
+                except Exception:
+                    pass
+                self._db_conn = None
+
+        try:
+            from analysis.data.fetch_hsreplay import init_db
+            from analysis.config import HSREPLAY_CACHE_DB
+            self._db_conn = init_db(str(HSREPLAY_CACHE_DB))
+            return self._db_conn
+        except Exception as e:
+            logger.debug("无法连接 HSReplay 数据库: %s", e)
+            return None
+
+    def close(self):
+        """关闭缓存的数据库连接。"""
+        if self._db_conn is not None:
+            try:
+                self._db_conn.close()
+            except Exception:
+                pass
+            self._db_conn = None
+
     def _predict_deck(self, state_dict: dict, bayesian: dict) -> List[DeckPrediction]:
         """预测对手卡组构成，取最可能的卡组。"""
         multi = self._predict_multi_deck(state_dict, bayesian)
@@ -340,7 +373,9 @@ class HandPredictor:
         played_count = Counter()
         for kc in known_cards:
             cid = kc.get("card_id", "")
-            if cid and kc.get("source") == "deck":
+            if cid:
+                # 统计所有打出的卡牌（不仅 source=="deck"），
+                # 因为发现/衍生获得的卡组内牌打出后也应减少 remaining
                 played_count[cid] += 1
         known_hand_ids = {cid for _, cid in state_dict.get("known_hand", [])}
         opp_hand_count = state_dict.get("opp_hand_count", 0)
@@ -350,15 +385,12 @@ class HandPredictor:
         from analysis.engine.dynamic_probability import hypergeometric_at_least_one
 
         result = []
-        try:
-            from analysis.data.fetch_hsreplay import init_db, get_meta_decks
-            from analysis.config import HSREPLAY_CACHE_DB
-            conn = init_db(str(HSREPLAY_CACHE_DB))
-        except Exception as e:
-            logger.debug("无法连接 HSReplay 数据库: %s", e)
+        conn = self._get_db_conn()
+        if conn is None:
             return result
 
         try:
+            from analysis.data.fetch_hsreplay import get_meta_decks
             meta_decks = get_meta_decks(conn)
             deck_map = {d["archetype_id"]: d for d in meta_decks}
 
@@ -395,12 +427,15 @@ class HandPredictor:
                             hand_probability=hand_prob,
                         ))
                     else:
+                        # 未知卡牌：remaining 应减去已打出的数量，而非直接取 count
+                        cid_guess = f"dbf_{dbf_id}"
+                        remaining_guess = max(0, count - played_count.get(cid_guess, 0))
                         deck_preds.append(DeckPrediction(
-                            card_id=f"dbf_{dbf_id}",
+                            card_id=cid_guess,
                             name=f"卡牌#{dbf_id}",
                             cost=0,
                             quantity=count,
-                            remaining=count,
+                            remaining=remaining_guess,
                             source="deck",
                         ))
 
@@ -408,7 +443,5 @@ class HandPredictor:
                 result.append((arch_name, prob, deck_preds))
         except Exception as e:
             logger.debug("构建多卡组预测失败: %s", e)
-        finally:
-            conn.close()
 
         return result

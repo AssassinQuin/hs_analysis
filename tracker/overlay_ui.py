@@ -170,6 +170,11 @@ class _CardRow(QWidget):
         max_name_w = w - x - 60
         p.setPen(QPen(name_color))
         ft = QFont("Microsoft YaHei", 8)
+        # 跨平台字体回退：macOS 用 PingFang SC，Linux 用 Noto Sans CJK SC
+        if not ft.exactMatch():
+            ft = QFont("PingFang SC", 8)
+        if not ft.exactMatch():
+            ft = QFont("Noto Sans CJK SC", 8)
         p.setFont(ft)
         fm = QFontMetrics(ft)
         dn = fm.elidedText(name, Qt.ElideRight, max_name_w)
@@ -709,6 +714,10 @@ class OverlayWindow(QWidget):
 
     def update_state(self, gs: CompleteGameState):
         self._gs = gs
+        # reset 后 _gs 已更新，清空增量哈希以强制刷新
+        self._hand_hash = ""
+        self._deck_hash = ""
+        self._grave_hash = ""
 
     def start_refresh(self):
         self._timer.start()
@@ -838,8 +847,8 @@ class OverlayWindow(QWidget):
             # 按费用排序
             deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
 
-            # 增量刷新
-            d_hash = str(self._sel_arch) + str([(c["card_id"], c["remaining"]) for c in deck_cards[:10]])
+            # 增量刷新 — 使用全部卡牌计算哈希，不仅前10张
+            d_hash = str(self._sel_arch) + str([(c["card_id"], c["remaining"]) for c in deck_cards])
             if d_hash != self._deck_hash:
                 self._deck_hash = d_hash
                 self._deck_header.set_title(
@@ -867,7 +876,7 @@ class OverlayWindow(QWidget):
                     })
             deck_cards.sort(key=lambda c: (c["cost"], c["name"]))
 
-            d_hash = str([(c["card_id"], c["remaining"]) for c in deck_cards[:10]])
+            d_hash = str([(c["card_id"], c["remaining"]) for c in deck_cards])
             if d_hash != self._deck_hash:
                 self._deck_hash = d_hash
                 self._deck_header.set_title("对手卡组", len(deck_cards))
@@ -918,8 +927,8 @@ class OverlayWindow(QWidget):
         # 排序：卡组来源优先，然后按费用
         grave_cards.sort(key=lambda c: (0 if c.get("source") == "deck" else 1, c["cost"], c["name"]))
 
-        # 增量刷新
-        g_hash = str([(c["card_id"], c.get("source", "")) for c in grave_cards[:10]])
+        # 增量刷新 — 使用全部卡牌计算哈希
+        g_hash = str([(c["card_id"], c.get("source", "")) for c in grave_cards])
         if g_hash == self._grave_hash:
             return
         self._grave_hash = g_hash

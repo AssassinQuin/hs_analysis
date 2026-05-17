@@ -637,11 +637,22 @@ class PacketReplayer:
 
             for entity in opp_entities:
                 if entity.zone == Zone.PLAY and entity.card_type == CardType.MINION:
+                    keywords = []
+                    if entity.taunt: keywords.append(KEYWORD_CN_MAP['taunt'])
+                    if entity.divine_shield: keywords.append(KEYWORD_CN_MAP['divine_shield'])
+                    if entity.charge: keywords.append(KEYWORD_CN_MAP['charge'])
+                    if entity.rush: keywords.append(KEYWORD_CN_MAP['rush'])
+                    if entity.windfury: keywords.append(KEYWORD_CN_MAP['windfury'])
+                    if entity.stealth: keywords.append(KEYWORD_CN_MAP['stealth'])
+                    if entity.poisonous: keywords.append(KEYWORD_CN_MAP['poisonous'])
+                    if entity.frozen: keywords.append(KEYWORD_CN_MAP['frozen'])
+                    if entity.reborn: keywords.append(KEYWORD_CN_MAP['reborn'])
+
                     opp_board.append({
                         'name': self._card_name(entity.card_id),
                         'atk': entity.atk,
                         'health': entity.health,
-                        'keywords': [],
+                        'keywords': keywords,
                     })
 
             # Extract hand cards
@@ -904,7 +915,7 @@ class PacketReplayer:
                     hand_count=len(our_hand),
                     hand_cards=[f"{c['name']}({c['cost']}费·{c['type']})" for c in our_hand[:8]],
                     board_minions=[f"{m['name']} {m['atk']}/{m['health']}" for m in our_board[:6]],
-                    deck_remaining=0,
+                    deck_remaining=len([e for e in our_entities if e.zone == Zone.DECK]),
                     opp_hero_hp=opp_hero_hp,
                     opp_hero_armor=opp_hero_armor,
                     opp_hero_class=self._opp_hero_class,

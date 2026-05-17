@@ -149,6 +149,8 @@ class GlobalTracker:
         self._bayesian_initialized = False
         self._secret_model = None
         self._opp_card_play_count.clear()
+        # 清理对手手牌追踪（修复内存泄漏：opp_hand_card_ids 从不清理）
+        self.state.opp_hand_card_ids.clear()
 
     # ---------------------------------------------------------------
     # 延迟加载卡牌数据库
@@ -473,8 +475,12 @@ class GlobalTracker:
 
         启发式规则：
         1. 实体出生在DECK区域 → 牌库牌
-        2. 实体出生在SETASIDE或HAND（非初始） → 衍生牌
-        3. 查卡牌数据库：非可收集 = 衍生
+        2. 实体出生在SETASIDE → 衍生牌
+        3. 实体出生在HAND区域 → 区分初始手牌 vs 衍生到手牌
+           - 游戏开始前（turn==0）出生在HAND → 牌库牌（初始手牌）
+           - 游戏开始后出生在HAND → 衍生牌（发现/生成到手牌）
+           - 硬币卡牌出生在HAND → 牌库牌（后手硬币是牌库的一部分）
+        4. 查卡牌数据库：非可收集 = 衍生
         """
         birth = self._entity_birth.get(entity_id)
         if birth:
@@ -482,8 +488,12 @@ class GlobalTracker:
                 return CardSource.DECK
             if birth.initial_zone == self.ZONE_SETASIDE:
                 return CardSource.GENERATED
-            # HAND区域的非牌库卡牌（如衍生到手牌）
+            # HAND区域：区分初始手牌 vs 衍生到手牌
             if birth.initial_zone == self.ZONE_HAND:
+                # 初始手牌（turn==0 时出现）属于牌库牌
+                # 硬币也属于牌库牌（后手硬币是初始手牌的一部分）
+                if self.state.current_turn == 0 or self._is_coin_entity(card_id):
+                    return CardSource.DECK
                 return CardSource.GENERATED
 
         # 兜底：查卡牌数据库的可收集性
@@ -588,7 +598,13 @@ class GlobalTracker:
                 self.state.last_turn_schools_player = set(player_stats.spell_schools.keys())
 
             # 清除本回合打出卡牌的追踪
-            if turn % 2 == 1:  # 我方回合开始
+            # 使用 is_first_player 判断回合归属，而非硬编码 turn%2
+            # 先手玩家在奇数回合行动，后手在偶数回合行动
+            is_our_turn = (
+                (self.state.is_first_player and turn % 2 == 1)
+                or (not self.state.is_first_player and turn % 2 == 0)
+            )
+            if is_our_turn:
                 self.state.cards_played_this_turn_player.clear()
             else:
                 self.state.cards_played_this_turn_opp.clear()
@@ -615,10 +631,16 @@ class GlobalTracker:
             self.state.player_herald_count = count
 
     def on_fatigue_change(self, controller: int, fatigue_damage: int):
-        """FATIGUE标签变化时调用 (§8.3)"""
+        """FATIGUE标签变化时调用 (§8.3)
+
+        注意：TAG_CHANGE 可能多次写入同一伤害值（同一回合多次触发），
+        只有当伤害值递增时才计数为新的疲劳事件。
+        """
         stats = self.state.opp_stats if controller == self.opp_controller else self.state.player_stats
-        stats.fatigue_damage = fatigue_damage
-        stats.times_fatigued += 1
+        # 只有当伤害值确实递增时才计数，避免重复计数
+        if fatigue_damage > stats.fatigue_damage:
+            stats.fatigue_damage = fatigue_damage
+            stats.times_fatigued += 1
 
     def on_first_player(self, is_our_player: bool):
         """检测到FIRST_PLAYER时调用 (§1.7)"""
