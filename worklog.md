@@ -1,35 +1,39 @@
 ---
 Task ID: 1
-Agent: Main Agent
-Task: Fix 3 bugs in hs_analysis Hearthstone tracker plugin
+Agent: main
+Task: 克隆仓库并识别补丁式修复
 
 Work Log:
-- Analyzed uploaded screenshot showing opponent 5 hand cards display issue
-- Cloned GitHub repo and performed comprehensive codebase exploration
-- Identified 3 root causes for the reported issues:
-  1. COIN_CARD_IDS missing current coin card IDs (BAR_COIN1, MUDAN_COIN1)
-  2. FIRST_PLAYER tag not bridged in CoreLogMonitor
-  3. TAG_CHANGE zone transitions not bridged in CoreLogMonitor
-  4. Coin detection only used card_id matching, not COIN_CARD GameTag
-  5. deck_codes.txt was stale (missing 2026 Beetle Year decks)
-
-Fixes Applied:
-1. Updated COIN_CARD_IDS in hs_enums.py to include BAR_COIN1 and MUDAN_COIN1
-2. Added is_coin parameter to on_full_entity() and on_show_entity() in global_tracker.py
-3. Added COIN_CARD GameTag detection in _bridge_new_entities() and _bridge_entities_to_global_tracker()
-4. Added coin in HAND zone → auto-detect opponent is going second (后手)
-5. Enhanced coin_used detection to also check coin_entity_id (not just card_id matching)
-6. Added _parse_tag_change_zone() method to CoreLogMonitor for real-time zone change bridging
-7. Added _parse_tag_change_first_player() method to CoreLogMonitor for FIRST_PLAYER detection
-8. Added entity zone tracking (_entity_zones dict) for zone change detection
-9. Fixed log.debug → logger.debug bug in _mark_shuffled_card_played()
-10. Updated deck_codes.txt with 10 new 2026 Beetle Year meta decks
-11. Reset new tracking state in _on_game_start()
+- 克隆了 https://github.com/AssassinQuin/hs_analysis.git 到 /home/z/my-project/hs_analysis
+- 分析了 git diff HEAD~15 HEAD，识别出 7 大补丁式修复 + 3 额外问题
 
 Stage Summary:
-- All 11 existing unit tests pass
-- Coin detection now works with BAR_COIN1 and MUDAN_COIN1
-- FIRST_PLAYER tag is now bridged from Power.log to GlobalTracker
-- TAG_CHANGE ZONE events are now bridged (enables coin use detection, card return to hand, etc.)
-- deck_codes.txt updated with 10 new 2026 meta decks + existing decks preserved
-- Files modified: hs_enums.py, global_tracker.py, log_monitor.py, deck_codes.txt
+- 识别出7个补丁式修复模式和3个额外问题
+- 按优先级排列了重构方案
+
+---
+Task ID: 2-9
+Agent: main
+Task: 执行 7+3 项重构
+
+Work Log:
+- Patch #1: 提取 EntityFields dataclass + _extract_entity_fields() 统一函数，消除3处重复字段解析代码
+- Patch #3: 用 hs_enums 的 ZONE_NAME_MAP/CARDTYPE_NAME_MAP 替代硬编码 _ZONE_MAP/_CARD_TYPE_MAP，消除魔法数字
+- Patch #7: 合并 _get_card_db(strict=False) 和 _ensure_card_db()，后者委托给前者(strict=True)
+- Patch #2: 合并 _try_enrich_player_info 和 _enrich_player_info 为 _enrich_player_info_core(re_bridge, re_emit)
+  - 提取 _refresh_opp_counts(opp_player) 消除4处重复计数代码
+  - 提取 _refresh_opp_counts_from_exporter() 消除3处重复 exporter 获取代码
+  - 提取 _emit_game_started() 消除3处重复信号构建代码
+  - 提取 _handle_controller_correction() 消除2处重复 controller 修正代码
+  - 保留 _enrich_player_info() 作为兼容别名
+- Patch #4: 提取 _bridge_single_entity() 统一桥接逻辑，_bridge_entities_to_global_tracker 和 _bridge_new_entities 都委托给它
+- Patch #5: 用 GameLifecycle 枚举(IDLE/STARTING/READY/ENDED) 替代 _game_started_emitted + _game_started_with_classes 标志对
+- Patch #6: 将 _ROW_H 全局变量改为 _ROW_H_DEFAULT 常量 + OverlayWindow._row_height 实例属性
+- 额外: class_to_cn 导入统一到模块顶部，get_opp_hand_count() 委托给 count_opp_hand()
+- 提取 _safe_int() 统一安全整数转换
+
+Stage Summary:
+- 修改文件: tracker/log_monitor.py, analysis/watcher/global_tracker.py, tracker/overlay_ui.py
+- 语法检查通过: 所有3个文件
+- 删除约427行重复代码，新增约511行(含新增结构化方法)
+- 核心改善: 消除了重复逻辑、硬编码魔法数字、全局变量修改、标志位对
