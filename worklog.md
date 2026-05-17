@@ -78,3 +78,28 @@ Stage Summary:
 - 修改文件: tracker/overlay_ui.py, tracker/hand_predictor.py, tracker/game_state.py
 - 3 个文件语法检查通过
 - 已提交 898a229 并推送到 GitHub
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: 修复hs_analysis多项核心问题 — 英雄技能排除、手牌数实时追踪、缓存失效
+
+Work Log:
+- git diff审查最近两次commit（51088e7, 2918f7f）：未发现严重补丁式修复
+- 发现英雄技能(HERO_POWER)被错误追踪为打出卡牌和衍生卡，影响贝叶斯推断
+- 发现手牌数/牌库数只在游戏开始时设置，zone变化后不更新（根因：一直5张）
+- 发现_predict_multi_deck缓存key不含known_card_count，对手出牌后概率不刷新
+
+核心修复:
+1. global_tracker.py: on_show_entity排除CT_HERO_POWER从_on_card_played和贝叶斯喂入
+2. global_tracker.py: _classify_source增加HERO_POWER优先检测
+3. global_tracker.py: on_zone_change添加实时手牌/牌库计数追踪（HAND/DECK区域变化时立即增减）
+4. global_tracker.py: on_full_entity的_PLAYABLE_CARD_TYPES改为_DECK_CARD_TYPES排除HERO_POWER
+5. dynamic_probability.py: _compute_bayesian_hand_probabilities过滤HERO_POWER + card_data复用优化
+6. hand_predictor.py: _predict_multi_deck缓存key加入known_card_count
+7. game_state.py: _build_graveyard和_build_opponent_deck排除HERO_POWER
+8. overlay_ui.py: _refresh_hand预测手牌过滤HERO_POWER
+
+Stage Summary:
+- 816个测试全部通过
+- 已推送到GitHub (commit f0e18a5)
