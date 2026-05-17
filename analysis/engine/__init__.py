@@ -4,5 +4,6 @@
 模块组成：
 - dynamic_probability: 超几何分布 + 贝叶斯卡组推断的手牌概率引擎
 - card_effect_inference: 卡牌效果推断引擎（条件持有、衍生牌、打出时机）
-- world_model: 世界推断驱动的概率调整系统（贝叶斯似然比替代硬编码）
+- world_model: 世界推断驱动的概率调整系统（贝叶斯似然比，作为回退方案）
+- opponent_hand_mcts: MCTS世界节点模拟的手牌概率推断（主方案，替代硬编码）
 """

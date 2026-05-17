@@ -249,12 +249,18 @@ class DynamicProbabilityEngine:
         self._playstyle: str = "unknown"         # 对手打法风格
         self._known_cards_with_info: List[Dict] = []  # 带有 turn_seen/cost 的已知卡牌
         self._opp_cards_played_this_turn: List[str] = []  # 对手本回合打出的卡牌
-        # 世界模型整合器（延迟初始化）
+        # 世界模型整合器（延迟初始化）—— 作为回退方案
         self._world_model_integrator: Optional[WorldModelIntegrator] = None
         # 上一次的世界模型证据（缓存，避免重复计算）
         self._last_world_evidence: Optional[WorldModelEvidence] = None
         # 卡牌效果推断引擎（延迟初始化）
         self._effect_inferences: Optional[List] = None
+        # ── MCTS世界节点模拟引擎 ──
+        # 替代硬编码似然比，通过模拟对手决策来推断手牌概率
+        self._mcts_engine: Optional[object] = None  # OpponentHandMCTS 延迟初始化
+        self._last_mcts_result: Optional[Dict[str, float]] = None  # MCTS推断结果缓存
+        # MCTS模拟状态缓存哈希
+        self._last_mcts_hash: int = 0
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -754,24 +760,34 @@ class DynamicProbabilityEngine:
         evidence: Optional[WorldModelEvidence] = None,
         hand_size: int = 0,
     ):
-        """应用世界模型证据修正概率（替代三个硬编码方法）。
+        """应用世界模型证据修正概率。
 
-        此方法替代了原有的三个硬编码概率调整方法：
-        - _apply_hold_duration_bias      → analyze_unplayed_cards (贝叶斯似然比)
-        - _apply_mulligan_keep_bias      → analyze_mana_curve_gap (法力曲线空隙 + mulligan)
-        - _apply_generated_cooccurrence_boost → integrate() 中的综合证据
-
-        所有修正基于贝叶斯似然比 LR = P(E|H) / P(E|¬H)，
-        通过 apply_likelihood_to_probability() 将似然比转化为后验概率。
-
-        如果没有提供 evidence 参数，则从当前状态自动生成。
-        如果状态信息不足，退化为超几何分布基础概率（不 crash）。
+        v3 优先使用MCTS模拟推断：
+        1. 首先尝试通过MCTS世界节点模拟推断手牌概率
+           - 采样候选手牌世界
+           - 调用卡牌效果引擎模拟对手决策
+           - 比较模拟行为与观测行为的匹配度
+           - 完全不硬编码概率值，通过模拟得出
+        2. 如果MCTS不可用（时间不足等），回退到贝叶斯似然比方法
+           - 使用 WorldModelIntegrator 生成的似然比
+           - 仍然比硬编码好，但不如MCTS精确
 
         Args:
             report: 手牌概率报告（会被就地修改）
-            evidence: 可选的 WorldModelEvidence。如果为 None，则自动从当前状态生成。
-            hand_size: 对手手牌数量，传递给 _build_world_evidence
+            evidence: 可选的 WorldModelEvidence
+            hand_size: 对手手牌数量
         """
+        # ── 优先：MCTS世界节点模拟推断 ──
+        mcts_applied = self._apply_mcts_simulation_evidence(report, hand_size=hand_size)
+
+        if mcts_applied:
+            # MCTS成功应用，不需要回退到似然比方法
+            logger.debug("MCTS模拟推断成功应用于手牌概率")
+            return
+
+        # ── 回退：贝叶斯似然比方法 ──
+        logger.debug("MCTS不可用，回退到贝叶斯似然比方法")
+
         # 如果没有提供证据，自动生成
         if evidence is None:
             evidence = self._build_world_evidence(hand_size=hand_size)
@@ -781,32 +797,134 @@ class DynamicProbabilityEngine:
             return
 
         # ── 按卡牌逐一应用似然比 ──
-        # 对每张手牌概率，找到所有相关的证据，
-        # 将多个似然比依次应用于先验概率
         for cp in report.card_probabilities:
             if cp.source == "revealed":
-                continue  # 确认手牌不受世界模型调整
+                continue
 
-            # 收集与此卡牌相关的所有证据
             relevant_evidence = self._collect_relevant_evidence(cp, evidence)
 
             if not relevant_evidence:
                 continue
 
-            # 依次应用每个似然比
-            # 后验几率 = 先验几率 × LR1 × LR2 × ...
-            # 等价于 P_posterior = apply_likelihood(P_prior, LR_combined)
-            # 其中 LR_combined = LR1 × LR2 × ...
             combined_lr = 1.0
             for ev in relevant_evidence:
                 combined_lr *= ev.likelihood
 
-            # 用组合似然比修正概率
             cp.probability = apply_likelihood_to_probability(cp.probability, combined_lr)
 
-            # 标记来源为推断（如果概率被显著调整）
             if abs(combined_lr - 1.0) > 0.05 and cp.source not in ("revealed", "inferred"):
                 cp.source = "inferred"
+
+    def _apply_mcts_simulation_evidence(
+        self,
+        report: HandProbabilityReport,
+        hand_size: int = 0,
+    ) -> bool:
+        """通过MCTS世界节点模拟推断修正手牌概率。
+
+        核心思路：
+        1. 从贝叶斯卡组中采样候选手牌世界
+        2. 对每个世界，调用卡牌效果引擎模拟对手决策
+        3. 比较模拟行为与实际观测行为
+        4. 匹配度高的世界中包含的卡牌概率提升
+
+        这完全替代了硬编码的似然比方法。
+        如果对手pass了，模拟引擎会发现在手牌假设中
+        没有可出的牌时也会pass——这自然产生正确的概率调整。
+
+        Args:
+            report: 手牌概率报告（会被就地修改）
+            hand_size: 对手手牌数量
+
+        Returns:
+            True 如果MCTS成功应用，False 如果需要回退
+        """
+        # 延迟初始化MCTS引擎
+        if self._mcts_engine is None:
+            try:
+                from analysis.engine.opponent_hand_mcts import OpponentHandMCTS
+                self._mcts_engine = OpponentHandMCTS(time_budget_ms=400.0)
+            except Exception as e:
+                logger.debug("MCTS引擎初始化失败: %s", e)
+                return False
+
+        # 构建MCTS所需的输入
+        try:
+            from analysis.engine.opponent_hand_mcts import ObservedBehavior
+
+            # 构建观测行为
+            opp_cards_this_turn = self._opp_cards_played_this_turn
+            mana_spent = 0
+            for kc in self._known_cards_with_info:
+                if kc.get("turn_seen", 0) == self._current_turn:
+                    cost = kc.get("cost", 0)
+                    if isinstance(cost, (int, float)):
+                        mana_spent += int(cost)
+
+            is_pass = len(opp_cards_this_turn) == 0 and mana_spent == 0 and self._current_turn > 1
+
+            observed = ObservedBehavior(
+                played_cards=list(opp_cards_this_turn),
+                mana_spent=mana_spent,
+                available_mana=self._available_mana,
+                passed=is_pass,
+                turn=self._current_turn,
+            )
+
+            # 如果没有足够信息（回合太早或没有观测行为），跳过MCTS
+            if self._current_turn <= 1 and not observed.played_cards:
+                return False
+
+            # 执行MCTS推断
+            mcts_probs = self._mcts_engine.infer_hand_probabilities(
+                bayesian_state=self._bayesian_state,
+                observed=observed,
+                seen_cards=self._seen_cards,
+                generated_cards=self._generated_cards,
+                hand_size=hand_size,
+                time_budget_ms=400.0,
+            )
+
+            if not mcts_probs:
+                return False
+
+            # 将MCTS推断结果应用到报告
+            # 策略：MCTS给出了每张牌在手牌中的概率
+            # 我们用它作为似然比来修正超几何分布的基础概率
+            for cp in report.card_probabilities:
+                if cp.source == "revealed":
+                    continue
+
+                mcts_prob = mcts_probs.get(cp.card_id, 0.0)
+                if mcts_prob <= 0.0:
+                    continue
+
+                # 将MCTS概率转化为似然比
+                # 如果MCTS认为牌在手牌中的概率高于超几何基础概率 → 提升
+                # 如果MCTS认为概率低于基础概率 → 降低
+                if cp.probability > 0.0 and cp.probability < 1.0:
+                    # LR = P(mcts|card_in_hand) / P(mcts|card_not_in_hand)
+                    # 近似：LR = mcts_prob / (1 - mcts_prob) / (prior_prob / (1 - prior_prob))
+                    prior_odds = cp.probability / (1.0 - cp.probability)
+                    mcts_odds = mcts_prob / max(0.001, 1.0 - mcts_prob)
+                    if prior_odds > 0:
+                        lr = mcts_odds / prior_odds
+                        # 限制似然比范围，避免过度调整
+                        lr = max(0.1, min(10.0, lr))
+                        cp.probability = apply_likelihood_to_probability(cp.probability, lr)
+                        if abs(lr - 1.0) > 0.1 and cp.source not in ("revealed", "inferred"):
+                            cp.source = "inferred"
+                elif cp.probability == 0.0 and mcts_prob > 0.0:
+                    # 基础概率为0但MCTS认为有可能
+                    cp.probability = mcts_prob * 0.5  # 保守提升
+                    cp.source = "inferred"
+
+            self._last_mcts_result = mcts_probs
+            return True
+
+        except Exception as e:
+            logger.debug("MCTS推断失败，回退到似然比方法: %s", e)
+            return False
 
     def _build_world_evidence(self, hand_size: int = 0) -> Optional[WorldModelEvidence]:
         """从当前引擎状态构建世界模型证据。
