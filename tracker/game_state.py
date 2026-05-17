@@ -371,7 +371,7 @@ class GameStateManager:
                 if (hp.card_id
                     and hp.card_id not in known_ids
                     and hp.source not in ("unknown", "")
-                    and hp.probability > 0.05):
+                    and hp.probability > 0.02):
                     cih = CardInHand(
                         card_id=hp.card_id,
                         name=hp.name,

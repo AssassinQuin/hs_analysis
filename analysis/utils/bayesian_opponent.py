@@ -35,9 +35,9 @@ from analysis.data.fetch_hsreplay import init_db, get_meta_decks
 
 
 # ── Constants ──────────────────────────────────────
-SIGNATURE_LIKELIHOOD = 0.8   # P(seen_X | deck_i) when X is a signature card
-EPSILON_LIKELIHOOD = 0.02    # P(seen_X | deck_i) when X is NOT in signature
-LOCK_THRESHOLD = 0.60        # Confidence threshold for deck lock
+SIGNATURE_LIKELIHOOD = 0.9   # P(seen_X | deck_i) when X is a signature card
+EPSILON_LIKELIHOOD = 0.01    # P(seen_X | deck_i) when X is NOT in signature
+LOCK_THRESHOLD = 0.55        # Confidence threshold for deck lock (lowered to lock faster)
 
 
 # ── Playstyle classification ──────────────────────
@@ -557,7 +557,7 @@ class BayesianOpponentModel:
 
         # Don't check lock here — we're rebuilding
 
-    def get_top_decks(self, n=5) -> list:
+    def get_top_decks(self, n=3) -> list:
         """Return top N archetypes by posterior probability.
 
         Args:
@@ -584,22 +584,7 @@ class BayesianOpponentModel:
         returns signature cards not yet observed, with probabilities computed
         using the hypergeometric distribution.
 
-        P(card_c in hand | deck_j) = 1 - C(pool - r, H) / C(pool, H)
-        where:
-            pool = hand_size + deck_remaining (total unknown cards)
-            r = remaining copies of card_c in deck_j
-            H = hand_size
-
-        When not locked, predictions are weighted across top-3 decks by
-        their posterior probability, giving a more robust estimate.
-
-        Args:
-            n: Number of predictions to return. Default 10.
-            hand_size: Opponent's current hand size (for hypergeometric calc).
-            deck_remaining: Opponent's deck remaining count.
-
-        Returns:
-            list of dicts with keys: dbfId, probability, name, cost
+        Only considers top-3 decks for prediction.
         """
         # When locked, use single deck (high confidence)
         if self.locked:

@@ -404,6 +404,12 @@ class DynamicProbabilityEngine:
         """基于贝叶斯后验 + 超几何分布计算每张卡牌的手牌概率。
 
         P(c in hand | observed) = Σ_j P(c in hand | deck=j) × P(deck=j | observed)
+
+        区分度增强：
+        1. 只考虑 top-3 卡组，忽略低概率卡组噪声
+        2. 已确认打出牌的同卡组牌获得"共现加成"——同一套卡组里已打出多张牌，
+           说明对手更可能在使用这套卡组，该卡组中未打出的牌概率大幅提升
+        3. 不在任何 top-3 卡组中的牌概率极低，直接过滤
         """
         if transformed_from_ids is None:
             transformed_from_ids = set()
@@ -417,10 +423,51 @@ class DynamicProbabilityEngine:
         if not top_decks:
             return results
 
+        # 只取 top-3 卡组（用户需求：最多适配3套）
+        top_decks = top_decks[:3]
+
         card_weighted_probs: Dict[str, float] = {}
         card_info: Dict[str, Dict] = {}
+        # 记录每张牌在哪些 top-3 卡组中出现过（用于区分度）
+        card_deck_membership: Dict[str, List[Tuple[int, float]]] = {}  # card_id -> [(deck_idx, deck_prob)]
 
+        # 收集所有 top-3 卡组的卡牌集合（dbfId 维度）
+        all_deck_dbf_sets: List[set] = []
         for deck_id, deck_name, deck_prob in top_decks:
+            deck_cards = self._get_deck_cards(deck_id)
+            all_deck_dbf_sets.append(set(deck_cards) if deck_cards else set())
+
+        # 统计对手已打出的非衍生牌在各卡组中的匹配数
+        deck_match_counts: List[int] = [0] * len(top_decks)
+        deck_total_seen: int = 0
+        for card_id, seen_count in self._seen_cards.items():
+            if card_id in self._generated_cards:
+                continue
+            dbf = self._card_id_to_dbf(card_id)
+            if dbf is None:
+                continue
+            for idx, dbf_set in enumerate(all_deck_dbf_sets):
+                if dbf in dbf_set:
+                    deck_match_counts[idx] += seen_count
+            deck_total_seen += seen_count
+
+        # 计算每套卡组的"匹配加成因子"
+        # 对手每打出一张非衍生牌，匹配到的卡组概率提升，未匹配的降低
+        # 加成 = 1.0 + match_ratio * boost_strength
+        # match_ratio = 匹配牌数 / 总已见牌数（0~1）
+        # boost_strength 随已见牌数增加而增大（打得越多，区分度越高）
+        deck_match_boost: List[float] = []
+        if deck_total_seen > 0:
+            # 已见牌越多，加成越强（最多 2.0 倍）
+            boost_strength = min(2.0, 0.3 + deck_total_seen * 0.15)
+            for idx in range(len(top_decks)):
+                match_ratio = deck_match_counts[idx] / max(deck_total_seen, 1)
+                # 匹配率高的卡组获得加成，低的获得惩罚
+                deck_match_boost.append(1.0 + (match_ratio - 0.3) * boost_strength)
+        else:
+            deck_match_boost = [1.0] * len(top_decks)
+
+        for deck_idx, (deck_id, deck_name, deck_prob) in enumerate(top_decks):
             if deck_prob <= 0.001:
                 continue
 
@@ -429,6 +476,7 @@ class DynamicProbabilityEngine:
                 continue
 
             card_counts = Counter(deck_cards)
+            match_boost = deck_match_boost[deck_idx]
 
             for dbf_id, total_copies in card_counts.items():
                 # dbfId → card_id
@@ -475,7 +523,10 @@ class DynamicProbabilityEngine:
                     N=pool,
                 )
 
-                # 加权
+                # 应用匹配加成：匹配度高的卡组中牌概率提升
+                p_in_hand = min(1.0, p_in_hand * match_boost)
+
+                # 加权：卡组后验概率 × 超几何概率
                 weighted = p_in_hand * deck_prob
 
                 if card_id in card_weighted_probs:
@@ -486,9 +537,19 @@ class DynamicProbabilityEngine:
                 if card_id not in card_info and card_data:
                     card_info[card_id] = card_data
 
+                if card_id not in card_deck_membership:
+                    card_deck_membership[card_id] = []
+                card_deck_membership[card_id].append((deck_idx, deck_prob))
+
+        # 构建结果：区分卡组内牌 vs 不在卡组中的牌
         for card_id, prob in card_weighted_probs.items():
             info = card_info.get(card_id, {})
             remaining = self._estimate_remaining_copies(card_id)
+
+            # 区分度标记：如果在 top-1 卡组中，标记为高可信度
+            membership = card_deck_membership.get(card_id, [])
+            best_deck_idx = max(membership, key=lambda x: x[1])[0] if membership else -1
+            is_in_top_deck = best_deck_idx == 0
 
             cp = CardProbability(
                 card_id=card_id,
@@ -497,7 +558,7 @@ class DynamicProbabilityEngine:
                 cost=info.get("cost", 0),
                 probability=min(1.0, prob),
                 remaining_copies=remaining,
-                source="deck",
+                source="deck" if is_in_top_deck else "possible",
                 card_type=info.get("type", ""),
                 race=info.get("race", ""),
                 spell_school=info.get("spellSchool", ""),

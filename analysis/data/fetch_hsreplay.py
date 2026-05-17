@@ -570,13 +570,58 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
     for code, name_hint, arch_hint in entries:
         if code not in seen_codes:
             seen_codes[code] = (code, name_hint, arch_hint)
-    deduped = list(seen_codes.values())
-    log.info(f"Deck codes: {len(entries)} entries, {len(deduped)} unique")
+    code_deduped = list(seen_codes.values())
+    log.info(f"Deck codes: {len(entries)} entries, {len(code_deduped)} unique codes")
+
+    # 按名称去重：同名卡组只保留第一个（最完整的变体）
+    seen_names: dict[str, tuple] = {}
+    for code, name_hint, arch_hint in code_deduped:
+        key = (name_hint or "").strip().lower()
+        if not key:
+            # 无名称提示，按 code 去重（已在上面处理）
+            seen_names[code] = (code, name_hint, arch_hint)
+        elif key not in seen_names:
+            seen_names[key] = (code, name_hint, arch_hint)
+    name_deduped = list(seen_names.values())
+    if len(name_deduped) < len(code_deduped):
+        log.info(f"Name dedup: {len(code_deduped)} → {len(name_deduped)} decks")
+
+    # 按内容相似度去重：卡牌重叠度 > 80% 的只保留一个
+    # 先解析所有卡组，然后两两比较
+    parsed_decks = []  # [(code, name_hint, arch_hint, cards_frozenset)]
+    for code, name_hint, arch_hint in name_deduped:
+        try:
+            deck = Deck.from_deckstring(code)
+            cards_set = frozenset(dbf for dbf, count in deck.cards)
+            parsed_decks.append((code, name_hint, arch_hint, cards_set))
+        except Exception:
+            continue
+
+    content_deduped = []  # [(code, name_hint, arch_hint, cards_frozenset)]
+    for code, name_hint, arch_hint, cards_set in parsed_decks:
+        is_duplicate = False
+        for existing in content_deduped:
+            ex_cards = existing[3]
+            if not ex_cards or not cards_set:
+                continue
+            overlap = len(ex_cards & cards_set)
+            max_size = max(len(ex_cards), len(cards_set))
+            similarity = overlap / max_size if max_size > 0 else 0
+            if similarity > 0.80:
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            content_deduped.append((code, name_hint, arch_hint, cards_set))
+
+    if len(content_deduped) < len(parsed_decks):
+        log.info(f"Content dedup: {len(parsed_decks)} → {len(content_deduped)} decks (80% similarity threshold)")
+
+    deduped = content_deduped
 
     today = datetime.now().strftime("%Y-%m-%d")
     stored = 0
 
-    for i, (code, name_hint, arch_hint) in enumerate(deduped):
+    for i, (code, name_hint, arch_hint, _cards_frozenset) in enumerate(deduped):
         try:
             deck = Deck.from_deckstring(code)
             # Get hero class from hero card

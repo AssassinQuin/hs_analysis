@@ -195,6 +195,9 @@ class _CardRow(QWidget):
         elif name.startswith("[") or src == "inferred":
             # 类型约束标记或推断卡牌使用强调色
             name_color = _C_TEXT_ACC
+        elif src == "possible":
+            # 不在 top-1 卡组但可能在其他卡组中的牌：稍暗
+            name_color = QColor(160, 170, 200)
         else:
             name_color = _rarity_color(rarity)
         max_name_w = w - x - 60
@@ -931,7 +934,7 @@ class OverlayWindow(QWidget):
         # ── 收集已知手牌和预测手牌 ──
         seen_ids = set()
         confirmed_cards = []   # 已确认（revealed）
-        predicted_cards = []   # 概率 > 50% 的预测
+        predicted_cards = []   # 概率 > 20% 的预测（降低阈值展示更多有区分度的概率）
 
         # 已知手牌 (来自 gs.opponent.hand)
         for h in opp.hand:
@@ -954,7 +957,7 @@ class OverlayWindow(QWidget):
                     "race": getattr(h, 'race', ''),
                 })
                 seen_ids.add(cid)
-            elif prob >= 0.5:
+            elif prob >= 0.2:
                 predicted_cards.append({
                     "card_id": cid,
                     "name": h.name or "?",
@@ -1000,8 +1003,8 @@ class OverlayWindow(QWidget):
                     seen_ids.add(cid)
                 continue
 
-            # 概率 > 50% 的预测
-            if prob >= 0.5:
+            # 概率 > 20% 的预测
+            if prob >= 0.2:
                 predicted_cards.append({
                     "card_id": cid,
                     "name": h.get("name", "?"),

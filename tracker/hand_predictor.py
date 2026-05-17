@@ -33,7 +33,7 @@ class HandPrediction:
     name: str = ""
     cost: int = 0
     probability: float = 0.0
-    source: str = "deck"  # "deck" | "generated" | "revealed" | "inferred"
+    source: str = "deck"  # "deck" | "generated" | "revealed" | "inferred" | "possible"
     card_type: str = ""   # MINION | SPELL | WEAPON | HERO | LOCATION
     race: str = ""
     spell_school: str = ""
