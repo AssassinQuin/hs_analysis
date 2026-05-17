@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MinionState:
     """场上随从状态。"""
+    entity_id: int = 0
     card_id: str = ""
     name: str = ""
     attack: int = 0
