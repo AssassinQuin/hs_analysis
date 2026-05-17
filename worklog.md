@@ -37,3 +37,20 @@ Stage Summary:
 - 语法检查通过: 所有3个文件
 - 删除约427行重复代码，新增约511行(含新增结构化方法)
 - 核心改善: 消除了重复逻辑、硬编码魔法数字、全局变量修改、标志位对
+---
+Task ID: audit-full-pipeline
+Agent: main
+Task: 拉取最新远程代码，审计从插件启动到游戏结束的完整追踪链路
+
+Work Log:
+- 拉取远程代码：d686af8 (fix: 审计修复9项)
+- 完整阅读 12 个核心文件：log_monitor.py, global_tracker.py, tracker_types.py, tracker_rules.py, game_state.py, hand_predictor.py, dynamic_probability.py, card_effect_inference.py, bayesian_opponent.py, secret_probability.py, game_tracker.py, overlay_ui.py, app.py
+- 按游戏生命周期9个阶段系统审计
+- 发现 37 个问题：P0×9 + P1×17 + P2×11
+
+Stage Summary:
+- 关键崩溃Bug 2个：opp_known_deck_cards 类型冲突(#18)、transformed_from_ids 作用域错误(#27)
+- 追踪逻辑Bug 4个：区域变化双重桥接(#7)、窥探揭示误判衍生(#11)、贝叶斯张数不衰减(#14)、opp_secrets只删一个(#23)
+- 封装问题 4个：直接访问ec._entities私有属性(#1-4)
+- 功能缺失：我方卡牌追踪几乎为空(#35)
+- 审计报告已输出给用户
