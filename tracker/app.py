@@ -27,7 +27,12 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional, List
-from PyQt5.QtCore import QTimer
+try:
+    from PyQt5.QtCore import QTimer
+    _HAS_PYQT5 = True
+except ImportError:
+    QTimer = None
+    _HAS_PYQT5 = False
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +282,7 @@ class TrackerApp:
 
         # 7. 卡组文件热更新监视器
         self._deck_codes_mtime: float = 0.0
-        self._deck_watch_timer = QTimer(self._qt_app) if self._qt_app else None
+        self._deck_watch_timer = QTimer(self._qt_app) if _HAS_PYQT5 and self._qt_app else None
         if self._deck_watch_timer:
             self._deck_watch_timer.timeout.connect(self._check_deck_codes_update)
             self._deck_watch_timer.setInterval(5000)  # 每5秒检查一次

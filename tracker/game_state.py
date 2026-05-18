@@ -188,6 +188,10 @@ class CompleteGameState:
     multi_deck_predictions: List[Dict] = field(default_factory=list)
     conditional_evidence: List[Dict] = field(default_factory=list)
 
+    # MCTS状态
+    mcts_applied: bool = False                    # Whether MCTS simulation was used
+    mcts_top_predictions: list = field(default_factory=list)  # Top MCTS predictions [(card_id, prob)]
+
 
 # ── 游戏状态管理器 ──────────────────────────────────────────────
 
@@ -297,6 +301,10 @@ class GameStateManager:
                 for dp in prediction_result.deck_predictions
             ]
             gs.conditional_evidence = prediction_result.conditional_evidence
+
+            # MCTS状态
+            gs.mcts_applied = getattr(prediction_result, 'mcts_applied', False)
+            gs.mcts_top_predictions = list(getattr(prediction_result, 'mcts_top_predictions', []))
 
             # 多卡组预测
             multi = getattr(prediction_result, 'multi_deck_predictions', [])

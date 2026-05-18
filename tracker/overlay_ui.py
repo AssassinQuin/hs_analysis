@@ -797,6 +797,13 @@ class OverlayWindow(QWidget):
         self._hand_count_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
         lay.addWidget(self._hand_count_lbl)
 
+        # MCTS状态指示器
+        self._mcts_lbl = QLabel("")
+        self._mcts_lbl.setStyleSheet(f"color:{_rgba(_C_TEXT_WARN)};")
+        self._mcts_lbl.setFont(QFont("Arial", 7))
+        self._mcts_lbl.setAttribute(Qt.WA_TransparentForMouseEvents)
+        lay.addWidget(self._mcts_lbl)
+
         # 交互切换按钮 (📌/👁)
         self._interact_btn = QPushButton("📌")
         self._interact_btn.setFixedSize(20, 20)
@@ -907,6 +914,20 @@ class OverlayWindow(QWidget):
         # 手牌/牌库计数
         opp = gs.opponent
         self._hand_count_lbl.setText(f"手{opp.hand_count} 库{opp.deck_remaining}")
+
+        # MCTS状态指示器
+        if getattr(gs, 'mcts_applied', False):
+            top_preds = getattr(gs, 'mcts_top_predictions', [])
+            if top_preds:
+                top_card, top_prob = top_preds[0]
+                self._mcts_lbl.setText(f"MCTS✓ {top_prob:.0%}")
+                self._mcts_lbl.setStyleSheet(f"color:{_rgba(_C_CONFIRM)};")
+            else:
+                self._mcts_lbl.setText("MCTS✓")
+                self._mcts_lbl.setStyleSheet(f"color:{_rgba(_C_CONFIRM)};")
+        else:
+            self._mcts_lbl.setText("")
+            self._mcts_lbl.setStyleSheet(f"color:{_rgba(_C_TEXT_DIM)};")
 
         # ── 手牌区 ──
         self._refresh_hand(gs)

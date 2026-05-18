@@ -81,6 +81,8 @@ class PredictionResult:
     conditional_evidence: List[Dict] = field(default_factory=list)
     derived_cards: List[Dict] = field(default_factory=list)
     multi_deck_predictions: List[Tuple[str, float, List[DeckPrediction]]] = field(default_factory=list)
+    mcts_applied: bool = False                    # Whether MCTS simulation was used
+    mcts_top_predictions: List[Tuple[str, float]] = field(default_factory=list)  # Top MCTS predictions
 
 
 # ── 条件效果规则 ──────────────────────────────────────────────
@@ -228,6 +230,10 @@ class HandPredictor:
                 result.hand_predictions.append(hp)
 
             result.conditional_evidence = prob_report.conditional_constraints
+
+            # 传递MCTS状态
+            result.mcts_applied = prob_report.mcts_applied
+            result.mcts_top_predictions = prob_report.mcts_top_predictions
 
             # 不再填充未知占位符——UI 层根据 opp_hand_count 显示手牌总数，
             # 只展示有实际预测价值的卡牌（概率 > 50%），避免显示 10 张无意义的 "?"

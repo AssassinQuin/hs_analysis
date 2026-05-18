@@ -170,6 +170,8 @@ class HandProbabilityReport:
     archetype_confidence: float = 0.0
     top_archetypes: List[Tuple[str, float]] = field(default_factory=list)
     conditional_constraints: List[Dict] = field(default_factory=list)
+    mcts_applied: bool = False                    # Whether MCTS simulation was used
+    mcts_top_predictions: List[Tuple[str, float]] = field(default_factory=list)  # Top MCTS predictions
 
     def get_hand_fill(self) -> List[CardProbability]:
         """获取填充到手牌数量的概率条目。"""
@@ -501,6 +503,12 @@ class DynamicProbabilityEngine:
                 cp.probability = max(cp.probability, confirmed_boost[cp.card_id])
                 if cp.source != "inferred":
                     cp.source = "confirmed_prior"
+
+        # 7. 标记MCTS应用状态
+        if self._mcts_engine is not None and self._last_mcts_result:
+            report.mcts_applied = True
+            sorted_mcts = sorted(self._last_mcts_result.items(), key=lambda x: -x[1])[:5]
+            report.mcts_top_predictions = [(cid, prob) for cid, prob in sorted_mcts]
 
         # 6. 排序
         report.card_probabilities.sort(
