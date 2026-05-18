@@ -127,27 +127,27 @@ Stage Summary:
 - 代码已推送到 GitHub: c5a192b
 
 ---
-Task ID: 1
-Agent: Super Z (main)
-Task: 将MCTS世界节点模拟系统集成到对手手牌概率推断，替代硬编码概率修改
+Task ID: mcts-v3-fixes
+Agent: main
+Task: 根据MCTS推断测试报告修复核心问题，设计缺失单元测试，全流程验证
 
 Work Log:
-- 拉取最新代码，完整阅读项目架构：MCTS引擎、世界模型、对手模拟器、卡牌效果引擎
-- 设计逆MCTS (Inverse MCTS) 架构：已知对手行为→推最可能手牌
-- 实现新模块 analysis/engine/opponent_hand_mcts.py（约600行）
-- 实现 BehaviorMatcher: 比较模拟行为与观测行为的匹配度
-- 实现 OpponentTurnSimulator: 调用卡牌效果引擎模拟对手回合决策
-- 实现 HandSampler: 从贝叶斯卡组中采样候选手牌组合
-- 实现 OpponentHandMCTS: MCTS世界节点模拟推断引擎
-- 修改 dynamic_probability.py: 新增 _apply_mcts_simulation_evidence() 方法
-- _apply_world_model_evidence() 现在优先使用MCTS，回退到似然比
-- 运行70个相关测试全部通过
-- 推送到GitHub
+- 读取上传的 mcts_inference_test_report.pdf，识别5大问题
+- P0修复1: 对手回合检测 - 去除奇偶回合规则(test_mcts_accuracy_v3.py)，opp_turn_plays已通过controller精确过滤
+- P0修复2: seen_cards计数 - 从set改为Counter，传递dict(seen_card_ids)而非{cid:1}
+- P1修复3: BehaviorMatcher新增手牌覆盖匹配维度(_hand_coverage_match)
+  - 如果世界手牌包含对手实际打出的牌，给该世界更高权重(权重0.40)
+  - 修复_card_play_match：模拟没出牌时返回0.1而非0
+- P1修复4: HandSampler动态扩展(_extend_deck_with_observed_cards)和职业卡池回退(_sample_from_class_pool)
+- P1修复5: 衍生卡牌后缀处理(_strip_card_suffix)，去除ta/t/e/en后缀
+- 新增26个单元测试(test_mcts_inference_fixes.py)，全部通过
+- 新增跨回合预测验证脚本(test_cross_turn_prediction.py)
+- 全流程验证结果：
+  - Game2对手回合检测：1→7个回合（修复奇偶规则bug）
+  - Game2 DK跨回合：MCTS Top-10命中3/15(20%) > 贝叶斯2/15(13.3%)，MCTS超越贝叶斯基线
+  - Game1战士跨回合：MCTS和贝叶斯均为2/7(28.6%)
 
 Stage Summary:
-- 新增 analysis/engine/opponent_hand_mcts.py 完整MCTS模拟推断引擎
-- 修改 analysis/engine/dynamic_probability.py 集成MCTS（优先）+似然比（回退）
-- 修改 analysis/engine/__init__.py 更新模块说明
-- 核心改进：通过模拟对手决策推断手牌概率，无硬编码概率值
-- 跨回合验证：不只看当前回合，还模拟未来1-2回合
-- 所有70个相关测试通过
+- 6个文件修改，2530行新增，130行删除
+- 95个测试全部通过(26新+69原有)
+- 代码已推送到GitHub (commit bdf64f8)

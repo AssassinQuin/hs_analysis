@@ -1,0 +1,73 @@
+{
+  "metadata": {},
+  "phases": [
+    {
+      "phase_name": "chain_test",
+      "turn": 10,
+      "duration_ms": 1.5134280001802836,
+      "summary": {},
+      "steps": [
+        {
+          "type": "action",
+          "detail": "PLAY(self) Fireball (cost=4) -> enemy_hero",
+          "time": 0.0004,
+          "data": {
+            "card": "Fireball",
+            "cost": 4,
+            "target": "enemy_hero"
+          }
+        },
+        {
+          "type": "action",
+          "detail": "PLAY(self) Arcane Intellect (cost=3)",
+          "time": 0.0007,
+          "data": {
+            "card": "Arcane Intellect",
+            "cost": 3,
+            "target": ""
+          }
+        },
+        {
+          "type": "chain_start",
+          "detail": "  CHAIN_START Arcane Intellect generated new cards",
+          "time": 0.0009,
+          "data": {
+            "depth": 1
+          }
+        },
+        {
+          "type": "chain_play",
+          "detail": "  CHAIN_PLAY depth=1 Drawn Card (cost=0)",
+          "time": 0.001,
+          "data": {
+            "cost": 0
+          }
+        },
+        {
+          "type": "chain_play",
+          "detail": "  CHAIN_PLAY depth=1 Drawn Card (cost=0)",
+          "time": 0.0012,
+          "data": {
+            "cost": 0
+          }
+        },
+        {
+          "type": "chain_play",
+          "detail": "  CHAIN_PLAY depth=1 Frostbolt (cost=2)",
+          "time": 0.0014,
+          "data": {
+            "cost": 2
+          }
+        },
+        {
+          "type": "chain_end",
+          "detail": "  CHAIN_END Arcane Intellect depth=1",
+          "time": 0.0015,
+          "data": {
+            "plays": 3
+          }
+        }
+      ]
+    }
+  ]
+}

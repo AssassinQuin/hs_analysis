@@ -1,17 +1,29 @@
 """opponent_simulator.py — 1-turn greedy opponent simulation.
 
-Simulates the opponent's best-response turn using a greedy heuristic:
-favorable trades first, then face damage. Runs within a configurable
-time budget (default < 10 ms) and degrades gracefully on any error.
+Simulates the opponent's best-response turn using either:
+1. Full action simulation (swap_perspective + apply_action) — accurate
+2. Fast heuristic estimation — for quick risk assessment
+
+The full simulation mode:
+- Uses swap_perspective to reuse the entire action system
+- Actually plays cards from opponent's hand
+- Handles effect chains, deathrattles, triggers
+- Produces detailed logs for debugging
+
+The fast estimation mode (legacy):
+- Estimates damage potential from board + hero power + spell threat
+- Runs in <10ms
+- Used for quick risk assessment when full simulation isn't needed
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
-from analysis.search.game_state import GameState
+if TYPE_CHECKING:
+    from analysis.search.game_state import GameState
 
 
 # ===================================================================
@@ -27,6 +39,9 @@ class SimulatedOpponentTurn:
     lethal_exposure: bool = False        # can opponent kill us
     worst_case_damage: int = 0           # max damage to our hero
     spell_threat: float = 0.0
+    cards_played: int = 0                # how many cards opponent played
+    damage_to_our_hero: int = 0          # actual damage dealt to our hero
+    our_hero_hp_after: int = 0           # our hero HP after simulation
 
     def estimated_opp_damage(self) -> float:
         return float(self.worst_case_damage) + float(self.spell_threat)
@@ -39,13 +54,23 @@ class SimulatedOpponentTurn:
 class OpponentSimulator:
     """Greedy 1-turn opponent simulator.
 
+    Supports two modes:
+    - full_simulation=True: Uses swap_perspective + apply_action for accurate
+      simulation including effect chains, deathrattles, etc.
+    - full_simulation=False: Fast heuristic estimation (legacy).
+
     Given the current game state, simulates what a rational opponent
     would do on their next turn and returns a summary of the outcome
     from the friendly player's perspective.
     """
 
-    def __init__(self, eval_fn: Optional[Callable[[GameState], float]] = None):
+    def __init__(
+        self,
+        eval_fn: Optional[Callable[['GameState'], float]] = None,
+        full_simulation: bool = True,
+    ):
         self.eval_fn = eval_fn
+        self.full_simulation = full_simulation
 
     # ---------------------------------------------------------------
     # Public API
@@ -53,10 +78,130 @@ class OpponentSimulator:
 
     def simulate_best_response(
         self,
-        state: GameState,
-        time_budget_ms: float = 10.0,
+        state: 'GameState',
+        time_budget_ms: float = 50.0,
     ) -> SimulatedOpponentTurn:
-        """Simulate opponent's greedy best response within *time_budget_ms*."""
+        """Simulate opponent's greedy best response within *time_budget_ms*.
+
+        When full_simulation=True, uses the perspective swap mechanism
+        to actually play opponent cards and resolve effects.
+
+        When full_simulation=False, uses the legacy fast heuristic.
+        """
+        if self.full_simulation:
+            return self._simulate_full(state, time_budget_ms)
+        else:
+            return self._simulate_fast(state, time_budget_ms)
+
+    # ---------------------------------------------------------------
+    # Full simulation mode
+    # ---------------------------------------------------------------
+
+    def _simulate_full(
+        self,
+        state: 'GameState',
+        time_budget_ms: float,
+    ) -> SimulatedOpponentTurn:
+        """Full opponent simulation using swap_perspective + apply_action."""
+        deadline = time.perf_counter() + (time_budget_ms / 1000.0)
+
+        try:
+            from analysis.search.perspective_swap import swap_perspective, swap_back
+            from analysis.search.mcts.turn_advance import (
+                _greedy_play_with_chains,
+                _greedy_attacks,
+                _try_hero_power,
+            )
+            from analysis.search.abilities.actions import Action, ActionType
+            from analysis.search.abilities.simulation import apply_action
+            from analysis.search.sim_logger import get_sim_logger
+
+            sim_log = get_sim_logger()
+
+            # Record our state before
+            our_hp_before = state.hero.hp
+            our_armor_before = state.hero.armor
+            our_board_value_before = sum(m.attack + m.health for m in state.board)
+
+            # Swap to opponent perspective
+            opp_state, saved = swap_perspective(state)
+
+            with sim_log.phase("opp_simulator", turn=state.turn_number):
+                # Simulate opponent turn
+                # 1. Play cards
+                opp_state = _greedy_play_with_chains(
+                    opp_state, max_plays=7, max_chain_depth=2,
+                    perspective="opp_sim",
+                )
+
+                # 2. Attack
+                opp_state = _greedy_attacks(
+                    opp_state, max_attacks=7, perspective="opp_sim",
+                )
+
+                # 3. Hero power
+                opp_state = _try_hero_power(opp_state, perspective="opp_sim")
+
+                # 4. End turn
+                opp_state = apply_action(
+                    opp_state, Action(action_type=ActionType.END_TURN)
+                )
+
+            # Swap back
+            result_state = swap_back(opp_state, saved)
+
+            # Compute results
+            our_hp_after = result_state.hero.hp
+            our_armor_after = result_state.hero.armor
+            our_board_value_after = sum(
+                m.attack + m.health for m in result_state.board
+            )
+
+            damage_to_hero = (our_hp_before + our_armor_before) - (our_hp_after + our_armor_after)
+            if damage_to_hero < 0:
+                damage_to_hero = 0
+
+            friendly_deaths = len([m for m in state.board if m.health > 0]) - len(result_state.board)
+            if friendly_deaths < 0:
+                friendly_deaths = 0
+
+            our_total_health = our_hp_after + our_armor_after
+            lethal_exposure = our_total_health <= 0
+
+            board_resilience = (
+                our_board_value_after / max(our_board_value_before, 1)
+                if our_board_value_before > 0
+                else 1.0
+            )
+
+            return SimulatedOpponentTurn(
+                board_resilience_delta=board_resilience,
+                friendly_deaths=friendly_deaths,
+                lethal_exposure=lethal_exposure,
+                worst_case_damage=damage_to_hero,
+                spell_threat=self._estimate_spell_threat(state),
+                cards_played=len(sim_log._current_phase.steps) if sim_log._current_phase else 0,
+                damage_to_our_hero=damage_to_hero,
+                our_hero_hp_after=our_hp_after,
+            )
+
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Full opponent simulation failed, falling back to fast: %s", exc
+            )
+            return self._simulate_fast(state, time_budget_ms)
+
+    # ---------------------------------------------------------------
+    # Fast estimation mode (legacy)
+    # ---------------------------------------------------------------
+
+    def _simulate_fast(
+        self,
+        state: 'GameState',
+        time_budget_ms: float,
+    ) -> SimulatedOpponentTurn:
+        """Fast heuristic opponent estimation (legacy logic)."""
         deadline = time.perf_counter() + (time_budget_ms / 1000.0)
         try:
             # Fast-path: no opponent board → nothing to simulate
@@ -163,7 +308,7 @@ class OpponentSimulator:
         except Exception:
             return SimulatedOpponentTurn()  # safe default
 
-    def _estimate_hero_power_damage(self, state: GameState) -> int:
+    def _estimate_hero_power_damage(self, state: 'GameState') -> int:
         cls = (state.opponent.hero.hero_class or "").upper()
         if cls == "HUNTER":
             return 2
@@ -171,7 +316,7 @@ class OpponentSimulator:
             return 1
         return 0
 
-    def _estimate_spell_threat(self, state: GameState) -> float:
+    def _estimate_spell_threat(self, state: 'GameState') -> float:
         cls = (state.opponent.hero.hero_class or "").upper()
         if cls in {"MAGE", "WARLOCK", "SHAMAN"}:
             return 2.0

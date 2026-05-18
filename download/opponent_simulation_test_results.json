@@ -1,0 +1,7 @@
+{
+  "perspective_swap": "PASS",
+  "opponent_simulation": "PASS",
+  "full_turn_advance": "PASS",
+  "opponent_simulator": "PASS",
+  "effect_chain": "PASS"
+}
