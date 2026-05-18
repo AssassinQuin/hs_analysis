@@ -39,6 +39,7 @@ import random
 import re
 import time
 import urllib.error
+import urllib.request
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -221,6 +222,66 @@ def _write_update_metadata(build: str, metadata: Dict[str, Any]) -> None:
 
 
 # ──────────────────────────────────────────────
+# Build version detection & cleanup
+# ──────────────────────────────────────────────
+
+
+def detect_latest_build(timeout: int = 10) -> str:
+    """检测 HSJSON API 最新 build 版本号。
+
+    解析 /v1/latest/ HTML 目录列表中的 build 数字。
+    失败时回退到 DATA_BUILD 默认值，不中断服务。
+
+    Returns:
+        Build 版本号字符串（如 "241958"）
+    """
+    url = f"{_API_BASE}/latest/"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            html = resp.read().decode("utf-8")
+        m = re.search(r'href="/v1/(\d+)"', html)
+        if m:
+            build = m.group(1)
+            logger.info("Detected latest HSJSON build: %s", build)
+            return build
+        logger.warning("Could not find build number in /v1/latest/ HTML")
+    except Exception as e:
+        logger.warning("Failed to detect latest build: %s", e)
+    return DATA_BUILD
+
+
+def cleanup_old_builds(current_build: str) -> List[str]:
+    """清理 card_data 中非当前版本的历史 build 目录。
+
+    Args:
+        current_build: 当前使用的 build 版本号（保留此目录）
+
+    Returns:
+        已删除的历史 build 版本号列表
+    """
+    import shutil
+
+    removed: List[str] = []
+    card_data_dir = PROJECT_ROOT / "card_data"
+    if not card_data_dir.exists():
+        return removed
+    for entry in sorted(card_data_dir.iterdir()):
+        if entry.is_dir() and entry.name.isdigit() and entry.name != current_build:
+            if entry.name == "images":
+                continue  # 保留 images 目录
+            try:
+                shutil.rmtree(entry)
+                logger.info("Cleaned up old build directory: %s (%d MB reclaimed?)", entry.name)
+                removed.append(entry.name)
+            except Exception as e:
+                logger.warning("Failed to remove old build %s: %s", entry.name, e)
+    if removed:
+        logger.info("Cleanup complete: removed %d old build(s)", len(removed))
+    return removed
+
+
+# ──────────────────────────────────────────────
 # UpdateStatus
 # ──────────────────────────────────────────────
 
@@ -265,7 +326,14 @@ class CardDB:
         if self._card_list_mode:
             self._build = DATA_BUILD
         else:
+            # Auto-detect latest build from API when using default
+            global _latest_build_cache
+            if build == DATA_BUILD and _latest_build_cache is None:
+                _latest_build_cache = detect_latest_build()
+            if build == DATA_BUILD and _latest_build_cache is not None:
+                build = _latest_build_cache
             self._build = build
+
         self._load_xml_enabled = load_xml
         self._data_dir = data_dir or (PROJECT_ROOT / "card_data" / self._build)
         self._max_age_hours = max_age_hours
@@ -1215,6 +1283,15 @@ class CardDB:
         })
         _write_update_metadata(build, meta)
 
+        # Clean up historical build directories (only after successful download)
+        if fetched:
+            try:
+                removed = cleanup_old_builds(build)
+                if removed:
+                    logger.info("Removed %d outdated build(s) after fetching %s", len(removed), build)
+            except Exception:
+                pass
+
         return {
             "build": build,
             "fetched": fetched,
@@ -1291,6 +1368,7 @@ class CardDB:
 
 _db: Optional[CardDB] = None
 _db_cache: Dict[Tuple[str, bool], CardDB] = {}
+_latest_build_cache: Optional[str] = None  # Auto-detected latest build (cached for process lifetime)
 _hero_class_map_cache: Dict[str, Dict[int, str]] = {}
 
 
