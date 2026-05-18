@@ -1,0 +1,551 @@
+
+======================================================================
+全流程模拟分析报告
+======================================================================
+日志文件: tests/fixtures/game3_dk_vs_rogue_21t.log
+游戏回合: 20
+我方决策: 10
+对手出牌: 45 (牌库=34, 衍生=11)
+MCTS总耗时: 1519ms
+
+── 引擎单例验证 ──
+  GameEngine ID: 140709305333664
+  MCTSEngine ID: 140709305435392 (应始终一致)
+  BayesianModel ID: 140709305333856 (应始终一致)
+
+── 概率推断准确性 ──
+  预测回合数: 20
+  锁定卡组: 0/20 (0%)
+  对手实际牌库牌: 10 张唯一
+  对手衍生牌: 4 张唯一
+
+── 逐回合推断 vs 实际 ──
+  Turn 1:
+    对手手牌: 5
+    贝叶斯推断: ? (0%)
+  Turn 2:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+  Turn 3:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+  Turn 4:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+  Turn 5:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+    实际出牌: 饱胀水蛭 (来源=GENERATED)
+  Turn 6:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+  Turn 7:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+    实际出牌: 堕寒男爵 (来源=DECK)
+  Turn 8:
+    对手手牌: 8
+    贝叶斯推断: ? (0%)
+    实际出牌: 堕寒男爵 (来源=DECK)
+  Turn 9:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+    实际出牌: 末日使者之杖 (来源=DECK)
+  Turn 10:
+    对手手牌: 8
+    贝叶斯推断: ? (0%)
+    实际出牌: 末日使者之杖 (来源=DECK)
+  Turn 11:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+    实际出牌: 末日使者之杖 (来源=DECK)
+    实际出牌: 奥妮克希亚的士兵 (来源=GENERATED)
+    实际出牌: 水晶养护工 (来源=DECK)
+  Turn 12:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+    实际出牌: 末日使者之杖 (来源=DECK)
+    实际出牌: 奥妮克希亚的士兵 (来源=GENERATED)
+  Turn 13:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+    实际出牌: 愤怒残魂 (来源=DECK)
+    实际出牌: 末日使者之杖 (来源=DECK)
+  Turn 14:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+    实际出牌: 愤怒残魂 (来源=DECK)
+    实际出牌: 末日使者之杖 (来源=DECK)
+  Turn 15:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+    实际出牌: 愤怒残魂 (来源=DECK)
+    实际出牌: 着魔的技师 (来源=DECK)
+    实际出牌: 末日使者之杖 (来源=DECK)
+    实际出牌: 奥妮克希亚的士兵 (来源=GENERATED)
+    实际出牌: 血帆袭击者 (来源=DECK)
+  Turn 16:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+    实际出牌: 愤怒残魂 (来源=DECK)
+    实际出牌: 着魔的技师 (来源=DECK)
+    实际出牌: 末日使者之杖 (来源=DECK)
+    实际出牌: 奥妮克希亚的士兵 (来源=GENERATED)
+    实际出牌: 血帆袭击者 (来源=DECK)
+  Turn 17:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+    实际出牌: 着魔的技师 (来源=DECK)
+    实际出牌: 末日使者之杖 (来源=DECK)
+    实际出牌: 奥妮克希亚的士兵 (来源=GENERATED)
+    实际出牌: 蛛魔护群守卫 (来源=DECK)
+    实际出牌: 蛛魔护群守卫 (来源=DECK)
+    实际出牌: 蛛魔护群守卫 (来源=DECK)
+  Turn 18:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+    实际出牌: 末日使者之杖 (来源=DECK)
+    实际出牌: 奥妮克希亚的士兵 (来源=GENERATED)
+    实际出牌: 蛛魔护群守卫 (来源=DECK)
+    实际出牌: 蛛魔护群守卫 (来源=DECK)
+    实际出牌: 蛛魔护群守卫 (来源=DECK)
+  Turn 19:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+    实际出牌: 复活的奥妮克希亚 (来源=DECK)
+    实际出牌: 奥妮克希亚之翼 (来源=GENERATED)
+    实际出牌: 原始剑齿豹 (来源=DECK)
+    实际出牌: 奥妮克希亚之翼 (来源=GENERATED)
+    实际出牌: 缚风者 (来源=DECK)
+  Turn 20:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+    实际出牌: 复活的奥妮克希亚 (来源=DECK)
+    实际出牌: 奥妮克希亚之翼 (来源=GENERATED)
+    实际出牌: 原始剑齿豹 (来源=DECK)
+    实际出牌: 奥妮克希亚之翼 (来源=GENERATED)
+    实际出牌: 缚风者 (来源=DECK)
+
+--- 原始数据 ---
+[
+  {
+    "turn": 1,
+    "opp_hand_count": 5,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 2,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 3,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 4,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 5,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "EDR_810t",
+        "name": "饱胀水蛭",
+        "source": "GENERATED"
+      }
+    ]
+  },
+  {
+    "turn": 6,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 7,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "RLK_708",
+        "name": "堕寒男爵",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 8,
+    "opp_hand_count": 8,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "RLK_708",
+        "name": "堕寒男爵",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 9,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 10,
+    "opp_hand_count": 8,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 11,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780t",
+        "name": "奥妮克希亚的士兵",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "TLC_255",
+        "name": "水晶养护工",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 12,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780t",
+        "name": "奥妮克希亚的士兵",
+        "source": "GENERATED"
+      }
+    ]
+  },
+  {
+    "turn": 13,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "END_004",
+        "name": "愤怒残魂",
+        "source": "DECK"
+      },
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 14,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "END_004",
+        "name": "愤怒残魂",
+        "source": "DECK"
+      },
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 15,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "END_004",
+        "name": "愤怒残魂",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780",
+        "name": "着魔的技师",
+        "source": "DECK"
+      },
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780t",
+        "name": "奥妮克希亚的士兵",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "CORE_NEW1_018",
+        "name": "血帆袭击者",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 16,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "END_004",
+        "name": "愤怒残魂",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780",
+        "name": "着魔的技师",
+        "source": "DECK"
+      },
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780t",
+        "name": "奥妮克希亚的士兵",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "CORE_NEW1_018",
+        "name": "血帆袭击者",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 17,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "CATA_780",
+        "name": "着魔的技师",
+        "source": "DECK"
+      },
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780t",
+        "name": "奥妮克希亚的士兵",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "CORE_RLK_062",
+        "name": "蛛魔护群守卫",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CORE_RLK_062",
+        "name": "蛛魔护群守卫",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CORE_RLK_062",
+        "name": "蛛魔护群守卫",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 18,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_780t",
+        "name": "奥妮克希亚的士兵",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "CORE_RLK_062",
+        "name": "蛛魔护群守卫",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CORE_RLK_062",
+        "name": "蛛魔护群守卫",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CORE_RLK_062",
+        "name": "蛛魔护群守卫",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 19,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "CATA_155",
+        "name": "复活的奥妮克希亚",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_155t",
+        "name": "奥妮克希亚之翼",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "TLC_247",
+        "name": "原始剑齿豹",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_155t1",
+        "name": "奥妮克希亚之翼",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "CATA_724",
+        "name": "缚风者",
+        "source": "DECK"
+      }
+    ]
+  },
+  {
+    "turn": 20,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": [
+      {
+        "card_id": "CATA_155",
+        "name": "复活的奥妮克希亚",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_155t",
+        "name": "奥妮克希亚之翼",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "TLC_247",
+        "name": "原始剑齿豹",
+        "source": "DECK"
+      },
+      {
+        "card_id": "CATA_155t1",
+        "name": "奥妮克希亚之翼",
+        "source": "GENERATED"
+      },
+      {
+        "card_id": "CATA_724",
+        "name": "缚风者",
+        "source": "DECK"
+      }
+    ]
+  }
+]

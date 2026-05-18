@@ -22,7 +22,7 @@ from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
 from analysis.search.abilities.actions import Action
-from analysis.search.engine_adapter import UnifiedSearchResult, create_engine
+from analysis.search.engine_adapter import UnifiedSearchResult, GameEngine, create_engine
 from analysis.utils.score_provider import load_scores_into_hand
 from analysis.utils.bayesian_opponent import classify_card_playstyle
 
@@ -352,7 +352,7 @@ class DecisionLoop:
             "time_decay_gamma": 0.6,
             "max_actions_per_turn": 10,
         }
-        self._engine_factory = create_engine("mcts", self.engine_params)
+        self._game_engine: GameEngine = create_engine("mcts", self.engine_params)()
         self.poll_interval = poll_interval
         self.on_decision = on_decision
         self.presenter = DecisionPresenter(
@@ -473,6 +473,8 @@ class DecisionLoop:
             log.info("New game detected")
             self._last_turn = 0
             self._last_decision_signature = None
+            # 通知 GameEngine 单例游戏开始
+            self._game_engine.on_game_start()
             # Auto-reset GlobalTracker when latest_game_only=True
             if self._global_tracker is not None:
                 self._global_tracker.on_game_start()
@@ -482,6 +484,8 @@ class DecisionLoop:
             log.info("Game ended")
             self._last_turn = 0
             self._last_decision_signature = None
+            # 通知 GameEngine 单例游戏结束
+            self._game_engine.on_game_end()
             self._display.present_status("游戏结束")
         elif event == "turn_start":
             current_turn = self._tracker.get_current_turn()
@@ -614,10 +618,9 @@ class DecisionLoop:
         opp_playstyle = _infer_opp_playstyle(state)
         state.opp_playstyle = opp_playstyle
 
-        engine = self._engine_factory()
-
+        # 使用 GameEngine 单例（MCTS + Bayesian 只有一份）
         start_time = time.perf_counter()
-        raw_result = engine.search(state, opp_playstyle=opp_playstyle)
+        raw_result = self._game_engine.search(state, opp_playstyle=opp_playstyle)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
         result = UnifiedSearchResult(raw_result)
@@ -681,7 +684,8 @@ class DecisionLoop:
 
         tracker = GameTracker()
         bridge = StateBridge()
-        engine_factory = create_engine(engine, engine_kwargs)
+        # 使用 GameEngine 单例
+        game_engine: GameEngine = create_engine(engine, engine_kwargs)()
 
         events = tracker.load_file(log_path)
         log.info(f"Parsed {len(events)} events")
@@ -690,7 +694,9 @@ class DecisionLoop:
         for event in events:
             if event == "game_start":
                 last_turn = 0
+                game_engine.on_game_start()
             elif event == "game_end":
+                game_engine.on_game_end()
                 break
             elif event == "turn_start":
                 current_turn = tracker.get_current_turn()
@@ -707,9 +713,8 @@ class DecisionLoop:
 
                     load_scores_into_hand(state)
 
-                    eng = engine_factory()
                     start_time = time.perf_counter()
-                    raw_result = eng.search(state)
+                    raw_result = game_engine.search(state)
                     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
                     result = UnifiedSearchResult(raw_result)
                     presenter = DecisionPresenter(output=output)

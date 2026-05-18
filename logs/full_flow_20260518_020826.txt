@@ -1,0 +1,98 @@
+
+======================================================================
+全流程模拟分析报告
+======================================================================
+日志文件: Power.log
+游戏回合: 6
+我方决策: 3
+对手出牌: 0 (牌库=0, 衍生=0)
+MCTS总耗时: 1653ms
+
+── 引擎单例验证 ──
+  GameEngine ID: 139859315503568
+  MCTSEngine ID: 139859315504864 (应始终一致)
+  BayesianModel ID: 139859315505152 (应始终一致)
+
+── 概率推断准确性 ──
+  预测回合数: 6
+  锁定卡组: 0/6 (0%)
+  对手实际牌库牌: 0 张唯一
+  对手衍生牌: 0 张唯一
+
+── 逐回合推断 vs 实际 ──
+  Turn 1:
+    对手手牌: 5
+    贝叶斯推断: ? (0%)
+  Turn 2:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+  Turn 3:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+  Turn 4:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+  Turn 5:
+    对手手牌: 6
+    贝叶斯推断: ? (0%)
+  Turn 6:
+    对手手牌: 7
+    贝叶斯推断: ? (0%)
+
+--- 原始数据 ---
+[
+  {
+    "turn": 1,
+    "opp_hand_count": 5,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 2,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 3,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 4,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 5,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 6,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": null,
+    "known_hand_cards": [],
+    "actual_opp_plays": []
+  }
+]
