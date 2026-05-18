@@ -18,7 +18,7 @@ from analysis.card.engine.state import (
     Minion,
     OpponentState,
 )
-from analysis.search.engine.mechanics.spell_target_resolver import (
+from analysis.search.engine.mechanics import (
     SpellTargetResolver,
     TargetEntityType,
     TargetSide,

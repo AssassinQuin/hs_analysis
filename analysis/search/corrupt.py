@@ -6,8 +6,8 @@ higher cost. The upgraded card replaces the original in hand.
 
 from __future__ import annotations
 
-from analysis.search.game_state import GameState
-from analysis.models.card import Card
+from analysis.card.engine.state import GameState
+from analysis.card.models.card import Card
 
 
 def has_corrupt(card) -> bool:

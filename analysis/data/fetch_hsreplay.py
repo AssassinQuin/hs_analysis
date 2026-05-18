@@ -518,7 +518,7 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
         return 0
 
     # Use lightweight hero dbfId -> class map first; fallback to card DB for unknown hero ids.
-    from analysis.data.hsdb import get_db, get_hero_class_map
+    from analysis.card.data.card_data import get_db, get_hero_class_map
 
     hero_class_map = get_hero_class_map()
     db = None

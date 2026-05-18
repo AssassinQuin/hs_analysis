@@ -29,7 +29,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.card.engine.state import GameState
 
 log = logging.getLogger(__name__)
 

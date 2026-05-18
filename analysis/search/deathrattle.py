@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import List, Tuple
 
-from analysis.search.game_state import GameState, Minion
+from analysis.card.engine.state import GameState, Minion
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ def _execute_abilities_deathrattle(
 ) -> GameState:
     """Execute deathrattle via unified abilities system (zero regex)."""
     from analysis.search.abilities.parser import AbilityParser
-    from analysis.search.abilities.definition import AbilityTrigger
+    from analysis.card.abilities.definition import AbilityTrigger
     from analysis.search.abilities.executor import execute_effects
 
     abilities = getattr(minion, 'abilities', [])

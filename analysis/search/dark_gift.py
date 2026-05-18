@@ -12,7 +12,7 @@ import logging
 import random
 from dataclasses import dataclass
 
-from analysis.search.game_state import GameState
+from analysis.card.engine.state import GameState
 
 logger = logging.getLogger(__name__)
 

@@ -272,7 +272,7 @@ class OpponentTurnSimulator:
     def _ensure_card_db(self):
         if self._card_db is None:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except Exception as e:
                 logger.warning("无法加载卡牌数据库: %s", e)
@@ -383,10 +383,10 @@ class OpponentTurnSimulator:
         Returns:
             SimulatedBehavior 模拟的对手行为
         """
-        from analysis.search.game_state import (
+        from analysis.card.engine.state import (
             GameState, HeroState, ManaState, Minion, OpponentState as SearchOppState,
         )
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         try:
             opp_mana = min(10, max(1, turn_number))
@@ -611,7 +611,7 @@ class HandSampler:
     def _ensure_card_db(self):
         if self._card_db is None:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except Exception:
                 pass
@@ -876,7 +876,7 @@ class HandSampler:
 
     def _dbf_to_card(self, dbf_id: int):
         """dbfId转Card对象。"""
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         if self._card_db is not None:
             card_data = self._card_db.get_by_dbf(dbf_id)
@@ -1252,7 +1252,7 @@ class OpponentHandMCTS:
     def _default_opponent_state():
         """默认对手状态。"""
         try:
-            from analysis.search.game_state import OpponentState, HeroState
+            from analysis.card.engine.state import OpponentState, HeroState
             return OpponentState(hero=HeroState(hp=30))
         except ImportError:
             return None

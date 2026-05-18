@@ -22,8 +22,8 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from analysis.search.game_state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
-from analysis.models.card import Card
+from analysis.card.engine.state import GameState, Minion, HeroState, ManaState, OpponentState, Weapon
+from analysis.card.models.card import Card
 from analysis.data.card_effects import get_effects, CardEffects
 from analysis.evaluators.composite import target_selection_eval
 
@@ -31,7 +31,7 @@ from analysis.evaluators.composite import target_selection_eval
 from analysis.search.abilities.effect_parser import EffectParser  # noqa: F401
 
 # Executor — the unified effect application engine
-from analysis.search.abilities.definition import (
+from analysis.card.abilities.definition import (
     EffectKind, EffectSpec, TargetSpec, TargetKind,
 )
 from analysis.search.abilities.executor import (

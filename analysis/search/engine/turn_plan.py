@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from analysis.search.engine.models.probability_panel import ProbabilityPanel
-from analysis.search.abilities import Action
+from analysis.search.engine.models import ProbabilityPanel
+from analysis.card.abilities.definition import Action
 
 
 @dataclass

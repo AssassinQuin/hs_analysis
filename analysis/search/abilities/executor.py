@@ -16,13 +16,13 @@ import logging
 import random
 from typing import List, Optional, TYPE_CHECKING
 
-from analysis.search.abilities.definition import (
+from analysis.card.abilities.definition import (
     CardAbility, AbilityTrigger, EffectSpec, EffectKind,
     ConditionSpec, ConditionKind, TargetSpec, TargetKind,
 )
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState, Minion, HeroState
+    from analysis.card.engine.state import GameState, Minion, HeroState
 
 log = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ def _execute_single(
     kind = effect.kind
 
     if kind == EffectKind.WEAPON_EQUIP:
-        from analysis.search.game_state import Weapon
+        from analysis.card.engine.state import Weapon
         state.hero.weapon = Weapon(
             attack=effect.value, health=effect.value2,
             name=getattr(source, 'name', 'Weapon'),
@@ -281,7 +281,7 @@ def _exec_damage(state: GameState, effect: EffectSpec, target) -> GameState:
 
 def _exec_summon(state: GameState, effect: EffectSpec) -> GameState:
     """SUMMON: create a token minion on the friendly board."""
-    from analysis.search.game_state import Minion as _Minion
+    from analysis.card.engine.state import Minion as _Minion
     atk = effect.value
     hp = effect.value2
     if atk > 0 or hp > 0:

@@ -4,7 +4,8 @@ pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", all
 
 from analysis.card.engine.state import GameState, HeroState, Minion, ManaState, OpponentState
 from analysis.card.models.card import Card
-from analysis.search.abilities import apply_action, Action
+from analysis.card.abilities.definition import Action
+from analysis.card.engine.simulation import apply_action
 from analysis.card.engine.mechanics._data import apply_imbue, apply_hero_power, IMBUE_HERO_POWERS
 
 

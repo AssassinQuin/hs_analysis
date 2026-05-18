@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import List, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.models.card import Card
+    from analysis.card.models.card import Card
 
 
 class EffectParser:

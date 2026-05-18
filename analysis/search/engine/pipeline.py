@@ -9,27 +9,19 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from analysis.search.game_state import GameState
-from analysis.search.abilities import Action, ActionType, enumerate_legal_actions
+from analysis.card.engine.state import GameState
+from analysis.card.abilities.definition import Action, ActionType
+from analysis.card.engine.rules import enumerate_legal_actions
 from analysis.search.engine.strategic import strategic_decision, StrategicMode
 from analysis.search.engine.tactical import TacticalPlanner, TacticalCandidate
 from analysis.search.engine.action_pruner import ActionPruner
 from analysis.search.engine.attack_planner import AttackPlanner, AttackPlan
-from analysis.search.engine.factors.factor_graph import (
-    FactorGraphEvaluator, FactorScores,
+from analysis.search.engine.factors import (
+    BoardControlFactor, DiscoverEVFactor, EvalContext,
+    FactorGraphEvaluator, FactorScores, LethalThreatFactor,
+    ResourceEfficiencyFactor, SurvivalFactor, TempoFactor, ValueFactor,
 )
-from analysis.search.engine.factors.factor_base import EvalContext
-from analysis.search.engine.factors.board_control import BoardControlFactor
-from analysis.search.engine.factors.lethal_threat import LethalThreatFactor
-from analysis.search.engine.factors.tempo import TempoFactor
-from analysis.search.engine.factors.value import ValueFactor
-from analysis.search.engine.factors.survival import SurvivalFactor
-from analysis.search.engine.factors.resource_efficiency import ResourceEfficiencyFactor
-from analysis.search.engine.factors.discover_ev import DiscoverEVFactor
-from analysis.search.engine.models.probability_panel import (
-    ProbabilityPanel,
-    compute_panel,
-)
+from analysis.search.engine.models import compute_panel
 from analysis.search.engine.turn_plan import TurnPlan, NextTurnOuts
 
 

@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 
 log = logging.getLogger(__name__)
 

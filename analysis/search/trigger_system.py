@@ -17,7 +17,7 @@ import copy
 import logging
 from typing import List, Optional
 
-from analysis.search.game_state import GameState, Minion
+from analysis.card.engine.state import GameState, Minion
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ def dispatch_turn_start(state: GameState) -> GameState:
 # ===================================================================
 
 if __name__ == "__main__":
-    from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
+    from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
     from analysis.search.enchantment import Enchantment, apply_enchantment
 
     state = GameState()

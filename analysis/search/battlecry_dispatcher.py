@@ -19,8 +19,8 @@ import re
 import logging
 from typing import List, Optional, Tuple
 
-from analysis.search.game_state import GameState, Minion, HeroState
-from analysis.models.card import Card
+from analysis.card.engine.state import GameState, Minion, HeroState
+from analysis.card.models.card import Card
 from analysis.evaluators.composite import target_selection_eval
 from analysis.search.abilities.effect_parser import EffectParser
 from analysis.search.abilities.executor import (
@@ -331,7 +331,7 @@ class BattlecryDispatcher:
             if not has_race:
                 return state
 
-        from analysis.search.game_state import Weapon
+        from analysis.card.engine.state import Weapon
         state.hero.weapon = Weapon(attack=atk, health=dur, name="BattlecryWeapon")
         return state
 
@@ -506,8 +506,8 @@ def dispatch_battlecry_branches(
 # ===================================================================
 
 if __name__ == "__main__":
-    from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
-    from analysis.models.card import Card
+    from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
+    from analysis.card.models.card import Card
 
     state = GameState(hero=HeroState(hp=30), opponent=OpponentState(hero=HeroState(hp=30)))
 

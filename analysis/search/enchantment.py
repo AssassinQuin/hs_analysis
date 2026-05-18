@@ -200,7 +200,7 @@ def tick_enchantments(minion) -> int:
 # ===================================================================
 
 if __name__ == "__main__":
-    from analysis.search.game_state import Minion
+    from analysis.card.engine.state import Minion
 
     m = Minion(attack=3, health=3, max_health=3)
     print(f"Base: {m.attack}/{m.health}")

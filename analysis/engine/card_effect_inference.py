@@ -98,7 +98,7 @@ class CardEffectInferenceEngine:
     def _ensure_card_db(self):
         if self._card_db is None:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except Exception as e:
                 logger.warning("无法加载卡牌数据库: %s", e)
@@ -194,7 +194,7 @@ class CardEffectInferenceEngine:
         推断对手手牌中有对应种族/学派的牌。
         """
         # 中文条件效果 — races from hs_enums, schools from hs_enums
-        from analysis.constants.hs_enums import RACE_ZH_MAP, SCHOOL_ZH_MAP
+        from analysis.card.constants.hs_enums import RACE_ZH_MAP, SCHOOL_ZH_MAP
 
         # Build CN patterns from unified mappings
         _CN_PATTERNS = {}

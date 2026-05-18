@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from analysis.search.enchantment import Enchantment, apply_enchantment, remove_enchantment
-from analysis.search.game_state import GameState, Minion
+from analysis.card.engine.state import GameState, Minion
 
 
 # ---------------------------------------------------------------------------

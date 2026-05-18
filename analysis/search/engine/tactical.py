@@ -5,14 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from analysis.search.game_state import GameState
-from analysis.search.abilities import Action, ActionType, apply_action
-from analysis.search.engine.factors.factor_graph import (
-    FactorGraphEvaluator, FactorScores,
-)
-from analysis.search.engine.factors.factor_base import EvalContext
+from analysis.card.engine.state import GameState
+from analysis.card.abilities.definition import Action, ActionType
+from analysis.card.engine.simulation import apply_action
+from analysis.search.engine.factors import EvalContext, FactorGraphEvaluator, FactorScores
 from analysis.search.engine.attack_planner import AttackPlanner, AttackPlan
-from analysis.search.engine.mechanics.spell_target_resolver import SpellTargetResolver
+from analysis.search.engine.mechanics import SpellTargetResolver
 
 
 @dataclass

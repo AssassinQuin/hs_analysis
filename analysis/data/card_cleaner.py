@@ -8,7 +8,7 @@ with legacy JSON data files.
 
 For new code::
 
-    from analysis.data.hsdb import get_db
+    from analysis.card.data.card_data import get_db
     db = get_db()
     card = db.get_card("EX1_001")  # mechanics, race, school all pre-extracted
 """

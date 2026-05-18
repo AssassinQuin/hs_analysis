@@ -6,7 +6,7 @@ When a card with IMBUE mechanic is played, the hero power gets stronger.
 
 from __future__ import annotations
 
-from analysis.search.game_state import GameState, Minion, Weapon
+from analysis.card.engine.state import GameState, Minion, Weapon
 
 # ===================================================================
 # Imbue hero power table

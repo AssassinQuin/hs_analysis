@@ -15,7 +15,7 @@ import random
 import re
 from dataclasses import replace
 
-from analysis.search.game_state import GameState, Minion
+from analysis.card.engine.state import GameState, Minion
 
 logger = logging.getLogger(__name__)
 

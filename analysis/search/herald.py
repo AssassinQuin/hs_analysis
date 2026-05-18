@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.card.engine.state import GameState
 
 
 # Per-class soldier minion definitions
@@ -52,7 +52,7 @@ def apply_herald(state: 'GameState', card) -> 'GameState':
         Modified game state with herald counter incremented and
         soldier summoned (if board has room).
     """
-    from analysis.search.game_state import Minion as _Minion
+    from analysis.card.engine.state import Minion as _Minion
 
     if not check_herald(card):
         return state

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from analysis.search.abilities.actions import ActionType
-from analysis.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, SCHOOL_ZH_MAP as _SPELL_SCHOOL_MAP
+from analysis.card.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, SCHOOL_ZH_MAP as _SPELL_SCHOOL_MAP
 
 _QUEST_THRESHOLD_EN = re.compile(r'(\d+)\s*(?:cards?|spells?|minions?)')
 _QUEST_TOTAL_CN = re.compile(r'总计(\d+)张')
@@ -49,8 +49,8 @@ class QuestState:
 # ===================================================================
 
 # Map Chinese race/type names to uppercase English constants
-# _RACE_MAP is now imported from analysis.constants.hs_enums
-# _SPELL_SCHOOL_MAP is now imported from analysis.constants.hs_enums
+# _RACE_MAP is now imported from analysis.card.constants.hs_enums
+# _SPELL_SCHOOL_MAP is now imported from analysis.card.constants.hs_enums
 
 
 def _parse_constraint(text: str, english_text: str = '') -> str:

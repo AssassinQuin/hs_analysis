@@ -1,4 +1,18 @@
-from analysis.search.engine.mechanics.spell_target_resolver import (
+"""Mechanics handlers for search engine. All handler classes live in mechanics.py."""
+
+from analysis.search.engine.mechanics.mechanics import (
+    HeroCardHandler,
     SpellTargetResolver,
+    TargetSide,
+    TargetEntityType,
+    TargetSpec,
+    _TARGETING_KEYWORDS,
 )
-from analysis.search.engine.mechanics.hero_card_handler import HeroCardHandler
+
+__all__ = [
+    "HeroCardHandler",
+    "SpellTargetResolver",
+    "TargetSide",
+    "TargetEntityType",
+    "TargetSpec",
+]

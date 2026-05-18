@@ -6,7 +6,7 @@ Uses English text and mechanics tags exclusively — zero regex.
 """
 from __future__ import annotations
 
-from analysis.search.abilities.definition import (
+from analysis.card.abilities.definition import (
     AbilityTrigger,
     EffectKind,
     ConditionKind,
@@ -117,7 +117,7 @@ TARGET_PHRASES = {
 # Race name normalization (English text → standard race)
 # ──────────────────────────────────────────────────────────────
 
-from analysis.constants.hs_enums import RACE_EN_NORMALIZE as RACE_NAMES
+from analysis.card.constants.hs_enums import RACE_EN_NORMALIZE as RACE_NAMES
 
 # ──────────────────────────────────────────────────────────────
 # Trigger timing keywords in text → AbilityTrigger

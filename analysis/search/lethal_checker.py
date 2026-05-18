@@ -16,13 +16,10 @@ import time
 from typing import List, Optional
 
 from analysis.data.card_effects import get_card_damage, _DAMAGE_CN, _DAMAGE_EN
-from analysis.search.game_state import GameState, Minion
-from analysis.search.abilities import (
-    Action,
-    ActionType,
-    apply_action,
-    enumerate_legal_actions,
-)
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.abilities.definition import Action, ActionType
+from analysis.card.engine.simulation import apply_action
+from analysis.card.engine.rules import enumerate_legal_actions
 
 
 # ===================================================================

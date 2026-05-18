@@ -17,7 +17,7 @@ from analysis.card.data.card_data import get_index
 from analysis.card.engine.deterministic import det_top_k
 from analysis.card.models.card import Card
 from analysis.utils.score_provider import ScoreProvider
-from analysis.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, RACE_EN_NORMALIZE as _RACE_EN_MAP
+from analysis.card.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, RACE_EN_NORMALIZE as _RACE_EN_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def get_discover_cost_reduction(source_card_text: str, english_text: str = '') -
 
 # ===================================================================
 # Race name mapping (Chinese → JSON race value) — imported from hs_enums
-# _RACE_MAP is now imported from analysis.constants.hs_enums
+# _RACE_MAP is now imported from analysis.card.constants.hs_enums
 
 _TYPE_NORMALIZE = {
     '装备': 'WEAPON',

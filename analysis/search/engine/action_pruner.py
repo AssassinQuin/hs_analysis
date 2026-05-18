@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import List, Set, Tuple
 
-from analysis.search.game_state import GameState, Minion
-from analysis.search.abilities import Action, ActionType
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.abilities.definition import Action, ActionType
 
 
 class ActionPruner:

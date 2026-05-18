@@ -7,7 +7,7 @@ leftmost or rightmost position in hand gain bonus effects.
 from __future__ import annotations
 
 import re
-from analysis.search.game_state import GameState
+from analysis.card.engine.state import GameState
 
 
 # ===================================================================

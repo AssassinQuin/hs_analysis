@@ -13,19 +13,19 @@ from typing import TYPE_CHECKING
 from analysis.search.abilities.actions import Action, ActionType
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.card.engine.state import GameState
 
-from analysis.search.game_state import Minion, Weapon
-from analysis.models.card import Card
+from analysis.card.engine.state import Minion, Weapon
+from analysis.card.models.card import Card
 from analysis.data.card_effects import (
     get_card_armor,
     get_card_damage,
     get_card_health_cost,
 )
-from analysis.constants.hs_enums import COIN_CARD_IDS as _COIN_CARD_IDS
+from analysis.card.constants.hs_enums import COIN_CARD_IDS as _COIN_CARD_IDS
 from analysis.search.aura_engine import recompute_auras
 from analysis.search.battlecry_dispatcher import dispatch_battlecry
-from analysis.search.choose_one import is_choose_one, resolve_choose_one
+from analysis.card.engine.mechanics.choose_one import is_choose_one, resolve_choose_one
 from analysis.search.colossal import parse_colossal_value, summon_colossal_appendages
 from analysis.search.corpse import (
     gain_corpses,
@@ -58,7 +58,7 @@ _DEATH_SHADOW_CARD_IDS = frozenset({"CORE_RLK_567", "RLK_567"})
 def _trigger_minion_on_spell_cast(s):
     """After casting a spell, check friendly minions for ON_SPELL_CAST triggers."""
     from analysis.search.abilities.parser import AbilityParser
-    from analysis.search.abilities.definition import AbilityTrigger
+    from analysis.card.abilities.definition import AbilityTrigger
 
     for m in s.board:
         if m.health <= 0:
@@ -85,7 +85,7 @@ def _trigger_location_spell_react(s, card):
     Uses abilities executor to detect spellSchool-based cooldown resets.
     """
     from analysis.search.abilities.parser import AbilityParser
-    from analysis.search.abilities.definition import AbilityTrigger
+    from analysis.card.abilities.definition import AbilityTrigger
 
     spell_school = getattr(card, "spell_school", "") or ""
     if not spell_school:
@@ -114,7 +114,7 @@ def _trigger_location_spell_react(s, card):
 def _apply_text_cost_reduction(card, hand, card_idx, current_cost):
     """Apply passive text-based cost reductions via abilities system."""
     from analysis.search.abilities.parser import AbilityParser
-    from analysis.search.abilities.definition import AbilityTrigger, EffectKind
+    from analysis.card.abilities.definition import AbilityTrigger, EffectKind
 
     abilities = getattr(card, 'abilities', [])
     if not abilities:
@@ -252,9 +252,7 @@ def _apply_play_card(s, action: Action):
         s = _play_spell(s, card, action)
     elif card.card_type.upper() == "HERO":
         try:
-            from analysis.search.engine.mechanics.hero_card_handler import (
-                HeroCardHandler,
-            )
+            from analysis.search.engine.mechanics import HeroCardHandler
             s = HeroCardHandler().apply_hero_card(s, card)
         except (ImportError, AttributeError):
             armor = card.effective_armor() if hasattr(card, "effective_armor") else 0
@@ -575,9 +573,7 @@ def _apply_hero_replace(s, action: Action):
         s.mana.consume_modifiers(card)
         s.cards_played_this_turn.append(card)
         try:
-            from analysis.search.engine.mechanics.hero_card_handler import (
-                HeroCardHandler,
-            )
+            from analysis.search.engine.mechanics import HeroCardHandler
             s = HeroCardHandler().apply_hero_card(s, card)
         except (ImportError, AttributeError):
             armor = getattr(card, "armor", 0) or 0

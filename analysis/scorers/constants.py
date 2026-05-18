@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 
-from analysis.constants.hs_enums import RACE_ZH_MAP, SCHOOL_ZH_MAP
+from analysis.card.constants.hs_enums import RACE_ZH_MAP, SCHOOL_ZH_MAP
 
 
 # ═══════════════════════════════════════════════════════════════════

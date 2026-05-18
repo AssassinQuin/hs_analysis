@@ -595,7 +595,7 @@ def _play_location(s: "GameState", card, action: Action) -> "GameState":
 def _play_hero_card(s: "GameState", card, action: Action) -> "GameState":
     """Handle HERO card replacement."""
     try:
-        from analysis.search.engine.mechanics.hero_card_handler import HeroCardHandler
+        from analysis.search.engine.mechanics import HeroCardHandler
         return HeroCardHandler().apply_hero_card(s, card)
     except (ImportError, AttributeError):
         try:
@@ -949,9 +949,7 @@ def _hero_replace(s: "GameState", action: Action) -> "GameState":
         s.mana.consume_modifiers(card)
         s.cards_played_this_turn.append(card)
         try:
-            from analysis.search.engine.mechanics.hero_card_handler import (
-                HeroCardHandler,
-            )
+            from analysis.search.engine.mechanics import HeroCardHandler
             s = HeroCardHandler().apply_hero_card(s, card)
         except (ImportError, AttributeError):
             armor = getattr(card, "armor", 0) or 0

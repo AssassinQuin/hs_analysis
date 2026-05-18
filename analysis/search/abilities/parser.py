@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List, Tuple, Optional
 
-from analysis.search.abilities.definition import (
+from analysis.card.abilities.definition import (
     CardAbility, AbilityTrigger, EffectKind, EffectSpec,
     ConditionKind, ConditionSpec, TargetSpec, TargetKind,
 )

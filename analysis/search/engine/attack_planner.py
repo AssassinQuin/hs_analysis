@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from analysis.search.game_state import GameState, Minion
-from analysis.search.abilities import Action, ActionType, apply_action
+from analysis.card.engine.state import GameState, Minion
+from analysis.card.abilities.definition import Action, ActionType
+from analysis.card.engine.simulation import apply_action
 
 
 @dataclass

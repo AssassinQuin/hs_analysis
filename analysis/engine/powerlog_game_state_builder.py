@@ -35,7 +35,7 @@ from typing import Dict, List, Optional, Any
 
 from hearthstone.enums import GameTag, Zone, CardType
 
-from analysis.search.game_state import (
+from analysis.card.engine.state import (
     GameState,
     HeroState,
     ManaState,
@@ -43,8 +43,8 @@ from analysis.search.game_state import (
     OpponentState,
     Weapon,
 )
-from analysis.models.card import Card
-from analysis.search.keywords import KeywordSet
+from analysis.card.models.card import Card
+from analysis.card.abilities.keywords import KeywordSet
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ class PowerLogGameStateBuilder:
         """延迟加载 CardDB，用于查询卡牌元数据（种族、法术学派等）。"""
         if self._card_db is None:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except Exception as e:
                 logger.warning("无法加载卡牌数据库: %s", e)

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import List, Optional
 
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 from analysis.search.enchantment import Enchantment
 
 __all__ = ["EntityId", "Zone", "CardInstance", "next_entity_id"]

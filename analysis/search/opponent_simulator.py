@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState
+    from analysis.card.engine.state import GameState
 
 
 # ===================================================================

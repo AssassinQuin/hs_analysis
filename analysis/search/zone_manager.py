@@ -14,8 +14,8 @@ from typing import List, Optional, TYPE_CHECKING, Union
 from analysis.search.entity import Zone, CardInstance, EntityId, next_entity_id
 
 if TYPE_CHECKING:
-    from analysis.models.card import Card
-    from analysis.search.game_state import Minion
+    from analysis.card.models.card import Card
+    from analysis.card.engine.state import Minion
 
 
 @dataclass
@@ -155,7 +155,7 @@ class ZoneManager:
         If a ``Card`` is passed, a new ``CardInstance`` is created.
         Returns the resulting ``CardInstance``.
         """
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
         if isinstance(card_or_instance, Card):
             ci = CardInstance(entity_id=next_entity_id(), card=card_or_instance, zone=Zone.HAND)
         else:
@@ -170,7 +170,7 @@ class ZoneManager:
         If a ``Card`` is passed, a new ``CardInstance`` is created.
         Returns the resulting ``CardInstance``.
         """
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
         if isinstance(card_or_instance, Card):
             ci = CardInstance(entity_id=next_entity_id(), card=card_or_instance, zone=Zone.DECK)
         else:
@@ -190,7 +190,7 @@ class ZoneManager:
         """
         if self.board_full():
             return None
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
         if isinstance(card_or_instance, Card):
             ci = CardInstance(entity_id=next_entity_id(), card=card_or_instance, zone=Zone.PLAY)
         else:

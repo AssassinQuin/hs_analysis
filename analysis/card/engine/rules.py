@@ -28,9 +28,7 @@ def _get_spell_target_resolver():
     global _spell_target_resolver
     if _spell_target_resolver is None:
         try:
-            from analysis.search.engine.mechanics.spell_target_resolver import (
-                SpellTargetResolver,
-            )
+            from analysis.search.engine.mechanics import SpellTargetResolver
             _spell_target_resolver = SpellTargetResolver()
         except (ImportError, AttributeError):
             _spell_target_resolver = False
@@ -592,9 +590,7 @@ def _enum_play_spell(
                     eff.damage > 0 or eff.random_damage > 0 or eff.aoe_damage > 0
                 )
 
-                from analysis.search.engine.mechanics.spell_target_resolver import (
-                    SpellTargetResolver,
-                )
+                from analysis.search.engine.mechanics import SpellTargetResolver
 
                 has_target_keyword = SpellTargetResolver.has_targeting_keyword(text)
                 if not (has_damage and has_target_keyword):

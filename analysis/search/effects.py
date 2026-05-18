@@ -23,7 +23,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState, Minion
+    from analysis.card.engine.state import GameState, Minion
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +278,7 @@ def _handle_aoe_damage(state: "GameState", spec: EffectSpec, source: Any = None,
 @register(EffectKind.SUMMON)
 def _handle_summon(state: "GameState", spec: EffectSpec, source: Any = None, **ctx) -> "GameState":
     """Summon a token with attack=value, health=value2."""
-    from analysis.search.game_state import Minion
+    from analysis.card.engine.state import Minion
 
     board_type = ctx.get("board_type", "friendly")
     position = ctx.get("position", -1)
@@ -304,7 +304,7 @@ def _handle_summon(state: "GameState", spec: EffectSpec, source: Any = None, **c
 @register(EffectKind.DRAW)
 def _handle_draw(state: "GameState", spec: EffectSpec, source: Any = None, **ctx) -> "GameState":
     """Draw *value* cards from deck."""
-    from analysis.search.abilities import apply_draw
+    from analysis.card.engine.simulation import apply_draw
     return apply_draw(state, spec.value)
 
 

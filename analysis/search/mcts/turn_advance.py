@@ -94,7 +94,7 @@ def advance_full_turn(state: GameState, *, greedy_opponent: bool = True) -> Game
             s.opponent.hand_count += 1
             # If opponent has a sampled hand, add a placeholder
             if s.opponent.hand is not None:
-                from analysis.models.card import Card
+                from analysis.card.models.card import Card
                 s.opponent.hand.append(Card(
                     dbf_id=0, name="Opp Draw", cost=0, card_type="SPELL"
                 ))
@@ -200,7 +200,7 @@ def _simulate_opponent_turn_impl(state: GameState) -> GameState:
     from analysis.search.abilities.simulation import apply_action
     from analysis.search.abilities.actions import ActionType
     from analysis.search.sim_logger import get_sim_logger
-    from analysis.search.game_state import GameState
+    from analysis.card.engine.state import GameState
 
     sim_log = get_sim_logger()
 

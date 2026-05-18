@@ -66,8 +66,8 @@ def _simple_state(hero_hp=30, mana=5, max_mana=5, board=None, hand=None,
 
 class TestFactorGraph:
     def test_empty_evaluator_returns_zero(self):
-        from analysis.search.engine.factors.factor_graph import FactorGraphEvaluator
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import FactorGraphEvaluator
+        from analysis.search.engine.factors import EvalContext
 
         evaluator = FactorGraphEvaluator()
         state = _simple_state()
@@ -76,9 +76,9 @@ class TestFactorGraph:
         assert scores.total == 0.0
 
     def test_board_control_friendly_advantage(self):
-        from analysis.search.engine.factors.factor_graph import FactorGraphEvaluator
-        from analysis.search.engine.factors.board_control import BoardControlFactor
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import FactorGraphEvaluator
+        from analysis.search.engine.factors import BoardControlFactor
+        from analysis.search.engine.factors import EvalContext
 
         evaluator = FactorGraphEvaluator()
         evaluator.register(BoardControlFactor())
@@ -91,8 +91,8 @@ class TestFactorGraph:
         assert scores.board_control > 0
 
     def test_lethal_threat_factor(self):
-        from analysis.search.engine.factors.lethal_threat import LethalThreatFactor
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import LethalThreatFactor
+        from analysis.search.engine.factors import EvalContext
 
         factor = LethalThreatFactor()
         ctx = EvalContext(phase="mid", turn_number=5)
@@ -103,8 +103,8 @@ class TestFactorGraph:
         assert score == 1.0
 
     def test_tempo_factor_positive_on_play(self):
-        from analysis.search.engine.factors.tempo import TempoFactor
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import TempoFactor
+        from analysis.search.engine.factors import EvalContext
 
         factor = TempoFactor()
         ctx = EvalContext(phase="mid", turn_number=5)
@@ -116,8 +116,8 @@ class TestFactorGraph:
         assert score > 0
 
     def test_survival_factor_negative_on_damage(self):
-        from analysis.search.engine.factors.survival import SurvivalFactor
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import SurvivalFactor
+        from analysis.search.engine.factors import EvalContext
 
         factor = SurvivalFactor()
         ctx = EvalContext(phase="mid", turn_number=5)
@@ -283,7 +283,7 @@ class TestStrategic:
 
 class TestDrawModel:
     def test_empty_deck_negative(self):
-        from analysis.search.engine.models.draw_model import DrawModel
+        from analysis.search.engine.models import DrawModel
         model = DrawModel()
         state = _simple_state()
         state.deck_remaining = 0
@@ -291,7 +291,7 @@ class TestDrawModel:
         assert ev <= 0
 
     def test_deck_with_cards_positive(self):
-        from analysis.search.engine.models.draw_model import DrawModel
+        from analysis.search.engine.models import DrawModel
         model = DrawModel()
         state = _simple_state()
         state.deck_list = [_make_card("A", cost=3, score=4.0) for _ in range(5)]
@@ -300,7 +300,7 @@ class TestDrawModel:
         assert ev > 0
 
     def test_draw_role_probability_bounds(self):
-        from analysis.search.engine.models.draw_model import DrawModel
+        from analysis.search.engine.models import DrawModel
         model = DrawModel()
         state = _simple_state()
         state.deck_list = [
@@ -315,7 +315,7 @@ class TestDrawModel:
 
 class TestDiscoverModel:
     def test_empty_pool(self):
-        from analysis.search.engine.models.discover_model import DiscoverModel
+        from analysis.search.engine.models import DiscoverModel
         model = DiscoverModel()
         state = _simple_state()
         card, ev = model.best_discover([], state)
@@ -323,7 +323,7 @@ class TestDiscoverModel:
         assert ev == 0.0
 
     def test_pool_picks_best(self):
-        from analysis.search.engine.models.discover_model import DiscoverModel
+        from analysis.search.engine.models import DiscoverModel
         model = DiscoverModel()
         state = _simple_state()
         pool = [
@@ -336,7 +336,7 @@ class TestDiscoverModel:
         assert ev > 0
 
     def test_discover_role_hit_prob_bounds(self):
-        from analysis.search.engine.models.discover_model import DiscoverModel
+        from analysis.search.engine.models import DiscoverModel
         model = DiscoverModel()
         state = _simple_state()
         pool = [
@@ -348,7 +348,7 @@ class TestDiscoverModel:
         assert 0.0 <= p <= 1.0
 
     def test_discover_role_offer_prob_3_pick_rule(self):
-        from analysis.search.engine.models.discover_model import DiscoverModel
+        from analysis.search.engine.models import DiscoverModel
         model = DiscoverModel()
         pool = []
         for i in range(2):
@@ -362,7 +362,7 @@ class TestDiscoverModel:
 
 class TestProbabilityPanel:
     def test_format_category_lines_filters_under_5_percent(self):
-        from analysis.search.engine.models.probability_panel import ProbabilityPanel
+        from analysis.search.engine.models import ProbabilityPanel
         panel = ProbabilityPanel(
             draw_clear_1=0.04,
             draw_heal_1=0.25,
@@ -382,7 +382,7 @@ class TestProbabilityPanel:
         assert "回血=2%" not in text
 
     def test_compute_panel_with_discover_pool_sets_discover_probs(self):
-        from analysis.search.engine.models.probability_panel import compute_panel
+        from analysis.search.engine.models import compute_panel
         state = _simple_state()
         state.deck_list = [_make_card("DeckHeal", text="恢复 4 点生命")]
         pool = [
@@ -399,14 +399,14 @@ class TestProbabilityPanel:
 
 class TestRNGModel:
     def test_fixed_damage(self):
-        from analysis.search.engine.models.rng_model import RNGModel
+        from analysis.search.engine.models import RNGModel
         model = RNGModel()
         state = _simple_state()
         ev = model.expected_value("damage 3", state)
         assert ev == 3.0
 
     def test_empty_effect(self):
-        from analysis.search.engine.models.rng_model import RNGModel
+        from analysis.search.engine.models import RNGModel
         model = RNGModel()
         state = _simple_state()
         ev = model.expected_value("", state)
@@ -512,7 +512,7 @@ class TestDecisionPipeline:
 
 class TestFactorScores:
     def test_as_dict(self):
-        from analysis.search.engine.factors.factor_graph import FactorScores
+        from analysis.search.engine.factors import FactorScores
         scores = FactorScores(board_control=0.5, tempo=-0.3, total=0.2)
         d = scores.as_dict()
         assert d["board_control"] == 0.5
@@ -520,7 +520,7 @@ class TestFactorScores:
         assert d["total"] == 0.2
 
     def test_describe_nonzero(self):
-        from analysis.search.engine.factors.factor_graph import FactorScores
+        from analysis.search.engine.factors import FactorScores
         scores = FactorScores(board_control=0.5, tempo=-0.3)
         desc = scores.describe()
         assert "board_control" in desc
@@ -533,21 +533,21 @@ class TestFactorScores:
 
 class TestEvalContext:
     def test_from_state_early(self):
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import EvalContext
         from analysis.models.phase import Phase
         state = _simple_state(turn=2)
         ctx = EvalContext.from_state(state)
         assert ctx.phase == Phase.EARLY
 
     def test_from_state_mid(self):
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import EvalContext
         from analysis.models.phase import Phase
         state = _simple_state(turn=6)
         ctx = EvalContext.from_state(state)
         assert ctx.phase == Phase.MID
 
     def test_from_state_late(self):
-        from analysis.search.engine.factors.factor_base import EvalContext
+        from analysis.search.engine.factors import EvalContext
         from analysis.models.phase import Phase
         state = _simple_state(turn=10)
         ctx = EvalContext.from_state(state)

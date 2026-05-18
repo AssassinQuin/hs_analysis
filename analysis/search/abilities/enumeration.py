@@ -9,7 +9,7 @@ from typing import List, TYPE_CHECKING
 from analysis.search.abilities.actions import Action, ActionType
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState, Minion
+    from analysis.card.engine.state import GameState, Minion
 
 _spell_target_resolver = None
 
@@ -17,9 +17,7 @@ _spell_target_resolver = None
 def _get_spell_target_resolver():
     global _spell_target_resolver
     if _spell_target_resolver is None:
-        from analysis.search.engine.mechanics.spell_target_resolver import (
-            SpellTargetResolver,
-        )
+        from analysis.search.engine.mechanics import SpellTargetResolver
         _spell_target_resolver = SpellTargetResolver()
     return _spell_target_resolver
 
@@ -111,7 +109,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                     has_damage = bool(_DAMAGE_EN.search(text) or _DAMAGE_CN.search(text))
 
                     # Use resolver's internal targeting keyword check
-                    from analysis.search.engine.mechanics.spell_target_resolver import _TARGETING_KEYWORDS
+                    from analysis.search.engine.mechanics import _TARGETING_KEYWORDS
                     import re as _re
                     has_target_keyword = any(
                         _re.search(kw, text, _re.IGNORECASE) for kw in _TARGETING_KEYWORDS
@@ -239,7 +237,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
             loc_targets = []
             if loc_text:
                 try:
-                    from analysis.search.engine.mechanics.spell_target_resolver import TargetSpec
+                    from analysis.search.engine.mechanics import TargetSpec
                     resolver = _get_spell_target_resolver()
                     # Create a minimal card-like object for the resolver
                     class _LocCard:

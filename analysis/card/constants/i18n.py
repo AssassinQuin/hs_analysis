@@ -41,7 +41,7 @@ def card_name_lookup(card_id: str, locale: str = DEFAULT_LOCALE) -> str:
         Localized card name, or card_id as fallback.
     """
     try:
-        from analysis.data.card_data import get_db
+        from analysis.card.data.card_data import get_db
         db = get_db()
         card = db.get_card(card_id)
         if card:

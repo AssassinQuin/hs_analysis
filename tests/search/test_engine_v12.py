@@ -10,12 +10,9 @@ from analysis.card.engine.state import (
     ManaModifier,
 )
 from analysis.card.models.card import Card
-from analysis.search.abilities import (
-    Action,
-    ActionType,
-    apply_action,
-    enumerate_legal_actions,
-)
+from analysis.card.abilities.definition import Action, ActionType
+from analysis.card.engine.simulation import apply_action
+from analysis.card.engine.rules import enumerate_legal_actions
 
 
 def _make_card(

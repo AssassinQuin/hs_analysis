@@ -13,7 +13,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState, Minion
+    from analysis.card.engine.state import GameState, Minion
 
 
 # Per-class appendage definitions
@@ -75,7 +75,7 @@ def summon_colossal_appendages(
     Returns:
         Modified game state with appendages added.
     """
-    from analysis.search.game_state import Minion as _Minion
+    from analysis.card.engine.state import Minion as _Minion
 
     appendage_count = parse_colossal_value(card)
     if appendage_count <= 0:

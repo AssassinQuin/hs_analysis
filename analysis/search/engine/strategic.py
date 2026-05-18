@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from analysis.search.game_state import GameState
+from analysis.card.engine.state import GameState
 
 
 @dataclass

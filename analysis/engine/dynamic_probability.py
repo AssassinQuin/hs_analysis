@@ -205,7 +205,7 @@ class HandConstraint:
 
 # ── 条件效果规则映射 ──────────────────────────────────────────
 
-from analysis.constants.hs_enums import CONDITIONAL_HOLDING_RULES as _CONDITIONAL_RULES
+from analysis.card.constants.hs_enums import CONDITIONAL_HOLDING_RULES as _CONDITIONAL_RULES
 
 
 # ── 动态概率引擎 ──────────────────────────────────────────────
@@ -272,7 +272,7 @@ class DynamicProbabilityEngine:
     def _ensure_card_db(self):
         if self._card_db is None:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except Exception as e:
                 logger.warning("无法加载卡牌数据库: %s", e)
@@ -449,7 +449,7 @@ class DynamicProbabilityEngine:
         # 后手第5张牌一定是硬币，这是游戏机制
         if not self._is_first_player and not self._coin_used:
             # 硬币卡牌ID
-            from analysis.constants.hs_enums import COIN_CARD_IDS
+            from analysis.card.constants.hs_enums import COIN_CARD_IDS
             for coin_id in COIN_CARD_IDS:
                 if coin_id not in revealed_set:
                     # 检查硬币是否已打出（如果 seen_cards 中有硬币，说明已用过但 coin_used 未检测到）

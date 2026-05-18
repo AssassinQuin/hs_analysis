@@ -22,9 +22,9 @@ import os
 import re
 from typing import Dict, Optional
 
-from analysis.models.card import Card
-from analysis.search.game_state import GameState
-from analysis.models.phase import Phase, detect_phase
+from analysis.card.models.card import Card
+from analysis.card.engine.state import GameState
+from analysis.models import Phase, detect_phase
 from analysis.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ class V8ContextualScorer:
         - Weapon: (attack * durability * 0.9) / max(cost, 1)
         - Other: cost * 0.5
         """
-        from analysis.models.card import CardType
+        from analysis.card.models.card import CardType
         ct = getattr(card, "card_type", CardType.INVALID)
         cost = max(getattr(card, "cost", 0), 1)
         atk = getattr(card, "attack", 0)

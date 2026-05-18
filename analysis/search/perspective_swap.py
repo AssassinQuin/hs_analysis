@@ -33,7 +33,7 @@ import logging
 from typing import TYPE_CHECKING, Tuple
 
 if TYPE_CHECKING:
-    from analysis.search.game_state import GameState, OpponentState
+    from analysis.card.engine.state import GameState, OpponentState
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def swap_perspective(state: 'GameState') -> Tuple['GameState', dict]:
     - swapped_state.hand = original opponent's hand (inferred)
     - swapped_state.opponent = original player's state
     """
-    from analysis.search.game_state import GameState, OpponentState, ManaState, ManaModifier
+    from analysis.card.engine.state import GameState, OpponentState, ManaState, ManaModifier
 
     s = state.copy()
 
@@ -148,7 +148,7 @@ def swap_back(swapped_state: 'GameState', saved: dict) -> 'GameState':
     Takes the simulated opponent state and converts it back to our perspective,
     preserving the results of the opponent's actions (board state, HP, etc.).
     """
-    from analysis.search.game_state import GameState, OpponentState, ManaState
+    from analysis.card.engine.state import GameState, OpponentState, ManaState
 
     s = swapped_state
 

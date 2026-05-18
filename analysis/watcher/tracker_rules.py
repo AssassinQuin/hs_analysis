@@ -320,7 +320,7 @@ class RevealTrackerRule:
     name = "reveal"
 
     def __init__(self) -> None:
-        from analysis.constants.hs_enums import (
+        from analysis.card.constants.hs_enums import (
             ZONE_DECK, ZONE_HAND, ZONE_PLAY, ZONE_SECRET,
         )
         self._ZONE_DECK = ZONE_DECK
@@ -420,7 +420,7 @@ class TransformTrackerRule:
     name = "transform"
 
     def __init__(self) -> None:
-        from analysis.constants.hs_enums import ZONE_HAND
+        from analysis.card.constants.hs_enums import ZONE_HAND
         self._ZONE_HAND = ZONE_HAND
 
     def on_show_entity(self, entity_id: int, card_id: str,
@@ -481,7 +481,7 @@ class DeckPeekTrackerRule:
     name = "deck_peek"
 
     def __init__(self) -> None:
-        from analysis.constants.hs_enums import ZONE_DECK
+        from analysis.card.constants.hs_enums import ZONE_DECK
         self._ZONE_DECK = ZONE_DECK
         self._peeked_entities: set = set()
 
@@ -534,7 +534,7 @@ class DiscardTrackerRule:
     name = "discard"
 
     def __init__(self) -> None:
-        from analysis.constants.hs_enums import ZONE_HAND, ZONE_GRAVEYARD
+        from analysis.card.constants.hs_enums import ZONE_HAND, ZONE_GRAVEYARD
         self._ZONE_HAND = ZONE_HAND
         self._ZONE_GRAVEYARD = ZONE_GRAVEYARD
 
@@ -611,7 +611,7 @@ class TutorConstraintTrackerRule:
         """Detect tutor effects when opponent plays a card (HAND→PLAY)."""
         if not ctx.is_opp:
             return
-        from analysis.constants.hs_enums import ZONE_PLAY
+        from analysis.card.constants.hs_enums import ZONE_PLAY
         if ctx.new_zone != ZONE_PLAY:
             return
 
@@ -649,9 +649,9 @@ class TutorConstraintTrackerRule:
         Delegates to ``card_effects.get_effects()`` — no regex here.
         """
         try:
-            from analysis.data.hsdb import get_db
+            from analysis.card.data.card_data import get_db
             from analysis.data.card_effects import get_effects
-            from analysis.models.card import Card
+            from analysis.card.models.card import Card
 
             db = get_db()
             raw = db.get_card(card_id)
