@@ -198,6 +198,13 @@ def get_opponent_played_cards(log_path: str) -> Tuple[Dict, List[Dict]]:
                 current_show_entity = None
 
     # 构建对手回合数据
+    # 改进：不再使用奇偶回合规则判断对手回合，
+    # 因为 opp_turn_plays 已经通过 controller 精确过滤（ctrl == opp_ctrl），
+    # 所有记录的牌都是对手打出的，无需再做奇偶过滤。
+    # 奇偶规则在以下情况不可靠：
+    #   - 先手/后手与controller编号不是固定对应
+    #   - 某些游戏模式下回合编号不严格递增
+    #   - TAG_CHANGE STEP 阶段标记延迟
     opponent_turns = []
     all_played_so_far = []
 
@@ -205,15 +212,9 @@ def get_opponent_played_cards(log_path: str) -> Tuple[Dict, List[Dict]]:
         played = opp_turn_plays[turn]
         all_played_so_far.extend(played)
 
-        # 判断是否是对手回合
-        if opp_ctrl == 1:
-            is_opp = (turn % 2 == 1)
-        elif opp_ctrl == 2:
-            is_opp = (turn % 2 == 0)
-        else:
-            is_opp = True
-
-        if is_opp and played:
+        if played:
+            # 对手法力 = 对手在游戏中的回合数 = ceil(turn / 2)
+            # turn 1,2 → mana 1; turn 3,4 → mana 2; ...
             mana_available = min(10, (turn + 1) // 2)
             opponent_turns.append({
                 "turn": turn,
@@ -243,7 +244,7 @@ def run_bayesian_and_mcts(game_info: Dict, opponent_turns: List[Dict]) -> List[D
     bayesian = BayesianOpponentModel(player_class=opp_class)
 
     results = []
-    seen_card_ids = set()  # 已见的对手卡牌
+    seen_card_ids = Counter()  # 修复：使用Counter跟踪每张牌的已打出次数，而非set
     generated_cards = set()
 
     for snap in opponent_turns:
@@ -264,7 +265,7 @@ def run_bayesian_and_mcts(game_info: Dict, opponent_turns: List[Dict]) -> List[D
                         bayesian.update(dbf_id)
                     except Exception:
                         pass
-            seen_card_ids.add(cid)
+            seen_card_ids[cid] += 1  # 修复：计数而非简单add
 
         # 获取贝叶斯推断结果
         top_decks = bayesian.get_top_decks(n=3)
@@ -296,7 +297,7 @@ def run_bayesian_and_mcts(game_info: Dict, opponent_turns: List[Dict]) -> List[D
             preds = mcts.infer_hand_probabilities(
                 bayesian_state=bayesian_state,
                 observed=observed,
-                seen_cards={cid: 1 for cid in seen_card_ids},
+                seen_cards=dict(seen_card_ids),  # 修复：传递实际计数，而非全是1
                 generated_cards=generated_cards,
                 hand_size=max(1, 5 - turn // 4),  # 估算手牌数
                 time_budget_ms=1500.0,

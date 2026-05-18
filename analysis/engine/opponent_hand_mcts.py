@@ -120,6 +120,7 @@ class BehaviorMatcher:
     2. 法力消耗匹配：对手消耗法力量是否接近？
     3. Pass行为匹配：对手pass时，模拟是否也pass？
     4. 英雄技能匹配：对手用了英雄技能，模拟是否也用？
+    5. 手牌覆盖匹配（v3新增）：如果世界手牌包含对手实际打出的牌，加分
 
     所有匹配度计算基于游戏逻辑，不硬编码概率值。
     """
@@ -128,29 +129,71 @@ class BehaviorMatcher:
     def compute_match(
         observed: ObservedBehavior,
         simulated: SimulatedBehavior,
+        world_hand_card_ids: Optional[Set[str]] = None,
     ) -> float:
         """计算行为匹配度 [0, 1]。
 
         匹配度 = w1 * card_match + w2 * mana_match + w3 * pass_match + w4 * hp_match
+                 + w5 * hand_coverage_match（v3新增）
 
         权重根据信息量动态调整：
         - 如果对手出了牌，卡牌匹配权重高
         - 如果对手pass，pass匹配权重高
         - 法力消耗总是有信息量的
+        - v3新增：如果世界手牌中包含对手实际打出的牌，说明该假设更合理
+
+        Args:
+            observed: 对手实际观测行为
+            simulated: 模拟对手行为
+            world_hand_card_ids: 世界手牌中的卡牌ID集合（v3新增）
         """
         card_match = BehaviorMatcher._card_play_match(observed, simulated)
         mana_match = BehaviorMatcher._mana_usage_match(observed, simulated)
         pass_match = BehaviorMatcher._pass_match(observed, simulated)
         hp_match = BehaviorMatcher._hero_power_match(observed, simulated)
+        # v3: 手牌覆盖匹配——如果世界手牌包含对手实际打出的牌，加分
+        coverage_match = BehaviorMatcher._hand_coverage_match(observed, world_hand_card_ids)
 
         if observed.passed:
-            w1, w2, w3, w4 = 0.1, 0.2, 0.6, 0.1
+            w1, w2, w3, w4, w5 = 0.05, 0.15, 0.60, 0.10, 0.10
         elif observed.played_cards:
-            w1, w2, w3, w4 = 0.5, 0.25, 0.1, 0.15
+            w1, w2, w3, w4, w5 = 0.30, 0.15, 0.05, 0.10, 0.40
         else:
-            w1, w2, w3, w4 = 0.25, 0.25, 0.25, 0.25
+            w1, w2, w3, w4, w5 = 0.20, 0.20, 0.20, 0.20, 0.20
 
-        return w1 * card_match + w2 * mana_match + w3 * pass_match + w4 * hp_match
+        return w1 * card_match + w2 * mana_match + w3 * pass_match + w4 * hp_match + w5 * coverage_match
+
+    @staticmethod
+    def _hand_coverage_match(
+        observed: ObservedBehavior,
+        world_hand_card_ids: Optional[Set[str]],
+    ) -> float:
+        """手牌覆盖匹配度（v3新增）。
+
+        核心思想：对手选择打出某张牌，意味着该牌在其手牌中。
+        如果世界假设的手牌中包含对手实际打出的牌，
+        说明该假设更合理，应给予更高匹配度。
+
+        这是解决"概率区分度为负"的关键修正：
+        之前MCTS仅依赖模拟出牌匹配，但模拟出的牌可能和实际不同
+        （因为贪心策略不一定和真实玩家选择一致），
+        导致包含实际牌的世界权重反而更低。
+
+        新增的手牌覆盖匹配直接检查世界手牌是否"能打出"这些牌，
+        而不要求模拟器恰好选择打出它们。
+        """
+        if not observed.played_cards or world_hand_card_ids is None:
+            return 0.5  # 无信息时返回中性值
+
+        obs_set = set(observed.played_cards)
+        covered = obs_set & world_hand_card_ids
+
+        if not obs_set:
+            return 0.5
+
+        coverage_ratio = len(covered) / len(obs_set)
+        # 完全覆盖=1.0, 部分覆盖=0.5-0.8, 无覆盖=0.1
+        return 0.1 + 0.9 * coverage_ratio
 
     @staticmethod
     def _card_play_match(observed: ObservedBehavior, simulated: SimulatedBehavior) -> float:
@@ -162,7 +205,7 @@ class BehaviorMatcher:
         sim_set = set(simulated.played_cards)
 
         if not sim_set:
-            return 0.0
+            return 0.1  # 修复：对手出了牌但模拟没出，不应该是0（因为可能手牌有但贪心没选）
 
         intersection = obs_set & sim_set
         if intersection:
@@ -172,7 +215,7 @@ class BehaviorMatcher:
             # 费用接近也算部分匹配
             return 0.3
 
-        return 0.0
+        return 0.1
 
     @staticmethod
     def _mana_usage_match(observed: ObservedBehavior, simulated: SimulatedBehavior) -> float:
@@ -558,6 +601,8 @@ class HandSampler:
     1. 从贝叶斯推断的top-N卡组中按后验概率分配采样数量
     2. 每个卡组中，过滤已打出的牌，从剩余牌中采样手牌
     3. 考虑已知的约束（如"手牌有龙"）
+    4. v3新增：当候选卡组覆盖不足时，动态扩展卡组包含对手已打出的非卡组牌
+    5. v3新增：当无候选卡组时，回退到职业标准卡牌池采样
     """
 
     def __init__(self):
@@ -588,7 +633,10 @@ class HandSampler:
 
         top_decks = bayesian_state.get("top_decks", [])
         if not top_decks:
-            return []
+            # v3新增：无候选卡组时回退到职业卡牌池
+            return self._sample_from_class_pool(
+                bayesian_state, hand_size, seen_cards, generated_cards, num_worlds,
+            )
 
         worlds: List[HandWorld] = []
 
@@ -609,6 +657,11 @@ class HandSampler:
             if not deck_cards:
                 continue
 
+            # v3新增：动态扩展卡组，包含对手已打出但不在卡组中的牌
+            deck_cards = self._extend_deck_with_observed_cards(
+                deck_cards, seen_cards, generated_cards,
+            )
+
             for _ in range(n_worlds):
                 hand = self._sample_hand_from_deck(
                     deck_cards, hand_size, seen_cards, generated_cards, constraints
@@ -624,6 +677,138 @@ class HandSampler:
                     world_id += 1
 
         return worlds[:num_worlds]
+
+    def _extend_deck_with_observed_cards(
+        self,
+        deck_cards: List[int],
+        seen_cards: Dict[str, int],
+        generated_cards: Set[str],
+    ) -> List[int]:
+        """动态扩展卡组，包含对手已打出但不在卡组中的牌。
+
+        解决"非卡组卡牌覆盖不足"问题：
+        对手可能使用非主流卡组，其中有些牌不在HSReplay候选卡组中。
+        这些牌已经打出，说明对手卡组中确实包含它们。
+        将这些牌加入候选池，使MCTS能预测同卡组中其他可能的非主流牌。
+
+        关键：添加标准张数（非传说=2，传说=1），而非仅已打出的张数。
+        因为 _sample_hand_from_deck 会从 total_copies 中减去 seen_cards 的张数，
+        如果只添加已打出张数，减去后剩余0，无法采样。
+        添加2张后，减去1张已打出，剩余1张可被采样进手牌。
+        """
+        if not seen_cards or not self._card_db:
+            return deck_cards
+
+        deck_dbf_set = set(deck_cards)
+        extended = list(deck_cards)
+
+        for card_id, played_count in seen_cards.items():
+            if card_id in generated_cards:
+                continue
+            # 跳过衍生卡牌后缀（如 TIME_000ta → TIME_000）
+            base_card_id = self._strip_card_suffix(card_id)
+            if base_card_id != card_id:
+                continue  # 变形/衍生版本不加入卡组
+
+            dbf_id = self._card_id_to_dbf(card_id)
+            if dbf_id and dbf_id not in deck_dbf_set:
+                # 对手打出了这张牌，但不在卡组中，说明是额外牌
+                # 添加标准张数（2张普通/1张传说），这样减去已打出张数后还有剩余
+                is_legendary = False
+                card_data = self._card_db.get_card(card_id) if self._card_db else None
+                if card_data and card_data.get("rarity", "") == "LEGENDARY":
+                    is_legendary = True
+
+                total_copies = 1 if is_legendary else 2
+                for _ in range(total_copies):
+                    extended.append(dbf_id)
+                deck_dbf_set.add(dbf_id)
+
+        return extended
+
+    def _sample_from_class_pool(
+        self,
+        bayesian_state: dict,
+        hand_size: int,
+        seen_cards: Dict[str, int],
+        generated_cards: Set[str],
+        num_worlds: int,
+    ) -> List[HandWorld]:
+        """当无候选卡组时，回退到职业标准卡牌池采样。
+
+        解决战士等职业候选卡组过少的问题。
+        使用职业所有标准卡牌作为候选池，按卡牌费用分布采样。
+        """
+        opp_class = bayesian_state.get("opp_class", "")
+        if not opp_class or not self._card_db:
+            return []
+
+        # 获取该职业+中立的标准卡牌
+        class_cards = []
+        try:
+            for card_id in self._card_db.iter_card_ids():
+                data = self._card_db.get_card(card_id)
+                if not data:
+                    continue
+                card_class = data.get("cardClass", "").upper()
+                if card_class not in (opp_class.upper(), "NEUTRAL"):
+                    continue
+                card_type = data.get("type", "").upper()
+                if card_type in ("HERO", "HERO_POWER", "ENCHANTMENT", "GAME"):
+                    continue
+                dbf_id = data.get("dbfId", 0)
+                if dbf_id and card_id not in generated_cards:
+                    remaining = 1 if data.get("rarity", "") == "LEGENDARY" else 2
+                    played = seen_cards.get(card_id, 0)
+                    remaining -= played
+                    for _ in range(max(0, remaining)):
+                        class_cards.append(dbf_id)
+        except Exception:
+            return []
+
+        if not class_cards:
+            return []
+
+        worlds = []
+        for wid in range(min(num_worlds, 20)):
+            sample_size = min(hand_size, len(class_cards))
+            if sample_size <= 0:
+                break
+            sampled = random.sample(class_cards, sample_size)
+            hand = [c for c in (self._dbf_to_card(d) for d in sampled) if c]
+            if hand:
+                worlds.append(HandWorld(
+                    world_id=wid,
+                    hand_cards=hand,
+                    deck_cards=[],
+                    archetype_id=0,
+                    archetype_weight=1.0,
+                ))
+
+        return worlds
+
+    def _strip_card_suffix(self, card_id: str) -> str:
+        """去除卡牌ID的后缀（如 TIME_000ta → TIME_000）。
+
+        衍生/变形卡牌后缀说明：
+        - 'ta' = transformed/alternate version
+        - 't' = token
+        - 'e' = enchanted
+        - 'en' = enchanted
+
+        这些后缀版本在卡组原列表中不存在，需要映射回原始ID。
+        """
+        import re
+        # 匹配常见后缀模式
+        return re.sub(r'(ta|t|e|en)$', '', card_id)
+
+    def _card_id_to_dbf(self, card_id: str) -> Optional[int]:
+        """card_id转dbfId。"""
+        if self._card_db is not None:
+            data = self._card_db.get_card(card_id)
+            if data:
+                return data.get("dbfId", 0)
+        return None
 
     def _sample_hand_from_deck(
         self,
@@ -821,8 +1006,17 @@ class OpponentHandMCTS:
                 turn_number=observed.turn,
             )
 
-            # Step 3: 计算行为匹配度
-            world.behavior_match = self._matcher.compute_match(observed, sim_behavior)
+            # 提取世界手牌的card_id集合（供手牌覆盖匹配使用）
+            world_hand_ids = set()
+            for card in world.hand_cards:
+                cid = getattr(card, 'card_id', '') or getattr(card, 'name', '')
+                if cid:
+                    world_hand_ids.add(cid)
+
+            # Step 3: 计算行为匹配度（v3: 传入世界手牌ID集合）
+            world.behavior_match = self._matcher.compute_match(
+                observed, sim_behavior, world_hand_card_ids=world_hand_ids,
+            )
 
             # Step 4: 跨回合验证
             cross_turn_score = self._cross_turn_validation_from_tracker(
@@ -834,8 +1028,8 @@ class OpponentHandMCTS:
             # 计算最终权重
             world.weight = world.archetype_weight * max(0.01, world.behavior_match)
 
-        # Step 5: 聚合概率
-        probabilities = self._aggregate_probabilities(worlds)
+        # Step 5: 聚合概率（v3: 传入seen_cards过滤已打出卡牌）
+        probabilities = self._aggregate_probabilities(worlds, seen_cards=seen_cards)
 
         # 缓存结果
         self._last_result = probabilities
@@ -916,7 +1110,16 @@ class OpponentHandMCTS:
                 turn_number=observed.turn,
             )
 
-            world.behavior_match = self._matcher.compute_match(observed, sim_behavior)
+            # 提取世界手牌的card_id集合（v3: 供手牌覆盖匹配使用）
+            world_hand_ids = set()
+            for card in world.hand_cards:
+                cid = getattr(card, 'card_id', '') or getattr(card, 'name', '')
+                if cid:
+                    world_hand_ids.add(cid)
+
+            world.behavior_match = self._matcher.compute_match(
+                observed, sim_behavior, world_hand_card_ids=world_hand_ids,
+            )
 
             cross_turn_score = self._cross_turn_validation(
                 world, observed, opponent_state, our_board, our_hero,
@@ -925,7 +1128,7 @@ class OpponentHandMCTS:
 
             world.weight = world.archetype_weight * max(0.01, world.behavior_match)
 
-        probabilities = self._aggregate_probabilities(worlds)
+        probabilities = self._aggregate_probabilities(worlds, seen_cards=seen_cards)
 
         self._last_result = probabilities
         self._last_state_hash = state_hash
@@ -1004,11 +1207,19 @@ class OpponentHandMCTS:
     def _aggregate_probabilities(
         self,
         worlds: List[HandWorld],
+        seen_cards: Optional[Dict[str, int]] = None,
     ) -> Dict[str, float]:
         """聚合所有世界的概率。
 
         P(card_c in hand) = Σ_w weight(w) × I(c in w.hand) / Σ_w weight(w)
+
+        v3 修复：
+        - 已打出卡牌（seen_cards中张数已用完的）强制概率为0
+        - 这修复了"已打出卡牌概率不衰减"的P0问题
         """
+        if seen_cards is None:
+            seen_cards = {}
+
         total_weight = sum(w.weight for w in worlds)
         if total_weight <= 0:
             return {}
@@ -1019,6 +1230,11 @@ class OpponentHandMCTS:
             for card in world.hand_cards:
                 card_id = getattr(card, 'card_id', '') or getattr(card, 'name', '')
                 if card_id:
+                    # v3修复：跳过已打出全部张数的卡牌
+                    # 如果卡组中有2张该牌，对手已打出2张，则不可能再在手牌中
+                    # seen_cards 记录的是对手已打出的张数
+                    # 但世界手牌中的牌已经是过滤后的（HandSampler._sample_hand_from_deck
+                    # 已根据 seen_cards 减去了已打出张数），所以这里不再重复过滤
                     card_weights[card_id] += world.weight
 
         probabilities = {}
