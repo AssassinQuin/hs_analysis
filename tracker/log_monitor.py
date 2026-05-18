@@ -286,6 +286,11 @@ class CoreLogMonitor:
         # 避免「读到旧日志的 game_start + game_end → UI 闪烁」问题
         self._catching_up: bool = False
 
+        # 延迟初始桥接标记：当 _on_game_start 触发时 _player_names 尚未就绪，
+        # 先设此标记，等到 PlayerName 解析完毕、第一次 _notify_state_update 时
+        # 按正确 controller 桥接，避免「先桥接 → 后修正 → 全量重桥」的浪费
+        self._defer_initial_bridge: bool = False
+
     @property
     def log_path(self) -> Optional[Path]:
         return self._log_path
@@ -358,6 +363,7 @@ class CoreLogMonitor:
             self._last_known_zones.clear()
             self._last_known_card_ids.clear()
             self._first_player_detected = False
+            self._defer_initial_bridge = False
             self._player_names.clear()
             self._game_lifecycle = GameLifecycle.IDLE
             self.game_tracker.reset()
@@ -880,6 +886,18 @@ class CoreLogMonitor:
             our_controller, opp_controller = enriched
             self.global_tracker.set_controllers(our_controller, opp_controller)
 
+        # 检查 PlayerName 是否已就绪：PlayerID=... PlayerName=... 行在
+        # DebugPrintGame() 中，位于 CREATE_GAME 块之后。如果 _player_names
+        # 为空，说明 PlayerName 行尚未被 _parse_player_name_line 解析，
+        # 此时 _detect_my_idx 和 _detect_my_idx 只能靠 fallback 猜测。
+        # 延迟桥接，等到 PlayerName 解析完毕后再以正确 controller 桥接，
+        # 避免「先错桥 → 后修正 → 全量重桥」的开销和噪声。
+        if not self._player_names:
+            self._defer_initial_bridge = True
+            logger.debug("PlayerName 尚未就绪，延迟初始桥接")
+            # 不桥接、不发通知，等 _notify_state_update 处理
+            return
+
         # 桥接实体事件到 GlobalTracker（在 controller 确定之后）
         self._bridge_entities_to_global_tracker()
         self._bridge_new_entities()
@@ -919,9 +937,29 @@ class CoreLogMonitor:
 
     def _notify_state_update(self):
         """通知 UI 更新游戏状态。"""
-        # 先桥接新实体，确保 GlobalTracker 状态最新
+        # 延迟初始桥接处理
+        if self._defer_initial_bridge:
+            # PlayerName 此前在 _on_game_start 时尚未就绪（CREATE_GAME 块
+            # 在 PlayerName 行之前），桥接被推迟。现在 PlayerName 应已就绪，
+            # 先尝试补充玩家信息。
+            # _try_enrich_player_info 内部若检测到 controller 变化，
+            # 会调用 _handle_controller_correction → 清除 _bridged_entities
+            # → _bridge_entities_to_global_tracker（以正确 controller 桥接）。
+            self._try_enrich_player_info()
+            if self._player_names:
+                self._defer_initial_bridge = False
+                logger.debug("延迟初始桥接完成")
+                # 延迟路径已完成桥接（通过 _handle_controller_correction），
+                # 直接构建状态并发送通知，跳过下面的常规桥接流程
+                state = self.build_state_dict()
+                if self.on_state_updated:
+                    self.on_state_updated(state)
+                return
+            # _player_names 仍为空 → 跳过本次通知
+            return
+
+        # 常规流程：先桥接新实体，再补充玩家信息
         self._bridge_new_entities()
-        # 如果职业信息不完整，尝试补充
         self._try_enrich_player_info()
         state = self.build_state_dict()
         if self.on_state_updated:

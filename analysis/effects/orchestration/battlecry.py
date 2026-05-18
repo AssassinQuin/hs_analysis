@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # ===================================================================
 
 _BATTLECRY_PATTERN_EN = re.compile(r"Battlecry[：:]\s*(.+?)(?:[,.]|$)", re.DOTALL | re.IGNORECASE)
+_BATTLECRY_PATTERN_ZH = re.compile(r"战吼[：:]\s*(.+)")
 
 _FREEZE_EN = re.compile(r"Freeze\s+(?:a|an|the)?\s*(?:enemy|minion)", re.IGNORECASE)
 _SILENCE_EN = re.compile(r"Silence\s+(?:a|an|the)?\s*(?:enemy|minion)", re.IGNORECASE)
@@ -74,7 +75,7 @@ class BattlecryDispatcher:
         if not card_text:
             return state
 
-        bc_match = _BATTLECRY_PATTERN_EN.search(card_text)
+        bc_match = _BATTLECRY_PATTERN_EN.search(card_text) or _BATTLECRY_PATTERN_ZH.search(card_text)
         if not bc_match:
             return state
 
@@ -124,8 +125,9 @@ class BattlecryDispatcher:
         """Parse and apply all effects from battlecry text."""
         s = state
 
-        # Parse standard effects using spell_simulator's EffectParser
-        effects = EffectParser.parse(bc_text)
+        # Parse standard effects using EffectParser
+        # Pass card so DB-backed parsing works for real cards (with card_id)
+        effects = EffectParser.parse(bc_text, card=card)
 
         for effect_type, params in effects:
             try:

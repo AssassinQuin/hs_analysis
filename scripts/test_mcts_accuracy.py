@@ -132,7 +132,7 @@ def extract_opponent_turns(log_path: str) -> List[Dict]:
 
     # 卡牌数据库
     try:
-        from analysis.data.hsdb import get_db
+        from analysis.card.data.card_data import get_db
         db = get_db()
     except Exception:
         db = None
@@ -240,7 +240,7 @@ def extract_opponent_turns_v2(log_path: str) -> List[Dict]:
 
     # 加载卡牌数据库
     try:
-        from analysis.data.card_data import get_db
+        from analysis.card.data.card_data import get_db
         card_db = get_db()
     except Exception:
         card_db = None
@@ -462,7 +462,7 @@ def test_mcts_on_snapshots(snapshots: List[Dict], game_name: str) -> Dict:
         pred_display = []
         if preds:
             for c, p in sorted(preds.items(), key=lambda x: -x[1])[:5]:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 try:
                     db = get_db()
                     name = db.get_card(c).get("name", c) if db and db.get_card(c) else c

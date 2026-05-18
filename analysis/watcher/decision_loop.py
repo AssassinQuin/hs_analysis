@@ -117,7 +117,8 @@ class TerminalDisplay:
 
         file_lines.append("│")
 
-        decision_text = f"★ 最优操作 (Score: {result.fitness:+.2f} | {elapsed_ms:.0f}ms)"
+        score = getattr(result, "best_fitness", getattr(result, "fitness", 0.0))
+        decision_text = f"★ 最优操作 (Score: {score:+.2f} | {elapsed_ms:.0f}ms)"
         term_lines.append(decision_text)
         file_lines.append(f"│ {decision_text}")
 
@@ -671,7 +672,7 @@ class DecisionLoop:
             log.debug(f"Eval logging failed: {e}")
 
     @staticmethod
-    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, time_budget_ms: float = 8000.0, num_worlds: int = 7, **engine_kwargs) -> None:
+    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "unified", time_budget_ms: float = 8000.0, num_worlds: int = 7, **engine_kwargs) -> None:
         """One-shot: analyze an entire Power.log file and output decisions for each turn."""
         log_path = Path(path)
         if not log_path.exists():
@@ -683,7 +684,7 @@ class DecisionLoop:
         tracker = GameTracker()
         bridge = StateBridge()
         # 使用 GameEngine 单例
-        game_engine: GameEngine = create_engine(engine, engine_kwargs)()
+        game_engine: GameEngine = create_engine(engine, engine_kwargs or None)()
 
         events = tracker.load_file(log_path)
         log.info(f"Parsed {len(events)} events")

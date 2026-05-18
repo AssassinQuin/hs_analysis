@@ -104,7 +104,7 @@ def test_lethal_with_taunt():
                 health=10,
                 max_health=10,
                 can_attack=True,
-                has_windfury=True,
+                keywords={'WINDFURY'},
             ),
         ],
         opponent=OpponentState(

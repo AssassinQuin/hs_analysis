@@ -84,7 +84,7 @@ def get_opponent_played_cards(log_path: str) -> Tuple[Dict, List[Dict]]:
         cid = getattr(e, "card_id", "")
         if cid and cid.startswith("HERO_") and e.tags.get(GameTag.ZONE) == Zone.PLAY:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 db = get_db()
                 if db:
                     data = db.get_card(cid)
@@ -235,7 +235,7 @@ def run_bayesian_and_mcts(game_info: Dict, opponent_turns: List[Dict]) -> List[D
     """对每个对手回合运行贝叶斯推断 + MCTS 手牌推断。"""
     from analysis.utils.bayesian_opponent import BayesianOpponentModel
     from analysis.engine.opponent_hand_mcts import OpponentHandMCTS, ObservedBehavior
-    from analysis.data.card_data import get_db
+    from analysis.card.data.card_data import get_db
 
     opp_class = game_info.get("opp_hero_class", "")
     db = get_db()

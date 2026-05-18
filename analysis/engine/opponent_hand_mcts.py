@@ -55,6 +55,7 @@ v2 重构：使用 Power.log + Tracker 真实数据
 
 from __future__ import annotations
 
+import concurrent.futures as cf
 import logging
 import math
 import random
@@ -91,6 +92,78 @@ class SimulatedBehavior:
     hero_power_used: bool = False
     attacked: bool = False
     passed: bool = False
+
+
+@dataclass
+class TurnRecord:
+    """对手过去某一回合的观测记录。
+
+    用于计算费用偏向：若对手在 T5 有5费但完全跳过出牌，
+    则 T6+ 的手牌更可能全部是高费牌（>available_mana 费）。
+    """
+    turn_number: int = 0
+    available_mana: int = 0
+    mana_spent: int = 0
+    played_cards: List[str] = field(default_factory=list)
+    passed: bool = False
+
+
+class TurnHistoryTracker:
+    """追踪对手历史回合行为，计算费用偏向权重。
+
+    核心逻辑：
+    如果对手在某回合有 X 法力但没出牌（或大幅浪费法力），说明：
+      - 手牌中费用 <= X 的牌较少（本可以出但没出）
+      - 手牌中费用 > X 的牌较多（想出但出不起）
+    这个信号跨回合累计，引导 MCTS 手牌采样偏向合理费用范围。
+    """
+
+    def __init__(self):
+        self._turns: Dict[int, TurnRecord] = {}
+
+    def record_turn(self, observed: ObservedBehavior):
+        """记录或更新某一回合的观测行为。"""
+        self._turns[observed.turn] = TurnRecord(
+            turn_number=observed.turn,
+            available_mana=observed.available_mana,
+            mana_spent=observed.mana_spent,
+            played_cards=list(observed.played_cards),
+            passed=observed.passed,
+        )
+
+    def compute_cost_bias(self, current_turn: int) -> Dict[int, float]:
+        """根据历史回合行为，计算每费段的权重乘数。
+
+        Returns:
+            {cost: weight}, weight>1.0 表示"更可能在手牌中"
+        """
+        bias = {cost: 1.0 for cost in range(11)}
+
+        for turn_num, record in self._turns.items():
+            if turn_num >= current_turn:
+                continue  # 只使用过去的回合
+
+            unused = record.available_mana - record.mana_spent
+
+            if record.passed or unused >= 1:
+                # 对手本回合有法力但没出可出的牌 → 惩罚该费段
+                for cost in range(0, min(11, record.available_mana + 1)):
+                    bias[cost] *= 0.4
+                # 对手本回合没法力出高费牌 → 奖励高费段
+                for cost in range(record.available_mana + 1, 11):
+                    bias[cost] *= 2.0
+            elif unused > 0 and record.available_mana >= 3:
+                # 有法力浪费但没完全 pass → 弱信号
+                for cost in range(0, min(11, record.available_mana + 1)):
+                    bias[cost] *= 0.7
+                for cost in range(record.available_mana + 1, 11):
+                    bias[cost] *= 1.3
+
+        return bias
+
+    @property
+    def turn_count(self) -> int:
+        return len(self._turns)
 
 
 @dataclass
@@ -624,8 +697,15 @@ class HandSampler:
         generated_cards: Set[str],
         num_worlds: int = 30,
         constraints: Optional[List] = None,
+        cost_bias: Optional[Dict[int, float]] = None,
     ) -> List[HandWorld]:
-        """采样候选手牌世界。"""
+        """采样候选手牌世界。
+
+        Args:
+            cost_bias: {cost: weight} 费用偏向权重，
+                来自 TurnHistoryTracker.compute_cost_bias()。
+                用于引导采样偏向历史行为暗示的高/低费方向。
+        """
         self._ensure_card_db()
 
         if hand_size <= 0:
@@ -633,7 +713,6 @@ class HandSampler:
 
         top_decks = bayesian_state.get("top_decks", [])
         if not top_decks:
-            # v3新增：无候选卡组时回退到职业卡牌池
             return self._sample_from_class_pool(
                 bayesian_state, hand_size, seen_cards, generated_cards, num_worlds,
             )
@@ -664,7 +743,8 @@ class HandSampler:
 
             for _ in range(n_worlds):
                 hand = self._sample_hand_from_deck(
-                    deck_cards, hand_size, seen_cards, generated_cards, constraints
+                    deck_cards, hand_size, seen_cards, generated_cards,
+                    constraints, cost_bias=cost_bias,
                 )
                 if hand:
                     worlds.append(HandWorld(
@@ -817,17 +897,23 @@ class HandSampler:
         seen_cards: Dict[str, int],
         generated_cards: Set[str],
         constraints: Optional[List],
+        cost_bias: Optional[Dict[int, float]] = None,
     ) -> List:
-        """从卡组中采样一手手牌。"""
+        """从卡组剩余牌 + 衍生牌候选池中采样一手手牌。
+
+        改进（v4）：
+        1. 衍生牌不再被排除，而是加入候选池填充剩余手牌位置
+        2. 支持 cost_bias 加权采样，使采样偏向历史行为暗示的费用方向
+        """
         card_counts = Counter(deck_cards)
 
+        # ── 从卡组剩余牌构建候选池 ──
         remaining_cards = []
         for dbf_id, count in card_counts.items():
             card_id = self._dbf_to_card_id(dbf_id)
             if not card_id:
                 continue
-            if card_id in generated_cards:
-                continue
+            # 卡组中的原始计数不考虑衍生牌（衍生牌不在卡组中）
             played = seen_cards.get(card_id, 0)
             remaining = count - played
             if remaining <= 0:
@@ -838,8 +924,28 @@ class HandSampler:
         if not remaining_cards:
             return []
 
-        sample_size = min(hand_size, len(remaining_cards))
-        sampled_dbfs = random.sample(remaining_cards, sample_size)
+        # ── 衍生牌加入候选池（v4修复：衍生牌可以且应该在手牌中） ──
+        generated_candidates = []
+        deck_card_ids = {self._dbf_to_card_id(d) for d in card_counts if self._dbf_to_card_id(d)}
+        for cid in generated_cards:
+            if cid in seen_cards:
+                continue  # 已打出，不在手牌中
+            if cid in deck_card_ids:
+                continue  # 已在卡组候选池中
+            dbf = self._card_id_to_dbf(cid)
+            if dbf is not None:
+                generated_candidates.append(dbf)
+
+        # 合并候选池：卡组剩余 + 衍生牌
+        all_candidates = list(remaining_cards)
+        all_candidates.extend(generated_candidates)
+
+        sample_size = min(hand_size, len(all_candidates))
+
+        if cost_bias and sample_size > 0:
+            sampled_dbfs = self._weighted_sample_by_cost(all_candidates, cost_bias, sample_size)
+        else:
+            sampled_dbfs = random.sample(all_candidates, sample_size)
 
         hand = []
         for dbf_id in sampled_dbfs:
@@ -848,6 +954,48 @@ class HandSampler:
                 hand.append(card)
 
         return hand
+
+    def _weighted_sample_by_cost(
+        self,
+        candidates: List[int],
+        cost_bias: Dict[int, float],
+        k: int,
+    ) -> List[int]:
+        """按费用偏向权重做无放回加权采样。"""
+        if len(candidates) <= k:
+            return list(candidates)
+
+        # 预计算每个候选的权重
+        weights = []
+        for dbf_id in candidates:
+            card = self._dbf_to_card(dbf_id)
+            cost = card.cost if card else 3
+            w = cost_bias.get(cost, 1.0)
+            weights.append(max(0.01, w))  # 确保正权重
+
+        # 无放回加权采样
+        pool_indices = list(range(len(candidates)))
+        result = []
+        for _ in range(k):
+            if not pool_indices:
+                break
+            total = sum(weights[i] for i in pool_indices)
+            if total <= 0:
+                # 退化到均匀采样
+                idx = random.choice(pool_indices)
+            else:
+                r = random.random() * total
+                cumsum = 0.0
+                idx = pool_indices[0]
+                for i in pool_indices:
+                    cumsum += weights[i]
+                    if cumsum >= r:
+                        idx = i
+                        break
+            result.append(candidates[idx])
+            pool_indices.remove(idx)
+
+        return result
 
     def _get_deck_cards(self, archetype_id: int) -> List[int]:
         """获取卡组的dbfId列表。"""
@@ -920,11 +1068,14 @@ class OpponentHandMCTS:
     - 可配置，适应不同性能需求
     """
 
-    def __init__(self, time_budget_ms: float = 500.0):
+    def __init__(self, time_budget_ms: float = 500.0, num_threads: int = 4):
         self.time_budget_ms = time_budget_ms
+        self.num_threads = num_threads
         self._sampler = HandSampler()
         self._simulator = OpponentTurnSimulator()
         self._matcher = BehaviorMatcher()
+        # 历史回合追踪（跨 MCTS 调用累积）
+        self._turn_history = TurnHistoryTracker()
         # 缓存
         self._last_result: Optional[Dict[str, float]] = None
         self._last_state_hash: int = 0
@@ -975,7 +1126,9 @@ class OpponentHandMCTS:
         if state_hash == self._last_state_hash and self._last_result is not None:
             return self._last_result
 
-        # Step 1: 采样候选手牌世界
+        # Step 1: 从历史回合计算费用偏向，引导采样（v4）
+        cost_bias = self._turn_history.compute_cost_bias(observed.turn)
+
         num_worlds = self._compute_num_worlds(budget)
         worlds = self._sampler.sample_worlds(
             bayesian_state=bayesian_state,
@@ -984,6 +1137,7 @@ class OpponentHandMCTS:
             generated_cards=generated_cards,
             num_worlds=num_worlds,
             constraints=constraints,
+            cost_bias=cost_bias,
         )
 
         if not worlds:
@@ -991,38 +1145,34 @@ class OpponentHandMCTS:
             self._last_state_hash = state_hash
             return {}
 
-        # Step 2: 对每个世界模拟对手决策（使用 Power.log 真实数据）
+        # Step 2: 并行模拟所有世界（v4）
+        sim_results = self._run_parallel_simulation(
+            worlds, log_monitor, our_controller, opp_controller,
+            observed, budget, start_time,
+        )
+
+        # Step 3 & 4: 依次处理每个世界的匹配度 + 权重（轻量计算，串行即可）
         for world in worlds:
-            elapsed = time.time() * 1000 - start_time
-            if elapsed > budget * 0.8:
-                break
+            result = sim_results.get(world.world_id)
+            if result is None:
+                continue  # 该世界未在预算时间内完成模拟
 
-            # 使用 PowerLogGameStateBuilder 构建对手视角的完整 GameState
-            sim_behavior = self._simulator.simulate_opponent_turn_from_tracker(
-                log_monitor=log_monitor,
-                world=world,
-                our_controller=our_controller,
-                opp_controller=opp_controller,
-                turn_number=observed.turn,
-            )
-
-            # 提取世界手牌的card_id集合（供手牌覆盖匹配使用）
-            world_hand_ids = set()
-            for card in world.hand_cards:
-                cid = getattr(card, 'card_id', '') or getattr(card, 'name', '')
-                if cid:
-                    world_hand_ids.add(cid)
-
-            # Step 3: 计算行为匹配度（v3: 传入世界手牌ID集合）
+            # Step 3: 计算行为匹配度
             world.behavior_match = self._matcher.compute_match(
-                observed, sim_behavior, world_hand_card_ids=world_hand_ids,
+                observed, result['sim_main'],
+                world_hand_card_ids=result['world_hand_ids'],
             )
 
-            # Step 4: 跨回合验证
-            cross_turn_score = self._cross_turn_validation_from_tracker(
-                log_monitor, world, observed,
-                our_controller, opp_controller,
-            )
+            # Step 4: 跨回合验证（使用并行化的 sim_next 结果）
+            sim_next = result['sim_next']
+            if observed.passed and sim_next.passed:
+                cross_turn_score = 0.9
+            elif observed.passed and not sim_next.passed:
+                cross_turn_score = 0.7
+            elif not observed.passed and sim_next.passed:
+                cross_turn_score = 0.5
+            else:
+                cross_turn_score = 0.6
             world.behavior_match = world.behavior_match * 0.7 + cross_turn_score * 0.3
 
             # 计算最终权重
@@ -1034,6 +1184,9 @@ class OpponentHandMCTS:
         # 缓存结果
         self._last_result = probabilities
         self._last_state_hash = state_hash
+
+        # 记录本回合行为到历史追踪（供后续回合的 cost_bias 使用）（v4）
+        self._turn_history.record_turn(observed)
 
         return probabilities
 
@@ -1081,6 +1234,8 @@ class OpponentHandMCTS:
         if state_hash == self._last_state_hash and self._last_result is not None:
             return self._last_result
 
+        # v4: 从历史回合计算费用偏向，引导采样
+        cost_bias = self._turn_history.compute_cost_bias(observed.turn)
         num_worlds = self._compute_num_worlds(budget)
         worlds = self._sampler.sample_worlds(
             bayesian_state=bayesian_state,
@@ -1089,6 +1244,7 @@ class OpponentHandMCTS:
             generated_cards=generated_cards,
             num_worlds=num_worlds,
             constraints=constraints,
+            cost_bias=cost_bias,
         )
 
         if not worlds:
@@ -1132,6 +1288,9 @@ class OpponentHandMCTS:
 
         self._last_result = probabilities
         self._last_state_hash = state_hash
+
+        # v4: 记录本回合行为到历史追踪（供后续回合的 cost_bias 使用）
+        self._turn_history.record_turn(observed)
 
         return probabilities
 
@@ -1243,10 +1402,120 @@ class OpponentHandMCTS:
 
         return probabilities
 
-    @staticmethod
-    def _compute_num_worlds(budget_ms: float) -> int:
-        """根据时间预算计算采样世界数。"""
-        return max(10, min(80, int(budget_ms / 10)))
+    def _compute_num_worlds(self, budget_ms: float) -> int:
+        """根据时间预算 + 并行线程数计算采样世界数。
+
+        v4 并行版本：世界模拟可在多线程中同时运行，
+        同时间预算下可支持更多世界数。
+        400ms + 4线程 → ~128 世界（vs 之前 40）。
+        """
+        base = max(10, min(80, int(budget_ms / 10)))
+        if self.num_threads > 1:
+            return max(10, min(200, int(base * self.num_threads * 0.8)))
+        return base
+
+    def _run_parallel_simulation(
+        self,
+        worlds: List[HandWorld],
+        log_monitor,
+        our_controller: int,
+        opp_controller: int,
+        observed: ObservedBehavior,
+        budget: float,
+        start_time: float,
+    ) -> Dict[int, dict]:
+        """线程池并行化世界模拟。
+
+        每个世界独立模拟（主回合贪心搜索 + 跨回合验证），
+        在预算时间内收集尽可能多的完成结果。
+        返回 {world_id: {...}} 映射。
+        """
+        if self.num_threads <= 1 or len(worlds) <= 3:
+            # 单线程或世界太少时退化为串行
+            results = {}
+            for world in worlds:
+                elapsed = time.time() * 1000 - start_time
+                if elapsed > budget * 0.8:
+                    break
+                results[world.world_id] = self._simulate_one_world(
+                    world, log_monitor, our_controller, opp_controller, observed,
+                )
+            return results
+
+        results: Dict[int, dict] = {}
+        executor = cf.ThreadPoolExecutor(
+            max_workers=self.num_threads,
+            thread_name_prefix="mcts_world",
+        )
+
+        try:
+            # 一次性提交所有世界（不逐个检查预算——提交本身很快）
+            futures = {}
+            for world in worlds:
+                future = executor.submit(
+                    self._simulate_one_world,
+                    world, log_monitor, our_controller, opp_controller, observed,
+                )
+                futures[future] = world.world_id
+
+            # 在剩余预算内收集完成的结果
+            remaining = max(0.001, budget - (time.time() * 1000 - start_time))
+            for future in cf.as_completed(futures, timeout=remaining / 1000):
+                try:
+                    result = future.result()
+                    results[result['world_id']] = result
+                except cf.TimeoutError:
+                    break
+                except Exception:
+                    continue
+
+        except Exception:
+            pass
+        finally:
+            executor.shutdown(wait=False)  # 不等待未完成的任务
+
+        return results
+
+    def _simulate_one_world(
+        self,
+        world: HandWorld,
+        log_monitor,
+        our_controller: int,
+        opp_controller: int,
+        observed: ObservedBehavior,
+    ) -> dict:
+        """模拟单个世界，返回包含主回合+跨回合模拟结果的字典。
+
+        此方法设计为线程安全——不修改共享可变状态。
+        simulate_opponent_turn_from_tracker 只读访问 entity_cache 和 tracker。
+        """
+        sim_main = self._simulator.simulate_opponent_turn_from_tracker(
+            log_monitor=log_monitor, world=world,
+            our_controller=our_controller, opp_controller=opp_controller,
+            turn_number=observed.turn,
+        )
+
+        # 跨回合验证（下一回合的轻量模拟）
+        next_turn = observed.turn + 2
+        sim_next = self._simulator.simulate_opponent_turn_from_tracker(
+            log_monitor=log_monitor, world=world,
+            our_controller=our_controller, opp_controller=opp_controller,
+            turn_number=next_turn, max_steps=4,
+        )
+
+        # 提取世界手牌的card_id集合（线程安全——world 为每个世界的独立对象）
+        world_hand_ids = set()
+        for card in getattr(world, 'hand_cards', []):
+            cid = getattr(card, 'card_id', '') or getattr(card, 'name', '')
+            if cid:
+                world_hand_ids.add(cid)
+
+        return {
+            'world_id': world.world_id,
+            'sim_main': sim_main,
+            'sim_next': sim_next,
+            'world_hand_ids': world_hand_ids,
+        }
 
     @staticmethod
     def _default_opponent_state():

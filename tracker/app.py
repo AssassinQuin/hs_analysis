@@ -506,7 +506,7 @@ class TrackerApp:
                             conn.close()
 
             # 2. 更新 DeckProvider 供 game_tracker 使用
-            from analysis.data.deck_provider import DeckProvider
+            from analysis.watcher.deck_provider import DeckProvider
             if hasattr(self, '_log_monitor') and hasattr(self._log_monitor, 'game_tracker'):
                 new_provider = DeckProvider()
                 new_provider.load_deck_codes(str(deck_codes_path))

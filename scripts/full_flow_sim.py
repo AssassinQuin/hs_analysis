@@ -289,8 +289,8 @@ def run_full_flow_simulation(
                 for cid in new_opp_cards:
                     # 查卡牌元数据
                     try:
-                        from analysis.data.hsdb import get_db as _get_hsdb
-                        _hsdb = _get_hsdb()
+                        from analysis.card.data.card_data import get_db as _get_db
+                        _hsdb = _get_db()
                         card_meta = _hsdb.get_card(cid) or {}
                     except Exception:
                         card_meta = {}

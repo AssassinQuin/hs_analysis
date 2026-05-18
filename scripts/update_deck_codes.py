@@ -440,7 +440,7 @@ def decode_deck_class(deckstring: str) -> Optional[str]:
         hero_dbf_id = deck.heroes[0] if deck.heroes else 0
 
         # 映射 hero dbfId → class
-        from analysis.data.hsdb import get_hero_class_map
+        from analysis.card.data.card_data import get_hero_class_map
         hero_map = get_hero_class_map()
         if hero_dbf_id in hero_map:
             return hero_map[hero_dbf_id]

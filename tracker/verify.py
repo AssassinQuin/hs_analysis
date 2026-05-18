@@ -66,7 +66,7 @@ def verify(log_path: str | None = None):
     # ── 2. 加载卡牌数据库 ───────────────────────────────────
     print("\n📚 加载卡牌数据库…")
     try:
-        from analysis.data.card_data import get_db
+        from analysis.card.data.card_data import get_db
         db = get_db()
         print(f"   ✅ 卡牌数据库加载成功: {len(db._cards)} 张卡牌")
     except Exception as e:

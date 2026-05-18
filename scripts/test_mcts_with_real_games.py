@@ -35,7 +35,7 @@ logger = logging.getLogger("mcts_test")
 
 def get_card_name(card_id: str) -> str:
     try:
-        from analysis.data.card_data import get_db
+        from analysis.card.data.card_data import get_db
         db = get_db()
         data = db.get_card(card_id)
         if data:
@@ -47,7 +47,7 @@ def get_card_name(card_id: str) -> str:
 
 def get_card_dbf_id(card_id: str) -> int:
     try:
-        from analysis.data.card_data import get_db
+        from analysis.card.data.card_data import get_db
         db = get_db()
         data = db.get_card(card_id)
         if data:
@@ -59,7 +59,7 @@ def get_card_dbf_id(card_id: str) -> int:
 
 def get_card_cost(card_id: str) -> int:
     try:
-        from analysis.data.card_data import get_db
+        from analysis.card.data.card_data import get_db
         db = get_db()
         data = db.get_card(card_id)
         if data:

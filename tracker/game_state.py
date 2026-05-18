@@ -221,7 +221,7 @@ class GameStateManager:
         """延迟加载卡牌数据库。"""
         if self._card_db is None:
             try:
-                from analysis.data.card_data import get_db
+                from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except Exception as e:
                 logger.warning("无法加载卡牌数据库: %s", e)

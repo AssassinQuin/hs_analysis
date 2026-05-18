@@ -52,7 +52,7 @@ class Card:
             self.mechanics = []
         if not self.roles:
             try:
-                from analysis.card.data.card_roles import classify_card_roles
+                from analysis.data.card_roles import classify_card_roles
                 self.roles = frozenset(classify_card_roles(self))
             except Exception as e:
                 logger.debug("classify_card_roles 失败 for %s: %s", self.card_id, e)

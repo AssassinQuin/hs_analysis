@@ -30,7 +30,7 @@ from hslog import packets
 
 from analysis.card.models.card import Card
 try:
-    from analysis.card.data.card_roles import RoleTag, classify_card_roles
+    from analysis.data.card_roles import RoleTag, classify_card_roles
 except ImportError:
     RoleTag = None
     classify_card_roles = None
