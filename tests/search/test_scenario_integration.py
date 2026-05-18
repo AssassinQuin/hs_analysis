@@ -136,7 +136,8 @@ class TestNespirahMCTSChain:
         s = apply_action(s, Action(action_type=ActionType.ACTIVATE_LOCATION, source_index=0))
         assert s.locations[0].durability == 1
         assert s.locations[0].cooldown_current == 1
-        assert s.opponent.hero.hp == 29
+        # Fel spell dealt 3 damage (from english_text), location dealt 1 → 30-3-1=26
+        assert s.opponent.hero.hp == 26
 
         # Fel #1 → cd refresh again
         s = apply_action(s, Action(action_type=ActionType.PLAY, card_index=0))
@@ -145,8 +146,13 @@ class TestNespirahMCTSChain:
         # Activate → dur 1→0 → deathrattle
         s = apply_action(s, Action(action_type=ActionType.ACTIVATE_LOCATION, source_index=0))
         assert len(s.locations) == 0  # removed
+<<<<<<< HEAD
         assert len(s.board) == 1      # token summoned
         assert s.opponent.hero.hp == 28  # 2 damage from 2 activations
+=======
+        assert len(s.board) == 1  # token summoned
+        assert s.opponent.hero.hp == 25  # 3 (Fel) + 2 (2 activations) = 5 total damage
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
     def test_full_mcts_chain_dump_all_fel(self, setup):
         """Full chain: dump all 5 Fel spells with location activations interleaved.

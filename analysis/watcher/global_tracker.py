@@ -33,14 +33,18 @@ from analysis.card.constants.hs_enums import (
     ZONE_SETASIDE, ZONE_SECRET,
     CT_HERO, CT_MINION, CT_SPELL, CT_ENCHANTMENT,
     CT_WEAPON, CT_HERO_POWER, CT_LOCATION,
+    CARDTYPE_EN, COIN_CARD_IDS,
 )
 from analysis.watcher.secret_probability import SecretProbabilityModel
 from analysis.watcher.tracker_types import (
-    CardSource, KnownCard, OppHandIntel, SideStats, GlobalGameState,
+    CardSource, CardRevealType, CardRevealRecord,
+    KnownCard, OppHandIntel, SideStats, GlobalGameState,
 )
 from analysis.watcher.tracker_rules import (
     TrackingContext, TrackerRuleDispatcher,
-    ShuffleTrackerRule, CorruptTrackerRule,
+    ShuffleTrackerRule, CorruptTrackerRule, RevealTrackerRule,
+    TransformTrackerRule, DeckPeekTrackerRule,
+    DiscardTrackerRule, TutorConstraintTrackerRule,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,8 +85,8 @@ class GlobalTracker:
     CT_HERO_POWER = CT_HERO_POWER
     CT_LOCATION = CT_LOCATION
 
-    # 已知的硬币卡牌ID
-    COIN_CARD_IDS = {"GAME_005", "TB_BlingBrawl_Coin", "NEW1_008t"}
+    # 已知的硬币卡牌ID (imported from hs_enums)
+    COIN_CARD_IDS = COIN_CARD_IDS
 
     # Standard deck rules: max copies per rarity
     _MAX_COPIES = {
@@ -90,10 +94,12 @@ class GlobalTracker:
         'LEGENDARY': 1, 'FREE': 2,
     }
 
-    def __init__(self, our_controller: int = 0, opp_controller: int = 0):
+    def __init__(self, our_controller: int = 0, opp_controller: int = 0,
+                 latest_game_only: bool = False):
         self.state = GlobalGameState()
         self.our_controller = our_controller
         self.opp_controller = opp_controller
+        self._latest_game_only = latest_game_only
 
         # 实体出生追踪 — 记录实体首次出现的时机和位置
         self._entity_birth: Dict[int, _EntityBirth] = {}
@@ -121,19 +127,49 @@ class GlobalTracker:
             (self.ZONE_HAND, self.ZONE_SECRET): self._on_zone_hand_to_secret,
             (self.ZONE_SECRET, self.ZONE_GRAVEYARD): self._on_zone_secret_resolved,
             (self.ZONE_SECRET, self.ZONE_SETASIDE): self._on_zone_secret_resolved,
+            # P1 #4 / P2 #11: 新增区域转换处理器
+            (self.ZONE_HAND, self.ZONE_GRAVEYARD): self._on_zone_hand_to_graveyard,
+            (self.ZONE_DECK, self.ZONE_PLAY): self._on_zone_deck_to_play,
+            (self.ZONE_HAND, self.ZONE_DECK): self._on_zone_hand_to_deck,
         }
 
         # 可插拔追踪规则
         self._rule_dispatcher = TrackerRuleDispatcher()
         self._rule_dispatcher.register(ShuffleTrackerRule())
         self._rule_dispatcher.register(CorruptTrackerRule())
+        self._rule_dispatcher.register(RevealTrackerRule())
+        self._rule_dispatcher.register(TransformTrackerRule())
+        self._rule_dispatcher.register(DeckPeekTrackerRule())
+        self._rule_dispatcher.register(DiscardTrackerRule())
+        self._rule_dispatcher.register(TutorConstraintTrackerRule())
+        # GallywixTrackerRule is a structural placeholder — not yet implemented.
+        # Kept in tracker_rules.py for future activation.
+
+        # 实体卡牌ID快照: entity_id → card_id (用于检测 ChangeEntity 变形)
+        self._last_known_card_ids: Dict[int, str] = {}
+
+        # P0 #1: 防止同一实体重复记录为打出（zone_change + show_entity 双路径）
+        self._entity_played_set: Set[int] = set()
+
+        # 延迟贝叶斯证据缓存：职业未知时暂时缓存观察到的卡牌
+        self._pending_bayesian_evidence: List[Tuple[str, str]] = []  # (card_id, evidence_type)
 
     def set_controllers(self, our: int, opp: int):
         self.our_controller = our
         self.opp_controller = opp
 
     def on_game_start(self):
-        """为新游戏重置状态"""
+        """为新游戏重置状态。
+
+        When ``latest_game_only=True``, this is called automatically
+        by the DecisionLoop when a new CREATE_GAME is detected,
+        ensuring the old game state is cleared without manual intervention.
+        """
+        # 重置 controller 为无效值，强制调用方必须 set_controllers()
+        # 避免跨游戏复用旧 controller 导致 is_opp 判断全部反
+        self.our_controller = 0
+        self.opp_controller = 0
+
         self.state = GlobalGameState()
         self._entity_birth.clear()
         self._card_db = None
@@ -141,18 +177,33 @@ class GlobalTracker:
         self._bayesian_initialized = False
         self._secret_model = None
         self._opp_card_play_count.clear()
+        # 清理卡牌ID快照
+        self._last_known_card_ids.clear()
+        # 清理已打出实体集合（P0 #1）
+        self._entity_played_set.clear()
+        # 清理延迟贝叶斯证据缓存
+        self._pending_bayesian_evidence.clear()
+        # 通知所有 Rule 重置其 per-game 状态
+        self._rule_dispatcher.dispatch_game_start(self.state)
 
     # ---------------------------------------------------------------
     # 延迟加载卡牌数据库
     # ---------------------------------------------------------------
 
-    def _get_card_db(self):
-        """延迟加载HSCardDB，用于卡牌元数据（种族、学派等）"""
+    def _get_card_db(self, strict: bool = False):
+        """延迟加载HSCardDB，用于卡牌元数据（种族、学派等）
+
+        Args:
+            strict: 为 True 时，导入失败抛出 ImportError 而非仅记录警告。
+                    用于贝叶斯等需要 dbfId 查询的场景。
+        """
         if self._card_db is None:
             try:
                 from analysis.card.data.card_data import get_db
                 self._card_db = get_db()
             except ImportError:
+                if strict:
+                    raise
                 logger.warning("HSCardDB unavailable, race/school tracking disabled")
         return self._card_db
 
@@ -170,8 +221,16 @@ class GlobalTracker:
     # 实体生命周期
     # ---------------------------------------------------------------
 
+    def _is_coin_entity(self, card_id: str, is_coin_tag: bool = False,
+                         entity_id: int = 0) -> bool:
+        """统一硬币检测。\n\n        优先级：\n        1. COIN_CARD GameTag（来自 FULL_ENTITY/SHOW_ENTITY）\n        2. card_id 匹配 COIN_CARD_IDS\n        3. entity_id 匹配 state.coin_entity_id（区域变化路径）\n        """
+        return (is_coin_tag
+                or card_id in self.COIN_CARD_IDS
+                or (entity_id != 0 and entity_id == self.state.coin_entity_id))
+
     def on_full_entity(self, entity_id: int, card_id: str, controller: int,
-                       zone: int, card_type: int = 0, cost: int = 0):
+                       zone: int, card_type: int = 0, cost: int = 0,
+                       is_coin_tag: bool = False):
         """解析到 FULL_ENTITY - Creating 时调用"""
         birth = _EntityBirth(
             entity_id=entity_id,
@@ -180,13 +239,22 @@ class GlobalTracker:
             initial_zone=zone,
             card_type=card_type,
             cost=cost,
+            birth_turn=self.state.current_turn,  # P0 #2: 记录出生回合
         )
         self._entity_birth[entity_id] = birth
 
-        # 追踪对手初始牌库大小
-        if controller == self.opp_controller and zone == self.ZONE_DECK:
-            if card_type not in (2,):  # 排除PLAYER类型
+        # 追踪双方初始牌库大小
+        # 使用白名单：只计入牌库中的卡牌类型
+        # 排除 HERO_POWER（英雄技能不在牌库中）和 ENCHANTMENT（附魔不算卡牌）
+        _DECK_CARD_TYPES = (
+            self.CT_MINION, self.CT_SPELL, self.CT_WEAPON,
+            self.CT_HERO, self.CT_LOCATION,
+        )
+        if zone == self.ZONE_DECK and card_type in _DECK_CARD_TYPES:
+            if controller == self.opp_controller:
                 self.state.opp_initial_deck_size += 1
+            elif controller == self.our_controller:
+                self.state.player_initial_deck_size += 1
 
         # 从英雄实体检测英雄职业
         if card_type == self.CT_HERO and card_id:
@@ -197,18 +265,36 @@ class GlobalTracker:
             elif controller == self.opp_controller:
                 self.state.opp_hero_class = hero_class
 
-        # 检测硬币实体
-        if card_id in self.COIN_CARD_IDS:
+        # 检测硬币实体（统一方法）
+        if self._is_coin_entity(card_id, is_coin_tag):
             self.state.coin_entity_id = entity_id
+            # 如果硬币出生在HAND区域，说明持有方是后手
+            if zone == self.ZONE_HAND:
+                if controller == self.opp_controller:
+                    self.state.is_first_player = False
+                    logger.info("检测到对手持有硬币 → 对手后手")
 
     def on_show_entity(self, entity_id: int, card_id: str, controller: int,
-                       zone: int, card_type: int = 0, cost: int = 0):
+                       zone: int, card_type: int = 0, cost: int = 0,
+                       is_coin_tag: bool = False):
         """解析到 SHOW_ENTITY 揭示隐藏实体时调用。
 
         对于对手直接揭示到PLAY/SECRET区域的卡牌（典型情况——对手打出
         一张牌，我们看到它出现），我们将其追踪为"已打出"的卡牌，
         因为对手的 HAND→PLAY 区域变化对我们不可见。
         """
+        # 检测硬币揭示（统一方法）
+        if self._is_coin_entity(card_id, is_coin_tag):
+            self.state.coin_entity_id = entity_id
+            if zone == self.ZONE_HAND:
+                if controller == self.opp_controller:
+                    self.state.is_first_player = False
+                    logger.info("检测到对手揭示硬币 → 对手后手")
+
+        # 记录卡牌ID快照（用于后续 ChangeEntity 检测）
+        old_card_id = self._last_known_card_ids.get(entity_id, "")
+        self._last_known_card_ids[entity_id] = card_id
+
         if controller == self.opp_controller:
             # 追踪规则分发（Corrupt升级检测等由 CorruptTrackerRule 处理）
             self._rule_dispatcher.dispatch_show_entity(
@@ -216,53 +302,112 @@ class GlobalTracker:
                 card_type, self.state, is_opp=True,
             )
 
-            self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
+            # 只在 HAND/SECRET 区域时记录到手牌追踪——其他区域的卡牌
+            # 不在手牌中，无需追踪；避免 PLAY/DECK 区域的条目无限增长
+            if zone in (self.ZONE_HAND, self.ZONE_SECRET):
+                self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
 
             # 将对手揭示到PLAY/SECRET的卡牌追踪为"已打出"
             # 对手的HAND→PLAY不可见，直接通过SHOW_ENTITY出现在最终区域
-            if zone == self.ZONE_PLAY and card_type not in (self.CT_ENCHANTMENT,):
+            if zone == self.ZONE_PLAY and card_type not in (self.CT_ENCHANTMENT, self.CT_HERO_POWER):
                 # 跳过附魔（type 6）— 它们是增益效果，不是打出的卡牌
+                # 跳过英雄技能（type 10）— 技能不是从手牌打出的卡牌
                 self._on_card_played(entity_id, controller, card_id, card_type)
                 # 检测洗入牌库的牌被打出 → 标记为 GENERATED
                 if card_id and card_id in self.state.opp_shuffled_into_deck:
                     self._mark_shuffled_card_played(card_id)
+                # Track opponent board minion
+                if card_id and card_type not in (self.CT_WEAPON, self.CT_LOCATION, self.CT_HERO_POWER):
+                    self.state.opp_board_minions.append({
+                        "card_id": card_id,
+                        "entity_id": entity_id,
+                        "card_type": card_type,
+                    })
+            elif zone == self.ZONE_GRAVEYARD and card_type not in (self.CT_ENCHANTMENT, self.CT_HERO_POWER):
+                # 快速结算的法术/武器：SHOW_ENTITY 与 TAG_CHANGE GRAVEYARD
+                # 在同一批次日志中处理，桥接时 zone 已是 GRAVEYARD 而非 PLAY。
+                # 这种情况下对手的 HAND→PLAY→GRAVEYARD 过渡被跳过，
+                # 我们在此补偿调用 _on_card_played 以确保法术被正确追踪。
+                # 也加入 opp_graveyard_seen，因为卡牌已在墓地中。
+                if card_id:
+                    self._on_card_played(entity_id, controller, card_id, card_type)
+                    if card_id not in self.state.opp_graveyard_seen:
+                        self.state.opp_graveyard_seen.append(card_id)
+                    if card_id in self.state.opp_shuffled_into_deck:
+                        self._mark_shuffled_card_played(card_id)
+                    logger.info("快速结算识别: entity=%d, card_id=%s, type=%d 直接出现在GRAVEYARD",
+                                entity_id, card_id, card_type)
             elif zone == self.ZONE_SECRET:
-                self.state.opp_secrets.append(card_id)
+                # 奥秘注册统一入口：仅在此处添加（show_entity 是对手奥秘唯一的揭示路径）
+                # _on_zone_hand_to_secret 不再重复添加，仅负责触发 _on_card_played
+                if card_id not in self.state.opp_secrets:
+                    self.state.opp_secrets.append(card_id)
                 self._on_card_played(entity_id, controller, card_id, card_type)
                 # 更新奥秘概率模型
                 self._ensure_secret_model()
                 if self._secret_model and card_id:
                     self._secret_model.exclude(card_id)
 
-            # 为对手揭示到PLAY/SECRET的卡牌喂入贝叶斯模型
+            # 为对手揭示到PLAY/SECRET/GRAVEYARD的卡牌喂入贝叶斯模型
+            # 英雄技能不是卡牌，不应影响贝叶斯推断
             # 检测衍生牌：来源为GENERATED 或 超过标准牌库张数限制
-            if zone in (self.ZONE_PLAY, self.ZONE_SECRET) and card_id:
+            # GRAVEYARD：快速结算的法术，在桥接时 zone 已是 GRAVEYARD
+            if zone in (self.ZONE_PLAY, self.ZONE_SECRET, self.ZONE_GRAVEYARD) and card_id and card_type != self.CT_HERO_POWER:
                 card_source = self._classify_source(entity_id, card_id)
                 is_generated = (card_source == CardSource.GENERATED 
                                or self._is_over_copy_limit(card_id))
                 if not self._bayesian_initialized:
-                    self._init_bayesian_model(self.state.opp_hero_class)
-                if is_generated:
-                    # 衍生牌：记录但不更新后验
-                    self.feed_bayesian_generated_update(card_id)
+                    # 延迟初始化：只初始化不喂入（_init_bayesian_model 返回 False 时跳过）
+                    if self._init_bayesian_model(self.state.opp_hero_class):
+                        # 首次初始化成功 — 延迟喂入积压证据
+                        self._replay_pending_bayesian_evidence()
+                if self._bayesian_model is not None:
+                    if is_generated:
+                        self.feed_bayesian_generated_update(card_id)
+                    else:
+                        self.feed_bayesian_update(card_id)
                 else:
-                    # 牌库牌：正常更新后验
-                    self.feed_bayesian_update(card_id)
+                    # 模型未初始化（职业未知），缓存证据等待后续
+                    self._pending_bayesian_evidence.append(
+                        (card_id, 'generated' if is_generated else 'play'))
 
             # 为对手揭示到HAND的卡牌喂入贝叶斯模型 (Tracking/发现效果/Mulligan)
+            # 英雄技能不是卡牌，不应影响贝叶斯推断
             # 同样需要区分来源和张数限制
-            if zone == self.ZONE_HAND and card_id:
+            if zone == self.ZONE_HAND and card_id and card_type != self.CT_HERO_POWER:
                 card_source = self._classify_source(entity_id, card_id)
                 is_generated = (card_source == CardSource.GENERATED
                                or self._is_over_copy_limit(card_id))
                 if not self._bayesian_initialized:
-                    self._init_bayesian_model(self.state.opp_hero_class)
-                if is_generated:
-                    self.feed_bayesian_generated_update(card_id)
+                    if self._init_bayesian_model(self.state.opp_hero_class):
+                        self._replay_pending_bayesian_evidence()
+                if self._bayesian_model is not None:
+                    if is_generated:
+                        self.feed_bayesian_generated_update(card_id)
+                    else:
+                        self.feed_bayesian_hand_update(card_id)
                 else:
-                    self.feed_bayesian_hand_update(card_id)
+                    self._pending_bayesian_evidence.append(
+                        (card_id, 'generated' if is_generated else 'hand'))
                 # 记录已知手牌（无论来源，用于 Determinizer 采样）
                 self._record_known_hand_card(card_id)
+
+        # 我方卡牌追踪
+        if controller == self.our_controller and card_id:
+            self.state.player_hand_card_ids[entity_id] = (card_id, zone)
+            # 我方手牌进入记录
+            if zone == self.ZONE_HAND:
+                pass  # 可扩展：记录我方已知手牌
+            elif zone == self.ZONE_PLAY:
+                if card_type not in (self.CT_ENCHANTMENT,):
+                    self.state.player_board_minions.append({
+                        "card_id": card_id,
+                        "entity_id": entity_id,
+                        "card_type": card_type,
+                    })
+            elif zone == self.ZONE_SECRET:
+                if card_id not in self.state.player_secrets:
+                    self.state.player_secrets.append(card_id)
 
         if entity_id in self._entity_birth:
             self._entity_birth[entity_id].card_id = card_id
@@ -271,10 +416,34 @@ class GlobalTracker:
         if card_type == self.CT_HERO and card_id:
             meta = self._card_metadata(card_id)
             hero_class = meta.get("cardClass", "")
-            if controller == self.our_controller and not self.state.player_hero_class:
-                self.state.player_hero_class = hero_class
-            elif controller == self.opp_controller and not self.state.opp_hero_class:
-                self.state.opp_hero_class = hero_class
+            if controller == self.our_controller:
+                if not self.state.player_hero_class:
+                    self.state.player_hero_class = hero_class
+            elif controller == self.opp_controller:
+                if not self.state.opp_hero_class:
+                    self.state.opp_hero_class = hero_class
+                    # 首次检测到对手职业 — 尝试初始化贝叶斯模型并回放积压证据
+                    if self._pending_bayesian_evidence and not self._bayesian_initialized:
+                        if self._init_bayesian_model(hero_class):
+                            self._replay_pending_bayesian_evidence()
+                elif self.state.opp_hero_class != hero_class and self._bayesian_initialized:
+                    # 对手职业被修正（如 controller 修正后），重新初始化贝叶斯模型
+                    # 保存已知的对手卡牌证据，重新喂入新模型
+                    old_known_cards = list(self.state.opp_known_cards)
+                    logger.info("对手职业修正: %s → %s，重新初始化贝叶斯模型（重喂 %d 张已知卡牌）",
+                                self.state.opp_hero_class, hero_class, len(old_known_cards))
+                    self.state.opp_hero_class = hero_class
+                    self._bayesian_model = None
+                    self._bayesian_initialized = False
+                    self._secret_model = None
+                    # 重新喂入已知对手卡牌到新的贝叶斯模型
+                    if self._init_bayesian_model(hero_class):
+                        for kc in old_known_cards:
+                            if kc.source == CardSource.DECK and kc.card_id:
+                                self.feed_bayesian_update(kc.card_id)
+                            elif kc.source == CardSource.GENERATED and kc.card_id:
+                                self.feed_bayesian_generated_update(kc.card_id)
+                        self._replay_pending_bayesian_evidence()
 
     def on_zone_change(self, entity_id: int, controller: int,
                        old_zone: int, new_zone: int,
@@ -288,13 +457,56 @@ class GlobalTracker:
         """
         is_opp = (controller == self.opp_controller)
 
+        # ── 实时手牌计数更新 ──
+        # 对手手牌数是 UI 的核心数据，不能依赖延迟的实体枚举刷新
+        # 每次 HAND 区域变化时立即增减计数
+        if is_opp:
+            if old_zone == self.ZONE_HAND and new_zone != self.ZONE_HAND:
+                self.state.opp_hand_count = max(0, self.state.opp_hand_count - 1)
+                # 卡牌离开手牌，清除持有追踪
+                self.state.opp_hand_hold_since.pop(entity_id, None)
+            elif old_zone != self.ZONE_HAND and new_zone == self.ZONE_HAND:
+                self.state.opp_hand_count += 1
+                # 卡牌进入手牌，记录回合（用于持有回合推断）
+                current_turn = self.state.current_turn
+                if entity_id not in self.state.opp_hand_hold_since and current_turn > 0:
+                    self.state.opp_hand_hold_since[entity_id] = current_turn
+        # 我方手牌也实时追踪
+        elif controller == self.our_controller:
+            if old_zone == self.ZONE_HAND and new_zone != self.ZONE_HAND:
+                self.state.player_hand_count = max(0, self.state.player_hand_count - 1)
+            elif old_zone != self.ZONE_HAND and new_zone == self.ZONE_HAND:
+                self.state.player_hand_count += 1
+
+        # ── 实时牌库计数更新 ──
+        # 同理，牌库计数也需要实时追踪
+        if is_opp:
+            if old_zone == self.ZONE_DECK and new_zone != self.ZONE_DECK:
+                self.state.opp_deck_remaining = max(0, self.state.opp_deck_remaining - 1)
+            elif old_zone != self.ZONE_DECK and new_zone == self.ZONE_DECK:
+                self.state.opp_deck_remaining += 1
+        elif controller == self.our_controller:
+            if old_zone == self.ZONE_DECK and new_zone != self.ZONE_DECK:
+                self.state.player_deck_remaining = max(0, self.state.player_deck_remaining - 1)
+            elif old_zone != self.ZONE_DECK and new_zone == self.ZONE_DECK:
+                self.state.player_deck_remaining += 1
+
         # 区域变化时更新opp_hand_card_ids中的zone
         # 保留card_id但更新zone，以便get_opp_known_hand()能正确过滤
         # 注意：不在此处检查is_opp——controller可能已变化
         # （例如对手卡牌在回合开始时转移到玩家牌库）
         if entity_id in self.state.opp_hand_card_ids:
-            card_id = self.state.opp_hand_card_ids[entity_id][0]
-            self.state.opp_hand_card_ids[entity_id] = (card_id, new_zone)
+            tracked_card_id = self.state.opp_hand_card_ids[entity_id][0]
+            # 卡片离开 HAND/DECK 后清除条目（避免无限增长 + 过期 card_id fallback）
+            # 保留在 DECK 和 HAND 区域的条目（仍需要追踪）
+            if new_zone not in (self.ZONE_HAND, self.ZONE_DECK, self.ZONE_SECRET):
+                del self.state.opp_hand_card_ids[entity_id]
+            else:
+                self.state.opp_hand_card_ids[entity_id] = (tracked_card_id, new_zone)
+                # 仅在日志未提供 card_id 时使用追踪值作为回退
+                # 不盲目覆写——变形后的 ChangeEntity 会先更新 card_id
+                if not card_id:
+                    card_id = tracked_card_id
 
         # 区域转换分发
         handler = self._zone_handlers.get((old_zone, new_zone))
@@ -310,10 +522,167 @@ class GlobalTracker:
         )
         self._rule_dispatcher.dispatch_zone_change(ctx)
 
-        # 硬币使用：检测硬币法术从HAND离开
-        if (old_zone == self.ZONE_HAND and
-            card_id in self.COIN_CARD_IDS):
+        # 硬币使用：检测硬币法术从HAND离开（统一方法）
+        # 如果 card_id 为空，从出生记录回退查找
+        coin_card_id = card_id
+        if not coin_card_id and entity_id:
+            birth = self._entity_birth.get(entity_id)
+            if birth and birth.card_id:
+                coin_card_id = birth.card_id
+            else:
+                coin_card_id = self._last_known_card_ids.get(entity_id, "")
+        if old_zone == self.ZONE_HAND and self._is_coin_entity(coin_card_id, entity_id=entity_id):
             self.state.coin_used = True
+            who = "对手" if is_opp else "我方"
+            logger.info("检测到%s使用硬币 (entity_id=%d, card_id=%s)", who, entity_id, coin_card_id)
+
+    # ── 卡牌变形/控制器变化事件 ──────────────────────────────────
+
+    def on_card_transformed(self, entity_id: int, old_card_id: str, new_card_id: str,
+                            controller: int, zone: int = 0):
+        """实体卡牌ID变化（ChangeEntity）时调用。
+
+        炉石中 ChangeEntity 事件表示一张卡牌变形为另一张卡牌，
+        常见于：腐蚀升级、变形术、奖品等效果。
+        此事件对贝叶斯推断至关重要——原始卡已不存在，
+        新卡是衍生牌，不应影响卡组推断。
+
+        Args:
+            entity_id: 实体ID
+            old_card_id: 变形前的卡牌ID
+            new_card_id: 变形后的卡牌ID
+            controller: 控制者
+            zone: 当前区域
+        """
+        is_opp = (controller == self.opp_controller)
+        self._last_known_card_ids[entity_id] = new_card_id
+
+        if is_opp and old_card_id and new_card_id and old_card_id != new_card_id:
+            # 记录变形映射
+            self.state.opp_entity_transforms[entity_id] = (old_card_id, new_card_id)
+
+            # 记录变形揭示事件
+            record = CardRevealRecord(
+                card_id=new_card_id,
+                reveal_type=CardRevealType.TRANSFORM,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                source_card_id=old_card_id,
+                details=f"{old_card_id} → {new_card_id}",
+                is_opp=True,
+            )
+            self.state.opp_transform_events.append(record)
+
+            # 通知追踪规则
+            ctx = TrackingContext(
+                entity_id=entity_id, controller=controller,
+                old_zone=zone, new_zone=zone,
+                card_id=new_card_id, card_type=0,
+                is_opp=is_opp, state=self.state,
+            )
+            self._rule_dispatcher.dispatch_card_transformed(ctx, old_card_id, new_card_id)
+
+            logger.info("对手卡牌变形: entity=%d, %s → %s (zone=%d)",
+                        entity_id, old_card_id, new_card_id, zone)
+
+    def on_controller_change(self, entity_id: int, old_controller: int,
+                             new_controller: int, card_id: str = "",
+                             zone: int = 0):
+        """实体控制器变化（偷取/操控权转移）时调用。
+
+        当对手的牌被我们偷取（精神控制、卑劣的脏鼠等），
+        或我们的牌被对手偷取时，需要更新追踪。
+
+        Args:
+            entity_id: 实体ID
+            old_controller: 原控制器
+            new_controller: 新控制器
+            card_id: 卡牌ID（可能为空）
+            zone: 当前区域
+        """
+        was_opp = (old_controller == self.opp_controller)
+        now_opp = (new_controller == self.opp_controller)
+
+        # 对手的牌被我们偷取：从对手追踪中移除
+        if was_opp and not now_opp:
+            if entity_id in self.state.opp_hand_card_ids:
+                old_info = self.state.opp_hand_card_ids.pop(entity_id)
+                logger.info("对手卡牌被我方偷取: entity=%d, card_id=%s",
+                            entity_id, old_info[0] if old_info else card_id)
+
+        # 我们的牌被对手偷取：加入对手追踪
+        if not was_opp and now_opp and card_id:
+            self.state.opp_hand_card_ids[entity_id] = (card_id, zone)
+            record = CardRevealRecord(
+                card_id=card_id,
+                reveal_type=CardRevealType.HAND_REVEAL,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                details="controller_change: stolen",
+                is_opp=True,
+            )
+            self.state.opp_revealed_hand_cards.append(record)
+            logger.info("我方卡牌被对手偷取: entity=%d, card_id=%s", entity_id, card_id)
+
+    def on_tutor_draw(self, entity_id: int, card_id: str, controller: int,
+                      search_type: str = "", race: str = "", spell_school: str = ""):
+        """定向检索事件——对手搜索特定类型的牌时调用。
+
+        当对手使用定向检索效果（如"抽一张龙牌"、"发现一张火焰法术"），
+        我们虽然看不到具体抽到的牌，但可以知道抽到牌的类型约束。
+        这极大缩小了手牌预测空间——某张手牌一定是某个种族/学派。
+
+        Args:
+            entity_id: 被抽到的实体ID
+            card_id: 被抽到的卡牌ID（如可见则提供）
+            controller: 控制者
+            search_type: 搜索类型描述 (如 "HOLDING_DRAGON")
+            race: 搜索的种族约束 (如 "DRAGON", "BEAST")
+            spell_school: 搜索的学派约束 (如 "FIRE", "FROST")
+        """
+        is_opp = (controller == self.opp_controller)
+        if not is_opp:
+            return
+
+        # 如果能确定具体牌（card_id 可见），直接记录
+        if card_id:
+            record = CardRevealRecord(
+                card_id=card_id,
+                reveal_type=CardRevealType.TUTOR,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                details=search_type or race or spell_school,
+                is_opp=True,
+            )
+            self.state.opp_tutor_evidence.append(record)
+            # 已知手牌中也记录
+            self._record_known_hand_card(card_id)
+            logger.info("对手定向检索(已知牌): entity=%d, card_id=%s, type=%s",
+                        entity_id, card_id, search_type or race)
+        else:
+            # 只知道类型，不知道具体牌——记录类型约束
+            constraint = {
+                "entity_id": entity_id,
+                "turn": self.state.current_turn,
+                "search_type": search_type,
+            }
+            if race:
+                constraint["race"] = race
+            if spell_school:
+                constraint["spell_school"] = spell_school
+            self.state.opp_known_hand_types.append(constraint)
+
+            record = CardRevealRecord(
+                card_id="",
+                reveal_type=CardRevealType.TUTOR,
+                turn=self.state.current_turn,
+                entity_id=entity_id,
+                details=search_type or race or spell_school,
+                is_opp=True,
+            )
+            self.state.opp_tutor_evidence.append(record)
+            logger.info("对手定向检索(类型约束): entity=%d, race=%s, school=%s",
+                        entity_id, race, spell_school)
 
     # ── 区域转换处理器 ─────────────────────────────────────────
 
@@ -342,27 +711,88 @@ class GlobalTracker:
 
     def _on_zone_play_to_graveyard(self, entity_id, controller, card_id, card_type, is_opp):
         """随从死亡/武器摧毁: PLAY -> GRAVEYARD"""
+        # 如果 card_id 为空，尝试从出生记录或历史快照回退查找
+        if not card_id:
+            birth = self._entity_birth.get(entity_id)
+            if birth and birth.card_id:
+                card_id = birth.card_id
+            else:
+                card_id = self._last_known_card_ids.get(entity_id, "")
+
         if is_opp and card_id:
             self.state.opp_graveyard_seen.append(card_id)
         if not is_opp and card_id:
             self.state.player_minions_died.append(card_id)
+        # Remove from board minion lists
+        if is_opp:
+            self.state.opp_board_minions = [
+                m for m in self.state.opp_board_minions
+                if m.get("entity_id") != entity_id
+            ]
+        else:
+            self.state.player_board_minions = [
+                m for m in self.state.player_board_minions
+                if m.get("entity_id") != entity_id
+            ]
 
     def _on_zone_return_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
         """打出的卡牌回手（弹回/召回）: PLAY/SECRET -> HAND"""
         if is_opp and card_id:
             self.state.opp_returned_to_hand_seen.append(card_id)
+            # Remove from opp board minions (card returned to hand)
+            self.state.opp_board_minions = [
+                m for m in self.state.opp_board_minions
+                if m.get("entity_id") != entity_id
+            ]
+        elif is_opp and not card_id:
+            # PLAY→HAND 时 card_id 不应为空（之前已揭示），回退查 opp_hand_card_ids
+            entry = self.state.opp_hand_card_ids.get(entity_id)
+            if entry and entry[0]:
+                self.state.opp_returned_to_hand_seen.append(entry[0])
 
     def _on_zone_hand_to_secret(self, entity_id, controller, card_id, card_type, is_opp):
-        """打出奥秘: HAND -> SECRET (§7)"""
-        if is_opp and card_id:
-            self.state.opp_secrets.append(card_id)
+        """打出奥秘: HAND -> SECRET (§7)
+
+        注意：奥秘注册统一由 on_show_entity (SECRET zone) 处理。
+        此方法仅负责触发 _on_card_played 记录出牌，不操作 opp_secrets。
+        """
         self._on_card_played(entity_id, controller, card_id, card_type)
+
+    def _on_zone_hand_to_graveyard(self, entity_id, controller, card_id, card_type, is_opp):
+        """弃牌/死亡: HAND -> GRAVEYARD (P1 #4)
+
+        记录弃牌并添加到 opp_graveyard_seen。
+        """
+        if not card_id:
+            birth = self._entity_birth.get(entity_id)
+            if birth and birth.card_id:
+                card_id = birth.card_id
+            else:
+                card_id = self._last_known_card_ids.get(entity_id, "")
+        if is_opp and card_id:
+            self.state.opp_graveyard_seen.append(card_id)
+
+    def _on_zone_deck_to_play(self, entity_id, controller, card_id, card_type, is_opp):
+        """直接从牌库打出: DECK -> PLAY (P2 #11)
+
+        极罕见情况（如追踪术直接从牌库放随从到场），
+        不算"打出"，不触发 _on_card_played。
+        """
+        pass
+
+    def _on_zone_hand_to_deck(self, entity_id, controller, card_id, card_type, is_opp):
+        """手牌回牌库: HAND -> DECK (P2 #11)
+
+        例如污染者玛法里奥的效果。
+        不触发 _on_card_played。
+        """
+        pass
 
     def _on_zone_secret_resolved(self, entity_id, controller, card_id, card_type, is_opp):
         """奥秘触发/过期: SECRET -> GRAVEYARD/SETASIDE"""
         if is_opp and card_id:
-            if card_id in self.state.opp_secrets:
-                self.state.opp_secrets.remove(card_id)
+            # 移除所有匹配的奥秘条目（而非仅第一个）
+            self.state.opp_secrets = [s for s in self.state.opp_secrets if s != card_id]
             self.state.opp_secrets_triggered.append(KnownCard(
                 card_id=card_id,
                 turn_seen=self.state.current_turn,
@@ -376,6 +806,11 @@ class GlobalTracker:
     def _on_card_played(self, entity_id: int, controller: int,
                         card_id: str, card_type: int):
         """记录一张卡牌被打出（HAND -> PLAY 或 HAND -> SECRET）"""
+        # P0 #1: 防止同一实体被重复记录为打出
+        if entity_id in self._entity_played_set:
+            return
+        self._entity_played_set.add(entity_id)
+
         is_opp = (controller == self.opp_controller)
         source = self._classify_source(entity_id, card_id)
 
@@ -424,27 +859,55 @@ class GlobalTracker:
         """判断卡牌来源是牌库还是衍生。
 
         启发式规则：
+        0. 英雄技能 → 不属于任何来源，调用方应跳过
         1. 实体出生在DECK区域 → 牌库牌
-        2. 实体出生在SETASIDE或HAND（非初始） → 衍生牌
-        3. 查卡牌数据库：非可收集 = 衍生
+        2. 实体出生在SETASIDE → 衍生牌
+        3. 实体出生在HAND区域 → 区分初始手牌 vs 衍生到手牌
+           - 游戏开始前（turn==0）出生在HAND → 牌库牌（初始手牌）
+           - 游戏开始后出生在HAND → 衍生牌（发现/生成到手牌）
+           - 硬币卡牌出生在HAND → 牌库牌（后手硬币是牌库的一部分）
+        4. 查卡牌数据库：非可收集 = 衍生
         """
+        # 英雄技能不是从牌库或衍生来的卡牌，应被调用方完全跳过
         birth = self._entity_birth.get(entity_id)
+        if birth and birth.card_type == self.CT_HERO_POWER:
+            return CardSource.GENERATED  # 标记为衍生以排除贝叶斯，但调用方应已跳过
+
+        # 查卡牌元数据（后续多处复用）
+        meta = self._card_metadata(card_id) if card_id else {}
+
+        # 兜底：card_id 查库判断是否是英雄技能
+        if meta and meta.get("type", "").upper() == "HERO_POWER":
+            return CardSource.GENERATED
+
+        # 窥探确认：如果卡牌已被确认存在于对手牌库中，则必定是牌库牌
+        if card_id and card_id in self.state.opp_known_deck_cards:
+            return CardSource.DECK
+
         if birth:
             if birth.initial_zone == self.ZONE_DECK:
                 return CardSource.DECK
             if birth.initial_zone == self.ZONE_SETASIDE:
                 return CardSource.GENERATED
-            # HAND区域的非牌库卡牌（如衍生到手牌）
+            # HAND区域：区分初始手牌 vs 衍生到手牌
             if birth.initial_zone == self.ZONE_HAND:
+                # P0 #2: 使用 birth_turn 而非 current_turn 判断初始手牌
+                # 初始手牌（出生时 turn==0）属于牌库牌
+                # 硬币也属于牌库牌（后手硬币是初始手牌的一部分）
+                if birth.birth_turn == 0 or self._is_coin_entity(card_id):
+                    return CardSource.DECK
                 return CardSource.GENERATED
 
-        # 兜底：查卡牌数据库的可收集性
-        if card_id:
-            meta = self._card_metadata(card_id)
-            if meta:
-                if not meta.get("collectible", False):
-                    return CardSource.GENERATED
-                return CardSource.DECK
+        # 兜底：无出生记录时，不可收集=衍生，可收集=未知
+        # 不再默认可收集卡牌=DECK，因为发现的牌也可以是可收集的
+        if meta:
+            if not meta.get("collectible", False):
+                return CardSource.GENERATED
+            # 可收集但无出生记录，无法确定来源
+            # 如果对手已打出超过牌库限制，则判断为衍生
+            if self._is_over_copy_limit(card_id):
+                return CardSource.GENERATED
+            return CardSource.UNKNOWN
 
         return CardSource.UNKNOWN
 
@@ -460,10 +923,16 @@ class GlobalTracker:
             self.state.opp_shuffled_into_deck.remove(card_id)
         # Remove from known shuffled cards
         self.state.opp_shuffled_known_cards.pop(card_id, None)
+        # Decrease play count by 1 instead of resetting to 0.
+        # Resetting to 0 would lose the count of original deck copies played,
+        # causing _is_over_copy_limit to misclassify future generated copies as DECK.
+        current = self._opp_card_play_count.get(card_id, 0)
+        if current > 0:
+            self._opp_card_play_count[card_id] = current - 1
         
-        log.debug(
-            "Shuffled card played (marked GENERATED): %s",
-            card_id,
+        logger.debug(
+            "Shuffled card played (marked GENERATED, play count decremented): %s (%d→%d)",
+            card_id, current, max(0, current - 1),
         )
 
     def _is_over_copy_limit(self, card_id: str) -> bool:
@@ -487,13 +956,11 @@ class GlobalTracker:
         rarity = meta.get('rarity', 'COMMON').upper()
         max_copies = self._MAX_COPIES.get(rarity, 2)
         
-        return count >= max_copies
+        return count > max_copies
 
     def _card_type_name(self, card_type: int) -> str:
         """将数字卡牌类型转换为字符串"""
-        _map = {4: "MINION", 5: "SPELL", 7: "WEAPON", 3: "HERO",
-                6: "LOCATION", 10: "HERO_POWER"}
-        return _map.get(card_type, "UNKNOWN")
+        return CARDTYPE_EN.get(card_type, "UNKNOWN")
 
     def _update_play_stats(self, stats: SideStats, card_id: str,
                            card_type: int, source: CardSource, meta: Dict):
@@ -542,12 +1009,32 @@ class GlobalTracker:
                 self.state.last_turn_schools_player = set(player_stats.spell_schools.keys())
 
             # 清除本回合打出卡牌的追踪
-            if turn % 2 == 1:  # 我方回合开始
-                self.state.cards_played_this_turn_player.clear()
+            # 当 is_first_player 为 None（未知）时，无法确定回合归属，跳过清理
+            if self.state.is_first_player is None:
+                # 先后手未确定，跳过清理避免清错列表
+                pass
             else:
-                self.state.cards_played_this_turn_opp.clear()
+                # 使用 is_first_player 判断回合归属，而非硬编码 turn%2
+                # 先手玩家在奇数回合行动，后手在偶数回合行动
+                is_our_turn = (
+                    (self.state.is_first_player and turn % 2 == 1)
+                    or (not self.state.is_first_player and turn % 2 == 0)
+                )
+                if is_our_turn:
+                    self.state.cards_played_this_turn_player.clear()
+                else:
+                    self.state.cards_played_this_turn_opp.clear()
+
+            # P2 #14: 修剪过期的 opp_known_hand_types（类似 TutorConstraintTrackerRule 的 2 回合截止）
+            cutoff = turn - 2
+            self.state.opp_known_hand_types = [
+                ht for ht in self.state.opp_known_hand_types
+                if ht.get("turn", 0) >= cutoff
+            ]
 
         self.state.current_turn = turn
+        # 分发回合变化事件到所有 TrackerRule
+        self._rule_dispatcher.dispatch_turn_change(turn, self.state)
 
     def on_corpse_change(self, controller: int, total_corpses: int):
         """残骸(Corpse)总量变化时调用"""
@@ -569,10 +1056,16 @@ class GlobalTracker:
             self.state.player_herald_count = count
 
     def on_fatigue_change(self, controller: int, fatigue_damage: int):
-        """FATIGUE标签变化时调用 (§8.3)"""
+        """FATIGUE标签变化时调用 (§8.3)
+
+        注意：TAG_CHANGE 可能多次写入同一伤害值（同一回合多次触发），
+        只有当伤害值递增时才计数为新的疲劳事件。
+        """
         stats = self.state.opp_stats if controller == self.opp_controller else self.state.player_stats
-        stats.fatigue_damage = fatigue_damage
-        stats.times_fatigued += 1
+        # 只有当伤害值确实递增时才计数，避免重复计数
+        if fatigue_damage > stats.fatigue_damage:
+            stats.fatigue_damage = fatigue_damage
+            stats.times_fatigued += 1
 
     def on_first_player(self, is_our_player: bool):
         """检测到FIRST_PLAYER时调用 (§1.7)"""
@@ -588,6 +1081,12 @@ class GlobalTracker:
         self.state.opp_deck_remaining = count
         return count
 
+    def count_opp_hand(self, opp_entities: list) -> int:
+        """统计对手在HAND区域的实体数（真实手牌数量）"""
+        count = sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_HAND)
+        self.state.opp_hand_count = count
+        return count
+
     def count_player_deck(self, our_entities: list) -> int:
         """统计我方在DECK区域的实体数"""
         return sum(1 for e in our_entities if getattr(e, 'zone', 0) == self.ZONE_DECK)
@@ -596,9 +1095,12 @@ class GlobalTracker:
     # 对手手牌/武器/地点追踪
     # ---------------------------------------------------------------
 
-    def get_opp_hand_count(self, opp_entities: list) -> int:
-        """统计对手在HAND区域的实体数"""
-        return sum(1 for e in opp_entities if getattr(e, 'zone', 0) == self.ZONE_HAND)
+    def get_opp_hand_count(self) -> int:
+        """返回对手当前手牌数量（纯读取，无副作用）。
+
+        如需更新计数，应显式调用 count_opp_hand(opp_entities)。
+        """
+        return self.state.opp_hand_count
 
     def get_opp_known_hand(self) -> List[Tuple[int, str]]:
         """返回对手已知手牌的 (entity_id, card_id) 列表。
@@ -709,11 +1211,11 @@ class GlobalTracker:
             "total_played": len(state.opp_known_cards),
             "total_generated": len(state.opp_generated_seen),
             "type_counts": {
-                "随从": stats.minions_played,
-                "法术": stats.spells_played,
-                "武器": stats.weapons_played,
-                "英雄": stats.heroes_played,
-                "地点": stats.locations_played,
+                "MINION": stats.minions_played,
+                "SPELL": stats.spells_played,
+                "WEAPON": stats.weapons_played,
+                "HERO": stats.heroes_played,
+                "LOCATION": stats.locations_played,
             },
             "school_counts": dict(stats.spell_schools),
             "race_counts": dict(stats.races_played),
@@ -724,11 +1226,16 @@ class GlobalTracker:
     # ---------------------------------------------------------------
 
     def _ensure_card_db(self):
+<<<<<<< HEAD
         """延迟加载卡牌数据库，用于dbfId查询"""
         if self._card_db is None:
             from analysis.card.data.card_data import get_db
             self._card_db = get_db()
         return self._card_db
+=======
+        """延迟加载卡牌数据库，用于dbfId查询（strict 模式）"""
+        return self._get_card_db(strict=True)
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
     def _ensure_secret_model(self):
         """基于对手英雄职业初始化奥秘概率模型"""
@@ -738,14 +1245,24 @@ class GlobalTracker:
         if opp_cls:
             self._secret_model = SecretProbabilityModel(opp_cls)
 
-    def _init_bayesian_model(self, opponent_class: str = None):
+    def _init_bayesian_model(self, opponent_class: str = None) -> bool:
         """Initialize Bayesian opponent model from HSReplay cache or deck_codes.txt.
 
         Args:
             opponent_class: Optional class filter (e.g. 'ROGUE', 'WARLOCK')
+
+        Returns:
+            True if model was successfully initialized, False otherwise.
         """
         if self._bayesian_initialized:
-            return
+            return self._bayesian_model is not None
+
+        # 延迟初始化：如果对手职业未知，不要加载全职业卡组
+        # 否则会把其他职业的卡牌概率混入手牌预测
+        if not opponent_class or opponent_class == "UNKNOWN":
+            logger.debug("延迟贝叶斯模型初始化: 对手职业未知 (%s)", opponent_class)
+            return False
+
         self._bayesian_initialized = True
 
         try:
@@ -753,9 +1270,35 @@ class GlobalTracker:
 
             self._bayesian_model = BayesianOpponentModel(player_class=opponent_class)
             if not self._bayesian_model.decks:
-                self._bayesian_model = None  # No data available
-        except Exception:
+                logger.warning("贝叶斯模型初始化: 无匹配卡组 (class=%s)", opponent_class)
+                self._bayesian_model = None
+                return False
+            logger.info("贝叶斯模型初始化成功: %d 个卡组 (class=%s)",
+                        len(self._bayesian_model.decks), opponent_class)
+            return True
+        except Exception as e:
+            logger.error("贝叶斯模型初始化失败: %s", e)
             self._bayesian_model = None
+            return False
+
+    def _replay_pending_bayesian_evidence(self):
+        """回放积压的贝叶斯证据到已初始化的模型。
+
+        当对手职业未知时，观察到的卡牌被缓存在 _pending_bayesian_evidence 中。
+        一旦职业确认并成功初始化模型后，调用此方法回放所有积压证据。
+        """
+        if not self._pending_bayesian_evidence or self._bayesian_model is None:
+            return
+        count = len(self._pending_bayesian_evidence)
+        for card_id, evidence_type in self._pending_bayesian_evidence:
+            if evidence_type == 'play':
+                self.feed_bayesian_update(card_id)
+            elif evidence_type == 'hand':
+                self.feed_bayesian_hand_update(card_id)
+            elif evidence_type == 'generated':
+                self.feed_bayesian_generated_update(card_id)
+        self._pending_bayesian_evidence.clear()
+        logger.info("回放积压贝叶斯证据: %d 条", count)
 
     def feed_bayesian_update(self, card_id: str):
         """Feed an observed opponent card to the Bayesian model.
@@ -840,7 +1383,11 @@ class GlobalTracker:
 
         locked = self._bayesian_model.locked
         top = self._bayesian_model.get_top_decks(3)
-        preds = self._bayesian_model.predict_next_actions(3)
+        preds = self._bayesian_model.predict_next_actions(
+            3,
+            hand_size=self.state.opp_hand_count or len(self.state.opp_hand_card_ids),
+            deck_remaining=self.state.opp_deck_remaining,
+        )
 
         from analysis.utils.bayesian_opponent import classify_playstyle
         archetype_name = self._bayesian_model._deck_name(locked[0]) if locked else None
@@ -878,18 +1425,39 @@ class GlobalTracker:
         }
 
     def update_opp_weapon(self, opp_entities: list):
-        """从PLAY区域更新对手武器状态"""
+        """从PLAY区域更新对手武器状态。
+
+        当对手装备新武器时，如果之前已有不同的武器，
+        将旧武器记录为已消耗（进入墓地）。
+        """
+        new_weapon_id = ""
+        new_weapon_atk = 0
+        new_weapon_dur = 0
         for e in opp_entities:
             if (getattr(e, 'zone', 0) == self.ZONE_PLAY and
                 getattr(e, 'card_type', 0) == self.CT_WEAPON):
-                self.state.opp_weapon = getattr(e, 'card_id', '')
-                self.state.opp_weapon_atk = getattr(e, 'atk', 0)
-                self.state.opp_weapon_durability = getattr(e, 'health', 0)
-                return
-        # 未找到武器——清除
-        self.state.opp_weapon = ""
-        self.state.opp_weapon_atk = 0
-        self.state.opp_weapon_durability = 0
+                new_weapon_id = getattr(e, 'card_id', '')
+                new_weapon_atk = getattr(e, 'atk', 0)
+                new_weapon_dur = getattr(e, 'health', 0)
+                break
+
+        # Detect weapon replacement: old weapon consumed when new one appears
+        if new_weapon_id and self.state.opp_weapon and new_weapon_id != self.state.opp_weapon:
+            logger.info(
+                "对手武器替换: %s → %s（旧武器记录为消耗）",
+                self.state.opp_weapon, new_weapon_id,
+            )
+            self.state.opp_graveyard_seen.append(self.state.opp_weapon)
+
+        if new_weapon_id:
+            self.state.opp_weapon = new_weapon_id
+            self.state.opp_weapon_atk = new_weapon_atk
+            self.state.opp_weapon_durability = new_weapon_dur
+        else:
+            # 未找到武器——清除
+            self.state.opp_weapon = ""
+            self.state.opp_weapon_atk = 0
+            self.state.opp_weapon_durability = 0
 
     def update_opp_locations(self, opp_entities: list):
         """从PLAY区域更新对手地点状态"""
@@ -907,7 +1475,8 @@ class GlobalTracker:
     def opp_summary_str(self, opp_entities: list, card_name_fn=None) -> str:
         """生成人类可读的对手状态摘要字符串"""
         deck = self.count_opp_deck(opp_entities)
-        hand = self.get_opp_hand_count(opp_entities)
+        self.count_opp_hand(opp_entities)
+        hand = self.get_opp_hand_count()
         known_hand = self.get_opp_known_hand()
 
         parts = [f"手牌={hand}张", f"牌库={deck}张"]
@@ -987,3 +1556,4 @@ class _EntityBirth:
     initial_zone: int = 0
     card_type: int = 0
     cost: int = 0
+    birth_turn: int = 0  # 实体出生时的回合数（P0 #2: 用于 _classify_source 区分初始手牌）

@@ -26,11 +26,28 @@ Thumbs.db
 # Card images (large, downloadable)
 hs_cards/images/
 hs_cards/crops/
+card_data/images/
 
-# External tool artifacts
+# Debug screenshots (pasted from clipboard)
+upload/
+
+# Generated reports and logs (runtime output)
+logs/full_flow_*.txt
+download/mcts_*.json
+download/mcts_*.pdf
+
+# Game log directories (user-specific, large)
+Hearthstone_*/
+
+# Agent/IDE tool artifacts
+.opencode/
+.trae/
+agent-ctx/
 .swarm/
 SWARM_PLAN.*
 mcp-servers/
 
 # Environment variables
 .env
+deck_codes.bak.*
+.deck_codes_last_update

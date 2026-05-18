@@ -55,6 +55,8 @@ from analysis.watcher.global_tracker import CardSource, GlobalTracker
 from analysis.utils.player_name import (
     normalize_player_name, is_anonymous_name, name_matches, ANON_DISPLAY,
 )
+from analysis.constants.hs_enums import CARDTYPE_CN, CARDTYPE_EN, KEYWORD_CN_MAP
+from analysis.constants.i18n import card_type_display
 
 _PLAYABLE_CLASSES = {
     "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "HUNTER", "MAGE",
@@ -283,10 +285,21 @@ class PacketReplayer:
         elif isinstance(packet, packets.ChangeEntity):
             entity_id = self._resolve_id(packet.entity)
             if entity_id in self.entities:
+                old_card_id = self.entities[entity_id].card_id
                 if packet.card_id:
                     self.entities[entity_id].card_id = packet.card_id
                 for tag, value in packet.tags:
                     self._apply_tag(self.entities[entity_id], tag, value)
+                # 通知 GlobalTracker 卡牌变形事件
+                new_card_id = packet.card_id or self.entities[entity_id].card_id
+                if old_card_id and new_card_id and old_card_id != new_card_id:
+                    self.global_tracker.on_card_transformed(
+                        entity_id=entity_id,
+                        old_card_id=old_card_id,
+                        new_card_id=new_card_id,
+                        controller=self.entities[entity_id].controller,
+                        zone=self.entities[entity_id].zone,
+                    )
         elif isinstance(packet, packets.HideEntity):
             entity_id = self._resolve_id(packet.entity)
             if entity_id in self.entities:
@@ -490,6 +503,7 @@ class PacketReplayer:
         if eid in self.entities:
             entity = self.entities[eid]
             old_zone = entity.zone
+            old_controller = entity.controller
             self._apply_tag(entity, tag, value)
 
             # Zone change notification
@@ -501,6 +515,16 @@ class PacketReplayer:
                     new_zone=entity.zone,
                     card_id=entity.card_id,
                     card_type=entity.card_type,
+                )
+
+            # Controller change notification (steal/mind control effects)
+            if tag == GameTag.CONTROLLER and old_controller != entity.controller:
+                self.global_tracker.on_controller_change(
+                    entity_id=eid,
+                    old_controller=old_controller,
+                    new_controller=entity.controller,
+                    card_id=entity.card_id,
+                    zone=entity.zone,
                 )
 
     def _resolve_id(self, entity_ref) -> int:
@@ -622,15 +646,15 @@ class PacketReplayer:
             for entity in our_entities:
                 if entity.zone == Zone.PLAY and entity.card_type == CardType.MINION:
                     keywords = []
-                    if entity.taunt: keywords.append("嘲讽")
-                    if entity.divine_shield: keywords.append("圣盾")
-                    if entity.charge: keywords.append("冲锋")
-                    if entity.rush: keywords.append("突袭")
-                    if entity.windfury: keywords.append("风怒")
-                    if entity.stealth: keywords.append("潜行")
-                    if entity.poisonous: keywords.append("剧毒")
-                    if entity.frozen: keywords.append("冻结")
-                    if entity.reborn: keywords.append("亡语")
+                    if entity.taunt: keywords.append(KEYWORD_CN_MAP['taunt'])
+                    if entity.divine_shield: keywords.append(KEYWORD_CN_MAP['divine_shield'])
+                    if entity.charge: keywords.append(KEYWORD_CN_MAP['charge'])
+                    if entity.rush: keywords.append(KEYWORD_CN_MAP['rush'])
+                    if entity.windfury: keywords.append(KEYWORD_CN_MAP['windfury'])
+                    if entity.stealth: keywords.append(KEYWORD_CN_MAP['stealth'])
+                    if entity.poisonous: keywords.append(KEYWORD_CN_MAP['poisonous'])
+                    if entity.frozen: keywords.append(KEYWORD_CN_MAP['frozen'])
+                    if entity.reborn: keywords.append(KEYWORD_CN_MAP['reborn'])
 
                     our_board.append({
                         'name': self._card_name(entity.card_id),
@@ -641,11 +665,22 @@ class PacketReplayer:
 
             for entity in opp_entities:
                 if entity.zone == Zone.PLAY and entity.card_type == CardType.MINION:
+                    keywords = []
+                    if entity.taunt: keywords.append(KEYWORD_CN_MAP['taunt'])
+                    if entity.divine_shield: keywords.append(KEYWORD_CN_MAP['divine_shield'])
+                    if entity.charge: keywords.append(KEYWORD_CN_MAP['charge'])
+                    if entity.rush: keywords.append(KEYWORD_CN_MAP['rush'])
+                    if entity.windfury: keywords.append(KEYWORD_CN_MAP['windfury'])
+                    if entity.stealth: keywords.append(KEYWORD_CN_MAP['stealth'])
+                    if entity.poisonous: keywords.append(KEYWORD_CN_MAP['poisonous'])
+                    if entity.frozen: keywords.append(KEYWORD_CN_MAP['frozen'])
+                    if entity.reborn: keywords.append(KEYWORD_CN_MAP['reborn'])
+
                     opp_board.append({
                         'name': self._card_name(entity.card_id),
                         'atk': entity.atk,
                         'health': entity.health,
-                        'keywords': [],
+                        'keywords': keywords,
                     })
 
             # Extract hand cards
@@ -653,20 +688,7 @@ class PacketReplayer:
 
             for entity in our_entities:
                 if entity.zone == Zone.HAND:
-                    if entity.card_type == CardType.MINION:
-                        type_str = "随从"
-                    elif entity.card_type == CardType.SPELL:
-                        type_str = "法术"
-                    elif entity.card_type == CardType.WEAPON:
-                        type_str = "武器"
-                    elif entity.card_type == CardType.HERO:
-                        type_str = "英雄牌"
-                    elif entity.card_type == CardType.LOCATION:
-                        type_str = "地点"
-                    elif entity.card_type == CardType.HERO_POWER:
-                        type_str = "英雄技能"
-                    else:
-                        type_str = "未知"
+                    type_str = card_type_display(entity.card_type)
 
                     our_hand.append({
                         'name': self._card_name(entity.card_id),
@@ -694,7 +716,8 @@ class PacketReplayer:
 
             # Count opponent deck / hand
             opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
-            opp_hand_count = self.global_tracker.get_opp_hand_count(opp_entities)
+            self.global_tracker.count_opp_hand(opp_entities)
+            opp_hand_count = self.global_tracker.get_opp_hand_count()
 
             # Update opponent weapon/location tracking
             self.global_tracker.update_opp_weapon(opp_entities)
@@ -923,7 +946,7 @@ class PacketReplayer:
                     hand_count=len(our_hand),
                     hand_cards=[f"{c['name']}({c['cost']}费·{c['type']})" for c in our_hand[:8]],
                     board_minions=[f"{m['name']} {m['atk']}/{m['health']}" for m in our_board[:6]],
-                    deck_remaining=0,
+                    deck_remaining=len([e for e in our_entities if e.zone == Zone.DECK]),
                     opp_hero_hp=opp_hero_hp,
                     opp_hero_armor=opp_hero_armor,
                     opp_hero_class=self._opp_hero_class,
@@ -1361,26 +1384,26 @@ class PacketReplayer:
     def _extract_effect_specs(self, text: str) -> List[Dict[str, Any]]:
         specs: List[Dict[str, Any]] = []
         tl = text.lower()
-        from_past_only = ("来自过去" in text or "from the past" in tl)
+        from_past_only = ("from the past" in tl or "来自过去" in text)
 
         class_mode = "own_or_neutral"
         if (
-            "其他职业" in text
-            or "另一职业" in text
-            or "other class" in tl
+            "other class" in tl
             or "another class" in tl
+            or "其他职业" in text
+            or "另一职业" in text
         ):
             class_mode = "other"
         elif (
-            "本职业" in text
+            "your class" in tl
+            or "本职业" in text
             or "你的职业" in text
-            or "your class" in tl
         ):
             class_mode = "own_only"
-        elif "不限" in text or "any class" in tl:
+        elif "any class" in tl or "不限" in text:
             class_mode = "unrestricted"
 
-        if "发现" in text or "discover" in tl:
+        if "discover" in tl or "发现" in text:
             c = _parse_discover_constraint(text)
             specs.append(
                 {
@@ -1398,26 +1421,26 @@ class PacketReplayer:
                 }
             )
 
-        is_random_gain = ("随机" in text or "random" in tl) and (
-            "获得" in text
+        is_random_gain = ("random" in tl or "随机" in text) and (
+            "add a random" in tl
+            or "获得" in text
             or "加入" in text
             or "置入" in text
-            or "add a random" in tl
         )
         if is_random_gain:
             c = _parse_discover_constraint(text)
             random_class_mode = "unrestricted"
             if (
-                "其他职业" in text
-                or "另一职业" in text
-                or "other class" in tl
+                "other class" in tl
                 or "another class" in tl
+                or "其他职业" in text
+                or "另一职业" in text
             ):
                 random_class_mode = "other"
             elif (
-                "本职业" in text
+                "your class" in tl
+                or "本职业" in text
                 or "你的职业" in text
-                or "your class" in tl
             ):
                 random_class_mode = "own_only"
             specs.append(
@@ -1436,7 +1459,7 @@ class PacketReplayer:
                 }
             )
 
-        if "抉择" in text or "choose one" in tl:
+        if "choose one" in tl or "抉择" in text:
             specs.append(
                 {
                     "effect_kind": "抉择",
@@ -1909,7 +1932,8 @@ class PacketReplayer:
                     })
 
             # Opponent hand count & deck
-            opp_hand_count = self.global_tracker.get_opp_hand_count(opp_entities)
+            self.global_tracker.count_opp_hand(opp_entities)
+            opp_hand_count = self.global_tracker.get_opp_hand_count()
             opp_deck_remaining = self.global_tracker.count_opp_deck(opp_entities)
 
             # Update opponent weapon/location tracking

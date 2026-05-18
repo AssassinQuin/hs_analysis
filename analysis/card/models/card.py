@@ -51,7 +51,8 @@ class Card:
             try:
                 from analysis.card.data.card_roles import classify_card_roles
                 self.roles = frozenset(classify_card_roles(self))
-            except Exception:
+            except Exception as e:
+                logger.debug("classify_card_roles 失败 for %s: %s", self.id, e)
                 self.roles = frozenset()
         # 延迟加载字段初始化
         self._power = None

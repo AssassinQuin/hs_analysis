@@ -484,6 +484,16 @@ class OpponentState:
     opp_cost_modifiers: list = field(default_factory=list)  # 对手费用修正 [(modifier_type, value, scope), ...]
     opp_last_played_minion: dict = field(default_factory=dict)  # {"name":str, "attack":int, "health":int, "card_id":str} — 对手最后打出的随从
 
+    # P1 #10: 从 GlobalTracker 传递的额外追踪字段
+    opp_known_deck_cards: dict = field(default_factory=dict)  # 对手卡组确认存在的牌
+    opp_known_hand_types: list = field(default_factory=list)  # 对手手牌类型约束
+    opp_entity_transforms: dict = field(default_factory=dict)  # 对手实体变形映射
+    opp_revealed_hand_cards: list = field(default_factory=list)  # 对手手牌揭示记录
+    opp_revealed_deck_cards: list = field(default_factory=list)  # 对手卡组揭示记录
+    opp_transform_events: list = field(default_factory=list)  # 对手变形事件记录
+    opp_tutor_evidence: list = field(default_factory=list)  # 对手定向检索证据
+    opp_deck_insert_events: list = field(default_factory=list)  # 对手塞牌事件记录
+
     def copy(self) -> "OpponentState":
         """拷贝对手状态，含所有可变容器和嵌套英雄"""
         return dataclasses.replace(
@@ -498,7 +508,18 @@ class OpponentState:
             opp_shuffled_into_deck=list(self.opp_shuffled_into_deck),
             opp_corrupted_cards=list(self.opp_corrupted_cards),
             opp_cost_modifiers=list(self.opp_cost_modifiers),
+<<<<<<< HEAD:analysis/card/engine/state.py
             opp_last_played_minion=dict(self.opp_last_played_minion),
+=======
+            opp_known_deck_cards=dict(self.opp_known_deck_cards),
+            opp_known_hand_types=list(self.opp_known_hand_types),
+            opp_entity_transforms=dict(self.opp_entity_transforms),
+            opp_revealed_hand_cards=list(self.opp_revealed_hand_cards),
+            opp_revealed_deck_cards=list(self.opp_revealed_deck_cards),
+            opp_transform_events=list(self.opp_transform_events),
+            opp_tutor_evidence=list(self.opp_tutor_evidence),
+            opp_deck_insert_events=list(self.opp_deck_insert_events),
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad:analysis/search/game_state.py
         )
 
 

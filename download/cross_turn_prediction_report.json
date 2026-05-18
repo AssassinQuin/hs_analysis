@@ -1,0 +1,720 @@
+{
+  "战士 vs 战士 (8回合)": {
+    "game_info": {
+      "our_controller": 2,
+      "opp_controller": 1,
+      "opp_hero_class": "WARRIOR"
+    },
+    "results": [
+      {
+        "turn": 1,
+        "played_cards": [
+          "CATA_556"
+        ],
+        "future_played": [
+          "EDR_889",
+          "CATA_556"
+        ],
+        "num_predictions": 17,
+        "top_k_hit": 1,
+        "top_k_total": 2,
+        "bayesian_hit": 0,
+        "bayesian_total": 2,
+        "top_10": [
+          [
+            "CATA_210",
+            0.453
+          ],
+          [
+            "CORE_REV_990",
+            0.407
+          ],
+          [
+            "CATA_582",
+            0.393
+          ],
+          [
+            "CATA_584",
+            0.378
+          ],
+          [
+            "CATA_585",
+            0.369
+          ],
+          [
+            "END_020",
+            0.368
+          ],
+          [
+            "TIME_034",
+            0.361
+          ],
+          [
+            "EDR_456",
+            0.302
+          ],
+          [
+            "CATA_556",
+            0.279
+          ],
+          [
+            "FIR_939",
+            0.277
+          ]
+        ]
+      },
+      {
+        "turn": 2,
+        "played_cards": [
+          "CATA_556"
+        ],
+        "future_played": [
+          "EDR_889",
+          "TIME_000ta"
+        ],
+        "num_predictions": 16,
+        "top_k_hit": 0,
+        "top_k_total": 2,
+        "bayesian_hit": 0,
+        "bayesian_total": 2,
+        "top_10": [
+          [
+            "END_033",
+            0.451
+          ],
+          [
+            "EDR_457",
+            0.43
+          ],
+          [
+            "TLC_600",
+            0.381
+          ],
+          [
+            "EDR_456",
+            0.364
+          ],
+          [
+            "CATA_210",
+            0.354
+          ],
+          [
+            "END_020",
+            0.354
+          ],
+          [
+            "TIME_034",
+            0.353
+          ],
+          [
+            "FIR_939",
+            0.345
+          ],
+          [
+            "CATA_584",
+            0.329
+          ],
+          [
+            "CATA_585",
+            0.311
+          ]
+        ]
+      },
+      {
+        "turn": 3,
+        "played_cards": [
+          "EDR_889",
+          "EDR_889"
+        ],
+        "future_played": [
+          "END_033",
+          "TIME_000ta"
+        ],
+        "num_predictions": 16,
+        "top_k_hit": 0,
+        "top_k_total": 2,
+        "bayesian_hit": 1,
+        "bayesian_total": 2,
+        "top_10": [
+          [
+            "EDR_456",
+            0.492
+          ],
+          [
+            "EDR_457",
+            0.432
+          ],
+          [
+            "END_020",
+            0.425
+          ],
+          [
+            "TIME_034",
+            0.409
+          ],
+          [
+            "FIR_939",
+            0.403
+          ],
+          [
+            "CORE_REV_990",
+            0.37
+          ],
+          [
+            "CATA_582",
+            0.369
+          ],
+          [
+            "CATA_585",
+            0.364
+          ],
+          [
+            "TLC_600",
+            0.352
+          ],
+          [
+            "CATA_584",
+            0.32
+          ]
+        ]
+      },
+      {
+        "turn": 5,
+        "played_cards": [
+          "TIME_000ta",
+          "TIME_000ta",
+          "TIME_000ta"
+        ],
+        "future_played": [
+          "END_033"
+        ],
+        "num_predictions": 16,
+        "top_k_hit": 1,
+        "top_k_total": 1,
+        "bayesian_hit": 1,
+        "bayesian_total": 1,
+        "top_10": [
+          [
+            "CORE_REV_990",
+            0.449
+          ],
+          [
+            "TLC_600",
+            0.333
+          ],
+          [
+            "CATA_585",
+            0.33
+          ],
+          [
+            "CATA_210",
+            0.294
+          ],
+          [
+            "END_020",
+            0.288
+          ],
+          [
+            "CATA_582",
+            0.287
+          ],
+          [
+            "CATA_584",
+            0.283
+          ],
+          [
+            "END_033",
+            0.276
+          ],
+          [
+            "TIME_750",
+            0.275
+          ],
+          [
+            "TIME_034",
+            0.27
+          ]
+        ]
+      },
+      {
+        "turn": 7,
+        "played_cards": [
+          "END_033",
+          "END_033"
+        ],
+        "future_played": [],
+        "num_predictions": 15,
+        "top_k_hit": 0,
+        "top_k_total": 0,
+        "bayesian_hit": 0,
+        "bayesian_total": 0,
+        "top_10": [
+          [
+            "FIR_939",
+            0.425
+          ],
+          [
+            "CATA_584",
+            0.375
+          ],
+          [
+            "END_020",
+            0.362
+          ],
+          [
+            "TIME_750",
+            0.325
+          ],
+          [
+            "CORE_REV_990",
+            0.325
+          ],
+          [
+            "CATA_585",
+            0.325
+          ],
+          [
+            "TLC_600",
+            0.313
+          ],
+          [
+            "CATA_210",
+            0.288
+          ],
+          [
+            "EDR_457",
+            0.263
+          ],
+          [
+            "TIME_034",
+            0.263
+          ]
+        ]
+      }
+    ],
+    "total_mcts_hits": 2,
+    "total_bayesian_hits": 2,
+    "total_future": 7
+  },
+  "死亡骑士 vs 盗贼 (21回合)": {
+    "game_info": {
+      "our_controller": 2,
+      "opp_controller": 1,
+      "opp_hero_class": "DEATHKNIGHT"
+    },
+    "results": [
+      {
+        "turn": 6,
+        "played_cards": [
+          "RLK_708",
+          "RLK_708"
+        ],
+        "future_played": [
+          "CORE_RLK_066",
+          "END_004",
+          "CATA_780t"
+        ],
+        "num_predictions": 24,
+        "top_k_hit": 1,
+        "top_k_total": 3,
+        "bayesian_hit": 1,
+        "bayesian_total": 3,
+        "top_10": [
+          [
+            "CATA_156",
+            0.417
+          ],
+          [
+            "DINO_417",
+            0.32
+          ],
+          [
+            "EDR_814",
+            0.32
+          ],
+          [
+            "TLC_436",
+            0.276
+          ],
+          [
+            "EDR_813",
+            0.251
+          ],
+          [
+            "CATA_780",
+            0.235
+          ],
+          [
+            "CATA_722",
+            0.21
+          ],
+          [
+            "CATA_155",
+            0.186
+          ],
+          [
+            "CORE_RLK_066",
+            0.184
+          ],
+          [
+            "TLC_100",
+            0.178
+          ]
+        ]
+      },
+      {
+        "turn": 10,
+        "played_cards": [
+          "CATA_780t"
+        ],
+        "future_played": [
+          "CORE_RLK_066",
+          "END_004"
+        ],
+        "num_predictions": 24,
+        "top_k_hit": 1,
+        "top_k_total": 2,
+        "bayesian_hit": 1,
+        "bayesian_total": 2,
+        "top_10": [
+          [
+            "EDR_814",
+            0.279
+          ],
+          [
+            "EDR_813",
+            0.251
+          ],
+          [
+            "TLC_436",
+            0.236
+          ],
+          [
+            "DINO_417",
+            0.227
+          ],
+          [
+            "TIME_616",
+            0.225
+          ],
+          [
+            "CATA_156",
+            0.18
+          ],
+          [
+            "CORE_RLK_066",
+            0.179
+          ],
+          [
+            "CATA_780",
+            0.171
+          ],
+          [
+            "CATA_467",
+            0.156
+          ],
+          [
+            "CATA_722",
+            0.123
+          ]
+        ]
+      },
+      {
+        "turn": 12,
+        "played_cards": [
+          "CORE_RLK_066",
+          "CORE_RLK_066",
+          "END_004"
+        ],
+        "future_played": [
+          "END_004",
+          "CATA_155e2"
+        ],
+        "num_predictions": 22,
+        "top_k_hit": 0,
+        "top_k_total": 2,
+        "bayesian_hit": 0,
+        "bayesian_total": 2,
+        "top_10": [
+          [
+            "TLC_436",
+            0.238
+          ],
+          [
+            "TIME_616",
+            0.213
+          ],
+          [
+            "EDR_814",
+            0.188
+          ],
+          [
+            "EDR_813",
+            0.163
+          ],
+          [
+            "DINO_417",
+            0.138
+          ],
+          [
+            "CATA_780",
+            0.125
+          ],
+          [
+            "EDR_856",
+            0.113
+          ],
+          [
+            "CATA_156",
+            0.113
+          ],
+          [
+            "CATA_497",
+            0.088
+          ],
+          [
+            "CATA_190h",
+            0.088
+          ]
+        ]
+      },
+      {
+        "turn": 13,
+        "played_cards": [
+          "END_004"
+        ],
+        "future_played": [
+          "CATA_155",
+          "CATA_155t",
+          "CATA_155e2"
+        ],
+        "num_predictions": 22,
+        "top_k_hit": 1,
+        "top_k_total": 3,
+        "bayesian_hit": 0,
+        "bayesian_total": 3,
+        "top_10": [
+          [
+            "EDR_813",
+            0.229
+          ],
+          [
+            "CATA_156",
+            0.224
+          ],
+          [
+            "EDR_814",
+            0.211
+          ],
+          [
+            "TLC_436",
+            0.137
+          ],
+          [
+            "DINO_417",
+            0.124
+          ],
+          [
+            "CATA_155",
+            0.105
+          ],
+          [
+            "EDR_856",
+            0.099
+          ],
+          [
+            "CATA_780",
+            0.099
+          ],
+          [
+            "CATA_722",
+            0.087
+          ],
+          [
+            "CORE_KAR_061",
+            0.087
+          ]
+        ]
+      },
+      {
+        "turn": 14,
+        "played_cards": [
+          "CATA_155e2",
+          "CATA_155e2"
+        ],
+        "future_played": [
+          "CATA_155",
+          "CATA_155t",
+          "CATA_155e2",
+          "CATA_780t"
+        ],
+        "num_predictions": 22,
+        "top_k_hit": 0,
+        "top_k_total": 4,
+        "bayesian_hit": 0,
+        "bayesian_total": 4,
+        "top_10": [
+          [
+            "DINO_417",
+            0.212
+          ],
+          [
+            "TIME_616",
+            0.187
+          ],
+          [
+            "EDR_814",
+            0.163
+          ],
+          [
+            "EDR_813",
+            0.15
+          ],
+          [
+            "TLC_436",
+            0.15
+          ],
+          [
+            "CATA_156",
+            0.15
+          ],
+          [
+            "CATA_780",
+            0.125
+          ],
+          [
+            "CATA_722",
+            0.113
+          ],
+          [
+            "TIME_618",
+            0.113
+          ],
+          [
+            "CATA_467",
+            0.088
+          ]
+        ]
+      },
+      {
+        "turn": 18,
+        "played_cards": [
+          "CATA_155",
+          "CATA_155",
+          "CATA_155t",
+          "CATA_155e2",
+          "CATA_155e2",
+          "CATA_155e2",
+          "CATA_155e2"
+        ],
+        "future_played": [
+          "CATA_780t"
+        ],
+        "num_predictions": 20,
+        "top_k_hit": 0,
+        "top_k_total": 1,
+        "bayesian_hit": 0,
+        "bayesian_total": 1,
+        "top_10": [
+          [
+            "DINO_417",
+            0.113
+          ],
+          [
+            "EDR_814",
+            0.088
+          ],
+          [
+            "EDR_813",
+            0.088
+          ],
+          [
+            "EDR_856",
+            0.075
+          ],
+          [
+            "CATA_722",
+            0.075
+          ],
+          [
+            "CATA_156",
+            0.075
+          ],
+          [
+            "TLC_436",
+            0.075
+          ],
+          [
+            "CATA_780",
+            0.062
+          ],
+          [
+            "TIME_616",
+            0.062
+          ],
+          [
+            "CORE_KAR_061",
+            0.037
+          ]
+        ]
+      },
+      {
+        "turn": 20,
+        "played_cards": [
+          "CATA_780t"
+        ],
+        "future_played": [],
+        "num_predictions": 20,
+        "top_k_hit": 0,
+        "top_k_total": 0,
+        "bayesian_hit": 0,
+        "bayesian_total": 0,
+        "top_10": [
+          [
+            "CATA_780",
+            0.113
+          ],
+          [
+            "DINO_417",
+            0.1
+          ],
+          [
+            "TIME_616",
+            0.1
+          ],
+          [
+            "CATA_156",
+            0.088
+          ],
+          [
+            "TLC_436",
+            0.088
+          ],
+          [
+            "EDR_814",
+            0.075
+          ],
+          [
+            "CATA_190h",
+            0.075
+          ],
+          [
+            "CATA_467",
+            0.05
+          ],
+          [
+            "TLC_245",
+            0.05
+          ],
+          [
+            "CATA_497",
+            0.037
+          ]
+        ]
+      }
+    ],
+    "total_mcts_hits": 3,
+    "total_bayesian_hits": 2,
+    "total_future": 15
+  }
+}

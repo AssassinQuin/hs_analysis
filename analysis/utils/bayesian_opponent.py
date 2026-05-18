@@ -14,6 +14,11 @@ Mathematical foundation:
 Data sources:
    - CardDB (analysis.data.card_data) → card name lookups
 """
+<<<<<<< HEAD
+=======
+import os
+import json
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 import logging
 
 from collections import Counter, defaultdict
@@ -22,13 +27,24 @@ from typing import List, Optional
 
 log = logging.getLogger(__name__)
 
+<<<<<<< HEAD
 # ── CardDB ──────────────────────────────────────────
 from analysis.card.data.card_data import get_db
+=======
+# ── Paths (from centralized config) ────────────────
+from analysis.config import PROJECT_ROOT, HSREPLAY_CACHE_DB, UNIFIED_DB_PATH
+
+DB_PATH = str(HSREPLAY_CACHE_DB)
+UNIFIED_PATH = str(UNIFIED_DB_PATH)
+
+from analysis.data.fetch_hsreplay import init_db, get_meta_decks
+
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
 # ── Constants ──────────────────────────────────────
-SIGNATURE_LIKELIHOOD = 0.8   # P(seen_X | deck_i) when X is a signature card
-EPSILON_LIKELIHOOD = 0.02    # P(seen_X | deck_i) when X is NOT in signature
-LOCK_THRESHOLD = 0.60        # Confidence threshold for deck lock
+SIGNATURE_LIKELIHOOD = 0.9   # P(seen_X | deck_i) when X is a signature card
+EPSILON_LIKELIHOOD = 0.01    # P(seen_X | deck_i) when X is NOT in signature
+LOCK_THRESHOLD = 0.55        # Confidence threshold for deck lock (lowered to lock faster)
 
 
 # ── Playstyle classification ──────────────────────
@@ -36,6 +52,41 @@ _AGGRO_KEYWORDS = {'face', 'aggro', 'rush', 'hyper', 'pirate', 'odd', 'murloc', 
 _CONTROL_KEYWORDS = {'control', 'reno', 'highlander', 'wall', 'greed', 'fatigue', 'soul', 'reason'}
 _COMBO_KEYWORDS = {'combo', 'otk', 'malygos', 'miracle', 'toggwaggle', 'mechathun', 'raleigh', 'soulfire'}
 _MIDRANGE_KEYWORDS = {'midrange', 'dragon', 'even', 'hand', 'bomb', 'ramp', 'menagerie'}
+
+# ── Card-ID-based playstyle classification (for decision_loop.py) ──
+_AGGRO_CARD_KEYWORDS = frozenset({
+    'FACE', 'AGGRO', 'RUSH', 'ZOO', 'PIRATE', 'MECH', 'MURLOC', 'DEMON',
+    'BURN', 'SMORC', 'TEMPO',
+})
+_CONTROL_CARD_KEYWORDS = frozenset({
+    'CONTROL', 'SLOW', 'WALL', 'HEAL', 'ARMOR', 'REMOVE', 'CLEAR',
+    'GRIND', 'FATIGUE',
+})
+
+
+def classify_card_playstyle(card_id: str) -> Optional[str]:
+    """Classify a card ID into a playstyle hint based on name tokens.
+
+    Used when archetype name is unavailable (e.g., real-time observation).
+    Scans the upper-cased card_id for playstyle-indicating keywords.
+
+    Args:
+        card_id: Hearthstone card ID like 'EX1_001', 'LOOT_353', etc.
+
+    Returns:
+        One of: 'aggro', 'control', or None (no hint).
+    """
+    if not card_id:
+        return None
+
+    cid_upper = card_id.upper()
+    for kw in _AGGRO_CARD_KEYWORDS:
+        if kw in cid_upper:
+            return 'aggro'
+    for kw in _CONTROL_CARD_KEYWORDS:
+        if kw in cid_upper:
+            return 'control'
+    return None
 
 
 def classify_playstyle(archetype_name: str) -> str:
@@ -188,6 +239,9 @@ class BayesianOpponentModel:
         Unlock: If locked and the observed card is NOT in the locked deck's
         signature, the lock may be wrong → trigger unlock.
 
+        When locked, we still track seen cards but apply a soft update
+        (reduced likelihood ratio) instead of completely freezing posteriors.
+
         Args:
             seen_card_dbfId: dbfId of the card observed being played.
 
@@ -218,9 +272,17 @@ class BayesianOpponentModel:
                     self._unlock_count = 0
             
             if self.locked is not None:
+                # 锁定时仍追踪已见卡牌，但不更新后验
+                # 这样 _seen_deck_cards 仍可用于剩余张数计算
                 return dict(self.posteriors)
 
         unnormalized = {}
+        # 张数衰减：同一张牌第2次见到的信息量低于第1次
+        # 第N次见到时，likelihood 从 SIGNATURE_LIKELIHOOD 线性衰减到 EPSILON
+        seen_count = self._seen_deck_cards.get(seen_card_dbfId, 0)
+        decay = max(0.0, 1.0 - (seen_count - 1) * 0.3)  # 1st=1.0, 2nd=0.7, 3rd=0.4, 4th+=0.1
+        effective_sig = EPSILON_LIKELIHOOD + (SIGNATURE_LIKELIHOOD - EPSILON_LIKELIHOOD) * decay
+
         for deck in self.decks:
             aid = deck["archetype_id"]
             prior = self.posteriors.get(aid, 0.0)
@@ -228,9 +290,9 @@ class BayesianOpponentModel:
                 unnormalized[aid] = 0.0
                 continue
 
-            # Compute likelihood
+            # Compute likelihood (with count-based decay)
             if seen_card_dbfId in deck["cards"]:
-                likelihood = SIGNATURE_LIKELIHOOD
+                likelihood = effective_sig
             else:
                 likelihood = EPSILON_LIKELIHOOD
 
@@ -252,6 +314,9 @@ class BayesianOpponentModel:
     def update_batch(self, seen_cards: list) -> dict:
         """Sequential Bayesian update for multiple observed cards.
 
+        Early terminates if the model becomes locked during batch processing,
+        since subsequent updates would not change posteriors meaningfully.
+
         Args:
             seen_cards: List of dbfId integers.
 
@@ -260,6 +325,10 @@ class BayesianOpponentModel:
         """
         for dbf in seen_cards:
             self.update(dbf)
+            if self.locked is not None:
+                # Once locked, remaining cards won't shift posteriors
+                # (update() already handles unlock checks internally)
+                break
         return dict(self.posteriors)
 
     def update_from_hand(self, seen_card_dbfId: int) -> dict:
@@ -278,7 +347,8 @@ class BayesianOpponentModel:
         self._seen_cards.append(seen_card_dbfId)
         self._seen_cards_counter[seen_card_dbfId] += 1
         
-        # Don't update if locked
+        # Don't update posteriors when locked, but still track the card
+        # This ensures _seen_cards_counter stays accurate for remaining copies calc
         if self.locked is not None:
             return dict(self.posteriors)
         
@@ -425,8 +495,9 @@ class BayesianOpponentModel:
     def _do_unlock(self):
         """Unlock the current archetype lock.
         
-        Resets lock and reduces all posteriors toward uniform,
-        keeping relative ordering but dampening confidence.
+        Instead of dampening posteriors (which loses information),
+        rebuild posteriors from all accumulated evidence. This ensures
+        that if the lock was wrong, the model can correctly recover.
         """
         log.info(
             f"BayesianModel: unlocking from {self._deck_name(self.locked[0])} "
@@ -435,16 +506,51 @@ class BayesianOpponentModel:
         self.locked = None
         self._unlock_count = 0
         
-        # Dampen posteriors: blend 50% current + 50% uniform
-        if self.posteriors:
-            n = len(self.posteriors)
-            uniform = 1.0 / n
+        # 从所有积压证据重建后验（而非简单混合 uniform）
+        # 先重置为先验，然后逐个喂入所有已观测的 DECK 来源卡牌
+        old_seen_deck_cards = dict(self._seen_deck_cards)
+        self.posteriors = self.build_prior(self.player_class)
+        
+        for dbf_id, count in old_seen_deck_cards.items():
+            for _ in range(count):
+                # 使用内部更新（不检查 locked，因为我们刚解锁）
+                self._raw_update(dbf_id)
+
+    def _raw_update(self, seen_card_dbfId: int):
+        """Internal Bayesian update without lock checking.
+
+        Used by _do_unlock() to rebuild posteriors from evidence.
+        Applies the same decay logic as update() but skips all
+        lock/unlock checks since we know we're unlocked.
+        """
+        unnormalized = {}
+        seen_count = self._seen_deck_cards.get(seen_card_dbfId, 0)
+        decay = max(0.0, 1.0 - (seen_count - 1) * 0.3)
+        effective_sig = EPSILON_LIKELIHOOD + (SIGNATURE_LIKELIHOOD - EPSILON_LIKELIHOOD) * decay
+
+        for deck in self.decks:
+            aid = deck["archetype_id"]
+            prior = self.posteriors.get(aid, 0.0)
+            if prior == 0.0:
+                unnormalized[aid] = 0.0
+                continue
+
+            if seen_card_dbfId in deck["cards"]:
+                likelihood = effective_sig
+            else:
+                likelihood = EPSILON_LIKELIHOOD
+
+            unnormalized[aid] = likelihood * prior
+
+        total = sum(unnormalized.values())
+        if total > 0:
             self.posteriors = {
-                aid: 0.5 * prob + 0.5 * uniform
-                for aid, prob in self.posteriors.items()
+                aid: val / total for aid, val in unnormalized.items()
             }
 
-    def get_top_decks(self, n=5) -> list:
+        # Don't check lock here — we're rebuilding
+
+    def get_top_decks(self, n=3) -> list:
         """Return top N archetypes by posterior probability.
 
         Args:
@@ -463,40 +569,65 @@ class BayesianOpponentModel:
             result.append((aid, name, prob))
         return result
 
-    def predict_next_actions(self, n=3) -> list:
+    def predict_next_actions(self, n=10, hand_size: int = 0,
+                              deck_remaining: int = 0) -> list:
         """Predict cards the opponent might play next.
 
-        Based on the locked deck (if available) or the top-probability deck,
-        returns signature cards not yet observed, ranked by likelihood.
+        Based on the locked deck (if available) or weighted top-N decks,
+        returns signature cards not yet observed, with probabilities computed
+        using the hypergeometric distribution.
 
-        Args:
-            n: Number of predictions to return.
-
-        Returns:
-            list of dicts with keys: dbfId, probability, name
+        Only considers top-3 decks for prediction.
         """
-        # Determine which deck to predict from
+        # When locked, use single deck (high confidence)
         if self.locked:
-            target_id = self.locked[0]
-            target_prob = self.locked[1]
-        else:
-            top = self.get_top_decks(1)
-            if not top:
-                return []
-            target_id = top[0][0]
-            target_prob = top[0][2]
+            return self._predict_from_deck(
+                self.locked[0], self.locked[1], n,
+                hand_size, deck_remaining,
+            )
 
-        # Find the deck's signature cards
+        # When not locked, aggregate across top-3 decks weighted by posterior
+        top_decks = self.get_top_decks(3)
+        if not top_decks:
+            return []
+
+        # Aggregate predictions from each deck, weighted by deck probability
+        aggregated = {}  # dbfId -> {prob, cost, remaining, name}
+        for target_id, _, target_prob in top_decks:
+            deck_preds = self._predict_from_deck_raw(
+                target_id, target_prob, hand_size, deck_remaining,
+            )
+            for pred in deck_preds:
+                dbf = pred["dbfId"]
+                if dbf in aggregated:
+                    aggregated[dbf]["probability"] += pred["probability"]
+                else:
+                    aggregated[dbf] = pred
+
+        # Sort by probability descending
+        ranked = sorted(aggregated.values(), key=lambda x: -x["probability"])
+        return ranked[:n]
+
+    def _predict_from_deck(self, target_id: int, target_prob: float, n: int,
+                            hand_size: int, deck_remaining: int) -> list:
+        """Predict next actions from a single deck, returning top-n formatted."""
+        raw = self._predict_from_deck_raw(target_id, target_prob,
+                                          hand_size, deck_remaining)
+        raw.sort(key=lambda x: (-x["probability"], x["cost"]))
+        return raw[:n]
+
+    def _predict_from_deck_raw(self, target_id: int, target_prob: float,
+                                hand_size: int, deck_remaining: int) -> list:
+        """Compute per-card probabilities from a single deck (unsorted, unbounded)."""
         deck = self._find_deck(target_id)
         if not deck:
             return []
 
-        # Cards not yet seen
-        # Count-aware: deck cards minus seen deck cards
-        deck_remaining = list(deck["cards"])
+        # Cards not yet seen (count-aware: deck cards minus seen deck cards)
+        deck_remaining_list = list(deck["cards"])
         seen_copy = dict(self._seen_deck_cards)
         unseen = []
-        for dbf in deck_remaining:
+        for dbf in deck_remaining_list:
             if seen_copy.get(dbf, 0) > 0:
                 seen_copy[dbf] -= 1
             else:
@@ -504,14 +635,44 @@ class BayesianOpponentModel:
         if not unseen:
             return []
 
+        # Count remaining copies per dbfId
+        unseen_counter = Counter(unseen)
+
+        # Compute pool size for hypergeometric
+        pool = hand_size + deck_remaining if (hand_size > 0 and deck_remaining > 0) else 0
+
+        # Deduplicate and compute per-card probability
         predictions = []
-        for dbf in unseen[:n]:
-            card_info = self.cards_by_dbf.get(dbf, {})
-            predictions.append({
-                "dbfId": dbf,
-                "probability": round(target_prob, 4),
-                "name": card_info.get("name", f"Unknown({dbf})"),
-            })
+        seen_dbfs = set()
+        for dbf in unseen:
+            if dbf not in seen_dbfs:
+                seen_dbfs.add(dbf)
+                card_info = self.cards_by_dbf.get(dbf, {})
+                cost = card_info.get("cost", 5)
+                remaining = unseen_counter[dbf]
+
+                # Use hypergeometric distribution if pool info available
+                if pool > 0 and hand_size > 0:
+                    from analysis.engine.dynamic_probability import hypergeometric_at_least_one
+                    card_prob = hypergeometric_at_least_one(
+                        K=remaining,
+                        n=hand_size,
+                        N=pool,
+                    )
+                    # Weight by deck confidence
+                    card_prob *= target_prob
+                else:
+                    # Fallback: use deck confidence weighted by remaining ratio
+                    card_prob = target_prob * (remaining / max(len(unseen), 1))
+
+                predictions.append({
+                    "dbfId": dbf,
+                    "probability": round(card_prob, 4),
+                    "name": card_info.get("name", f"Unknown({dbf})"),
+                    "cost": cost,
+                    "remaining": remaining,
+                })
+
         return predictions
 
     def reset(self):

@@ -28,6 +28,41 @@ class CardSource(str, Enum):
     UNKNOWN = "unknown"      # 无法判断来源
 
 
+class CardRevealType(str, Enum):
+    """卡牌信息揭示的类型
+
+    对应炉石中5类信息揭示型卡牌效果：
+    1. DECK_PEEK    — 看对手卡组中的牌（洞察、窃取等）
+    2. HAND_REVEAL  — 看对手手牌（精神视界、追踪术等）
+    3. TRANSFORM    — 变化手牌（腐蚀、变形等）
+    4. DECK_INSERT  — 往对手卡组塞牌（瘟疫、诅咒等）
+    5. TUTOR        — 定向检索（抽特定类型的牌）
+    """
+    DECK_PEEK = "deck_peek"        # 看到对手卡组中的牌
+    HAND_REVEAL = "hand_reveal"    # 看到对手手牌
+    TRANSFORM = "transform"        # 卡牌变形（含腐蚀升级）
+    DECK_INSERT = "deck_insert"    # 往对手卡组塞牌
+    TUTOR = "tutor"                # 定向检索（知道抽到的牌类型）
+
+
+@dataclass
+class CardRevealRecord:
+    """卡牌信息揭示记录。
+
+    记录一次信息揭示事件的完整上下文，用于：
+    - 贝叶斯推断：确认信息提升后验概率
+    - 手牌预测：已知信息约束预测空间
+    - UI展示：向用户展示信息来源
+    """
+    card_id: str = ""            # 被揭示的卡牌ID
+    reveal_type: CardRevealType = CardRevealType.DECK_PEEK
+    turn: int = 0               # 揭示发生的回合
+    entity_id: int = 0          # 相关实体ID
+    source_card_id: str = ""    # 触发揭示的卡牌（如"洞察"本身）
+    details: str = ""           # 额外信息（如定向检索的类型"DRAGON"）
+    is_opp: bool = True         # 是否是对手的牌被揭示
+
+
 # ---------------------------------------------------------------------------
 # 已知卡牌记录（用于对手手牌追踪）
 # ---------------------------------------------------------------------------
@@ -117,6 +152,12 @@ class GlobalGameState:
     opp_hand_card_ids: Dict[int, Tuple[str, int]] = field(default_factory=dict)
     """对手手牌 entity_id -> (card_id, zone)（SHOW_ENTITY 揭示的）"""
 
+    opp_hand_hold_since: Dict[int, int] = field(default_factory=dict)
+    """对手手牌 entity_id -> 首次进入HAND的回合数（用于持有回合推断）"""
+
+    opp_hand_count: int = 0
+    """对手当前手牌数量（从实体区域计数）"""
+
     # ---- 对手牌库追踪 ----
     opp_deck_remaining: int = 0
     """对手牌库剩余（精确 ZONE_DECK 计数）"""
@@ -143,9 +184,39 @@ class GlobalGameState:
     player_minions_died: List[str] = field(default_factory=list)
     """我方死亡随从的 card_id 列表"""
 
+    # 我方手牌/卡组追踪
+    player_hand_card_ids: Dict[int, Tuple[str, int]] = field(default_factory=dict)
+    """我方手牌 entity_id -> (card_id, zone)"""
+
+    player_deck_remaining: int = 0
+    """我方牌库剩余数量"""
+
+    player_initial_deck_size: int = 0
+    """我方初始牌库大小"""
+
+    player_hand_count: int = 0
+    """我方当前手牌数量"""
+
+    player_weapon: str = ""
+    """我方当前武器 card_id"""
+    player_weapon_atk: int = 0
+    player_weapon_durability: int = 0
+
+    player_locations: List[str] = field(default_factory=list)
+    """我方当前地点 card_id 列表"""
+
+    player_secrets: List[str] = field(default_factory=list)
+    """我方当前奥秘 card_id 列表"""
+
+    player_board_minions: List[Dict] = field(default_factory=list)
+    """我方场上随从列表 [{card_id, entity_id, attack, health}, ...]"""
+
+    player_graveyard_seen: List[str] = field(default_factory=list)
+    """我方已进入墓地的已知 card_id 列表"""
+
     # ---- 先后手 (§1.7) ----
-    is_first_player: bool = True
-    """我方是否先手"""
+    is_first_player: Optional[bool] = None
+    """我方是否先手（None=未知，True=先手，False=后手）"""
     coin_used: bool = False
     """硬币是否已使用"""
     coin_entity_id: int = 0
@@ -165,6 +236,9 @@ class GlobalGameState:
 
     opp_locations: List[str] = field(default_factory=list)
     """对手当前地点 card_id 列表"""
+
+    opp_board_minions: List[Dict] = field(default_factory=list)
+    """对手场上随从列表 [{card_id, entity_id, card_type}, ...]"""
 
     # ---- 残骸 (DK Corpse) ----
     player_corpses: int = 0
@@ -210,6 +284,28 @@ class GlobalGameState:
     player_shuffled_into_deck: List[str] = field(default_factory=list)
     """我方洗入牌库的已知 card_id"""
 
+    # ---- 对手牌库已知卡牌（窥探效果） ----
+    opp_peeked_deck_cards: List[Dict] = field(default_factory=list)
+    """窥探到的对手牌库卡牌 [{"card_id": str, "entity_id": int, "turn": int}, ...]"""
+
+    # ---- 手牌变形追踪 ----
+    opp_hand_transforms: List[Dict] = field(default_factory=list)
+    """对手手牌变形记录 [{"entity_id": int, "old_card_id": str, "new_card_id": str, "turn": int}, ...]"""
+
+    opp_discarded_cards: List[str] = field(default_factory=list)
+    """对手弃牌/爆牌时揭示的已知 card_id 列表"""
+
+    # ---- 手牌类型约束（导师效果等） ----
+    opp_hand_type_constraints: List[Dict] = field(default_factory=list)
+    """确认对手手牌类型 [{"type": str, "value": str, "card_id": str, "turn": int}, ...]
+    type: "card_type" | "race" | "spell_school"
+    value: "MINION" | "SPELL" | "DRAGON" | "FIRE" etc.
+    """
+
+    # ---- Gallywix 等效果追踪 ----
+    opp_confirmed_hand_cards: List[str] = field(default_factory=list)
+    """通过各种效果确认的对手手牌 card_id（对手打出法术时我们获得副本等）"""
+
     # ---- 腐蚀追踪 ----
     opp_corrupted_cards: List[str] = field(default_factory=list)
     """对手已腐蚀升级的原始 card_id 列表（升级前的card_id）"""
@@ -220,6 +316,32 @@ class GlobalGameState:
     # ---- 统计 ----
     player_stats: SideStats = field(default_factory=SideStats)
     opp_stats: SideStats = field(default_factory=SideStats)
+
+    # ---- 卡牌信息揭示追踪 ----
+    opp_revealed_deck_cards: List[CardRevealRecord] = field(default_factory=list)
+    """对手卡组中被揭示的牌（DECK_PEEK类型，100%确认在卡组中）"""
+
+    opp_revealed_hand_cards: List[CardRevealRecord] = field(default_factory=list)
+    """对手手牌中被揭示的牌（HAND_REVEAL类型，100%确认在手牌中）"""
+
+    opp_transform_events: List[CardRevealRecord] = field(default_factory=list)
+    """对手卡牌变形事件（TRANSFORM类型，原始卡→新卡）"""
+
+    opp_tutor_evidence: List[CardRevealRecord] = field(default_factory=list)
+    """对手定向检索证据（TUTOR类型，知道抽到牌的类型/种族/学派）"""
+
+    opp_deck_insert_events: List[CardRevealRecord] = field(default_factory=list)
+    """对手卡组塞牌事件（DECK_INSERT类型，卡组数量变化）"""
+
+    opp_known_deck_cards: Dict[str, bool] = field(default_factory=dict)
+    """对手卡组中确认存在的牌: card_id → True（用于贝叶斯约束）"""
+
+    opp_known_hand_types: List[Dict] = field(default_factory=list)
+    """对手手牌中已知类型约束: [{'entity_id': int, 'race': str, 'school': str}]"""
+
+    # ---- 变形追踪（entity级别） ----
+    opp_entity_transforms: Dict[int, Tuple[str, str]] = field(default_factory=dict)
+    """对手实体变形映射: entity_id → (old_card_id, new_card_id)"""
 
     # ---- 回合数 ----
     current_turn: int = 0

@@ -12,7 +12,12 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+<<<<<<< HEAD:analysis/card/engine/mechanics/quest.py
 from analysis.card.abilities.definition import ActionType
+=======
+from analysis.search.abilities.actions import ActionType
+from analysis.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, SCHOOL_ZH_MAP as _SPELL_SCHOOL_MAP
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad:analysis/search/quest.py
 
 _QUEST_THRESHOLD_EN = re.compile(r'(\d+)\s*(?:cards?|spells?|minions?)')
 _QUEST_TOTAL_CN = re.compile(r'总计(\d+)张')
@@ -48,28 +53,8 @@ class QuestState:
 # ===================================================================
 
 # Map Chinese race/type names to uppercase English constants
-_RACE_MAP = {
-    "亡灵": "UNDEAD",
-    "野兽": "BEAST",
-    "恶魔": "DEMON",
-    "龙": "DRAGON",
-    "鱼人": "MURLOC",
-    "机械": "MECHANICAL",
-    "元素": "ELEMENTAL",
-    "海盗": "PIRATE",
-    "图腾": "TOTEM",
-    "全部": "ALL",
-}
-
-_SPELL_SCHOOL_MAP = {
-    "神圣": "HOLY",
-    "暗影": "SHADOW",
-    "火焰": "FIRE",
-    "冰霜": "FROST",
-    "自然": "NATURE",
-    "奥术": "ARCANE",
-    "邪能": "FEL",
-}
+# _RACE_MAP is now imported from analysis.constants.hs_enums
+# _SPELL_SCHOOL_MAP is now imported from analysis.constants.hs_enums
 
 
 def _parse_constraint(text: str, english_text: str = '') -> str:

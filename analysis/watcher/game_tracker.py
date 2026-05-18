@@ -151,6 +151,22 @@ class EntityCache:
         """清空缓存（游戏结束时调用）。"""
         self._entities.clear()
 
+    def items(self) -> 'ItemsView[int, Dict[str, Any]]':
+        """返回 (entity_id, entity_data) 的公共迭代接口。
+
+        替代外部直接访问 _entities 私有属性。
+        """
+        return self._entities.items()
+
+    def __len__(self) -> int:
+        return len(self._entities)
+
+    def __contains__(self, entity_id: int) -> bool:
+        return entity_id in self._entities
+
+    def __iter__(self):
+        return iter(self._entities)
+
 
 class GameTracker:
     """通过增量解析Power.log追踪炉石游戏状态。
@@ -254,11 +270,16 @@ class GameTracker:
 
             # 检测游戏结束
             if self._in_game:
-                if "Entity=GameEntity" in line and "tag=STATE value=COMPLETE" in line:
-                    self._in_game = False
-                    self._last_step = "UNKNOWN"
-                    self._last_event_type = "game_end"
-                    return "game_end"
+                state_match = (
+                    "Entity=GameEntity" in line
+                    and "tag=STATE value=" in line
+                )
+                if state_match:
+                    if "value=COMPLETE" in line or "value=LOST" in line or "value=WON" in line:
+                        self._in_game = False
+                        self._last_step = "UNKNOWN"
+                        self._last_event_type = "game_end"
+                        return "game_end"
 
                 # 跟踪 TURN 编号 (不触发事件，只记录)
                 if "Entity=GameEntity" in line and "tag=TURN value=" in line:
@@ -396,6 +417,25 @@ class GameTracker:
         if not self._in_game:
             return "NOT_STARTED"
         return self._last_step or "UNKNOWN"
+
+    def reset(self) -> None:
+        """完全重置追踪器状态（日志轮转/新session时调用）。
+
+        清空所有内部状态，包括 hslog LogParser 的游戏历史、
+        entity_cache、回合/步骤追踪等，确保旧游戏的实体
+        不会泄漏到新 session。
+        """
+        self._parser = LogParser()
+        self._game_count = 0
+        self._in_game = False
+        self._current_game_entities = None
+        self._last_event_type = None
+        self._last_turn = 0
+        self._fired_turn = -1
+        self._last_step = "UNKNOWN"
+        self._game_start_timestamp = None
+        self._current_block_entity_id = None
+        self.entity_cache.reset()
 
     @property
     def game_start_timestamp(self) -> Optional[str]:

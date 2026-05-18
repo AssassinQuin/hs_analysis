@@ -1,0 +1,4062 @@
+{
+  "69623": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "117892": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "130790": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "126088": {
+    "optimal_turn": 1.3,
+    "confidence": 0.8
+  },
+  "69550": {
+    "optimal_turn": 1.3,
+    "confidence": 0.8
+  },
+  "120083": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "69521": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "121020": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "117699": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "113109": {
+    "optimal_turn": 1.3,
+    "confidence": 0.8
+  },
+  "97377": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "117691": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "120647": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "115876": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "123398": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "102227": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "116660": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "117039": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "126227": {
+    "optimal_turn": 1.5,
+    "confidence": 0.8
+  },
+  "123060": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "69649": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "69742": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "120881": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "116256": {
+    "optimal_turn": 1.3,
+    "confidence": 0.8
+  },
+  "120648": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "117431": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "117596": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "119704": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "69546": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "118500": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "118559": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "97376": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "117544": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "115938": {
+    "optimal_turn": 1.1,
+    "confidence": 0.8
+  },
+  "119433": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "69547": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "129166": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "120173": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "121159": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "69566": {
+    "optimal_turn": 1.2,
+    "confidence": 0.8
+  },
+  "69707": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "116296": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "117427": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "122779": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "69586": {
+    "optimal_turn": 1.1,
+    "confidence": 0.8
+  },
+  "80818": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "114508": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "118192": {
+    "optimal_turn": 1.1,
+    "confidence": 0.8
+  },
+  "122883": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "117871": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "69535": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "121174": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "120481": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "121675": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "117222": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "123126": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "114303": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "117565": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "117719": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "123403": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "114933": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "115088": {
+    "optimal_turn": 1.5,
+    "confidence": 0.8
+  },
+  "76318": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "69705": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "69553": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "121190": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "121168": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "114344": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "117661": {
+    "optimal_turn": 1.1,
+    "confidence": 0.8
+  },
+  "129175": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "120746": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "76289": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "120393": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "106323": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "122773": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "117665": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "120964": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "117341": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "123410": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "115632": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "111469": {
+    "optimal_turn": 1.2,
+    "confidence": 0.8
+  },
+  "69683": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "102212": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "122966": {
+    "optimal_turn": 1.3,
+    "confidence": 0.8
+  },
+  "118222": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "120572": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "123164": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "69636": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "115638": {
+    "optimal_turn": 1.1,
+    "confidence": 0.8
+  },
+  "115753": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "115649": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "69654": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "69638": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "117655": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "116977": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "62442": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "114967": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "118225": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "120468": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "120786": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "121005": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "69509": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "119841": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "118183": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "114293": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "127088": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "69565": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "120971": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "122757": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "120484": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "117538": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "115295": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "115039": {
+    "optimal_turn": 1.1,
+    "confidence": 0.8
+  },
+  "69522": {
+    "optimal_turn": 1.3,
+    "confidence": 0.8
+  },
+  "122975": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "117684": {
+    "optimal_turn": 1.0,
+    "confidence": 0.8
+  },
+  "116684": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "117837": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "111459": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "117716": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "127089": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "122933": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "118766": {
+    "optimal_turn": 1.2,
+    "confidence": 0.8
+  },
+  "122937": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "120993": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "69545": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "117827": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "117061": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "119541": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "69625": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "129347": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "117672": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "86190": {
+    "optimal_turn": 1.3,
+    "confidence": 0.8
+  },
+  "69675": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "102228": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "114218": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "114511": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "121242": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "115080": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "114630": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "118177": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "95710": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "120975": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "69672": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "69604": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "78325": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "122774": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "118199": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "102745": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "115086": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "121150": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "122831": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "118636": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "102225": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "121460": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "117292": {
+    "optimal_turn": 1.2,
+    "confidence": 0.8
+  },
+  "126975": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "117599": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "120944": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "126890": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "121064": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "86552": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "69718": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "69735": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "122766": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "117679": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "129849": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "116675": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "76306": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "122953": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "121210": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "127470": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "114018": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "120429": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "118223": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "120437": {
+    "optimal_turn": 1.5,
+    "confidence": 0.8
+  },
+  "116292": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "123117": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "114367": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "117700": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "81972": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "111365": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "114012": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "121192": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "120074": {
+    "optimal_turn": 1.2,
+    "confidence": 0.8
+  },
+  "122770": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "122932": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "122833": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "69684": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "102224": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "117697": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "119816": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "119963": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "115688": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "117650": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "130823": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "69691": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "76304": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "114654": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "117580": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "69668": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "117574": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "114305": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "76288": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "120829": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "69665": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "78353": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "115027": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "115612": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "98053": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "117381": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "120788": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "111363": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "119786": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "123122": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "120578": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "120175": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "118265": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "120389": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "116980": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "120452": {
+    "optimal_turn": 1.8,
+    "confidence": 0.8
+  },
+  "95746": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "122643": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "114310": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "120482": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "123605": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "114080": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "76317": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "114346": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "114848": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "122988": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "118484": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "114510": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "128336": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "117027": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "127412": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "111328": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "126895": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "117308": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "118259": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "129170": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "102196": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "117890": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "115655": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "111321": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "69558": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "120883": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "120748": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "118410": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "115972": {
+    "optimal_turn": 2.0,
+    "confidence": 0.8
+  },
+  "116462": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "123106": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "123157": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "115650": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "115025": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "115647": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "117685": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "117612": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "115635": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "115640": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "115626": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "69603": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "115633": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "76321": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "120460": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "69695": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "117648": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "120475": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "118628": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "69614": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "114304": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "69662": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "113973": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "69661": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "115364": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "76302": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "117918": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "115033": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "76323": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "123419": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "118496": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "119740": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "126982": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "117060": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "76329": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "119696": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "117562": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "72250": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "119434": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "114281": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "122947": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "114215": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "123023": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "114935": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "115307": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "123385": {
+    "optimal_turn": 1.4,
+    "confidence": 0.8
+  },
+  "129167": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "120172": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "117686": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "69677": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "69655": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "127593": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "119702": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "118257": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "122720": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "122967": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "120485": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "120774": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "120977": {
+    "optimal_turn": 1.6,
+    "confidence": 0.8
+  },
+  "114337": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "120821": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "118224": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "123077": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "120571": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "118076": {
+    "optimal_turn": 1.9,
+    "confidence": 0.8
+  },
+  "123675": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "122637": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "115628": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "122848": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "69593": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "69511": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "126889": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "129222": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "69611": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "118490": {
+    "optimal_turn": 2.2,
+    "confidence": 0.8
+  },
+  "120793": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "102197": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "120176": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "66854": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "123383": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "117703": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "69557": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "115191": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "111320": {
+    "optimal_turn": 1.7,
+    "confidence": 0.8
+  },
+  "120467": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "122759": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "114219": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "86548": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "117666": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "115052": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "118266": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "122318": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "114287": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "119314": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "96916": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "119977": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "114517": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "114914": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "69621": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "127535": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "115176": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "118487": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "76297": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "69679": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "115461": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "119781": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "78342": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "122881": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "117430": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "120208": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "117307": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "121023": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "123848": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "117535": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "117657": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "123163": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "118480": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "120433": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "130582": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "69537": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "69519": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "118282": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "116718": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "80647": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "120082": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "119653": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "111364": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "122772": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "69532": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "119528": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "69500": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "69507": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "69551": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "118413": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "117652": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "120582": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "123660": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "69666": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "69608": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "114306": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "114217": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "120352": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "117617": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "117835": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "130286": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "118403": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "126847": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "123604": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "120966": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "102790": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "123124": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "127474": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "121153": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "122961": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "120492": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "115971": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "122829": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "117771": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "120463": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "117664": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "114299": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "115642": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "120448": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "121151": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "121162": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "121187": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "123779": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "120981": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "121194": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "119741": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "121274": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "120527": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "119270": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "117813": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "115866": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "121671": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "122500": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "117312": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "69645": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "120573": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "121271": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "120658": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "119754": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "117420": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "114912": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "114496": {
+    "optimal_turn": 2.1,
+    "confidence": 0.8
+  },
+  "121171": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "123416": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "111318": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "117395": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "123547": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "121106": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "120856": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "121188": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "123691": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "127471": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "118260": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "116672": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "69607": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "118765": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "114289": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "114533": {
+    "optimal_turn": 2.3,
+    "confidence": 0.8
+  },
+  "120954": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "117382": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "119707": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "119706": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "119705": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "113328": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "115643": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "118580": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "115624": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "117533": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "117606": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "118505": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "115055": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "115634": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "123055": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "115754": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "115656": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "76319": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "117536": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "86235": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "113568": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "114505": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "120534": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "121029": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "121015": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "123549": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "120547": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "122939": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "123315": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "69740": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "112923": {
+    "optimal_turn": 2.5,
+    "confidence": 0.8
+  },
+  "118254": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "122867": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "69508": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "69656": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "121670": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "111317": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "118481": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "120477": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "118241": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "121024": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "120392": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "117674": {
+    "optimal_turn": 2.8,
+    "confidence": 0.8
+  },
+  "119964": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "123074": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "115648": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "76316": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "97343": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "119815": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "120501": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "118252": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "118251": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "115174": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "118632": {
+    "optimal_turn": 2.6,
+    "confidence": 0.8
+  },
+  "122765": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "76293": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "120857": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "120188": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "121011": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "114373": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "131356": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "119545": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "115630": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "118220": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "119637": {
+    "optimal_turn": 3.3,
+    "confidence": 0.8
+  },
+  "117889": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "117030": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "69688": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "120976": {
+    "optimal_turn": 2.9,
+    "confidence": 0.8
+  },
+  "114081": {
+    "optimal_turn": 3.2,
+    "confidence": 0.8
+  },
+  "120574": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "111367": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "102221": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "122547": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "69629": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "117232": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "114518": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "122950": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "120961": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "115198": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "117600": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "118563": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "122710": {
+    "optimal_turn": 2.4,
+    "confidence": 0.8
+  },
+  "119447": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "76270": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "130820": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "115759": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "123351": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "114844": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "119919": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "119686": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "118501": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "80648": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "120450": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "123426": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "102184": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "69525": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "121191": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "122963": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "119814": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "121154": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "118235": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "114243": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "120979": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "123396": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "127410": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "76320": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "126891": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "130822": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "115805": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117916": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "116667": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "117384": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "122713": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "115637": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117028": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "119965": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117917": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "80645": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "120183": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "117317": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117316": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "122771": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "122632": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "118712": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "123692": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "115867": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "117950": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "117762": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "117622": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "117698": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "114632": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "115058": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "120962": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "114884": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "114020": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "120459": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "115651": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "114514": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "121142": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "120990": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "102230": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "117423": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "114663": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "120876": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "117062": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "120209": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "130580": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117848": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "117531": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "122968": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "120490": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "114006": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "116293": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "119441": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "120462": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "119633": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "122874": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "121158": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "121017": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "120955": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "120011": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "120988": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "114076": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "69616": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "76325": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "122712": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "120790": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "69588": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "117598": {
+    "optimal_turn": 2.7,
+    "confidence": 0.8
+  },
+  "120784": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "117534": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "127469": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "116495": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "116674": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "115139": {
+    "optimal_turn": 3.4,
+    "confidence": 0.8
+  },
+  "69542": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "111355": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "126700": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "120922": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "119929": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "121000": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "115646": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "117653": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "121051": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "129343": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "120782": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "123606": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "123001": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "69501": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "120523": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "102191": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "78324": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "69634": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "123552": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "115749": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "117830": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "117604": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "113822": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "102222": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "69652": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "118247": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "120503": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "118250": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "118503": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "122878": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "123600": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "123112": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "120487": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "121107": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "120471": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "114298": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "120795": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "121202": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "122778": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "118651": {
+    "optimal_turn": 3.6,
+    "confidence": 0.8
+  },
+  "122642": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "127589": {
+    "optimal_turn": 3.0,
+    "confidence": 0.8
+  },
+  "76287": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "122971": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "86731": {
+    "optimal_turn": 3.5,
+    "confidence": 0.8
+  },
+  "117383": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "121189": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "111373": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "117951": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "111319": {
+    "optimal_turn": 3.7,
+    "confidence": 0.8
+  },
+  "76303": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "130821": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "119930": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "119166": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "121757": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "118232": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "114308": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "121057": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "127592": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "118210": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "121195": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "123139": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "123655": {
+    "optimal_turn": 3.8,
+    "confidence": 0.8
+  },
+  "115365": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "123783": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "129894": {
+    "optimal_turn": 4.0,
+    "confidence": 0.8
+  },
+  "102217": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "115755": {
+    "optimal_turn": 3.1,
+    "confidence": 0.8
+  },
+  "117715": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "121157": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "120828": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "78352": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "66858": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "118277": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "121063": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "117037": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "111369": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "123332": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "116673": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "119780": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "114858": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "69627": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "128058": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "114544": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "122879": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "110889": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "119443": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "130791": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "115652": {
+    "optimal_turn": 3.9,
+    "confidence": 0.8
+  },
+  "129172": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "114292": {
+    "optimal_turn": 4.4,
+    "confidence": 0.8
+  },
+  "114857": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117687": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "122970": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "129168": {
+    "optimal_turn": 6.3,
+    "confidence": 0.8
+  },
+  "123119": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "114300": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "121060": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "121676": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "120644": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "120805": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117302": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "126892": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "129216": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "120958": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "121199": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "121166": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "122639": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "120179": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "111457": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "117656": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "115809": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "117646": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "117869": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "119920": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "114369": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "129176": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "123166": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "119312": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "120949": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "66856": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "123382": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "122995": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "120749": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "120488": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "115653": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "120344": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "120859": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "119695": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "130525": {
+    "optimal_turn": 5.7,
+    "confidence": 0.8
+  },
+  "118494": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "119527": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "119524": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "118554": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "118558": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "117885": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "119632": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "119928": {
+    "optimal_turn": 4.7,
+    "confidence": 0.8
+  },
+  "121176": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "113371": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "69658": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "117874": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "118163": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "119587": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "114966": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "120489": {
+    "optimal_turn": 4.1,
+    "confidence": 0.8
+  },
+  "123109": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "114280": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "114497": {
+    "optimal_turn": 4.3,
+    "confidence": 0.8
+  },
+  "123847": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "117434": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "120860": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "115631": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "115928": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "127407": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "120177": {
+    "optimal_turn": 4.5,
+    "confidence": 0.8
+  },
+  "115625": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "123123": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "120847": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "117602": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "120428": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "122952": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "120180": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "119643": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "123570": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "115215": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "118279": {
+    "optimal_turn": 4.2,
+    "confidence": 0.8
+  },
+  "115960": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "114301": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "122869": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "120543": {
+    "optimal_turn": 6.9,
+    "confidence": 0.8
+  },
+  "126888": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "80819": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "120787": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "120491": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "121672": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "120499": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "127473": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "69667": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "87920": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "121026": {
+    "optimal_turn": 7.3,
+    "confidence": 0.8
+  },
+  "78357": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "117949": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "129847": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "121193": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "122832": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "127409": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "126698": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "123151": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "116376": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "123056": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "125450": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "115873": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "122711": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "115654": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "118269": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "120818": {
+    "optimal_turn": 5.7,
+    "confidence": 0.8
+  },
+  "120817": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "120506": {
+    "optimal_turn": 6.6,
+    "confidence": 0.8
+  },
+  "114920": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "120530": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "121144": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "76273": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "114627": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "117563": {
+    "optimal_turn": 5.7,
+    "confidence": 0.8
+  },
+  "122976": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "119789": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "120999": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "117956": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "119532": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "117702": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "69516": {
+    "optimal_turn": 5.0,
+    "confidence": 0.8
+  },
+  "120947": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "119445": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "117532": {
+    "optimal_turn": 5.7,
+    "confidence": 0.8
+  },
+  "118620": {
+    "optimal_turn": 5.9,
+    "confidence": 0.8
+  },
+  "119688": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "112924": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "123114": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "108357": {
+    "optimal_turn": 4.6,
+    "confidence": 0.8
+  },
+  "120762": {
+    "optimal_turn": 5.3,
+    "confidence": 0.8
+  },
+  "119703": {
+    "optimal_turn": 5.6,
+    "confidence": 0.8
+  },
+  "129221": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "117919": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "119778": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "123546": {
+    "optimal_turn": 4.8,
+    "confidence": 0.8
+  },
+  "117723": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "122775": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "117557": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "112925": {
+    "optimal_turn": 5.2,
+    "confidence": 0.8
+  },
+  "129848": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "120187": {
+    "optimal_turn": 4.9,
+    "confidence": 0.8
+  },
+  "111316": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "111323": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "119647": {
+    "optimal_turn": 6.3,
+    "confidence": 0.8
+  },
+  "118507": {
+    "optimal_turn": 5.1,
+    "confidence": 0.8
+  },
+  "118182": {
+    "optimal_turn": 7.3,
+    "confidence": 0.8
+  },
+  "114284": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "120761": {
+    "optimal_turn": 6.6,
+    "confidence": 0.8
+  },
+  "127536": {
+    "optimal_turn": 7.0,
+    "confidence": 0.8
+  },
+  "114340": {
+    "optimal_turn": 6.6,
+    "confidence": 0.8
+  },
+  "121196": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "118653": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "120524": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "111326": {
+    "optimal_turn": 5.5,
+    "confidence": 0.8
+  },
+  "118616": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "129171": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "114543": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "120426": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "119444": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "69617": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "118730": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "118555": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "114307": {
+    "optimal_turn": 6.4,
+    "confidence": 0.8
+  },
+  "117038": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "118649": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "111464": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "119691": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "121058": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "120878": {
+    "optimal_turn": 6.0,
+    "confidence": 0.8
+  },
+  "122635": {
+    "optimal_turn": 5.4,
+    "confidence": 0.8
+  },
+  "118243": {
+    "optimal_turn": 6.4,
+    "confidence": 0.8
+  },
+  "123321": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "120575": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "119317": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "119649": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "120985": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "129846": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "69544": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "117877": {
+    "optimal_turn": 6.3,
+    "confidence": 0.8
+  },
+  "117566": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "114498": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "116713": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "66870": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "123665": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "114326": {
+    "optimal_turn": 7.1,
+    "confidence": 0.8
+  },
+  "126976": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "69502": {
+    "optimal_turn": 6.3,
+    "confidence": 0.8
+  },
+  "115776": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "122865": {
+    "optimal_turn": 5.7,
+    "confidence": 0.8
+  },
+  "115044": {
+    "optimal_turn": 6.6,
+    "confidence": 0.8
+  },
+  "129169": {
+    "optimal_turn": 7.7,
+    "confidence": 0.8
+  },
+  "118485": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "114849": {
+    "optimal_turn": 6.3,
+    "confidence": 0.8
+  },
+  "122871": {
+    "optimal_turn": 7.0,
+    "confidence": 0.8
+  },
+  "119453": {
+    "optimal_turn": 5.8,
+    "confidence": 0.8
+  },
+  "119451": {
+    "optimal_turn": 6.4,
+    "confidence": 0.8
+  },
+  "119454": {
+    "optimal_turn": 6.3,
+    "confidence": 0.8
+  },
+  "120797": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "120544": {
+    "optimal_turn": 7.1,
+    "confidence": 0.8
+  },
+  "128337": {
+    "optimal_turn": 7.3,
+    "confidence": 0.8
+  },
+  "123146": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "115037": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "117610": {
+    "optimal_turn": 6.6,
+    "confidence": 0.8
+  },
+  "122714": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "122755": {
+    "optimal_turn": 6.1,
+    "confidence": 0.8
+  },
+  "122641": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "119783": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "114868": {
+    "optimal_turn": 6.5,
+    "confidence": 0.8
+  },
+  "117714": {
+    "optimal_turn": 7.4,
+    "confidence": 0.8
+  },
+  "66176": {
+    "optimal_turn": 8.1,
+    "confidence": 0.8
+  },
+  "118404": {
+    "optimal_turn": 6.9,
+    "confidence": 0.8
+  },
+  "122401": {
+    "optimal_turn": 8.4,
+    "confidence": 0.8
+  },
+  "130677": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "69637": {
+    "optimal_turn": 7.0,
+    "confidence": 0.8
+  },
+  "125442": {
+    "optimal_turn": 7.1,
+    "confidence": 0.8
+  },
+  "76327": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "119446": {
+    "optimal_turn": 8.1,
+    "confidence": 0.8
+  },
+  "69635": {
+    "optimal_turn": 8.0,
+    "confidence": 0.8
+  },
+  "122760": {
+    "optimal_turn": 7.0,
+    "confidence": 0.8
+  },
+  "115186": {
+    "optimal_turn": 8.2,
+    "confidence": 0.8
+  },
+  "124110": {
+    "optimal_turn": 7.3,
+    "confidence": 0.8
+  },
+  "69613": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "118656": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "119755": {
+    "optimal_turn": 7.5,
+    "confidence": 0.8
+  },
+  "119918": {
+    "optimal_turn": 7.4,
+    "confidence": 0.8
+  },
+  "69643": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "122978": {
+    "optimal_turn": 7.3,
+    "confidence": 0.8
+  },
+  "115748": {
+    "optimal_turn": 7.0,
+    "confidence": 0.8
+  },
+  "126697": {
+    "optimal_turn": 7.0,
+    "confidence": 0.8
+  },
+  "117733": {
+    "optimal_turn": 7.9,
+    "confidence": 0.8
+  },
+  "115751": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "120951": {
+    "optimal_turn": 7.1,
+    "confidence": 0.8
+  },
+  "128334": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "121197": {
+    "optimal_turn": 7.4,
+    "confidence": 0.8
+  },
+  "119525": {
+    "optimal_turn": 7.4,
+    "confidence": 0.8
+  },
+  "120181": {
+    "optimal_turn": 6.2,
+    "confidence": 0.8
+  },
+  "118497": {
+    "optimal_turn": 7.4,
+    "confidence": 0.8
+  },
+  "113700": {
+    "optimal_turn": 7.1,
+    "confidence": 0.8
+  },
+  "124116": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "118625": {
+    "optimal_turn": 6.9,
+    "confidence": 0.8
+  },
+  "115090": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "120577": {
+    "optimal_turn": 8.4,
+    "confidence": 0.8
+  },
+  "118406": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "117511": {
+    "optimal_turn": 7.4,
+    "confidence": 0.8
+  },
+  "121014": {
+    "optimal_turn": 6.6,
+    "confidence": 0.8
+  },
+  "120646": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "123115": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "117498": {
+    "optimal_turn": 7.5,
+    "confidence": 0.8
+  },
+  "129850": {
+    "optimal_turn": 6.8,
+    "confidence": 0.8
+  },
+  "117231": {
+    "optimal_turn": 6.7,
+    "confidence": 0.8
+  },
+  "118408": {
+    "optimal_turn": 8.0,
+    "confidence": 0.8
+  },
+  "116018": {
+    "optimal_turn": 7.5,
+    "confidence": 0.8
+  },
+  "113321": {
+    "optimal_turn": 7.5,
+    "confidence": 0.8
+  },
+  "119809": {
+    "optimal_turn": 8.1,
+    "confidence": 0.8
+  },
+  "127595": {
+    "optimal_turn": 8.3,
+    "confidence": 0.8
+  },
+  "125432": {
+    "optimal_turn": 8.0,
+    "confidence": 0.8
+  },
+  "124138": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "119450": {
+    "optimal_turn": 8.1,
+    "confidence": 0.8
+  },
+  "123539": {
+    "optimal_turn": 7.4,
+    "confidence": 0.8
+  },
+  "114254": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "123440": {
+    "optimal_turn": 8.0,
+    "confidence": 0.8
+  },
+  "126887": {
+    "optimal_turn": 8.2,
+    "confidence": 0.8
+  },
+  "120266": {
+    "optimal_turn": 8.7,
+    "confidence": 0.8
+  },
+  "123072": {
+    "optimal_turn": 8.9,
+    "confidence": 0.8
+  },
+  "121203": {
+    "optimal_turn": 8.3,
+    "confidence": 0.8
+  },
+  "113434": {
+    "optimal_turn": 9.3,
+    "confidence": 0.8
+  },
+  "117294": {
+    "optimal_turn": 8.3,
+    "confidence": 0.8
+  },
+  "118575": {
+    "optimal_turn": 8.7,
+    "confidence": 0.8
+  },
+  "118221": {
+    "optimal_turn": 9.4,
+    "confidence": 0.8
+  },
+  "123384": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "122999": {
+    "optimal_turn": 7.7,
+    "confidence": 0.8
+  },
+  "115041": {
+    "optimal_turn": 8.9,
+    "confidence": 0.8
+  },
+  "115264": {
+    "optimal_turn": 8.6,
+    "confidence": 0.8
+  },
+  "126893": {
+    "optimal_turn": 8.4,
+    "confidence": 0.8
+  },
+  "130320": {
+    "optimal_turn": 8.4,
+    "confidence": 0.8
+  },
+  "69726": {
+    "optimal_turn": 8.6,
+    "confidence": 0.8
+  },
+  "114527": {
+    "optimal_turn": 8.6,
+    "confidence": 0.8
+  },
+  "118617": {
+    "optimal_turn": 8.0,
+    "confidence": 0.8
+  },
+  "95732": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "114357": {
+    "optimal_turn": 8.8,
+    "confidence": 0.8
+  },
+  "120068": {
+    "optimal_turn": 7.2,
+    "confidence": 0.8
+  },
+  "120064": {
+    "optimal_turn": 8.9,
+    "confidence": 0.8
+  },
+  "120060": {
+    "optimal_turn": 9.1,
+    "confidence": 0.8
+  },
+  "113606": {
+    "optimal_turn": 8.7,
+    "confidence": 0.8
+  },
+  "114353": {
+    "optimal_turn": 9.3,
+    "confidence": 0.8
+  },
+  "119432": {
+    "optimal_turn": 9.2,
+    "confidence": 0.8
+  },
+  "114213": {
+    "optimal_turn": 9.6,
+    "confidence": 0.8
+  },
+  "113588": {
+    "optimal_turn": 8.7,
+    "confidence": 0.8
+  },
+  "115756": {
+    "optimal_turn": 9.2,
+    "confidence": 0.8
+  },
+  "125467": {
+    "optimal_turn": 7.6,
+    "confidence": 0.8
+  },
+  "121240": {
+    "optimal_turn": 9.4,
+    "confidence": 0.8
+  },
+  "122454": {
+    "optimal_turn": 8.7,
+    "confidence": 0.8
+  },
+  "123006": {
+    "optimal_turn": 8.9,
+    "confidence": 0.8
+  },
+  "120593": {
+    "optimal_turn": 8.7,
+    "confidence": 0.8
+  },
+  "115203": {
+    "optimal_turn": 8.9,
+    "confidence": 0.8
+  },
+  "118238": {
+    "optimal_turn": 10.1,
+    "confidence": 0.8
+  }
+}

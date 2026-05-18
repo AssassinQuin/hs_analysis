@@ -1,6 +1,6 @@
 # 炉石传说 AI 决策分析系统
 
-> 实时解析 Power.log → 追踪游戏状态 → AI 搜索最优出牌序列 → 输出决策建议
+> 实时解析 Power.log → 追踪游戏状态 → AI 搜索最优出牌序列 → 叠加 UI 对手手牌预测
 
 ## 项目简介
 
@@ -10,6 +10,7 @@
 - **离线回放**：加载历史日志，逐回合回放并分析决策质量
 - **多版本评分**：从白板曲线到 V8 上下文感知的多层评分引擎
 - **对手建模**：贝叶斯卡组推断 + 奥秘概率模型 + 对手手牌追踪
+- **叠加追踪**：半透明叠加 UI，实时显示对手手牌预测、多卡组切换、墓地追踪（参考 Firestone 风格）
 
 ---
 
@@ -248,6 +249,16 @@ analysis/
     ├── hero_class.py             # 英雄职业映射（card_id/dbfId → 职业名）
     ├── player_name.py            # 玩家名解析（BattleTag识别/匿名检测）
     └── spell_simulator.py        # 法术效果模拟器
+
+tracker/                          # ── 叠加追踪器 ──
+├── app.py                        # 主应用入口（实时/离线模式）
+├── overlay_ui.py                 # 叠加 UI（PyQt5，Firestone 风格三段式布局）
+├── game_state.py                 # 完整游戏状态（Single Source of Truth）
+├── hand_predictor.py             # 动态手牌预测引擎（超几何分布+贝叶斯）
+├── log_monitor.py                # Power.log 实时监控器（轮询+QThread）
+├── card_images.py                # 卡牌图像管理器（下载+缓存+QPixmap）
+├── hsreplay_updater.py           # HSReplay 数据更新器（后台线程）
+└── verify.py                     # 端到端验证脚本
 ```
 
 ---
@@ -325,6 +336,7 @@ card_data/240397/
 | `scripts/run_fetch.py` | **数据获取**：从 HSJSON/HSReplay 下载最新卡牌数据 |
 | `scripts/pool_quality_generator.py` | **池质量报告**：生成发现池质量分析 |
 | `scripts/rewind_delta_generator.py` | **回溯报告**：生成抽牌预测准确率报告 |
+| `tracker/app.py` | **叠加追踪器**：对手手牌预测叠加 UI（实时/离线） |
 
 ---
 
@@ -360,6 +372,7 @@ card_data/240397/
 ```bash
 # 安装依赖
 pip install -e .
+pip install PyQt5   # 叠加 UI 需要
 
 # 获取卡牌数据（首次运行）
 python scripts/run_fetch.py
@@ -375,6 +388,140 @@ python scripts/parse_game_log.py /path/to/Hearthstone_YYYY_MM_DD_HH_MM_SS/
 
 # 运行测试
 pytest
+```
+
+---
+
+## 叠加追踪器（对手手牌预测 UI）
+
+基于 PyQt5 的半透明叠加窗口，参考 Firestone(火石) 风格设计，
+实时显示对手手牌预测、多卡组 A/B/C 切换、墓地追踪。
+
+### 功能特性
+
+- **三段式布局**：手牌区 → 卡组区(A/B/C切换) → 墓地区(卡组/衍生牌分区)
+- **手牌预测**：超几何分布 + 贝叶斯修正，显示概率最高的手牌预测
+- **多卡组切换**：A/B/C 标签切换不同卡组原型预测，显示概率和剩余卡牌
+- **墓地追踪**：区分「卡组来源牌」和「衍生牌」，标签颜色不同
+- **法力水晶**：菱形渐变蓝色水晶 + 稀有度颜色编码(白/蓝/紫/橙)
+- **可折叠 section**：点击标题栏折叠/展开各区域
+- **动态缩放**：拖拽右下角手柄调整窗口大小，行高自适应
+- **鼠标穿透**：📌/👁 按钮切换交互/穿透模式，穿透时点击穿过到游戏
+- **增量刷新**：哈希对比避免无效重绘，150ms 刷新间隔
+
+### 日志路径查找优先级
+
+1. 命令行 `--log` / `--offline` 参数
+2. `cfg/live.cfg` 配置文件 `[log]` `paths`
+3. 自动检测系统标准位置
+4. 项目根目录下的 `Power.log` / `Hearthstone_*/` 子目录
+
+### 配置文件
+
+编辑 `cfg/live.cfg` 设置日志路径：
+
+```ini
+[log]
+; 支持多个候选路径，按顺序取第一个可用项
+; 可用分号、逗号或换行分隔
+; 每一项可填:
+;   1) Power.log 文件路径
+;   2) 某局目录路径(目录内含 Power.log)
+;   3) Logs 根目录路径(自动选最新一局的 Power.log)
+;
+; === 多平台路径配置 ===
+; Windows (Battle.net 默认)
+;   E:\battle\Hearthstone\Logs
+;   C:\Program Files (x86)\Hearthstone\Logs
+; macOS
+;   ~/Library/Logs/Hearthstone
+; Linux / Wine
+;   ~/.wine/drive_c/Program Files/Hearthstone/Logs
+;
+paths =
+    E:\battle\Hearthstone\Logs
+```
+
+### 使用方法
+
+#### 实时模式（游戏进行中）
+
+```bash
+# 自动检测日志路径（推荐）
+python -m tracker.app
+
+# 指定日志路径
+python -m tracker.app --log "E:\battle\Hearthstone\Logs\Power.log"
+
+# 详细输出
+python -m tracker.app -v
+```
+
+启动后会在屏幕右侧显示半透明叠加窗口，自动跟随游戏进程：
+- 游戏开始时自动识别对手职业
+- 每回合更新对手手牌预测和卡组推断
+- 点击 section 标题折叠/展开
+- 点击 A/B/C 标签切换不同卡组原型
+- 右下角拖拽缩放窗口
+- 📌/👁 按钮切换鼠标穿透模式
+
+#### 离线模式（分析历史日志）
+
+```bash
+# 分析项目根目录下的 Power.log
+python -m tracker.app --offline Power.log
+
+# 分析指定目录的日志
+python -m tracker.app --offline Hearthstone_2026_04_23_08_43_35/Power.log
+```
+
+离线模式会一次性加载完整日志，显示最终游戏状态的预测结果。
+
+### UI 布局说明
+
+```
+┌────────────────────────────────┐
+│ [职业图标] 萨满  T5  手3 库22 📌 x│  ← 标题栏（拖拽移动）
+├────────────────────────────────┤
+│ 对手手牌 (3)               ▼  │  ← 可折叠
+│  ◇2  闪电风暴        60%    │  ← 法力水晶 + 卡名 + 概率
+│  ◇3  法力之潮图腾     确认   │
+│  ◇4  妖术           35%    │
+├────────────────────────────────┤
+│ 对手卡组                   ▼  │  ← 可折叠
+│ [A:进化萨 60%] [B:图腾萨 30%] │  ← A/B/C 卡组切换
+│  ◇1  火羽精灵       x2    │  ← 法力水晶 + 卡名 + 剩余
+│  ◇2  闪电箭         x2    │
+│  ◇3  法力之潮图腾    x1    │  │  ← 底部小条=手牌概率
+│  ...                           │
+├────────────────────────────────┤
+│ 墓地 (卡组3 / 衍生2)      ▼  │  ← 可折叠
+│  ◇1  火羽精灵  卡组       │  ← 「卡组」标签
+│  ◇2  闪电箭    卡组       │
+│  ◇3  小鬼   衍生          │  ← 「衍生」标签（橙色）
+│  ◇5  随从    衍生         │
+└────────────────────────────────┘
+```
+
+### 数据流
+
+```
+Power.log
+  ↓ (文件轮询 100ms)
+LogMonitor (QThread)
+  ↓ feed_line → GameTracker → GlobalTracker
+  ↓ build_state_dict() → raw dict
+  ↓
+HandPredictor.predict(state_dict)
+  ↓ DynamicProbabilityEngine (超几何分布)
+  ↓ CardEffectInferenceEngine (效果推断)
+  ↓ → PredictionResult
+  ↓
+GameStateManager.update(state_dict, prediction_result)
+  ↓ → CompleteGameState
+  ↓
+OverlayWindow._refresh() (150ms 定时器)
+  ↓ 三段式渲染: 手牌/卡组/墓地
 ```
 
 ---

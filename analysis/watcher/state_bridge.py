@@ -45,6 +45,10 @@ class StateBridge:
         FieldMapping("opp_quests", "opp_quests", list),
         FieldMapping("opp_shuffled_into_deck", "opp_shuffled_into_deck", list),
         FieldMapping("opp_corrupted_cards", "opp_corrupted_cards", list),
+        # P1 #10: 新增缺失的字段映射
+        FieldMapping("opp_known_deck_cards", "opp_known_deck_cards", dict),
+        FieldMapping("opp_known_hand_types", "opp_known_hand_types", list),
+        FieldMapping("opp_entity_transforms", "opp_entity_transforms", dict),
     ]
 
     # Declarative field mappings: GlobalGameState → GameState (player fields)
@@ -177,8 +181,11 @@ class StateBridge:
                 return HeroState()
 
             # Extract hero stats
+            # HEALTH = current HP after damage; DAMAGE = total damage taken
+            # max_hp = HEALTH + DAMAGE (original max, before any damage)
             current_health = hero.tags.get(GameTag.HEALTH, 0)
-            max_health = hero.tags.get(GameTag.HEALTH, current_health)
+            damage = hero.tags.get(GameTag.DAMAGE, 0)
+            max_health = current_health + damage
             armor = hero.tags.get(GameTag.ARMOR, 0)
 
             # Extract weapon if present
@@ -228,17 +235,12 @@ class StateBridge:
                 if result:
                     return result
 
-        # --- Try 3: card_id prefix ---
+        # --- Try 3: card_id prefix lookup via canonical mapping ---
         card_id = getattr(hero_entity, 'card_id', '') or ''
-        hero_class_map = {
-            "HERO_01": "WARRIOR", "HERO_02": "SHAMAN", "HERO_03": "ROGUE",
-            "HERO_04": "PALADIN", "HERO_05": "HUNTER", "HERO_06": "DRUID",
-            "HERO_07": "WARLOCK", "HERO_08": "MAGE", "HERO_09": "PRIEST",
-            "HERO_10": "DEMONHUNTER", "HERO_11": "DEATHKNIGHT",
-        }
-        for prefix, cls_name in hero_class_map.items():
-            if card_id.startswith(prefix):
-                return cls_name
+        from analysis.utils.hero_class import hero_card_to_class
+        result = hero_card_to_class(card_id)
+        if result != "UNKNOWN":
+            return result
 
         return "UNKNOWN"
 
@@ -572,31 +574,45 @@ class StateBridge:
             log.warning(f"Error counting hand: {e}")
             return 0
 
+    # ── 费用分段定义（单一数据源，避免硬编码阈值散落各处） ──
+    _COST_BUCKET_LOW = 2    # 低费：0-2
+    _COST_BUCKET_MID = 4    # 中费：3-4
+    # 高费：5+
+
+    # ── 风格判定阈值（集中定义，便于调参和测试） ──
+    _STYLE_THRESHOLDS = {
+        "aggro":    {"max_avg": 2.0, "min_low_pct": 0.55},
+        "tempo":    {"max_avg": 2.8, "min_low_pct": 0.40, "max_high_pct": 0.20},
+        "control":  {"min_avg": 4.0, "min_high_pct": 0.30},
+        "midrange": {"min_low_pct": 0.25, "min_mid_pct": 0.25},
+    }
+
     @staticmethod
     def _infer_our_playstyle(state: GameState) -> str:
-        """Infer our deck archetype from hand composition.
+        """推断我方卡组风格（aggro / tempo / midrange / control / unknown）。
 
-        Uses mana cost distribution of hand cards as a proxy for deck archetype.
-        Falls back to 'unknown' if hand is too small.
+        基于当前手牌的法力值分布作为卡组风格的代理指标。
+        分三档：低费(0-2) / 中费(3-4) / 高费(5+)，按占比和均值匹配风格。
+        手牌不足 3 张时返回 'unknown'。
         """
         hand = state.hand
         if not hand or len(hand) < 3:
             return "unknown"
 
-        low = 0
-        mid = 0
-        high = 0
-        total_cost = 0
-        n = 0
+        bucket_low = StateBridge._COST_BUCKET_LOW
+        bucket_mid = StateBridge._COST_BUCKET_MID
+        t = StateBridge._STYLE_THRESHOLDS
+
+        low = mid = high = total_cost = n = 0
         for c in hand:
             cost = getattr(c, "cost", 0)
             if not isinstance(cost, (int, float)):
                 continue
             total_cost += cost
             n += 1
-            if cost <= 2:
+            if cost <= bucket_low:
                 low += 1
-            elif cost <= 4:
+            elif cost <= bucket_mid:
                 mid += 1
             else:
                 high += 1
@@ -609,13 +625,16 @@ class StateBridge:
         mid_pct = mid / n
         high_pct = high / n
 
-        if avg <= 2.0 and low_pct >= 0.55:
+        # 按阈值表逐条匹配（优先级：aggro > tempo > control > midrange）
+        if avg <= t["aggro"]["max_avg"] and low_pct >= t["aggro"]["min_low_pct"]:
             return "aggro"
-        if avg <= 2.8 and low_pct >= 0.40 and high_pct <= 0.20:
+        if (avg <= t["tempo"]["max_avg"]
+                and low_pct >= t["tempo"]["min_low_pct"]
+                and high_pct <= t["tempo"]["max_high_pct"]):
             return "tempo"
-        if avg >= 4.0 and high_pct >= 0.30:
+        if avg >= t["control"]["min_avg"] and high_pct >= t["control"]["min_high_pct"]:
             return "control"
-        if low_pct >= 0.30 and mid_pct >= 0.25:
+        if low_pct >= t["midrange"]["min_low_pct"] and mid_pct >= t["midrange"]["min_mid_pct"]:
             return "midrange"
 
         return "unknown"
@@ -645,6 +664,29 @@ class StateBridge:
                     {"card_id": kc.card_id, "turn_seen": kc.turn_seen}
                     for kc in global_state.opp_secrets_triggered
                 ]
+
+            # P1 #10: 序列化 CardRevealRecord 列表到决策引擎
+            for attr_name in (
+                'opp_revealed_hand_cards',
+                'opp_revealed_deck_cards',
+                'opp_transform_events',
+                'opp_tutor_evidence',
+                'opp_deck_insert_events',
+            ):
+                records = getattr(global_state, attr_name, None)
+                if records:
+                    serialized = [
+                        {
+                            "card_id": rec.card_id,
+                            "reveal_type": rec.reveal_type.value if hasattr(rec.reveal_type, 'value') else str(rec.reveal_type),
+                            "turn": rec.turn,
+                            "entity_id": rec.entity_id,
+                            "details": rec.details,
+                            "source_card_id": getattr(rec, 'source_card_id', ''),
+                        }
+                        for rec in records
+                    ]
+                    setattr(opp_state, attr_name, serialized)
 
             # Apply declarative opponent field mappings
             self._apply_field_map(self._OPP_FIELD_MAP, opp_state, global_state)

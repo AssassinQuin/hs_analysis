@@ -21,23 +21,19 @@ from typing import Callable, Optional, TextIO
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
+<<<<<<< HEAD
 from analysis.card.abilities.definition import Action
 from analysis.search.mcts.engine import MCTSEngine
 from analysis.search.mcts.config import MCTSConfig
 from analysis.search.mcts.engine import SearchResult
+=======
+from analysis.search.abilities.actions import Action
+from analysis.search.engine_adapter import UnifiedSearchResult, GameEngine, create_engine
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 from analysis.utils.score_provider import load_scores_into_hand
+from analysis.utils.bayesian_opponent import classify_card_playstyle
 
 log = logging.getLogger(__name__)
-
-
-_AGGRO_KEYWORDS = frozenset({
-    "FACE", "AGGRO", "RUSH", "ZOO", "PIRATE", "MECH", "MURLOC", "DEMON",
-    "BURN", "SMORC", "TEMPO",
-})
-_CONTROL_KEYWORDS = frozenset({
-    "CONTROL", "SLOW", "WALL", "HEAL", "ARMOR", "REMOVE", "CLEAR",
-    "GRIND", "FATIGUE", "COMBO", "OTK", "MIRACLE",
-})
 
 
 def _infer_opp_playstyle(state) -> str:
@@ -61,17 +57,14 @@ def _infer_opp_playstyle(state) -> str:
         cost = c.get("cost", 0)
         if isinstance(cost, int) and cost >= 0:
             costs.append(cost)
-        cid_upper = cid.upper()
         if "MINION" in str(c.get("card_type", "")):
             minion_count += 1
         else:
             spell_count += 1
-        for kw in _AGGRO_KEYWORDS:
-            if kw in cid_upper:
-                return "aggro"
-        for kw in _CONTROL_KEYWORDS:
-            if kw in cid_upper:
-                return "control"
+        # Use centralized classify_card_playstyle instead of local keywords
+        hint = classify_card_playstyle(cid)
+        if hint is not None:
+            return hint
 
     if not costs:
         return "unknown"
@@ -355,8 +348,10 @@ class DecisionLoop:
         show_probabilities: bool = True,
         show_mcts_detail: bool = True,
         file_log: Optional[TextIO] = None,
+        latest_game_only: bool = False,
     ):
         self.log_path = Path(log_path)
+<<<<<<< HEAD
         self._engine_config = MCTSConfig(
             time_budget_ms=self.engine_params.get("time_budget_ms", 8000.0),
             num_worlds=self.engine_params.get("num_worlds", 7),
@@ -364,6 +359,16 @@ class DecisionLoop:
             time_decay_gamma=self.engine_params.get("time_decay_gamma", 0.6),
             max_actions_per_turn=self.engine_params.get("max_actions_per_turn", 10),
         )
+=======
+        self.engine_params = engine_params or {
+            "time_budget_ms": 8000.0,
+            "num_worlds": 7,
+            "uct_constant": 0.5,
+            "time_decay_gamma": 0.6,
+            "max_actions_per_turn": 10,
+        }
+        self._game_engine: GameEngine = create_engine("mcts", self.engine_params)()
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
         self.poll_interval = poll_interval
         self.on_decision = on_decision
         self.presenter = DecisionPresenter(
@@ -382,6 +387,14 @@ class DecisionLoop:
         self._last_decision_signature: tuple | None = None
         self._last_replan_at = 0.0
         self._replan_cooldown_s = float(self.engine_params.get("replan_cooldown_s", 0.8))
+        self._latest_game_only = latest_game_only
+
+        # GlobalTracker for cross-turn state (used when latest_game_only=True)
+        self._global_tracker = None
+        if latest_game_only:
+            from analysis.watcher.global_tracker import GlobalTracker
+            self._global_tracker = GlobalTracker()
+            log.info("latest_game_only=True: GlobalTracker enabled for auto-reset on new game")
 
         self._deck_reloader = None
         deck_codes_path = Path(log_path).parent.parent / "deck_codes.txt"
@@ -476,11 +489,19 @@ class DecisionLoop:
             log.info("New game detected")
             self._last_turn = 0
             self._last_decision_signature = None
+            # 通知 GameEngine 单例游戏开始
+            self._game_engine.on_game_start()
+            # Auto-reset GlobalTracker when latest_game_only=True
+            if self._global_tracker is not None:
+                self._global_tracker.on_game_start()
+                log.debug("latest_game_only: GlobalTracker auto-reset on game_start")
             self._display.present_status("新游戏开始!")
         elif event == "game_end":
             log.info("Game ended")
             self._last_turn = 0
             self._last_decision_signature = None
+            # 通知 GameEngine 单例游戏结束
+            self._game_engine.on_game_end()
             self._display.present_status("游戏结束")
         elif event == "turn_start":
             current_turn = self._tracker.get_current_turn()
@@ -613,10 +634,16 @@ class DecisionLoop:
         opp_playstyle = _infer_opp_playstyle(state)
         state.opp_playstyle = opp_playstyle
 
+<<<<<<< HEAD
         engine = MCTSEngine(self._engine_config)
 
         start_time = time.perf_counter()
         result = engine.search(state, opp_playstyle=opp_playstyle)
+=======
+        # 使用 GameEngine 单例（MCTS + Bayesian 只有一份）
+        start_time = time.perf_counter()
+        raw_result = self._game_engine.search(state, opp_playstyle=opp_playstyle)
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
         self.presenter.present(result, state, elapsed_ms)
@@ -679,6 +706,7 @@ class DecisionLoop:
 
         tracker = GameTracker()
         bridge = StateBridge()
+<<<<<<< HEAD
         config = MCTSConfig(
             time_budget_ms=engine_kwargs.get("time_budget_ms", time_budget_ms),
             num_worlds=engine_kwargs.get("num_worlds", num_worlds),
@@ -687,6 +715,10 @@ class DecisionLoop:
             max_actions_per_turn=engine_kwargs.get("max_actions_per_turn", 10),
         )
         mcts_engine = MCTSEngine(config)
+=======
+        # 使用 GameEngine 单例
+        game_engine: GameEngine = create_engine(engine, engine_kwargs)()
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
         events = tracker.load_file(log_path)
         log.info(f"Parsed {len(events)} events")
@@ -695,7 +727,9 @@ class DecisionLoop:
         for event in events:
             if event == "game_start":
                 last_turn = 0
+                game_engine.on_game_start()
             elif event == "game_end":
+                game_engine.on_game_end()
                 break
             elif event == "turn_start":
                 current_turn = tracker.get_current_turn()
@@ -713,7 +747,11 @@ class DecisionLoop:
                     load_scores_into_hand(state)
 
                     start_time = time.perf_counter()
+<<<<<<< HEAD
                     result = mcts_engine.search(state)
+=======
+                    raw_result = game_engine.search(state)
+>>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
                     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
                     presenter = DecisionPresenter(output=output)
                     presenter.present(result, state, elapsed_ms)
