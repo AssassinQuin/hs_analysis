@@ -146,13 +146,8 @@ class TestNespirahMCTSChain:
         # Activate → dur 1→0 → deathrattle
         s = apply_action(s, Action(action_type=ActionType.ACTIVATE_LOCATION, source_index=0))
         assert len(s.locations) == 0  # removed
-<<<<<<< HEAD
-        assert len(s.board) == 1      # token summoned
-        assert s.opponent.hero.hp == 28  # 2 damage from 2 activations
-=======
         assert len(s.board) == 1  # token summoned
         assert s.opponent.hero.hp == 25  # 3 (Fel) + 2 (2 activations) = 5 total damage
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
     def test_full_mcts_chain_dump_all_fel(self, setup):
         """Full chain: dump all 5 Fel spells with location activations interleaved.

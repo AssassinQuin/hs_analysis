@@ -1226,16 +1226,8 @@ class GlobalTracker:
     # ---------------------------------------------------------------
 
     def _ensure_card_db(self):
-<<<<<<< HEAD
-        """延迟加载卡牌数据库，用于dbfId查询"""
-        if self._card_db is None:
-            from analysis.card.data.card_data import get_db
-            self._card_db = get_db()
-        return self._card_db
-=======
         """延迟加载卡牌数据库，用于dbfId查询（strict 模式）"""
         return self._get_card_db(strict=True)
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
     def _ensure_secret_model(self):
         """基于对手英雄职业初始化奥秘概率模型"""

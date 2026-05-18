@@ -14,11 +14,8 @@ Mathematical foundation:
 Data sources:
    - CardDB (analysis.data.card_data) → card name lookups
 """
-<<<<<<< HEAD
-=======
 import os
 import json
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 import logging
 
 from collections import Counter, defaultdict
@@ -27,10 +24,6 @@ from typing import List, Optional
 
 log = logging.getLogger(__name__)
 
-<<<<<<< HEAD
-# ── CardDB ──────────────────────────────────────────
-from analysis.card.data.card_data import get_db
-=======
 # ── Paths (from centralized config) ────────────────
 from analysis.config import PROJECT_ROOT, HSREPLAY_CACHE_DB, UNIFIED_DB_PATH
 
@@ -38,8 +31,6 @@ DB_PATH = str(HSREPLAY_CACHE_DB)
 UNIFIED_PATH = str(UNIFIED_DB_PATH)
 
 from analysis.data.fetch_hsreplay import init_db, get_meta_decks
-
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
 # ── Constants ──────────────────────────────────────
 SIGNATURE_LIKELIHOOD = 0.9   # P(seen_X | deck_i) when X is a signature card

@@ -508,9 +508,6 @@ class OpponentState:
             opp_shuffled_into_deck=list(self.opp_shuffled_into_deck),
             opp_corrupted_cards=list(self.opp_corrupted_cards),
             opp_cost_modifiers=list(self.opp_cost_modifiers),
-<<<<<<< HEAD:analysis/card/engine/state.py
-            opp_last_played_minion=dict(self.opp_last_played_minion),
-=======
             opp_known_deck_cards=dict(self.opp_known_deck_cards),
             opp_known_hand_types=list(self.opp_known_hand_types),
             opp_entity_transforms=dict(self.opp_entity_transforms),
@@ -519,7 +516,6 @@ class OpponentState:
             opp_transform_events=list(self.opp_transform_events),
             opp_tutor_evidence=list(self.opp_tutor_evidence),
             opp_deck_insert_events=list(self.opp_deck_insert_events),
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad:analysis/search/game_state.py
         )
 
 

@@ -21,15 +21,8 @@ from typing import Callable, Optional, TextIO
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-<<<<<<< HEAD
-from analysis.card.abilities.definition import Action
-from analysis.search.mcts.engine import MCTSEngine
-from analysis.search.mcts.config import MCTSConfig
-from analysis.search.mcts.engine import SearchResult
-=======
 from analysis.search.abilities.actions import Action
 from analysis.search.engine_adapter import UnifiedSearchResult, GameEngine, create_engine
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 from analysis.utils.score_provider import load_scores_into_hand
 from analysis.utils.bayesian_opponent import classify_card_playstyle
 
@@ -351,15 +344,6 @@ class DecisionLoop:
         latest_game_only: bool = False,
     ):
         self.log_path = Path(log_path)
-<<<<<<< HEAD
-        self._engine_config = MCTSConfig(
-            time_budget_ms=self.engine_params.get("time_budget_ms", 8000.0),
-            num_worlds=self.engine_params.get("num_worlds", 7),
-            uct_constant=self.engine_params.get("uct_constant", 0.5),
-            time_decay_gamma=self.engine_params.get("time_decay_gamma", 0.6),
-            max_actions_per_turn=self.engine_params.get("max_actions_per_turn", 10),
-        )
-=======
         self.engine_params = engine_params or {
             "time_budget_ms": 8000.0,
             "num_worlds": 7,
@@ -368,7 +352,6 @@ class DecisionLoop:
             "max_actions_per_turn": 10,
         }
         self._game_engine: GameEngine = create_engine("mcts", self.engine_params)()
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
         self.poll_interval = poll_interval
         self.on_decision = on_decision
         self.presenter = DecisionPresenter(
@@ -634,16 +617,9 @@ class DecisionLoop:
         opp_playstyle = _infer_opp_playstyle(state)
         state.opp_playstyle = opp_playstyle
 
-<<<<<<< HEAD
-        engine = MCTSEngine(self._engine_config)
-
-        start_time = time.perf_counter()
-        result = engine.search(state, opp_playstyle=opp_playstyle)
-=======
         # 使用 GameEngine 单例（MCTS + Bayesian 只有一份）
         start_time = time.perf_counter()
-        raw_result = self._game_engine.search(state, opp_playstyle=opp_playstyle)
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
+        result = self._game_engine.search(state, opp_playstyle=opp_playstyle)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
         self.presenter.present(result, state, elapsed_ms)
@@ -706,19 +682,8 @@ class DecisionLoop:
 
         tracker = GameTracker()
         bridge = StateBridge()
-<<<<<<< HEAD
-        config = MCTSConfig(
-            time_budget_ms=engine_kwargs.get("time_budget_ms", time_budget_ms),
-            num_worlds=engine_kwargs.get("num_worlds", num_worlds),
-            uct_constant=engine_kwargs.get("uct_constant", 0.5),
-            time_decay_gamma=engine_kwargs.get("time_decay_gamma", 0.6),
-            max_actions_per_turn=engine_kwargs.get("max_actions_per_turn", 10),
-        )
-        mcts_engine = MCTSEngine(config)
-=======
         # 使用 GameEngine 单例
         game_engine: GameEngine = create_engine(engine, engine_kwargs)()
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
 
         events = tracker.load_file(log_path)
         log.info(f"Parsed {len(events)} events")
@@ -747,11 +712,7 @@ class DecisionLoop:
                     load_scores_into_hand(state)
 
                     start_time = time.perf_counter()
-<<<<<<< HEAD
-                    result = mcts_engine.search(state)
-=======
-                    raw_result = game_engine.search(state)
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad
+                    result = game_engine.search(state)
                     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
                     presenter = DecisionPresenter(output=output)
                     presenter.present(result, state, elapsed_ms)

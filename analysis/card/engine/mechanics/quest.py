@@ -12,12 +12,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-<<<<<<< HEAD:analysis/card/engine/mechanics/quest.py
-from analysis.card.abilities.definition import ActionType
-=======
 from analysis.search.abilities.actions import ActionType
 from analysis.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, SCHOOL_ZH_MAP as _SPELL_SCHOOL_MAP
->>>>>>> e1f7322cc1542daa2ad4da987ebbaa234f5969ad:analysis/search/quest.py
 
 _QUEST_THRESHOLD_EN = re.compile(r'(\d+)\s*(?:cards?|spells?|minions?)')
 _QUEST_TOTAL_CN = re.compile(r'总计(\d+)张')

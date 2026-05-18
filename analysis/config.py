@@ -17,7 +17,23 @@ CARD_LIST_PATH = DATA_DIR / "card_list.json"
 
 # ── External APIs ────────────────────────────────────────────────────────
 HSJSON_API_BASE = "https://api.hearthstonejson.com/v1/latest/zhCN/"
+
+# HSReplay API (card stats, archetypes, meta decks)
+HSREPLAY_API_KEY = os.environ.get("HSREPLAY_API_KEY", "")
+HSREPLAY_CARDS_URL = "https://hsreplay.net/api/v1/cards/?game_type=RANKED_STANDARD"
+HSREPLAY_ARCHETYPES_URL = "https://hsreplay.net/api/v1/archetypes/"
+HSREPLAY_CACHE_DB = DATA_DIR / "hsreplay_cache.db"
+UNIFIED_DB_PATH = DATA_DIR / "unified_standard.json"
+
 CACHE_DAYS = 30
+
+
+def get_api_headers() -> dict:
+    """Return headers for HSReplay API requests."""
+    return {
+        "User-Agent": "hs_analysis/1.0",
+        "X-Api-Key": HSREPLAY_API_KEY,
+    }
 
 # ── Class scoring weights ────────────────────────────────────────────────
 CLASS_MULTIPLIER = {
