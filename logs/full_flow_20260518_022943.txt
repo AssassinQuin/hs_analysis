@@ -1,0 +1,146 @@
+
+======================================================================
+全流程模拟分析报告
+======================================================================
+日志文件: Power.log
+游戏回合: 6
+我方决策: 3
+对手出牌: 2 (牌库=0, 衍生=0)
+MCTS总耗时: 2105ms
+
+── 引擎单例验证 ──
+  GameEngine ID: 140153913093552
+  MCTSEngine ID: 140153913869376 (应始终一致)
+  BayesianModel ID: 0
+
+── CoreLogMonitor 集成验证 ──
+  已桥接实体数: 71
+  GlobalTracker 对手职业: ROGUE
+  贝叶斯延迟初始化回合: 游戏开始时即初始化
+
+── 概率推断准确性 ──
+  预测回合数: 6
+  贝叶斯已初始化: 6/6 (100%)
+  锁定卡组: 6/6 (100%)
+  对手实际牌库牌: 0 张唯一
+  对手衍生牌: 0 张唯一
+
+  平均已知卡牌数: 1.3
+  平均奥秘数: 0.0
+  平均牌库剩余: 23.5
+
+── 逐回合推断 vs 实际 ──
+  Turn 1:
+    对手手牌: 5  牌库: 25
+    贝叶斯推断: Custom_ROGUE_11 (100%) [LOCKED] [已初始化]
+    实际出牌: 死亡阴影瓦莉拉 (来源=unknown)
+  Turn 2:
+    对手手牌: 6  牌库: 24
+    贝叶斯推断: Custom_ROGUE_11 (100%) [LOCKED] [已初始化]
+  Turn 3:
+    对手手牌: 6  牌库: 24
+    贝叶斯推断: Custom_ROGUE_11 (100%) [LOCKED] [已初始化]
+  Turn 4:
+    对手手牌: 7  牌库: 23
+    贝叶斯推断: Custom_ROGUE_11 (100%) [LOCKED] [已初始化]
+  Turn 5:
+    对手手牌: 6  牌库: 23
+    贝叶斯推断: Custom_ROGUE_11 (100%) [LOCKED] [已初始化]
+    实际出牌: 不测之变 (来源=unknown)
+  Turn 6:
+    对手手牌: 7  牌库: 22
+    贝叶斯推断: Custom_ROGUE_11 (100%) [LOCKED] [已初始化]
+
+--- 原始数据 ---
+[
+  {
+    "turn": 1,
+    "opp_hand_count": 5,
+    "bayesian_top_deck": "Custom_ROGUE_11",
+    "bayesian_top_prob": 1.0,
+    "bayesian_locked": true,
+    "bayesian_initialized": true,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 25,
+    "actual_opp_plays": [
+      {
+        "card_id": "HERO_03g",
+        "name": "死亡阴影瓦莉拉",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 2,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "Custom_ROGUE_11",
+    "bayesian_top_prob": 1.0,
+    "bayesian_locked": true,
+    "bayesian_initialized": true,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 24,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 3,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "Custom_ROGUE_11",
+    "bayesian_top_prob": 1.0,
+    "bayesian_locked": true,
+    "bayesian_initialized": true,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 24,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 4,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "Custom_ROGUE_11",
+    "bayesian_top_prob": 1.0,
+    "bayesian_locked": true,
+    "bayesian_initialized": true,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 23,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 5,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "Custom_ROGUE_11",
+    "bayesian_top_prob": 1.0,
+    "bayesian_locked": true,
+    "bayesian_initialized": true,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 2,
+    "opp_deck_remaining": 23,
+    "actual_opp_plays": [
+      {
+        "card_id": "END_000",
+        "name": "不测之变",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 6,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "Custom_ROGUE_11",
+    "bayesian_top_prob": 1.0,
+    "bayesian_locked": true,
+    "bayesian_initialized": true,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 2,
+    "opp_deck_remaining": 22,
+    "actual_opp_plays": []
+  }
+]

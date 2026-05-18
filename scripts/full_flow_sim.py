@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 """full_flow_sim.py — 全流程模拟验证脚本
 
-使用 tracker + power.log 逐行解析模拟真实游戏进程，
+使用 CoreLogMonitor（含 GlobalTracker 桥接）+ power.log 逐行解析模拟真实游戏进程，
 验证 GameEngine 单例 + MCTS + 贝叶斯推断的全链路正确性。
 
 核心验证点:
 1. GameEngine 单例 — MCTSEngine 和 BayesianOpponentModel 只有一份
-2. 逐行解析 — CoreLogMonitor 模拟真实 Power.log 输入
-3. 对手出牌追踪 — 观测对手实际打出什么牌
-4. 概率推断验证 — 对比贝叶斯预测与实际出牌的差异
-5. 全流程正确性 — 从 Power.log 到 MCTS 决策的完整路径
+2. CoreLogMonitor 集成 — 完整的实体桥接到 GlobalTracker
+3. 贝叶斯延迟初始化 — 直到对手职业被检测到才创建 BayesianOpponentModel
+4. 对手出牌追踪 — 观测对手实际打出什么牌，GlobalTracker 驱动贝叶斯更新
+5. 概率推断验证 — 对比贝叶斯预测与实际出牌的差异
+6. 全流程正确性 — 从 Power.log 到 MCTS 决策的完整路径
+
+架构:
+    Power.log → 逐行读取 → CoreLogMonitor
+        ├── GameTracker.feed_line() → entity_cache 更新
+        ├── _detect_zone_changes_from_cache() → GlobalTracker.on_zone_change()
+        ├── _bridge_new_entities() → GlobalTracker.on_full_entity/on_show_entity()
+        └── 事件分发 → game_start / turn_start / game_end
+            ├── game_start → GameEngine.on_game_start(opp_class) [延迟贝叶斯]
+            ├── turn_start → StateBridge.convert(global_state) → GameEngine.search()
+            └── game_end → GameEngine.on_game_end()
 
 Usage:
     python scripts/full_flow_sim.py
@@ -30,7 +41,7 @@ from typing import Dict, List, Optional, Set, Tuple
 # Ensure project root on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from analysis.watcher.game_tracker import GameTracker
+from tracker.log_monitor import CoreLogMonitor
 from analysis.watcher.state_bridge import StateBridge
 from analysis.search.engine_adapter import GameEngine, UnifiedSearchResult
 from analysis.search.abilities.enumeration import enumerate_legal_actions
@@ -59,8 +70,12 @@ class PredictionRecord:
     bayesian_top_deck: str
     bayesian_top_prob: float
     bayesian_locked: bool
+    bayesian_initialized: bool
     predicted_hand_types: List[dict]
     known_hand_cards: List[str]
+    opp_secrets: List[str]
+    opp_known_cards_count: int
+    opp_deck_remaining: int
     actual_opp_plays: List[OppCardPlay] = field(default_factory=list)
 
 @dataclass
@@ -80,6 +95,10 @@ class FlowReport:
     engine_id: int = 0
     mcts_engine_id: int = 0
     bayesian_model_id: int = 0
+    # CoreLogMonitor 集成状态
+    monitor_entities_bridged: int = 0
+    global_tracker_opp_class: str = ""
+    bayesian_lazy_init_turn: int = 0  # 贝叶斯延迟初始化的回合数
 
 
 # ── 显示辅助 ──────────────────────────────────────────────
@@ -105,7 +124,8 @@ def run_full_flow_simulation(
     """运行全流程模拟验证。
 
     架构:
-    Power.log → 逐行读取 → GameTracker → StateBridge → GameEngine(单例).search()
+    Power.log → 逐行读取 → CoreLogMonitor(GameTracker + GlobalTracker)
+        → StateBridge(global_state) → GameEngine(单例).search()
 
     Returns:
         FlowReport 包含完整的模拟结果和验证数据
@@ -127,150 +147,178 @@ def run_full_flow_simulation(
     })
     report.engine_id = id(game_engine)
     report.mcts_engine_id = id(game_engine.mcts_engine)
-    report.bayesian_model_id = id(game_engine.bayesian_model)
+    # 注意: bayesian_model 此时是默认实例（无职业过滤），on_game_start 后会被延迟初始化
 
-    print(f"[引擎单例] GameEngine={report.engine_id}  MCTS={report.mcts_engine_id}  Bayesian={report.bayesian_model_id}")
+    print(f"[引擎单例] GameEngine={report.engine_id}  MCTS={report.mcts_engine_id}")
 
-    # ── 2. 创建解析器 ──
-    tracker = GameTracker()
-    bridge = StateBridge(entity_cache=tracker.entity_cache)
+    # ── 2. 创建 CoreLogMonitor（含 GlobalTracker 桥接）──
+    monitor = CoreLogMonitor()
+    # StateBridge 使用 CoreLogMonitor 的 GameTracker 的 entity_cache
+    bridge = StateBridge(entity_cache=monitor.game_tracker.entity_cache)
 
     # ── 3. 逐行解析 Power.log ──
     last_turn = -1
-    prev_opp_dbf_ids: Set[int] = set()
-    turn_opponent_plays: List[OppCardPlay] = []
+    bayesian_initialized_in_turn = 0  # 记录贝叶斯何时被初始化
+    opp_class_detected = False
+
+    # 追踪对手出牌（从 GlobalTracker 的状态中提取）
+    prev_opp_known_card_ids: Set[str] = set()
 
     with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
         for line in f:
-            event = tracker.feed_line(line.strip())
+            line = line.strip()
+            if not line:
+                continue
+
+            # ── 解析 PlayerName 行（CoreLogMonitor 内部也会做，但我们先喂行） ──
+            # 先喂入 CoreLogMonitor 的 _process_lines 逻辑
+            event = monitor.game_tracker.feed_line(line)
+            monitor._parse_player_name_line(line)
 
             if event == 'game_start':
                 print(f"\n{'='*60}")
                 print(f"新游戏开始")
                 print(f"{'='*60}")
                 last_turn = -1
-                prev_opp_dbf_ids = set()
-                turn_opponent_plays = []
+                prev_opp_known_card_ids = set()
+                bayesian_initialized_in_turn = 0
+                opp_class_detected = False
 
-                # 检测对手职业
-                opp_class = None
-                game = tracker.export_entities()
-                if game and hasattr(game, 'players') and len(game.players) >= 2:
-                    _friendly_idx = DecisionLoop_detect_friendly(game)
-                    opp_player = game.players[1 - _friendly_idx]
-                    for ent in getattr(opp_player, 'entities', []):
-                        tags = getattr(ent, 'tags', {})
-                        if (tags.get(GameTag.ZONE) == HZone.PLAY and
-                                tags.get(GameTag.CARDTYPE) == HCardType.HERO):
-                            cls_val = tags.get(GameTag.CLASS, 0)
-                            if hasattr(cls_val, 'name'):
-                                opp_class = cls_val.name
-                            elif isinstance(cls_val, int):
-                                try:
-                                    from hearthstone.enums import CardClass
-                                    opp_class = CardClass(cls_val).name
-                                except ValueError:
-                                    pass
-                            break
+                # 触发 CoreLogMonitor 的游戏开始流程
+                monitor._bridged_entities.clear()
+                monitor._last_known_zones.clear()
+                monitor._last_known_card_ids.clear()
+                monitor._first_player_detected = False
+                monitor._on_game_start()
 
-                game_engine.on_game_start(opp_class=opp_class)
-                # 验证单例: game_start 后引擎 ID 不应改变
+                # 从 GlobalTracker 获取对手职业
+                gt_state = monitor.global_tracker.state
+                opp_class = gt_state.opp_hero_class or None
+                if opp_class and opp_class != "UNKNOWN":
+                    opp_class_detected = True
+                    report.global_tracker_opp_class = opp_class
+
+                # GameEngine 延迟初始化贝叶斯模型
+                # 只有在对手职业已知时才传入 opp_class
+                game_engine.on_game_start(opp_class=opp_class if opp_class_detected else None)
+
+                # 验证单例: game_start 后 MCTS 引擎 ID 不应改变
                 assert id(game_engine.mcts_engine) == report.mcts_engine_id, \
                     f"MCTS engine singleton violated! {id(game_engine.mcts_engine)} != {report.mcts_engine_id}"
-                print(f"  对手职业: {opp_class or '未知'}  |  贝叶斯原型: {len(game_engine.bayesian_model.decks)}")
+
+                # 记录贝叶斯模型状态
+                report.bayesian_model_id = id(game_engine.bayesian_model) if game_engine.bayesian_model else 0
+                bayesian_decks = len(game_engine.bayesian_model.decks) if game_engine.bayesian_model else 0
+                print(f"  对手职业: {opp_class or '未知'}  |  贝叶斯原型: {bayesian_decks}")
+                print(f"  GlobalTracker opp_class: {gt_state.opp_hero_class}")
+                print(f"  贝叶斯延迟初始化: {'已初始化' if opp_class_detected else '等待职业检测'}")
 
             elif event == 'game_end':
                 print(f"\n游戏结束 — {report.our_decisions} 次决策, "
                       f"对手出牌 {report.opp_plays_total} (牌库={report.opp_plays_from_deck}, "
                       f"衍生={report.opp_plays_generated})")
                 game_engine.on_game_end()
+                monitor._on_game_end()
                 break
 
             elif event == 'turn_start':
-                game = tracker.export_entities()
+                # 先桥接新实体和区域变化到 GlobalTracker
+                monitor._detect_zone_changes_from_cache()
+                monitor._detect_first_player_from_cache()
+                monitor._bridge_new_entities()
+                monitor._try_enrich_player_info()
+
+                game = monitor.game_tracker.export_entities()
                 if not game:
                     continue
 
-                _friendly_idx = DecisionLoop_detect_friendly(game)
-                state = bridge.convert(game, player_index=_friendly_idx)
+                # 使用 CoreLogMonitor 的 _detect_my_idx（更可靠的玩家检测）
+                players = list(game.players)
+                _friendly_idx = monitor._detect_my_idx(
+                    players,
+                    saved_our_controller=monitor.global_tracker.our_controller,
+                )
+
+                # 获取 GlobalTracker 的状态用于 enrich
+                global_state = monitor.global_tracker.state
+
+                # 检查对手职业是否刚刚被检测到（延迟初始化贝叶斯）
+                if not opp_class_detected and global_state.opp_hero_class and global_state.opp_hero_class != "UNKNOWN":
+                    opp_class_detected = True
+                    report.global_tracker_opp_class = global_state.opp_hero_class
+                    # 通知 GameEngine 对手职业已检测到
+                    game_engine.on_opp_class_detected(global_state.opp_hero_class)
+                    bayesian_initialized_in_turn = global_state.current_turn or 0
+                    report.bayesian_lazy_init_turn = bayesian_initialized_in_turn
+                    bayesian_decks = len(game_engine.bayesian_model.decks) if game_engine.bayesian_model else 0
+                    print(f"  [延迟初始化] Turn {bayesian_initialized_in_turn}: "
+                          f"对手职业={global_state.opp_hero_class}, 贝叶斯原型={bayesian_decks}")
+
+                # 用 global_state 富集 GameState
+                state = bridge.convert(game, player_index=_friendly_idx, global_state=global_state)
                 if not state or state.turn_number <= 0:
                     continue
                 current_turn = state.turn_number
                 if current_turn == last_turn:
                     continue
 
+                # 通知 GlobalTracker 回合切换
+                monitor.global_tracker.on_turn_change(current_turn)
+
                 report.game_turns = max(report.game_turns, current_turn)
 
                 # 判断是谁的回合
                 is_our_turn = (current_turn % 2 != _friendly_idx)
 
-                # ── 收集对手出牌信息 ──
-                _opp_idx = 1 - _friendly_idx
-                opp_player = game.players[_opp_idx]
-                current_opp_dbf_ids = set()
-                card_id_to_dbf = {}
-                bayesian = game_engine.bayesian_model
+                # ── 从 GlobalTracker 获取对手追踪信息 ──
+                gt = monitor.global_tracker
+                gt_state = global_state
+                bayesian_state = gt.get_bayesian_state()
+                known_hand = gt.get_opp_known_hand()
+                card_breakdown = gt.get_opp_card_breakdown()
 
-                # 构建卡牌ID映射
-                try:
-                    for dbf, info in bayesian.cards_by_dbf.items():
-                        cid = info.get("id", "")
-                        if cid:
-                            card_id_to_dbf[cid] = dbf
-                except Exception:
-                    pass
-                try:
-                    from analysis.data.hsdb import get_db as _get_hsdb
-                    _hsdb = _get_hsdb()
-                    _hsdb_lookup = _hsdb.card_id_to_dbf
-                except Exception:
-                    _hsdb_lookup = None
+                # ── 收集对手出牌信息（从 GlobalTracker 的已知卡牌 diff） ──
+                current_opp_known: Set[str] = set()
+                for kc in gt_state.opp_known_cards:
+                    cid = kc.card_id
+                    if cid:
+                        current_opp_known.add(cid)
 
-                # 从对手的实体中收集已打出的卡牌
+                new_opp_cards = current_opp_known - prev_opp_known_card_ids
                 turn_plays = []
-                for ent in getattr(opp_player, 'entities', []):
-                    cid = getattr(ent, 'card_id', '') or ''
-                    if not cid:
-                        continue
-                    zone = ent.tags.get(GameTag.ZONE, 0) if hasattr(ent, 'tags') else 0
-                    ctype = ent.tags.get(GameTag.CARDTYPE, 0)
-                    if zone in (HZone.PLAY, HZone.SECRET):
-                        if ctype in (HCardType.HERO, HCardType.HERO_POWER, HCardType.ENCHANTMENT):
-                            continue
-                        dbf_id = card_id_to_dbf.get(cid, 0)
-                        if not dbf_id and _hsdb_lookup:
-                            dbf_id = _hsdb_lookup(cid) or 0
-                        if dbf_id:
-                            current_opp_dbf_ids.add(dbf_id)
+                for cid in new_opp_cards:
+                    # 查卡牌元数据
+                    try:
+                        from analysis.data.hsdb import get_db as _get_hsdb
+                        _hsdb = _get_hsdb()
+                        card_meta = _hsdb.get_card(cid) or {}
+                    except Exception:
+                        card_meta = {}
 
-                        # 查卡牌元数据获取来源分类
-                        try:
-                            card_meta = _hsdb.get_card(cid) if _hsdb else {}
-                        except Exception:
-                            card_meta = {}
-                        source = "UNKNOWN"
-                        if card_meta:
-                            if not card_meta.get("collectible", False):
-                                source = "GENERATED"
-                            else:
-                                source = "DECK"
+                    source = "UNKNOWN"
+                    if card_meta:
+                        if not card_meta.get("collectible", False):
+                            source = "GENERATED"
+                        else:
+                            source = "DECK"
 
-                        play = OppCardPlay(
-                            turn=current_turn,
-                            card_id=cid,
-                            card_name=card_meta.get("name", cid),
-                            zone_from="HAND",
-                            card_type=str(ctype),
-                            source=source,
-                        )
-                        turn_plays.append(play)
+                    # 尝试从 GlobalTracker 的已知卡牌中获取来源
+                    for kc in gt_state.opp_known_cards:
+                        if kc.card_id == cid:
+                            source = kc.source.value if hasattr(kc.source, 'value') else str(kc.source)
+                            break
 
-                # 更新贝叶斯
-                bayesian_updates = game_engine.update_bayesian(current_opp_dbf_ids)
-                for update in bayesian_updates:
-                    print(f"  [贝叶斯] 对手打出: {update['name']} → 推断: "
-                          f"{update['top_deck']}@{update['top_prob']:.0%}"
-                          f"{' [LOCKED]' if update['locked'] else ''}")
+                    play = OppCardPlay(
+                        turn=current_turn,
+                        card_id=cid,
+                        card_name=card_meta.get("name", cid),
+                        zone_from="HAND",
+                        card_type=str(card_meta.get("type", "")),
+                        source=source,
+                    )
+                    turn_plays.append(play)
+
+                prev_opp_known_card_ids = current_opp_known
 
                 # 记录对手出牌
                 for play in turn_plays:
@@ -282,38 +330,47 @@ def run_full_flow_simulation(
                         report.opp_plays_generated += 1
 
                 # ── 收集预测记录 ──
-                top_decks = bayesian.get_top_decks(3)
+                top_decks = bayesian_state.get("top_decks", [])
                 top_deck_name = top_decks[0][1] if top_decks else "?"
                 top_deck_prob = top_decks[0][2] if top_decks else 0.0
-                known_hand = []
-                if hasattr(state.opponent, 'opp_known_cards'):
-                    for kc in state.opponent.opp_known_cards:
-                        cid = kc.get("card_id", "") if isinstance(kc, dict) else getattr(kc, "card_id", "")
-                        if cid:
-                            known_hand.append(cid)
+                locked_deck = bayesian_state.get("locked_deck_id")
+                known_hand_cards = [kc.get("card_id", "") if isinstance(kc, dict) else getattr(kc, "card_id", "") for kc in (known_hand or [])]
 
                 pred = PredictionRecord(
                     turn=current_turn,
                     opp_hand_count=state.opponent.hand_count,
                     bayesian_top_deck=top_deck_name,
                     bayesian_top_prob=top_deck_prob,
-                    bayesian_locked=bayesian.locked,
-                    predicted_hand_types=[],
-                    known_hand_cards=known_hand,
+                    bayesian_locked=locked_deck is not None,
+                    bayesian_initialized=bayesian_state.get("archetype_name") is not None,
+                    predicted_hand_types=card_breakdown or [],
+                    known_hand_cards=known_hand_cards,
+                    opp_secrets=list(gt_state.opp_secrets),
+                    opp_known_cards_count=len(gt_state.opp_known_cards),
+                    opp_deck_remaining=gt_state.opp_deck_remaining,
                     actual_opp_plays=turn_plays,
                 )
                 report.predictions.append(pred)
 
+                # 记录桥接实体数量
+                report.monitor_entities_bridged = len(monitor._bridged_entities)
+
                 # ── 对手回合：只显示推断 ──
                 if not is_our_turn:
                     print(f"\n┌─ Turn {current_turn} (对手回合) ────────────")
-                    print(f"│ 对手手牌: {state.opponent.hand_count}")
+                    print(f"│ 对手手牌: {state.opponent.hand_count}  牌库: {gt_state.opp_deck_remaining}")
+                    print(f"│ 已桥接实体: {len(monitor._bridged_entities)}  已知卡牌: {len(gt_state.opp_known_cards)}")
+                    if gt_state.opp_secrets:
+                        print(f"│ 奥秘: {', '.join(gt_state.opp_secrets)}")
                     if top_decks:
                         for rank, (dbf, name, prob) in enumerate(top_decks[:3], 1):
-                            print(f"│ 推断#{rank}: {name} ({prob:.0%})")
+                            print(f"│ 推断#{rank}: {name} ({prob:.0%})"
+                                  f"{' [LOCKED]' if locked_deck else ''}")
                     if turn_plays:
                         for p in turn_plays:
                             print(f"│ 实际出牌: {p.card_name} (来源={p.source})")
+                    if known_hand_cards:
+                        print(f"│ 已知手牌: {', '.join(known_hand_cards[:5])}")
                     print(f"└──────────────────────────")
                     last_turn = current_turn
                     continue
@@ -330,6 +387,8 @@ def run_full_flow_simulation(
                       f"Mana: {state.mana.available}/{state.mana.max_mana}  "
                       f"Hand: {len(state.hand)}  Board: {len(state.board)}  "
                       f"Legal: {len(non_end)} actions")
+                print(f"│ 已桥接实体: {len(monitor._bridged_entities)}  "
+                      f"对手已知卡牌: {len(gt_state.opp_known_cards)}")
                 if state.hand:
                     hand_str = " ".join(f"[{_card_display(c)}]" for c in state.hand)
                     print(f"│ Hand: {hand_str}")
@@ -341,14 +400,26 @@ def run_full_flow_simulation(
                     print(f"│ Opp Board: {opp_str}")
 
                 # 显示推断
-                print(f"│ 对手手牌: {state.opponent.hand_count}")
+                print(f"│ 对手手牌: {state.opponent.hand_count}  牌库: {gt_state.opp_deck_remaining}")
+                if gt_state.opp_secrets:
+                    print(f"│ 奥秘: {', '.join(gt_state.opp_secrets)}")
                 if top_decks:
                     for rank, (dbf, name, prob) in enumerate(top_decks[:3], 1):
                         print(f"│ 推断#{rank}: {name} ({prob:.0%})"
-                              f"{' [LOCKED]' if bayesian.locked else ''}")
+                              f"{' [LOCKED]' if locked_deck else ''}")
                 if turn_plays:
                     for p in turn_plays:
                         print(f"│ 对手上回合出牌: {p.card_name} (来源={p.source})")
+                if known_hand_cards:
+                    print(f"│ 已知手牌: {', '.join(known_hand_cards[:5])}")
+                if bayesian_state.get("playstyle") and bayesian_state["playstyle"] != "unknown":
+                    print(f"│ 对手风格: {bayesian_state['playstyle']}")
+
+                # 加载卡牌评分
+                try:
+                    load_scores_into_hand(state)
+                except Exception:
+                    pass
 
                 # MCTS 搜索
                 if len(non_end) <= 1:
@@ -363,19 +434,23 @@ def run_full_flow_simulation(
 
                 # 验证单例: 每次搜索后引擎 ID 不变
                 pre_mcts_id = id(game_engine.mcts_engine)
-                pre_bayes_id = id(game_engine.bayesian_model)
+                pre_bayes_id = id(game_engine.bayesian_model) if game_engine.bayesian_model else 0
 
                 t0 = time.time()
                 try:
-                    result = game_engine.search(state, time_budget_ms=budget_ms)
+                    # 获取对手风格
+                    opp_playstyle = bayesian_state.get("playstyle", "unknown")
+                    result = game_engine.search(state, time_budget_ms=budget_ms,
+                                                opp_playstyle=opp_playstyle)
                     elapsed = (time.time() - t0) * 1000
                     report.total_mcts_time_ms += elapsed
 
                     # 验证单例
                     assert id(game_engine.mcts_engine) == pre_mcts_id, \
                         f"MCTS engine replaced after search! {id(game_engine.mcts_engine)} != {pre_mcts_id}"
-                    assert id(game_engine.bayesian_model) == pre_bayes_id, \
-                        f"Bayesian model replaced after search! {id(game_engine.bayesian_model)} != {pre_bayes_id}"
+                    if game_engine.bayesian_model:
+                        assert id(game_engine.bayesian_model) == pre_bayes_id, \
+                            f"Bayesian model replaced after search! {id(game_engine.bayesian_model)} != {pre_bayes_id}"
 
                     s = result.mcts_stats
                     print(f"│")
@@ -402,22 +477,10 @@ def run_full_flow_simulation(
                     print(f"\n达到最大决策数 ({max_turns})")
                     break
 
+    # ── 最终桥接统计 ──
+    report.monitor_entities_bridged = len(monitor._bridged_entities)
+
     return report
-
-
-def DecisionLoop_detect_friendly(game) -> int:
-    """检测友方玩家索引"""
-    if not hasattr(game, 'players') or len(game.players) < 2:
-        return 0
-    visible = []
-    for p in game.players:
-        count = sum(
-            1 for e in getattr(p, 'entities', [])
-            if getattr(e, 'card_id', '') and
-               getattr(e, 'tags', {}).get(GameTag.ZONE) == HZone.HAND
-        )
-        visible.append(count)
-    return 1 if visible[1] > visible[0] else 0
 
 
 # ── 分析报告 ──────────────────────────────────────────────
@@ -439,7 +502,14 @@ def analyze_report(report: FlowReport) -> str:
     lines.append(f"── 引擎单例验证 ──")
     lines.append(f"  GameEngine ID: {report.engine_id}")
     lines.append(f"  MCTSEngine ID: {report.mcts_engine_id} (应始终一致)")
-    lines.append(f"  BayesianModel ID: {report.bayesian_model_id} (应始终一致)")
+    lines.append(f"  BayesianModel ID: {report.bayesian_model_id}")
+    lines.append(f"")
+
+    # ── CoreLogMonitor 集成验证 ──
+    lines.append(f"── CoreLogMonitor 集成验证 ──")
+    lines.append(f"  已桥接实体数: {report.monitor_entities_bridged}")
+    lines.append(f"  GlobalTracker 对手职业: {report.global_tracker_opp_class or '未检测到'}")
+    lines.append(f"  贝叶斯延迟初始化回合: {f'Turn {report.bayesian_lazy_init_turn}' if report.bayesian_lazy_init_turn > 0 else '游戏开始时即初始化'}")
     lines.append(f"")
 
     # ── 概率推断准确性分析 ──
@@ -448,8 +518,10 @@ def analyze_report(report: FlowReport) -> str:
         lines.append(f"  无预测记录")
     else:
         locked_count = sum(1 for p in report.predictions if p.bayesian_locked)
+        initialized_count = sum(1 for p in report.predictions if p.bayesian_initialized)
         total_preds = len(report.predictions)
         lines.append(f"  预测回合数: {total_preds}")
+        lines.append(f"  贝叶斯已初始化: {initialized_count}/{total_preds} ({initialized_count/max(total_preds,1):.0%})")
         lines.append(f"  锁定卡组: {locked_count}/{total_preds} ({locked_count/max(total_preds,1):.0%})")
 
         # 对比: 对手实际出牌 vs 贝叶斯推断的卡组
@@ -465,13 +537,25 @@ def analyze_report(report: FlowReport) -> str:
         lines.append(f"  对手衍生牌: {len(actual_generated_cards)} 张唯一")
         lines.append(f"")
 
+        # ── 全局追踪数据统计 ──
+        avg_known = sum(p.opp_known_cards_count for p in report.predictions) / max(total_preds, 1)
+        avg_secrets = sum(len(p.opp_secrets) for p in report.predictions) / max(total_preds, 1)
+        avg_deck_remaining = sum(p.opp_deck_remaining for p in report.predictions) / max(total_preds, 1)
+        lines.append(f"  平均已知卡牌数: {avg_known:.1f}")
+        lines.append(f"  平均奥秘数: {avg_secrets:.1f}")
+        lines.append(f"  平均牌库剩余: {avg_deck_remaining:.1f}")
+        lines.append(f"")
+
         # ── 逐回合推断 vs 实际 ──
         lines.append(f"── 逐回合推断 vs 实际 ──")
         for pred in report.predictions:
             lines.append(f"  Turn {pred.turn}:")
-            lines.append(f"    对手手牌: {pred.opp_hand_count}")
+            lines.append(f"    对手手牌: {pred.opp_hand_count}  牌库: {pred.opp_deck_remaining}")
             lines.append(f"    贝叶斯推断: {pred.bayesian_top_deck} ({pred.bayesian_top_prob:.0%})"
-                         f"{' [LOCKED]' if pred.bayesian_locked else ''}")
+                         f"{' [LOCKED]' if pred.bayesian_locked else ''}"
+                         f"{' [已初始化]' if pred.bayesian_initialized else ' [未初始化]'}")
+            if pred.opp_secrets:
+                lines.append(f"    奥秘: {', '.join(pred.opp_secrets)}")
             if pred.known_hand_cards:
                 lines.append(f"    已知手牌: {', '.join(pred.known_hand_cards[:5])}")
             if pred.actual_opp_plays:
@@ -491,7 +575,7 @@ def analyze_report(report: FlowReport) -> str:
 # ── 主入口 ────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="全流程模拟验证 — Tracker + Power.log 逐行解析 + MCTS 单例引擎")
+    parser = argparse.ArgumentParser(description="全流程模拟验证 — CoreLogMonitor + Power.log 逐行解析 + MCTS 单例引擎")
     parser.add_argument("log_path", nargs="?", default="Power.log",
                         help="Power.log path")
     parser.add_argument("--budget", "-b", type=float, default=3000.0,
@@ -531,6 +615,8 @@ def main():
     print(f"全流程模拟验证")
     print(f"文件: {log_path}")
     print(f"预算: {args.budget}ms")
+    print(f"CoreLogMonitor 集成: 是")
+    print(f"贝叶斯延迟初始化: 是")
     print(f"{'='*60}")
 
     # 运行模拟
@@ -565,7 +651,11 @@ def main():
                 "bayesian_top_deck": p.bayesian_top_deck,
                 "bayesian_top_prob": p.bayesian_top_prob,
                 "bayesian_locked": p.bayesian_locked,
+                "bayesian_initialized": p.bayesian_initialized,
                 "known_hand_cards": p.known_hand_cards,
+                "opp_secrets": p.opp_secrets,
+                "opp_known_cards_count": p.opp_known_cards_count,
+                "opp_deck_remaining": p.opp_deck_remaining,
                 "actual_opp_plays": [
                     {"card_id": play.card_id, "name": play.card_name, "source": play.source}
                     for play in p.actual_opp_plays

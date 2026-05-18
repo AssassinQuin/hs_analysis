@@ -1,0 +1,503 @@
+
+======================================================================
+全流程模拟分析报告
+======================================================================
+日志文件: tests/fixtures/game3_dk_vs_rogue_21t.log
+游戏回合: 20
+我方决策: 10
+对手出牌: 23 (牌库=0, 衍生=0)
+MCTS总耗时: 2227ms
+
+── 引擎单例验证 ──
+  GameEngine ID: 139699714231184
+  MCTSEngine ID: 139699718267456 (应始终一致)
+  BayesianModel ID: 0
+
+── CoreLogMonitor 集成验证 ──
+  已桥接实体数: 225
+  GlobalTracker 对手职业: DEATHKNIGHT
+  贝叶斯延迟初始化回合: 游戏开始时即初始化
+
+── 概率推断准确性 ──
+  预测回合数: 20
+  贝叶斯已初始化: 0/20 (0%)
+  锁定卡组: 0/20 (0%)
+  对手实际牌库牌: 0 张唯一
+  对手衍生牌: 0 张唯一
+
+  平均已知卡牌数: 10.6
+  平均奥秘数: 0.0
+  平均牌库剩余: 19.9
+
+── 逐回合推断 vs 实际 ──
+  Turn 1:
+    对手手牌: 5  牌库: 27
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 亡灵卡特拉娜 (来源=unknown)
+  Turn 2:
+    对手手牌: 6  牌库: 26
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 3:
+    对手手牌: 6  牌库: 26
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 4:
+    对手手牌: 7  牌库: 25
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 5:
+    对手手牌: 6  牌库: 25
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 感染吐息 (来源=unknown)
+  Turn 6:
+    对手手牌: 7  牌库: 24
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 7:
+    对手手牌: 7  牌库: 23
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 堕寒男爵 (来源=unknown)
+  Turn 8:
+    对手手牌: 8  牌库: 22
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 9:
+    对手手牌: 7  牌库: 21
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 末日使者之杖 (来源=deck)
+  Turn 10:
+    对手手牌: 8  牌库: 20
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 11:
+    对手手牌: 6  牌库: 20
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 水晶养护工 (来源=unknown)
+    实际出牌: 幸运币 (来源=generated)
+    实际出牌: 奥妮克希亚的士兵 (来源=generated)
+  Turn 12:
+    对手手牌: 7  牌库: 19
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 13:
+    对手手牌: 6  牌库: 17
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 脆弱的食尸鬼 (来源=generated)
+    实际出牌: 蚂蚁残躯 (来源=generated)
+    实际出牌: 丑恶的残躯 (来源=unknown)
+    实际出牌: 病变虫群 (来源=unknown)
+    实际出牌: 愤怒残魂 (来源=deck)
+    实际出牌: 鲜血魔术师 (来源=unknown)
+  Turn 14:
+    对手手牌: 7  牌库: 16
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 15:
+    对手手牌: 6  牌库: 16
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 着魔的技师 (来源=deck)
+    实际出牌: 财迷心窍 (来源=generated)
+    实际出牌: 血帆袭击者 (来源=unknown)
+  Turn 16:
+    对手手牌: 7  牌库: 15
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 17:
+    对手手牌: 6  牌库: 15
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 蛛魔护群守卫 (来源=unknown)
+    实际出牌: 奥妮克希亚之血 (来源=generated)
+  Turn 18:
+    对手手牌: 7  牌库: 14
+    贝叶斯推断: ? (0%) [未初始化]
+  Turn 19:
+    对手手牌: 6  牌库: 14
+    贝叶斯推断: ? (0%) [未初始化]
+    实际出牌: 奥妮克希亚之翼 (来源=generated)
+    实际出牌: 奥妮克希亚之翼 (来源=generated)
+    实际出牌: 缚风者 (来源=unknown)
+    实际出牌: 原始剑齿豹 (来源=unknown)
+    实际出牌: 复活的奥妮克希亚 (来源=unknown)
+  Turn 20:
+    对手手牌: 7  牌库: 13
+    贝叶斯推断: ? (0%) [未初始化]
+
+--- 原始数据 ---
+[
+  {
+    "turn": 1,
+    "opp_hand_count": 5,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 27,
+    "actual_opp_plays": [
+      {
+        "card_id": "HERO_11aw",
+        "name": "亡灵卡特拉娜",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 2,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 26,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 3,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 26,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 4,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 1,
+    "opp_deck_remaining": 25,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 5,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 2,
+    "opp_deck_remaining": 25,
+    "actual_opp_plays": [
+      {
+        "card_id": "EDR_814",
+        "name": "感染吐息",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 6,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 2,
+    "opp_deck_remaining": 24,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 7,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 3,
+    "opp_deck_remaining": 23,
+    "actual_opp_plays": [
+      {
+        "card_id": "RLK_708",
+        "name": "堕寒男爵",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 8,
+    "opp_hand_count": 8,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 3,
+    "opp_deck_remaining": 22,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 9,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 4,
+    "opp_deck_remaining": 21,
+    "actual_opp_plays": [
+      {
+        "card_id": "TLC_EVENT_402",
+        "name": "末日使者之杖",
+        "source": "deck"
+      }
+    ]
+  },
+  {
+    "turn": 10,
+    "opp_hand_count": 8,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 4,
+    "opp_deck_remaining": 20,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 11,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 7,
+    "opp_deck_remaining": 20,
+    "actual_opp_plays": [
+      {
+        "card_id": "TLC_255",
+        "name": "水晶养护工",
+        "source": "unknown"
+      },
+      {
+        "card_id": "TLC_COIN2",
+        "name": "幸运币",
+        "source": "generated"
+      },
+      {
+        "card_id": "CATA_780t",
+        "name": "奥妮克希亚的士兵",
+        "source": "generated"
+      }
+    ]
+  },
+  {
+    "turn": 12,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 7,
+    "opp_deck_remaining": 19,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 13,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 14,
+    "opp_deck_remaining": 17,
+    "actual_opp_plays": [
+      {
+        "card_id": "HERO_11bpt",
+        "name": "脆弱的食尸鬼",
+        "source": "generated"
+      },
+      {
+        "card_id": "EDR_813at",
+        "name": "蚂蚁残躯",
+        "source": "generated"
+      },
+      {
+        "card_id": "EDR_810",
+        "name": "丑恶的残躯",
+        "source": "unknown"
+      },
+      {
+        "card_id": "EDR_813",
+        "name": "病变虫群",
+        "source": "unknown"
+      },
+      {
+        "card_id": "END_004",
+        "name": "愤怒残魂",
+        "source": "deck"
+      },
+      {
+        "card_id": "CORE_RLK_066",
+        "name": "鲜血魔术师",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 14,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 14,
+    "opp_deck_remaining": 16,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 15,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 19,
+    "opp_deck_remaining": 16,
+    "actual_opp_plays": [
+      {
+        "card_id": "CATA_780",
+        "name": "着魔的技师",
+        "source": "deck"
+      },
+      {
+        "card_id": "NEW1_018e",
+        "name": "财迷心窍",
+        "source": "generated"
+      },
+      {
+        "card_id": "CORE_NEW1_018",
+        "name": "血帆袭击者",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 16,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 19,
+    "opp_deck_remaining": 15,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 17,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 25,
+    "opp_deck_remaining": 15,
+    "actual_opp_plays": [
+      {
+        "card_id": "CORE_RLK_062",
+        "name": "蛛魔护群守卫",
+        "source": "unknown"
+      },
+      {
+        "card_id": "CATA_155e2",
+        "name": "奥妮克希亚之血",
+        "source": "generated"
+      }
+    ]
+  },
+  {
+    "turn": 18,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 25,
+    "opp_deck_remaining": 14,
+    "actual_opp_plays": []
+  },
+  {
+    "turn": 19,
+    "opp_hand_count": 6,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 30,
+    "opp_deck_remaining": 14,
+    "actual_opp_plays": [
+      {
+        "card_id": "CATA_155t",
+        "name": "奥妮克希亚之翼",
+        "source": "generated"
+      },
+      {
+        "card_id": "CATA_155t1",
+        "name": "奥妮克希亚之翼",
+        "source": "generated"
+      },
+      {
+        "card_id": "CATA_724",
+        "name": "缚风者",
+        "source": "unknown"
+      },
+      {
+        "card_id": "TLC_247",
+        "name": "原始剑齿豹",
+        "source": "unknown"
+      },
+      {
+        "card_id": "CATA_155",
+        "name": "复活的奥妮克希亚",
+        "source": "unknown"
+      }
+    ]
+  },
+  {
+    "turn": 20,
+    "opp_hand_count": 7,
+    "bayesian_top_deck": "?",
+    "bayesian_top_prob": 0.0,
+    "bayesian_locked": false,
+    "bayesian_initialized": false,
+    "known_hand_cards": [],
+    "opp_secrets": [],
+    "opp_known_cards_count": 30,
+    "opp_deck_remaining": 13,
+    "actual_opp_plays": []
+  }
+]

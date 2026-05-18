@@ -96,6 +96,7 @@ class GameEngine:
     设计原则:
     - MCTSEngine 在整个游戏生命周期内只创建一次，跨回合复用
     - BayesianOpponentModel 跨回合累积对手出牌证据
+    - 贝叶斯模型延迟初始化：对手职业未知时不创建模型，等待职业检测
     - UCT 选择策略是 MCTSEngine 内部的无状态函数 (uct.select_child)
     - 每次 search() 调用会创建新的 _SearchContext (root node, worlds, TT)，
       但引擎实例本身（config 等）保持不变
@@ -103,8 +104,10 @@ class GameEngine:
     用法::
 
         engine = GameEngine(params)
-        # 游戏开始时
-        engine.on_game_start(opp_class="ROGUE")
+        # 游戏开始时（对手职业可能未知）
+        engine.on_game_start(opp_class=None)  # 或 "ROGUE" 如果已知
+        # 对手职业后续检测到时
+        engine.on_opp_class_detected("ROGUE")
         # 每回合
         result = engine.search(state)
         # 游戏结束
@@ -136,6 +139,9 @@ class GameEngine:
         self._prev_opp_known: set = set()
         self._game_active: bool = False
         self._decision_count: int = 0
+        # 贝叶斯延迟初始化：等待对手职业检测
+        self._bayesian_pending: bool = False
+        self._pending_opp_dbf_ids: set = set()  # 职业未知期间缓存的对手术dbfId
 
     @property
     def mcts_engine(self):
@@ -153,29 +159,73 @@ class GameEngine:
         return self._config
 
     def on_game_start(self, opp_class: Optional[str] = None) -> None:
-        """游戏开始 — 初始化/重建贝叶斯模型。
+        """游戏开始 — 延迟初始化贝叶斯模型。
+
+        如果对手职业已知，立即创建带职业过滤的 BayesianOpponentModel。
+        如果对手职业未知，不创建模型（设为 None），等待 on_opp_class_detected()
+        被调用后再初始化。这样可以避免加载全职业卡组导致概率推断被其他职业污染。
 
         Args:
             opp_class: 对手职业（如 "ROGUE", "WARRIOR"），用于贝叶斯模型过滤。
+                       None 表示职业未知，等待后续检测。
         """
         from analysis.utils.bayesian_opponent import BayesianOpponentModel
 
-        if opp_class:
+        self._prev_opp_known = set()
+        self._pending_opp_dbf_ids = set()
+        self._game_active = True
+        self._decision_count = 0
+
+        if opp_class and opp_class != "UNKNOWN":
+            # 对手职业已知，立即初始化贝叶斯模型
             self._bayesian_model = BayesianOpponentModel(player_class=opp_class)
             self._opp_class = opp_class
+            self._bayesian_pending = False
             log.info(
-                "GameEngine: 新游戏开始, 对手职业=%s, %d archetypes",
+                "GameEngine: 新游戏开始, 对手职业=%s, %d archetypes (立即初始化)",
                 opp_class, len(self._bayesian_model.decks),
             )
         else:
-            self._bayesian_model = BayesianOpponentModel()
+            # 对手职业未知，延迟初始化贝叶斯模型
+            self._bayesian_model = None
             self._opp_class = None
-            log.info("GameEngine: 新游戏开始, 对手职业未知, %d archetypes",
-                     len(self._bayesian_model.decks))
+            self._bayesian_pending = True
+            log.info("GameEngine: 新游戏开始, 对手职业未知, 贝叶斯模型延迟初始化")
 
-        self._prev_opp_known = set()
-        self._game_active = True
-        self._decision_count = 0
+    def on_opp_class_detected(self, opp_class: str) -> None:
+        """对手职业被检测到 — 延迟初始化贝叶斯模型。
+
+        当 on_game_start 时对手职业未知，后续通过 GlobalTracker
+        检测到对手职业后调用此方法。会创建带职业过滤的 BayesianOpponentModel，
+        并回放之前缓存的对手 dbfId 证据。
+
+        Args:
+            opp_class: 检测到的对手职业（如 "ROGUE", "WARRIOR"）
+        """
+        if not self._bayesian_pending:
+            # 已经初始化过了（可能 on_game_start 时就已知道职业）
+            if self._opp_class == opp_class:
+                return  # 重复调用，忽略
+            # 职业发生了变化（不太可能，但防御性处理）
+            log.warning("GameEngine: 对手职业变更 %s → %s, 重新初始化贝叶斯模型",
+                        self._opp_class, opp_class)
+
+        from analysis.utils.bayesian_opponent import BayesianOpponentModel
+
+        self._bayesian_model = BayesianOpponentModel(player_class=opp_class)
+        self._opp_class = opp_class
+        self._bayesian_pending = False
+
+        log.info(
+            "GameEngine: 延迟初始化贝叶斯模型, 对手职业=%s, %d archetypes, 回放 %d 条缓存证据",
+            opp_class, len(self._bayesian_model.decks), len(self._pending_opp_dbf_ids),
+        )
+
+        # 回放缓存的对手 dbfId 证据
+        for dbf in self._pending_opp_dbf_ids:
+            self._bayesian_model.update(dbf)
+        self._prev_opp_known = self._pending_opp_dbf_ids.copy()
+        self._pending_opp_dbf_ids.clear()
 
     def on_game_end(self) -> None:
         """游戏结束 — 重置状态但保留引擎实例。"""
@@ -185,6 +235,9 @@ class GameEngine:
     def update_bayesian(self, opp_dbf_ids: set) -> List[dict]:
         """用新对手卡牌更新贝叶斯模型。
 
+        如果贝叶斯模型尚未初始化（对手职业未知），将 dbfId 缓存到
+        _pending_opp_dbf_ids，等 on_opp_class_detected() 后回放。
+
         Args:
             opp_dbf_ids: 当前已知的对手 dbfId 集合
 
@@ -193,6 +246,15 @@ class GameEngine:
         """
         new_cards = opp_dbf_ids - self._prev_opp_known
         results = []
+
+        if self._bayesian_model is None:
+            # 贝叶斯模型尚未初始化（对手职业未知），缓存证据
+            self._pending_opp_dbf_ids.update(new_cards)
+            self._prev_opp_known = opp_dbf_ids
+            log.debug("贝叶斯模型未初始化, 缓存 %d 条新证据 (总计 %d)",
+                      len(new_cards), len(self._pending_opp_dbf_ids))
+            return results
+
         for dbf in new_cards:
             self._bayesian_model.update(dbf)
             card_name = self._bayesian_model.card_name(dbf)
