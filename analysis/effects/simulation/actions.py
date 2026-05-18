@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""simulation.py — Action simulation (apply_action) for the search engine.
+"""actions.py — Game action simulation (apply_action).
 
 Contains the core state transition logic: play card, attack, hero power,
 end turn, and draw mechanics."""
@@ -10,7 +10,7 @@ import dataclasses
 import logging
 from typing import TYPE_CHECKING
 
-from analysis.search.abilities.actions import Action, ActionType
+from analysis.effects.types import Action, ActionKind as ActionType
 
 if TYPE_CHECKING:
     from analysis.card.engine.state import GameState
@@ -24,7 +24,7 @@ from analysis.data.card_effects import (
 )
 from analysis.card.constants.hs_enums import COIN_CARD_IDS as _COIN_CARD_IDS
 from analysis.search.aura_engine import recompute_auras
-from analysis.search.battlecry_dispatcher import dispatch_battlecry
+from analysis.effects.orchestration.battlecry import dispatch_battlecry
 from analysis.card.engine.mechanics.choose_one import is_choose_one, resolve_choose_one
 from analysis.search.colossal import parse_colossal_value, summon_colossal_appendages
 from analysis.search.corpse import (
@@ -35,17 +35,17 @@ from analysis.search.corpse import (
 )
 from analysis.search.corrupt import check_corrupt_upgrade
 from analysis.search.deathrattle import resolve_deaths
-from analysis.search.dormant import is_dormant_card, apply_dormant, tick_dormant
+from analysis.card.engine.mechanics.dormant import is_dormant_card, apply_dormant, tick_dormant
 from analysis.search.herald import check_herald, apply_herald
 from analysis.search.imbue import apply_imbue, apply_hero_power
 from analysis.search.kindred import apply_kindred, set_kindred_double
-from analysis.search.location import activate_location, tick_location_cooldowns
+from analysis.card.engine.mechanics.location import activate_location, tick_location_cooldowns
 from analysis.search.outcast import check_outcast, apply_outcast_bonus
-from analysis.search.quest import parse_quest, track_quest_progress
-from analysis.search.shatter import check_shatter_on_draw
+from analysis.card.engine.mechanics.quest import parse_quest, track_quest_progress
+from analysis.card.engine.mechanics.shatter import check_shatter_on_draw
 from analysis.search.trigger_system import TriggerDispatcher
-from analysis.search.secret_triggers import check_secrets
-from analysis.utils.spell_simulator import resolve_effects
+from analysis.card.engine.mechanics.secret import check_secrets
+from analysis.effects.orchestration.spell import resolve_effects
 
 log = logging.getLogger(__name__)
 
@@ -55,9 +55,21 @@ _PREP_CARD_IDS = frozenset({"CS2_033"})
 _DEATH_SHADOW_CARD_IDS = frozenset({"CORE_RLK_567", "RLK_567"})
 
 
+def _extract_number_after(text: str, keyword: str) -> int:
+    idx = text.find(keyword)
+    if idx < 0:
+        return 0
+    after = text[idx + len(keyword):].strip()
+    for part in after.split():
+        cleaned = part.strip(".,;:!?)")
+        if cleaned.isdigit():
+            return int(cleaned)
+    return 0
+
+
 def _trigger_minion_on_spell_cast(s):
     """After casting a spell, check friendly minions for ON_SPELL_CAST triggers."""
-    from analysis.search.abilities.parser import AbilityParser
+    from analysis.effects.parser.legacy_ability_parser import AbilityParser
     from analysis.card.abilities.definition import AbilityTrigger
 
     for m in s.board:
@@ -84,7 +96,7 @@ def _trigger_location_spell_react(s, card):
 
     Uses abilities executor to detect spellSchool-based cooldown resets.
     """
-    from analysis.search.abilities.parser import AbilityParser
+    from analysis.effects.parser.legacy_ability_parser import AbilityParser
     from analysis.card.abilities.definition import AbilityTrigger
 
     spell_school = getattr(card, "spell_school", "") or ""
@@ -113,7 +125,7 @@ def _trigger_location_spell_react(s, card):
 
 def _apply_text_cost_reduction(card, hand, card_idx, current_cost):
     """Apply passive text-based cost reductions via abilities system."""
-    from analysis.search.abilities.parser import AbilityParser
+    from analysis.effects.parser.legacy_ability_parser import AbilityParser
     from analysis.card.abilities.definition import AbilityTrigger, EffectKind
 
     abilities = getattr(card, 'abilities', [])
@@ -205,7 +217,6 @@ def _apply_play_card(s, action: Action):
     if hp_cost > 0:
         # Guard: hero must have enough HP to pay the cost (min 1 HP remaining)
         if s.hero.hp <= hp_cost:
-            # Can't pay health cost — skip this card play
             return s
         s.hero.hp -= hp_cost
 
@@ -213,14 +224,12 @@ def _apply_play_card(s, action: Action):
     corpse_effects = parse_corpse_effects(card_text)
     for ce in corpse_effects:
         if not ce.is_optional and s.corpses < ce.cost:
-            # Mandatory corpse cost but can't afford — skip this play
             return s
 
-    # --- Opponent cost modifiers (e.g. Hysteria, Mutanus-type effects) ---
+    # --- Opponent cost modifiers ---
     etext_lower = (getattr(card, 'english_text', '') or card_text).lower()
     if "opponent" in etext_lower and "cost" in etext_lower and "more" in etext_lower:
-        from analysis.search.abilities.extractors import extract_number_after
-        amt = extract_number_after(etext_lower, "more")
+        amt = _extract_number_after(etext_lower, "more")
         if amt > 0:
             if "spell" in etext_lower:
                 s.opponent.opp_cost_modifiers.append(("opp_spell_increase", amt, "next_spell"))
@@ -285,7 +294,7 @@ def _apply_play_card(s, action: Action):
 
 def _play_location(s, card):
     """Handle LOCATION card play — add to locations list on board."""
-    from analysis.search.location import Location
+    from analysis.card.engine.mechanics.location import Location
     loc = Location(
         dbf_id=getattr(card, 'dbf_id', 0),
         name=card.name,
@@ -314,7 +323,6 @@ def _play_minion(s, card, action: Action, outcast_active: bool, card_idx: int):
         s = summon_colossal_appendages(s, new_minion, card, pos, s.herald_count)
 
     s = apply_kindred(s, card)
-    card_text = getattr(card, "text", "") or ""
     card_text_en = getattr(card, 'english_text', '') or ''
     if "kindred" in card_text_en.lower() and "twice" in card_text_en.lower():
         s = set_kindred_double(s)

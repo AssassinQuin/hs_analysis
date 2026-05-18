@@ -6,9 +6,9 @@ Batch 2: Battlecry effect parsing and application.
 
 import pytest
 
-from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
-from analysis.models.card import Card
-from analysis.search.battlecry_dispatcher import BattlecryDispatcher, dispatch_battlecry
+from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
+from analysis.card.models.card import Card
+from analysis.effects.orchestration.battlecry import BattlecryDispatcher, dispatch_battlecry
 
 
 # ===================================================================
@@ -181,7 +181,7 @@ class TestBattlecryExtraEffects:
 
     def test_silence_enemy(self, fresh_state, dispatcher):
         enemy = Minion(name="Enemy", attack=5, health=5, max_health=5,
-                       has_taunt=True, has_divine_shield=True, owner="enemy")
+                       keywords={'TAUNT', 'DIVINE_SHIELD'}, owner="enemy")
         fresh_state.opponent.board.append(enemy)
         card = _bc_card("战吼：沉默一个随从")
         minion = Minion(name="Test", attack=2, health=2, max_health=2)

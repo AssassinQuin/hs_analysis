@@ -19,7 +19,7 @@ from analysis.watcher.global_tracker import (
     KnownCard,
 )
 from analysis.watcher.state_bridge import StateBridge
-from analysis.search.game_state import GameState, OpponentState
+from analysis.card.engine.state import GameState, OpponentState
 from analysis.utils.bayesian_opponent import BayesianOpponentModel
 
 

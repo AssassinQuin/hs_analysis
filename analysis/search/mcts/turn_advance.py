@@ -196,9 +196,9 @@ def _simulate_opponent_turn(state: GameState) -> GameState:
 def _simulate_opponent_turn_impl(state: GameState) -> GameState:
     """Implementation of full opponent turn simulation."""
     from analysis.search.perspective_swap import swap_perspective, swap_back
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
-    from analysis.search.abilities.simulation import apply_action
-    from analysis.search.abilities.actions import ActionType
+    from analysis.effects.rules.enumeration import enumerate_legal_actions
+    from analysis.effects.simulation.actions import apply_action
+    from analysis.effects.types import ActionKind as ActionType
     from analysis.search.sim_logger import get_sim_logger
     from analysis.card.engine.state import GameState
 
@@ -225,7 +225,7 @@ def _simulate_opponent_turn_impl(state: GameState) -> GameState:
     opp_state = _try_hero_power(opp_state, perspective="opponent")
 
     # --- Step 5: End turn cleanup (in opponent perspective) ---
-    from analysis.search.abilities.actions import Action
+    from analysis.effects.types import Action
     opp_state = apply_action(opp_state, Action(action_type=ActionType.END_TURN))
 
     # --- Step 6: Swap back to our perspective ---
@@ -315,9 +315,9 @@ def _greedy_play_with_chains(
     Returns:
         Modified game state after greedy play.
     """
-    from analysis.search.abilities.actions import ActionType
-    from analysis.search.abilities.simulation import apply_action
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
+    from analysis.effects.types import ActionKind as ActionType
+    from analysis.effects.simulation.actions import apply_action
+    from analysis.effects.rules.enumeration import enumerate_legal_actions
     from analysis.search.sim_logger import get_sim_logger
     from analysis.search.deathrattle import resolve_deaths
 
@@ -412,9 +412,9 @@ def _play_chain(
     Returns:
         Modified game state after chain play.
     """
-    from analysis.search.abilities.actions import ActionType
-    from analysis.search.abilities.simulation import apply_action
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
+    from analysis.effects.types import ActionKind as ActionType
+    from analysis.effects.simulation.actions import apply_action
+    from analysis.effects.rules.enumeration import enumerate_legal_actions
     from analysis.search.sim_logger import get_sim_logger
     from analysis.search.deathrattle import resolve_deaths
 
@@ -500,9 +500,9 @@ def _greedy_attacks(state: GameState, max_attacks: int = 7, perspective: str = "
     3. Face damage if no taunts
     4. Attack taunts if forced
     """
-    from analysis.search.abilities.actions import ActionType
-    from analysis.search.abilities.simulation import apply_action
-    from analysis.search.abilities.enumeration import enumerate_legal_actions
+    from analysis.effects.types import ActionKind as ActionType
+    from analysis.effects.simulation.actions import apply_action
+    from analysis.effects.rules.enumeration import enumerate_legal_actions
     from analysis.search.sim_logger import get_sim_logger
 
     sim_log = get_sim_logger()
@@ -571,8 +571,8 @@ def _greedy_self_attacks(state: GameState) -> GameState:
 
 def _try_hero_power(state: GameState, perspective: str = "self") -> GameState:
     """Try using hero power if it seems beneficial."""
-    from analysis.search.abilities.actions import Action, ActionType
-    from analysis.search.abilities.simulation import apply_action
+    from analysis.effects.types import Action, ActionKind as ActionType
+    from analysis.effects.simulation.actions import apply_action
     from analysis.search.sim_logger import get_sim_logger
 
     sim_log = get_sim_logger()
@@ -674,7 +674,7 @@ def _pick_best_play(playable: list, state: GameState):
         return None
 
     def _play_value(a):
-        from analysis.search.abilities.actions import ActionType
+        from analysis.effects.types import ActionKind as ActionType
         idx = a.card_index
         if 0 <= idx < len(state.hand):
             card = state.hand[idx]
@@ -725,7 +725,7 @@ def _pick_best_attack(attacks: list, state: GameState):
         return None
 
     def _attack_value(a):
-        from analysis.search.abilities.actions import ActionType
+        from analysis.effects.types import ActionKind as ActionType
         tgt_idx = a.target_index
         src_idx = a.source_index
 
@@ -772,7 +772,7 @@ def _pick_best_attack(attacks: list, state: GameState):
 
 def _get_card_name(state: GameState, action) -> str:
     """Get the name of the card being played."""
-    from analysis.search.abilities.actions import ActionType
+    from analysis.effects.types import ActionKind as ActionType
     if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
         idx = action.card_index
         if 0 <= idx < len(state.hand):
@@ -782,7 +782,7 @@ def _get_card_name(state: GameState, action) -> str:
 
 def _get_card_cost(state: GameState, action) -> int:
     """Get the effective cost of the card being played."""
-    from analysis.search.abilities.actions import ActionType
+    from analysis.effects.types import ActionKind as ActionType
     if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
         idx = action.card_index
         if 0 <= idx < len(state.hand):
@@ -793,7 +793,7 @@ def _get_card_cost(state: GameState, action) -> int:
 
 def _describe_target(state: GameState, action) -> str:
     """Describe the target of an action."""
-    from analysis.search.abilities.actions import ActionType
+    from analysis.effects.types import ActionKind as ActionType
     if action.action_type == ActionType.PLAY_WITH_TARGET:
         tgt_idx = action.target_index
         if tgt_idx == 0:

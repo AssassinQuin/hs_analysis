@@ -87,7 +87,7 @@ class PredictionResult:
 
 # ── 条件效果规则 ──────────────────────────────────────────────
 
-from analysis.constants.hs_enums import CONDITIONAL_HOLDING_RULES as _CONDITIONAL_RULES
+from analysis.card.constants.hs_enums import CONDITIONAL_HOLDING_RULES as _CONDITIONAL_RULES
 
 
 # ── 动态手牌预测引擎 ──────────────────────────────────────────

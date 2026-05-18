@@ -44,8 +44,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tracker.log_monitor import CoreLogMonitor
 from analysis.watcher.state_bridge import StateBridge
 from analysis.search.engine_adapter import GameEngine, UnifiedSearchResult
-from analysis.search.abilities.enumeration import enumerate_legal_actions
-from analysis.search.abilities.actions import ActionType
+from analysis.effects.rules.enumeration import enumerate_legal_actions
+from analysis.effects.types import ActionKind as ActionType
 from analysis.utils.score_provider import load_scores_into_hand
 from hearthstone.enums import GameTag, Zone as HZone, CardType as HCardType
 

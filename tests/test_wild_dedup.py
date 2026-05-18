@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -11,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from analysis.data.card_data import CardDB
+from analysis.card.data.card_data import CardDB
 
 
 def _make_data_dir(tmp: Path, standard_cards=None, wild_cards=None):
@@ -51,7 +52,7 @@ def _make_data_dir(tmp: Path, standard_cards=None, wild_cards=None):
 
 def _build_wild_only(data_dir: Path, output_path: Path) -> dict:
     """Build wild-only cards from HSJSON data (inlined from deleted build_wild_db)."""
-    from analysis.data.card_data import STANDARD_SETS, _clean_text
+    from analysis.card.data.card_data import STANDARD_SETS
     from analysis.utils import load_json
 
     zh_path = data_dir / "zhCN" / "cards.collectible.json"
@@ -84,7 +85,7 @@ def _build_wild_only(data_dir: Path, output_path: Path) -> dict:
             "cardClass": zh.get("cardClass", "NEUTRAL"),
             "race": zh.get("race", ""),
             "rarity": zh.get("rarity", ""),
-            "text": _clean_text(text_raw),
+            "text": re.sub(r"\s+", "", re.sub(r"\[x\]", "", re.sub(r"[$#](\d+)", r"\1", re.sub(r"</?[^>]+>", "", text_raw or "")), flags=re.IGNORECASE)).strip(),
             "mechanics": zh.get("mechanics", []),
             "set": card_set,
             "format": "wild",

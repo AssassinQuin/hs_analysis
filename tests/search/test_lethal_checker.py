@@ -4,7 +4,7 @@
 import time
 import pytest
 
-from analysis.search.game_state import (
+from analysis.card.engine.state import (
     GameState,
     Minion,
     HeroState,
@@ -12,7 +12,7 @@ from analysis.search.game_state import (
     OpponentState,
     Weapon,
 )
-from analysis.models.card import Card
+from analysis.card.models.card import Card
 from analysis.card.abilities.definition import ActionType
 from analysis.search.lethal_checker import check_lethal, max_damage_bound
 
@@ -89,7 +89,7 @@ def test_lethal_with_taunt():
         opponent=OpponentState(
             hero=HeroState(hp=5),
             board=[
-                Minion(name="Taunt", attack=1, health=3, max_health=3, has_taunt=True)
+                Minion(name="Taunt", attack=1, health=3, max_health=3, keywords={'TAUNT'})
             ],
         ),
     )
@@ -110,7 +110,7 @@ def test_lethal_with_taunt():
         opponent=OpponentState(
             hero=HeroState(hp=5),
             board=[
-                Minion(name="Taunt", attack=1, health=3, max_health=3, has_taunt=True)
+                Minion(name="Taunt", attack=1, health=3, max_health=3, keywords={'TAUNT'})
             ],
         ),
     )
@@ -140,7 +140,7 @@ def test_timeout():
                     attack=i + 1,
                     health=10,
                     max_health=10,
-                    has_taunt=True,
+                    keywords={'TAUNT'},
                 )
                 for i in range(7)
             ],

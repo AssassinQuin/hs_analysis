@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from analysis.search.abilities.actions import ActionType
+from analysis.effects.types import ActionKind as ActionType
 from analysis.card.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, SCHOOL_ZH_MAP as _SPELL_SCHOOL_MAP
 
 _QUEST_THRESHOLD_EN = re.compile(r'(\d+)\s*(?:cards?|spells?|minions?)')

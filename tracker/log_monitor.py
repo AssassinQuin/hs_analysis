@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 from analysis.watcher.game_tracker import GameTracker, EntityCache
 from analysis.watcher.global_tracker import GlobalTracker
-from analysis.constants.hs_enums import (
+from analysis.card.constants.hs_enums import (
     ZONE_PLAY, ZONE_DECK, ZONE_HAND, ZONE_GRAVEYARD,
     ZONE_SETASIDE, ZONE_SECRET,
     CT_HERO, CT_MINION, CT_SPELL, CT_ENCHANTMENT,

@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-"""battlecry_dispatcher.py — Battlecry effect dispatcher for Hearthstone AI.
+"""battlecry.py — Battlecry effect dispatcher for Hearthstone AI.
 
-Parses card text for battlecry (战吼) effects and applies them to GameState.
+Parses card text for battlecry effects and applies them to GameState.
 Uses EffectParser from abilities for text parsing and executor primitives
 for damage/heal/silence application.
 
 Orchestration layer (Layer 3): handles battlecry-specific logic like
 Brann doubling, target selection, and weapon equip. Delegates effect
 execution to abilities/executor primitives.
-
-Usage:
-    python3 -m analysis.search.battlecry_dispatcher          # run self-test
 """
 
 from __future__ import annotations
@@ -22,12 +19,14 @@ from typing import List, Optional, Tuple
 from analysis.card.engine.state import GameState, Minion, HeroState
 from analysis.card.models.card import Card
 from analysis.evaluators.composite import target_selection_eval
-from analysis.search.abilities.effect_parser import EffectParser
-from analysis.search.abilities.executor import (
-    _apply_damage_to_hero,
-    _apply_damage_to_minion,
-    _silence_minion,
-    _apply_keyword,
+from analysis.effects.parser.legacy_adapter import EffectParser
+from analysis.effects.primitives.damage import (
+    apply_damage_to_hero,
+    apply_damage_to_minion,
+)
+from analysis.effects.primitives.modify import (
+    apply_silence_to_minion,
+    apply_keyword,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,11 +36,8 @@ logger = logging.getLogger(__name__)
 # Battlecry text extraction
 # ===================================================================
 
-# Pattern to extract battlecry text: "战吼：..." or "战吼:..."
 _BATTLECRY_PATTERN_EN = re.compile(r"Battlecry[：:]\s*(.+?)(?:[,.]|$)", re.DOTALL | re.IGNORECASE)
-_BATTLECRY_PATTERN = re.compile(r'战吼[：:]\s*(.+?)(?:，|$)', re.DOTALL)
 
-_DESTROY_MINION_CN = re.compile(r'消灭.*?随从')
 _FREEZE_EN = re.compile(r"Freeze\s+(?:a|an|the)?\s*(?:enemy|minion)", re.IGNORECASE)
 _SILENCE_EN = re.compile(r"Silence\s+(?:a|an|the)?\s*(?:enemy|minion)", re.IGNORECASE)
 _DIVINE_SHIELD_EN = re.compile(r"Give.*?Divine\s+Shield", re.IGNORECASE)
@@ -50,15 +46,12 @@ _RUSH_EN = re.compile(r"Give.*?Rush", re.IGNORECASE)
 _DISCOVER_EN = re.compile(r"Discover\s+(?:a\s+)?", re.IGNORECASE)
 
 _BATTLECRY_CHECKS = [
-    ('destroy_minion', lambda t: bool(_DESTROY_MINION_CN.search(t))),
-    ('freeze_target', lambda t: bool(_FREEZE_EN.search(t)) or '冻结' in t),
-    ('silence', lambda t: bool(_SILENCE_EN.search(t)) or '沉默' in t),
-    ('give_divine_shield', lambda t: bool(_DIVINE_SHIELD_EN.search(t)) or bool(re.search(r'获得?圣盾', t))),
-    ('give_taunt', lambda t: bool(_TAUNT_EN.search(t)) or bool(re.search(r'获得?嘲讽', t))),
-    ('give_charge', lambda t: bool(re.search(r'获得?冲锋', t))),
-    ('give_rush', lambda t: bool(_RUSH_EN.search(t)) or bool(re.search(r'获得?突袭', t))),
-    ('discover', lambda t: bool(_DISCOVER_EN.search(t)) or '发现' in t),
-    ('copy_minion', lambda t: bool(re.search(r'复制.*?随从', t))),
+    ('freeze_target', lambda t: bool(_FREEZE_EN.search(t))),
+    ('silence', lambda t: bool(_SILENCE_EN.search(t))),
+    ('give_divine_shield', lambda t: bool(_DIVINE_SHIELD_EN.search(t))),
+    ('give_taunt', lambda t: bool(_TAUNT_EN.search(t))),
+    ('give_rush', lambda t: bool(_RUSH_EN.search(t))),
+    ('discover', lambda t: bool(_DISCOVER_EN.search(t))),
 ]
 
 
@@ -82,8 +75,6 @@ class BattlecryDispatcher:
             return state
 
         bc_match = _BATTLECRY_PATTERN_EN.search(card_text)
-        if not bc_match:
-            bc_match = _BATTLECRY_PATTERN.search(card_text)
         if not bc_match:
             return state
 
@@ -111,7 +102,7 @@ class BattlecryDispatcher:
             if m is played_minion:
                 continue
             name = (getattr(m, 'name', '') or '').lower()
-            if 'brann' in name or '布莱恩' in name:
+            if 'brann' in name:
                 return True
             for ench in getattr(m, 'enchantments', []) or []:
                 etype = getattr(ench, 'trigger_effect', '') or ''
@@ -169,12 +160,12 @@ class BattlecryDispatcher:
 
         elif effect_type == 'random_damage':
             amount = params
-            _apply_damage_to_hero(s.opponent.hero, amount)
+            apply_damage_to_hero(s.opponent.hero, amount)
 
         elif effect_type == 'aoe_damage':
             amount = params
             for m in s.opponent.board:
-                _apply_damage_to_minion(m, amount)
+                apply_damage_to_minion(m, amount)
 
         elif effect_type == 'draw':
             count = params
@@ -228,17 +219,17 @@ class BattlecryDispatcher:
     def _apply_damage_to_target(state: GameState, target: str, amount: int) -> None:
         """Apply damage to a target resolved as string identifier."""
         if target == 'enemy_hero':
-            _apply_damage_to_hero(state.opponent.hero, amount)
+            apply_damage_to_hero(state.opponent.hero, amount)
         elif target == 'friendly_hero':
-            _apply_damage_to_hero(state.hero, amount)
+            apply_damage_to_hero(state.hero, amount)
         elif target.startswith('enemy_minion:'):
             idx = int(target.split(':')[1])
             if idx < len(state.opponent.board):
-                _apply_damage_to_minion(state.opponent.board[idx], amount)
+                apply_damage_to_minion(state.opponent.board[idx], amount)
         elif target.startswith('friendly_minion:'):
             idx = int(target.split(':')[1])
             if idx < len(state.board):
-                _apply_damage_to_minion(state.board[idx], amount)
+                apply_damage_to_minion(state.board[idx], amount)
 
     def _apply_extra_effects(
         self,
@@ -249,35 +240,35 @@ class BattlecryDispatcher:
         """Apply battlecry-specific effects using executor primitives."""
         s = state
 
-        if _FREEZE_EN.search(bc_text) or '冻结' in bc_text:
+        if _FREEZE_EN.search(bc_text):
             if s.opponent.board:
                 target = self._pick_damage_target(s)
                 if target.startswith('enemy_minion:'):
                     idx = int(target.split(':')[1])
                     s.opponent.board[idx].frozen_until_next_turn = True
 
-        if _DIVINE_SHIELD_EN.search(bc_text) or re.search(r'获得?圣盾', bc_text):
+        if _DIVINE_SHIELD_EN.search(bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
-                _apply_keyword(s.board[idx], 'DIVINE_SHIELD')
+                apply_keyword(s.board[idx], 'DIVINE_SHIELD')
 
-        if _TAUNT_EN.search(bc_text) or re.search(r'获得?嘲讽', bc_text):
+        if _TAUNT_EN.search(bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
-                _apply_keyword(s.board[idx], 'TAUNT')
+                apply_keyword(s.board[idx], 'TAUNT')
 
-        if _RUSH_EN.search(bc_text) or re.search(r'获得?突袭', bc_text):
+        if _RUSH_EN.search(bc_text):
             idx = self._find_minion_index(s, minion)
             if idx >= 0:
-                _apply_keyword(s.board[idx], 'RUSH')
+                apply_keyword(s.board[idx], 'RUSH')
 
-        if _SILENCE_EN.search(bc_text) or '沉默' in bc_text:
+        if _SILENCE_EN.search(bc_text):
             if s.opponent.board:
                 target_idx = self._pick_destroy_target(s)
                 if target_idx is not None:
-                    _silence_minion(s.opponent.board[target_idx])
+                    apply_silence_to_minion(s.opponent.board[target_idx])
 
-        if _DISCOVER_EN.search(bc_text) or '发现' in bc_text:
+        if _DISCOVER_EN.search(bc_text):
             try:
                 from analysis.search.discover import resolve_discover
                 hero_class = getattr(s, 'hero', None)
@@ -297,35 +288,30 @@ class BattlecryDispatcher:
     # Equip weapon from battlecry
     # ---------------------------------------------------------------
 
-    _EQUIP_WEAPON_CN = re.compile(r'装备一把(\d+)/(\d+)的?\w*')
     _EQUIP_WEAPON_EN = re.compile(r'Equip\s+a\s+(\d+)/(\d+)', re.IGNORECASE)
-    _HOLDING_RACE_CN = re.compile(r'手牌中有(\w+?)牌')
 
     def _apply_equip_weapon(self, state: GameState, bc_text: str) -> GameState:
         """Handle battlecry weapon equip effects.
 
-        Patterns:
-        - "装备一把2/2的剑"
-        - "Equip a 2/2 Sword"
-        With condition: "如果你的手牌中有龙牌" / "if you're holding a Dragon"
+        Pattern: "Equip a 2/2 Sword"
         """
-        m = self._EQUIP_WEAPON_CN.search(bc_text)
-        if not m:
-            m = self._EQUIP_WEAPON_EN.search(bc_text)
+        m = self._EQUIP_WEAPON_EN.search(bc_text)
         if not m:
             return state
 
         atk = int(m.group(1))
         dur = int(m.group(2))
 
-        cond = self._HOLDING_RACE_CN.search(bc_text)
-        if cond:
-            from analysis.search.abilities.simulation import _RACE_CN_TO_EN
-            race_cn = cond.group(1)
-            race_en = _RACE_CN_TO_EN.get(race_cn, race_cn.upper())
+        # Check for race-holding condition in English text
+        race_holding = re.search(
+            r"if\s+you(?:'re)?\s+(?:holding\s+a|have\s+a)\s+(\w+)",
+            bc_text, re.IGNORECASE,
+        )
+        if race_holding:
+            race_name = race_holding.group(1).upper()
             has_race = any(
-                getattr(h, 'race', '').upper() == race_en or
-                race_en in [r.upper() for r in (getattr(h, 'races', None) or [])]
+                getattr(h, 'race', '').upper() == race_name or
+                race_name in [r.upper() for r in (getattr(h, 'races', None) or [])]
                 for h in state.hand
             )
             if not has_race:
@@ -460,16 +446,12 @@ def dispatch_battlecry_branches(
     discovered cards added to hand.
     """
     card_text = getattr(card, 'text', '') or ''
-    has_discover = (
-        _DISCOVER_EN.search(card_text) or '发现' in card_text
-    )
+    has_discover = bool(_DISCOVER_EN.search(card_text))
     if not has_discover:
         result = _default_dispatcher.dispatch(state, card, minion)
         return [(result, 1.0)]
 
     bc_match = _BATTLECRY_PATTERN_EN.search(card_text)
-    if not bc_match:
-        bc_match = _BATTLECRY_PATTERN.search(card_text)
     if not bc_match:
         result = _default_dispatcher.dispatch(state, card, minion)
         return [(result, 1.0)]
@@ -499,36 +481,3 @@ def dispatch_battlecry_branches(
         pass
 
     return [(s, 1.0)]
-
-
-# ===================================================================
-# Self-test
-# ===================================================================
-
-if __name__ == "__main__":
-    from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
-    from analysis.card.models.card import Card
-
-    state = GameState(hero=HeroState(hp=30), opponent=OpponentState(hero=HeroState(hp=30)))
-
-    # Test 1: Battlecry damage
-    state.opponent.board.append(Minion(name="Enemy", attack=5, health=5, max_health=5, owner="enemy"))
-    dmg_card = Card(dbf_id=1, name="Fire Elemental", cost=4, card_type="MINION",
-                    attack=3, health=3, text="战吼：造成3点伤害", mechanics=["BATTLECRY"])
-    minion = Minion(name="Fire Elemental", attack=3, health=3, max_health=3)
-    state.board.append(minion)
-
-    state = dispatch_battlecry(state, dmg_card, minion)
-    assert state.opponent.board[0].health == 2, f"Expected 2, got {state.opponent.board[0].health}"
-    print(f"Test 1 PASS: enemy minion HP = {state.opponent.board[0].health}")
-
-    # Test 2: No battlecry
-    state2 = GameState()
-    vanilla = Card(dbf_id=2, name="Yeti", cost=4, card_type="MINION",
-                   attack=4, health=5, text="", mechanics=[])
-    m2 = Minion(name="Yeti", attack=4, health=5, max_health=5)
-    state2.board.append(m2)
-    state2 = dispatch_battlecry(state2, vanilla, m2)
-    print("Test 2 PASS: no crash on vanilla card")
-
-    print("All self-tests passed!")

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from analysis.search.game_state import GameState, Minion, OpponentState, HeroState
-from analysis.search.battlecry_dispatcher import BattlecryDispatcher
+from analysis.card.engine.state import GameState, Minion, OpponentState, HeroState
+from analysis.effects.orchestration.battlecry import BattlecryDispatcher
 
 
 # ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ def state_with_enemies() -> GameState:
     state = GameState()
     state.opponent.hero = HeroState(hp=5)
     state.opponent.board = [
-        Minion(name="BigTaunt", attack=5, health=5, max_health=5, has_taunt=True),
+        Minion(name="BigTaunt", attack=5, health=5, max_health=5, keywords={'TAUNT'}),
         Minion(name="SmallGuy", attack=1, health=1, max_health=1),
     ]
     state.board = [

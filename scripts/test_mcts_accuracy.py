@@ -100,7 +100,7 @@ def extract_opponent_turns(log_path: str) -> List[Dict]:
     """
     from analysis.watcher.game_tracker import GameTracker
     from analysis.watcher.global_tracker import GlobalTracker
-    from analysis.constants.hs_enums import ZONE_HAND, ZONE_DECK, ZONE_PLAY
+    from analysis.card.constants.hs_enums import ZONE_HAND, ZONE_DECK, ZONE_PLAY
 
     # 先检测 controller
     _, game, friendly_idx = parse_game_fully(log_path)

@@ -21,7 +21,7 @@ from typing import Callable, Optional, TextIO
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-from analysis.search.abilities.actions import Action
+from analysis.effects.types import Action
 from analysis.search.engine_adapter import UnifiedSearchResult, GameEngine, create_engine
 from analysis.utils.score_provider import load_scores_into_hand
 from analysis.utils.bayesian_opponent import classify_card_playstyle

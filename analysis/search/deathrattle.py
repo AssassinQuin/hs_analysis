@@ -96,10 +96,8 @@ def _execute_abilities_deathrattle(
     position: int,
 ) -> GameState:
     """Execute deathrattle via unified abilities system (zero regex)."""
-    from analysis.search.abilities.parser import AbilityParser
+    from analysis.effects.parser.legacy_ability_parser import AbilityParser
     from analysis.card.abilities.definition import AbilityTrigger
-    from analysis.search.abilities.executor import execute_effects
-
     abilities = getattr(minion, 'abilities', [])
     if not abilities:
         card_ref = getattr(minion, 'card_ref', None)

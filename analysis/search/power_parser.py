@@ -115,7 +115,7 @@ def extract_game_state(game, player_index=0):
     for m in minion_entities:
         exhausted = bool(m.tags.get(GameTag.EXHAUSTED, 0))
         cant_attack = bool(m.tags.get(GameTag.CANT_ATTACK, 0))
-        minions.append(Minion(
+        _minion = Minion(
             dbf_id=0,
             name=m.card_id or "",
             attack=m.tags.get(GameTag.ATK, 0),
@@ -123,19 +123,32 @@ def extract_game_state(game, player_index=0):
             max_health=m.tags.get(GameTag.HEALTH, 1),
             cost=m.tags.get(GameTag.COST, 0),
             can_attack=not exhausted and not cant_attack,
-            has_divine_shield=bool(m.tags.get(GameTag.DIVINE_SHIELD, 0)),
-            has_taunt=bool(m.tags.get(GameTag.TAUNT, 0)),
-            has_stealth=bool(m.tags.get(GameTag.STEALTH, 0)),
-            has_windfury=bool(m.tags.get(GameTag.WINDFURY, 0)),
-            has_rush=bool(m.tags.get(GameTag.RUSH, 0)),
-            has_charge=bool(m.tags.get(GameTag.CHARGE, 0)),
-            has_poisonous=bool(m.tags.get(GameTag.POISONOUS, 0)),
-            has_lifesteal=bool(m.tags.get(GameTag.LIFESTEAL, 0)),
-            has_reborn=bool(m.tags.get(GameTag.REBORN, 0)),
-            has_immune=bool(m.tags.get(GameTag.IMMUNE, 0)),
-            frozen_until_next_turn=bool(m.tags.get(GameTag.FROZEN, 0)),
             owner="friendly",
-        ))
+        )
+        _tags = m.tags
+        if _tags.get(GameTag.DIVINE_SHIELD, 0):
+            _minion.has_divine_shield = True
+        if _tags.get(GameTag.TAUNT, 0):
+            _minion.has_taunt = True
+        if _tags.get(GameTag.STEALTH, 0):
+            _minion.has_stealth = True
+        if _tags.get(GameTag.WINDFURY, 0):
+            _minion.has_windfury = True
+        if _tags.get(GameTag.RUSH, 0):
+            _minion.has_rush = True
+        if _tags.get(GameTag.CHARGE, 0):
+            _minion.has_charge = True
+        if _tags.get(GameTag.POISONOUS, 0):
+            _minion.has_poisonous = True
+        if _tags.get(GameTag.LIFESTEAL, 0):
+            _minion.has_lifesteal = True
+        if _tags.get(GameTag.REBORN, 0):
+            _minion.has_reborn = True
+        if _tags.get(GameTag.IMMUNE, 0):
+            _minion.has_immune = True
+        if _tags.get(GameTag.FROZEN, 0):
+            _minion.frozen_until_next_turn = True
+        minions.append(_minion)
 
     # 提取手牌（仅卡牌ID）
     hand_entities = [

@@ -112,8 +112,8 @@ class OpponentSimulator:
                 _greedy_attacks,
                 _try_hero_power,
             )
-            from analysis.search.abilities.actions import Action, ActionType
-            from analysis.search.abilities.simulation import apply_action
+            from analysis.effects.types import Action, ActionKind as ActionType
+            from analysis.effects.simulation.actions import apply_action
             from analysis.search.sim_logger import get_sim_logger
 
             sim_log = get_sim_logger()

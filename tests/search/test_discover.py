@@ -27,7 +27,7 @@ from analysis.card.engine.mechanics.discover import (
 def card_db_warmup():
     """Pre-load the CardDB singleton once per session so pool generation
     tests don't each pay the DB loading cost."""
-    from analysis.data.card_data import get_db
+    from analysis.card.data.card_data import get_db
     db = get_db(load_xml=False)
     # Pre-warm the discover pool cache for MAGE (most common test class)
     db.discover_pool("MAGE")

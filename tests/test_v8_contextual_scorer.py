@@ -13,8 +13,8 @@ import json
 
 # migrated to tests/
 
-from analysis.search.game_state import GameState, HeroState, ManaState, OpponentState, Minion
-from analysis.models.card import Card
+from analysis.card.engine.state import GameState, HeroState, ManaState, OpponentState, Minion
+from analysis.card.models.card import Card
 from analysis.scorers.v8_contextual import V8ContextualScorer, get_scorer, reset_scorer
 
 

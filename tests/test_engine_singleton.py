@@ -86,7 +86,7 @@ class TestGameEngineSingleton:
     def test_multiple_searches_same_engine(self):
         """多次 search 使用同一个 MCTSEngine"""
         from analysis.search.engine_adapter import GameEngine
-        from analysis.search.game_state import GameState, HeroState, ManaState, OpponentState
+        from analysis.card.engine.state import GameState, HeroState, ManaState, OpponentState
 
         engine = GameEngine(params={"time_budget_ms": 200.0, "num_worlds": 2})
         engine.on_game_start()

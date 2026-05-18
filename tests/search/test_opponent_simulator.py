@@ -3,7 +3,7 @@
 
 import pytest
 
-from analysis.search.game_state import GameState, Minion, HeroState, OpponentState
+from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
 from analysis.search.opponent_simulator import OpponentSimulator, SimulatedOpponentTurn
 
 

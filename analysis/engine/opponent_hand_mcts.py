@@ -469,9 +469,9 @@ class OpponentTurnSimulator:
         Returns:
             SimulatedBehavior 模拟的对手行为
         """
-        from analysis.search.abilities.enumeration import enumerate_legal_actions
-        from analysis.search.abilities.simulation import apply_action
-        from analysis.search.abilities.actions import ActionType
+        from analysis.effects.rules.enumeration import enumerate_legal_actions
+        from analysis.effects.simulation.actions import apply_action
+        from analysis.effects.types import ActionKind as ActionType
 
         played_cards = []
         total_mana_spent = 0
@@ -529,8 +529,8 @@ class OpponentTurnSimulator:
         2. 场面价值（随从总属性更高的更好）
         3. 伤害效率（打脸伤害更高的更好）
         """
-        from analysis.search.abilities.actions import ActionType
-        from analysis.search.abilities.simulation import apply_action
+        from analysis.effects.types import ActionKind as ActionType
+        from analysis.effects.simulation.actions import apply_action
 
         if not actions:
             return None

@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from typing import List, TYPE_CHECKING
 
-from analysis.search.abilities.actions import Action, ActionType
+from analysis.effects.types import Action, ActionKind as ActionType
 
 if TYPE_CHECKING:
     from analysis.card.engine.state import GameState, Minion
@@ -28,7 +28,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
     for idx, card in enumerate(state.hand):
         tags = _probe_tags_for_card(state, card)
         eff_cost = state.mana.effective_cost(card)
-        from analysis.search.abilities.simulation import _apply_text_cost_reduction
+        from analysis.effects.simulation.actions import _apply_text_cost_reduction
         eff_cost = _apply_text_cost_reduction(card, state.hand, idx, eff_cost)
         if eff_cost > state.mana.available:
             continue
@@ -89,9 +89,9 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                     # 3. Targeted spell with no valid targets: CANNOT play
                     text = getattr(card, "text", "") or ""
 
-                    # Case 1: AOE — detect "所有/全部/all" + damage patterns
+                    # Case 1: AOE — detect "all" + damage patterns
                     is_aoe = bool(re.search(
-                        r"所有(?:敌方)?(?:随从|角色|敌人)|all\s+(?:enemies|minion)",
+                        r"all\s+(?:enemies|minion)",
                         text, re.IGNORECASE
                     ))
                     if is_aoe:
@@ -114,7 +114,7 @@ def enumerate_legal_actions(state: GameState) -> List[Action]:
                     has_target_keyword = any(
                         _re.search(kw, text, _re.IGNORECASE) for kw in _TARGETING_KEYWORDS
                     )
-                    # If spell has damage AND targeting keywords but no valid targets → cannot play
+                    # If spell has damage AND targeting keywords but no valid targets — cannot play
                     # Otherwise (no targeting keyword): no-target spell, can play
                     if not (has_damage and has_target_keyword):
                         actions.append(

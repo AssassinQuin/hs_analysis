@@ -341,7 +341,7 @@ class TestAggregateProbabilities:
     def test_seen_cards_not_in_output_when_fully_played(self):
         """已打出全部张数的卡牌不应出现在概率输出中"""
         from analysis.engine.opponent_hand_mcts import OpponentHandMCTS, HandWorld
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         mcts = OpponentHandMCTS()
 
@@ -365,7 +365,7 @@ class TestAggregateProbabilities:
     def test_probabilities_sum_to_reasonable_range(self):
         """概率值应在合理范围内"""
         from analysis.engine.opponent_hand_mcts import OpponentHandMCTS, HandWorld
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         mcts = OpponentHandMCTS()
 
@@ -397,7 +397,7 @@ class TestProbabilityDiscrimination:
         from analysis.engine.opponent_hand_mcts import (
             OpponentHandMCTS, ObservedBehavior, HandWorld, BehaviorMatcher,
         )
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         matcher = BehaviorMatcher()
         observed = ObservedBehavior(

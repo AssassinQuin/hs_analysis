@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from analysis.search.abilities.actions import Action
+from analysis.effects.types import Action
 
 log = logging.getLogger(__name__)
 

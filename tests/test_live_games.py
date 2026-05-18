@@ -20,7 +20,7 @@ from hearthstone.enums import GameTag, Zone as HZone
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
 from analysis.search.engine_adapter import UnifiedSearchResult, ActionProb, create_engine
-from analysis.search.abilities.actions import Action, ActionType
+from analysis.effects.types import Action, ActionKind as ActionType
 from analysis.watcher.decision_loop import DecisionPresenter
 from analysis.utils.score_provider import load_scores_into_hand
 
@@ -404,10 +404,10 @@ class TestDecisionPresenter:
     @staticmethod
     def _make_mock_state():
         """Create a minimal mock GameState for presenter tests."""
-        from analysis.search.game_state import (
+        from analysis.card.engine.state import (
             GameState, HeroState, ManaState, Minion, OpponentState,
         )
-        from analysis.models.card import Card
+        from analysis.card.models.card import Card
 
         state = GameState()
         state.hero = HeroState(hp=30, max_hp=30, armor=0, hero_class="WARRIOR")
@@ -418,7 +418,7 @@ class TestDecisionPresenter:
         ]
         state.board = [
             Minion(attack=3, health=2, max_health=2, cost=2, can_attack=True,
-                   has_taunt=False, has_divine_shield=False, card_id="CS2_120",
+                   card_id="CS2_120",
                    name="鱼人猎潮者"),
         ]
         state.turn_number = 5

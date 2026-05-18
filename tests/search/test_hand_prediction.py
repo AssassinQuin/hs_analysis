@@ -456,7 +456,7 @@ class TestDerivedCardTracking:
     def test_classify_source_deck(self):
         """从牌库出生的卡牌应被标记为 DECK。"""
         from analysis.watcher.global_tracker import GlobalTracker, CardSource
-        from analysis.constants.hs_enums import ZONE_DECK
+        from analysis.card.constants.hs_enums import ZONE_DECK
 
         tracker = GlobalTracker(our_controller=1, opp_controller=2)
         tracker.on_full_entity(
@@ -472,7 +472,7 @@ class TestDerivedCardTracking:
     def test_classify_source_generated(self):
         """从 SETASIDE 出生的卡牌应被标记为 GENERATED。"""
         from analysis.watcher.global_tracker import GlobalTracker, CardSource
-        from analysis.constants.hs_enums import ZONE_SETASIDE
+        from analysis.card.constants.hs_enums import ZONE_SETASIDE
 
         tracker = GlobalTracker(our_controller=1, opp_controller=2)
         tracker.on_full_entity(
@@ -591,7 +591,7 @@ class TestPowerLogScenarios:
         这张牌不应影响卡组概率计算。
         """
         from analysis.watcher.global_tracker import GlobalTracker, CardSource
-        from analysis.constants.hs_enums import ZONE_SETASIDE, ZONE_PLAY, ZONE_DECK
+        from analysis.card.constants.hs_enums import ZONE_SETASIDE, ZONE_PLAY, ZONE_DECK
 
         tracker = GlobalTracker(our_controller=1, opp_controller=2)
 
@@ -674,7 +674,7 @@ class TestPowerLogScenarios:
     def test_scenario_card_play_tracking(self):
         """场景: 对手打出的每张牌都应被追踪。"""
         from analysis.watcher.global_tracker import GlobalTracker
-        from analysis.constants.hs_enums import ZONE_PLAY, ZONE_DECK
+        from analysis.card.constants.hs_enums import ZONE_PLAY, ZONE_DECK
 
         tracker = GlobalTracker(our_controller=1, opp_controller=2)
 
