@@ -1108,6 +1108,34 @@ class CoreLogMonitor:
             logger.warning("_build_sampled_hand_cards failed: %s", e)
             return known_hand_ids
 
+    @staticmethod
+    def _dedup_known_cards(cards: list) -> list:
+        """去重 known_cards 列表：每个 card_id 只保留最后一条记录。
+
+        Controller correction 可能导致同一卡牌被多次录入。
+        使用反向遍历 + set 去重，保留末端（最新）条目。
+        """
+        seen = set()
+        result = []
+        # 反向遍历，保留最后出现的条目
+        for kc in reversed(cards):
+            if kc.card_id not in seen:
+                seen.add(kc.card_id)
+                result.append(kc)
+        result.reverse()
+        return result
+
+    @staticmethod
+    def _lookup_card_source(card_id: str, gt_state) -> str:
+        """从 opp_known_cards 查找卡牌来源，若无记录返回 'unknown'。"""
+        for kc in gt_state.opp_known_cards:
+            if kc.card_id == card_id:
+                return kc.source.value if hasattr(kc.source, "value") else str(kc.source)
+        # 检查衍生牌集合
+        if card_id in gt_state.opp_generated_seen:
+            return "generated"
+        return "unknown"
+
     def build_state_dict(self) -> dict:
         """构建游戏状态字典用于 UI 展示。"""
         # 确保所有新实体已桥接
@@ -1129,6 +1157,19 @@ class CoreLogMonitor:
             player_hand_cards, gt_state.player_hand_count,
         )
 
+        # 对手初始牌库回退: 如果追踪到的值为0（桥接时机问题），默认30
+        opp_initial_deck_size = gt_state.opp_initial_deck_size
+        if opp_initial_deck_size <= 0 and gt_state.opp_hero_class:
+            opp_initial_deck_size = 30
+            if gt_state.opp_deck_remaining > 0:
+                # 如果有已追踪的牌库剩余，推算初始大小
+                opp_initial_deck_size = max(
+                    30,
+                    gt_state.opp_deck_remaining
+                    + gt_state.opp_hand_count
+                    + len(gt_state.opp_graveyard_seen),
+                )
+
         return {
             "in_game": self.game_tracker.in_game,
             "turn": self.game_tracker.get_current_turn(),
@@ -1139,7 +1180,7 @@ class CoreLogMonitor:
             "opp_class_en": gt_state.opp_hero_class or "UNKNOWN",
             "opp_hand_count": opp_hand_count,
             "opp_deck_count": opp_deck_count,
-            "opp_initial_deck_size": gt_state.opp_initial_deck_size,
+            "opp_initial_deck_size": opp_initial_deck_size,
             "opp_secrets": list(gt_state.opp_secrets),
             "opp_weapon": gt_state.opp_weapon,
             "opp_weapon_atk": gt_state.opp_weapon_atk,
@@ -1180,10 +1221,16 @@ class CoreLogMonitor:
                     "conditional_evidence": kc.conditional_evidence,
                     "effect_triggered": kc.effect_triggered,
                 }
-                for kc in gt_state.opp_known_cards
+                for kc in self._dedup_known_cards(gt_state.opp_known_cards)
             ],
             "generated_cards": list(gt_state.opp_generated_seen),
-            "graveyard": list(gt_state.opp_graveyard_seen),
+            "graveyard": [
+                {
+                    "card_id": cid,
+                    "source": self._lookup_card_source(cid, gt_state),
+                }
+                for cid in gt_state.opp_graveyard_seen
+            ],
             "peeked_deck_cards": list(gt_state.opp_peeked_deck_cards),
             "hand_transforms": list(gt_state.opp_hand_transforms),
             "discarded_cards": list(gt_state.opp_discarded_cards),

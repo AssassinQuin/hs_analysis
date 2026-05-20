@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -184,7 +185,10 @@ class CardEffectInferenceEngine:
         # 2. 衍生牌推断
         self._infer_derived_cards(card_id, text, mechanics, turn)
 
-        # 3. 打出时机推断
+        # 3. 随机效果推断
+        self._infer_random_effects(card_id, text, mechanics, turn)
+
+        # 4. 打出时机推断
         self._infer_play_timing(card_id, card, turn)
 
     def _infer_conditional_hold(self, card_id: str, text: str, turn: int):
@@ -295,6 +299,119 @@ class CardEffectInferenceEngine:
                 turn=turn,
                 source_description=f"对手打出 {card_id}，可能产生 Discover 衍生牌 (1/3 概率每种)",
             ))
+
+    # Regex patterns for random effect detection
+    # Group 1 captures the entity type (enemy, friendly, etc.)
+    _RE_RANDOM_DAMAGE = re.compile(
+        r"(?:Deal|do|deal|造成)\s+\d+\s+damage\s+to\s+a\s+random\s+(enemy\s+\w+|friendly\s+\w+|\w+)",
+        re.IGNORECASE,
+    )
+    _RE_RANDOM_SUMMON = re.compile(
+        r"(?:Summon|summon|召唤|Call|call)\s+a\s+random\s+((?:\w+(?:\s+\w+)?\s+)?(?:minion|随从))",
+        re.IGNORECASE,
+    )
+    _RE_RANDOM_TARGET = re.compile(
+        r"(?:Give|give|deal|造成|restore|恢复)\s+(?:\d+\s+)?\w+\s+to\s+a\s+random\s+(enemy|friendly|\w+)",
+        re.IGNORECASE,
+    )
+    _RE_RANDOM_SPLIT = re.compile(
+        r"randomly\s+split|随机分配|divided\s+randomly",
+        re.IGNORECASE,
+    )
+    _RE_RANDOM_BUFF = re.compile(
+        r"(?:Give|give|赋予)\s+a\s+random\s+(?:friendly\s+)?(\w+)",
+        re.IGNORECASE,
+    )
+
+    def _infer_random_effects(self, card_id: str, text: str, mechanics: list, turn: int):
+        """推断随机效果（随机伤害/召唤/目标等）。
+
+        当对手打出带有随机效果的牌时记录该信息，
+        用于理解对手场面状态和手牌组成的不确定性。
+        """
+        if not text:
+            return
+
+        text_lower = text.lower()
+        random_type = None
+        random_detail = ""
+
+        # Check mechanics first for DISCOVER (already handled in _infer_derived_cards)
+        # Focus on RANDOM keyword and random targeting effects
+
+        # 1. Random damage — "Deal X damage to a random enemy minion"
+        m = self._RE_RANDOM_DAMAGE.search(text)
+        if m:
+            target = m.group(1).lower()
+            random_type = "random_damage"
+            random_detail = f"random damage targeting {target}"
+            self._inferences.append(InferenceResult(
+                inference_type="random_effect",
+                card_id=card_id,
+                probability=1.0,
+                turn=turn,
+                source_description=f"Random damage effect: {card_id} deals random damage to {target}",
+            ))
+
+        # 2. Random summon — "Summon a random minion"
+        m = self._RE_RANDOM_SUMMON.search(text)
+        if m:
+            random_type = "random_summon"
+            random_detail = "random summon"
+            self._inferences.append(InferenceResult(
+                inference_type="random_effect",
+                card_id=card_id,
+                probability=1.0,
+                turn=turn,
+                source_description=f"Random summon effect: {card_id} summons a random minion",
+            ))
+
+        # 3. Random target — applies buff/heal/damage to random target
+        if not random_type:
+            m = self._RE_RANDOM_TARGET.search(text)
+            if m:
+                target = m.group(1).lower()
+                random_type = "random_target"
+                random_detail = f"random target ({target})"
+                self._inferences.append(InferenceResult(
+                    inference_type="random_effect",
+                    card_id=card_id,
+                    probability=1.0,
+                    turn=turn,
+                    source_description=f"Random target effect: {card_id} affects a random {target}",
+                ))
+
+        # 4. Random split — "randomly split among enemies"
+        if not random_type:
+            m = self._RE_RANDOM_SPLIT.search(text)
+            if m:
+                random_type = "random_split"
+                random_detail = "randomly split"
+                self._inferences.append(InferenceResult(
+                    inference_type="random_effect",
+                    card_id=card_id,
+                    probability=1.0,
+                    turn=turn,
+                    source_description=f"Random split effect: {card_id} randomly splits its effect",
+                ))
+
+        # 5. Random buff — "Give a random friendly minion +X/+X"
+        if not random_type:
+            m = self._RE_RANDOM_BUFF.search(text)
+            if m:
+                random_type = "random_buff"
+                random_detail = "random buff"
+                self._inferences.append(InferenceResult(
+                    inference_type="random_effect",
+                    card_id=card_id,
+                    probability=1.0,
+                    turn=turn,
+                    source_description=f"Random buff effect: {card_id} gives a random buff",
+                ))
+
+        # Log for analysis
+        if random_type:
+            logger.debug("随机效果检测: %s → %s (%s)", card_id, random_type, random_detail)
 
     def _infer_play_timing(self, card_id: str, card: dict, turn: int):
         """根据打出时机推断手牌信息。

@@ -175,8 +175,49 @@ class BayesianOpponentModel:
             self.cards_by_dbf = {}
 
     def _load_decks(self, player_class=None):
-        """Load meta decks from SQLite cache, optionally filtering by class."""
-        pass  # HSReplay data source removed; decks remain empty
+        """Load meta decks from SQLite cache, optionally filtering by class.
+
+        Loading order:
+        1. HSReplay cache DB (most accurate, from hsreplay.net data)
+        2. Deck codes fallback (from deck_codes.txt if HSReplay cache is empty or unavailable)
+
+        If player_class is provided (e.g. 'MAGE'), only decks of that class are loaded.
+        """
+        loaded_decks = []
+
+        # 1. Try HSReplay cache DB
+        try:
+            conn = init_db(DB_PATH)
+            try:
+                loaded_decks = get_meta_decks(conn)
+                if loaded_decks:
+                    log.info("从 HSReplay 缓存加载了 %d 个卡组", len(loaded_decks))
+            finally:
+                conn.close()
+        except Exception as e:
+            log.debug("HSReplay 卡组加载失败: %s", e)
+
+        # 2. Fallback: build from deck_codes.txt
+        if not loaded_decks:
+            try:
+                conn = init_db(DB_PATH)
+                try:
+                    from analysis.data.fetch_hsreplay import build_archetype_db_from_deck_codes
+                    count = build_archetype_db_from_deck_codes(conn)
+                    if count > 0:
+                        loaded_decks = get_meta_decks(conn)
+                        log.info("从 deck_codes.txt 构建了 %d 个卡组 (共 %d 个)", count, len(loaded_decks))
+                finally:
+                    conn.close()
+            except Exception as e:
+                log.debug("deck_codes.txt 卡组加载失败: %s", e)
+
+        # 3. Filter by class if specified
+        if player_class and loaded_decks:
+            loaded_decks = [d for d in loaded_decks if d.get("class", "").upper() == player_class.upper()]
+            log.info("过滤后 %s 职业有 %d 个卡组", player_class, len(loaded_decks))
+
+        self.decks = loaded_decks
 
     def build_prior(self, player_class=None):
         """Build prior probability distribution over archetypes.
