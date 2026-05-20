@@ -63,11 +63,18 @@ def _nespirah(durability=2, cooldown_current=1) -> Location:
 
 
 def _fel_spell(cost=2) -> Card:
-    return _make_card(
+    from analysis.card.abilities.model import CardAbility, SpellDesc
+
+    card = _make_card(
         name="Fel Blitz", cost=cost, card_type="SPELL",
         card_class="DEMONHUNTER", spell_school="FEL",
         english_text="Deal 3 damage.",
     )
+    # v2 CardAbility: deal 3 damage to enemy hero
+    card.ability = CardAbility(
+        on_play=SpellDesc(spell_class="DamageSpell", value=3, target="ENEMY_HERO"),
+    )
+    return card
 
 
 # ===================================================================
@@ -125,26 +132,27 @@ class TestNespirahMCTSChain:
 
     def test_activate_then_fel_then_activate_deathrattle(self, setup):
         """Fel → activate → Fel → activate(deathrattle) → token."""
-        # Fel #0 → cd refresh
+        # Fel #0 → cd refresh, deal 3 dmg
         s = apply_action(setup, Action(action_type=ActionType.PLAY, card_index=0))
         assert s.locations[0].cooldown_current == 0
+        assert s.opponent.hero.hp == 27  # 30-3
 
         # Activate → dur 2→1, cd=1, deal 1 dmg
         s = apply_action(s, Action(action_type=ActionType.ACTIVATE_LOCATION, source_index=0))
         assert s.locations[0].durability == 1
         assert s.locations[0].cooldown_current == 1
-        # Fel spell dealt 3 damage (from english_text), location dealt 1 → 30-3-1=26
-        assert s.opponent.hero.hp == 26
+        assert s.opponent.hero.hp == 26  # 27-1
 
-        # Fel #1 → cd refresh again
+        # Fel #1 → cd refresh, deal 3 dmg
         s = apply_action(s, Action(action_type=ActionType.PLAY, card_index=0))
         assert s.locations[0].cooldown_current == 0
+        assert s.opponent.hero.hp == 23  # 26-3
 
-        # Activate → dur 1→0 → deathrattle
+        # Activate → dur 1→0 → deathrattle, deal 1 dmg
         s = apply_action(s, Action(action_type=ActionType.ACTIVATE_LOCATION, source_index=0))
         assert len(s.locations) == 0  # removed
         assert len(s.board) == 1  # token summoned
-        assert s.opponent.hero.hp == 25  # 3 (Fel) + 2 (2 activations) = 5 total damage
+        assert s.opponent.hero.hp == 22  # 3+1+3+1 = 8 total damage
 
     def test_full_mcts_chain_dump_all_fel(self, setup):
         """Full chain: dump all 5 Fel spells with location activations interleaved.
@@ -187,7 +195,7 @@ class TestNespirahMCTSChain:
 
         # END_TURN
         s = apply_action(s, Action(action_type=ActionType.END_TURN))
-        assert s.opponent.hero.hp == 28  # 2 from location + 0 from spells(no target logic)
+        assert s.opponent.hero.hp == 13  # 5×Fel(3) + 2×Activate(1) = 17 total damage
 
     def test_play_nespirah_from_hand_durability(self):
         """Playing Nespirah: health → durability."""

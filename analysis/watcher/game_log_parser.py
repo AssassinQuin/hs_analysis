@@ -205,7 +205,7 @@ def parse_games(log_path: str, latest_game_only: bool = False) -> List[GameRecor
 
     db = None
     try:
-        from analysis.card.data.hsdb import get_db as _get_db
+        from analysis.card.data.card_data import get_db as _get_db
         db = _get_db(load_xml=False, build_indexes=False)
     except Exception:
         log.debug("parse_games: failed to load hsdb", exc_info=True)

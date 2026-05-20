@@ -195,8 +195,8 @@ class DeckProvider:
         if deck_info is None:
             return []
 
-        from analysis.card.data.hsdb import get_db
-        db = get_db(load_xml=False, build_indexes=False)
+        from analysis.card.data.card_data import get_db
+        db = get_db(load_xml=False)
 
         cards: List[Card] = []
         for deck_card in deck_info.cards:
@@ -237,8 +237,8 @@ class DeckProvider:
             game_start_timestamp: HH:MM:SS to match deck for current game.
                 If None, only HSCardDB lookup is used.
         """
-        from analysis.card.data.hsdb import get_db
-        _db = get_db(load_xml=False, build_indexes=False)
+        from analysis.card.data.card_data import get_db
+        _db = get_db(load_xml=False)
 
         # Build deck card map: card_id → Card for fast lookup
         deck_card_map = {}

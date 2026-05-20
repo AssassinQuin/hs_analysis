@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest
+pytest.skip("GameEngine (analysis.search.engine_adapter) deleted in v1 cleanup", allow_module_level=True)
 
 
 class TestGameEngineSingleton:

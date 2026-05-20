@@ -5,6 +5,7 @@ to explore subsequent possibilities (opponent turns, further plays).
 """
 
 import pytest
+pytest.skip("MCTSEngine (analysis.search.mcts) deleted in v1 cleanup", allow_module_level=True)
 
 from analysis.search.mcts import MCTSEngine, MCTSConfig
 from analysis.card.abilities.definition import ActionType

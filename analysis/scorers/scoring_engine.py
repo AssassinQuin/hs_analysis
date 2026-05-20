@@ -33,7 +33,7 @@ from analysis.scorers.vanilla_curve import power_law
 
 from analysis.config import (
     DATA_DIR, ENUMS_PATH, RANKINGS_PATH, CURVE_PARAMS_PATH,
-    SCORING_REPORT_PATH, UNIFIED_DB_PATH,
+    UNIFIED_DB_PATH,
 )
 from analysis.utils import load_json
 
@@ -688,11 +688,7 @@ def main():
         }
         report.append(entry)
 
-    report_path = str(SCORING_REPORT_PATH)
-    with open(report_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=False, indent=2)
-    print(f"\n💾 报告已保存: {report_path}")
-    print(f"   共 {len(report)} 张卡")
+    print(f"\n✔ 共 {len(report)} 张卡评分完成 (输出已禁用: scoring_report.json 已废弃)")
     print("=" * 70)
 
 

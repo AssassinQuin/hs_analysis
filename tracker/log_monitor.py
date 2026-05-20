@@ -286,10 +286,8 @@ class CoreLogMonitor:
         # 避免「读到旧日志的 game_start + game_end → UI 闪烁」问题
         self._catching_up: bool = False
 
-        # 延迟初始桥接标记：当 _on_game_start 触发时 _player_names 尚未就绪，
-        # 先设此标记，等到 PlayerName 解析完毕、第一次 _notify_state_update 时
-        # 按正确 controller 桥接，避免「先桥接 → 后修正 → 全量重桥」的浪费
-        self._defer_initial_bridge: bool = False
+        # 延迟初始桥接标记：已移除（zone change 追踪需要即时桥接）。
+        # 此字段在 2026-05 重构中删除，保留声明仅用于旧状态兼容。
 
     @property
     def log_path(self) -> Optional[Path]:
@@ -363,7 +361,6 @@ class CoreLogMonitor:
             self._last_known_zones.clear()
             self._last_known_card_ids.clear()
             self._first_player_detected = False
-            self._defer_initial_bridge = False
             self._player_names.clear()
             self._game_lifecycle = GameLifecycle.IDLE
             self.game_tracker.reset()
@@ -561,17 +558,33 @@ class CoreLogMonitor:
                              my_idx, [name0, name1][my_idx], saved_our_controller)
                 return my_idx
 
-            if has_tag1:
-                my_idx = 1
-                self._our_known_name = name1
-                logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
-                             my_idx, name1, 1 - my_idx, name0)
+            if has_tag1 and not has_tag0:
+                # 仅 players[1] 有 '#' 且非 UNKNOWN HUMAN PLAYER
+                # 检查对方是否 UNKNOWN HUMAN PLAYER（hslog 的本地玩家占位符）
+                if name0 == 'UNKNOWN HUMAN PLAYER':
+                    # UNKNOWN 是本地玩家，带 # 的是对手
+                    my_idx = 0
+                    self._our_known_name = name0
+                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[0](name=%s), 对手=players[1](name=%s)",
+                                 name0, name1)
+                else:
+                    my_idx = 1
+                    self._our_known_name = name1
+                    logger.debug("玩家检测(_player_names): 我方=players[1](name=%s), 对手=players[0](name=%s)",
+                                 name1, name0)
                 return my_idx
-            if has_tag0:
-                my_idx = 0
-                self._our_known_name = name0
-                logger.debug("玩家检测(_player_names): 我方=players[%d] name=%s, 对手=players[%d] name=%s",
-                             my_idx, name0, 1 - my_idx, name1)
+            if has_tag0 and not has_tag1:
+                # 仅 players[0] 有 '#'
+                if name1 == 'UNKNOWN HUMAN PLAYER':
+                    my_idx = 1
+                    self._our_known_name = name1
+                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[1](name=%s), 对手=players[0](name=%s)",
+                                 name1, name0)
+                else:
+                    my_idx = 0
+                    self._our_known_name = name0
+                    logger.debug("玩家检测(_player_names): 我方=players[0](name=%s), 对手=players[1](name=%s)",
+                                 name0, name1)
                 return my_idx
 
         # 第三优先: 使用 hslog player.name
@@ -750,6 +763,17 @@ class CoreLogMonitor:
             from analysis.watcher.game_log_parser import _get_hero_card_id
             for player, attr in [(opp_player, 'opp_hero_class'), (our_player, 'player_hero_class')]:
                 hero_id = _get_hero_card_id(player)
+                # Fallback: 通过 entity_cache 中 player 本身的 HERO_ENTITY 标签查找英雄
+                if not hero_id and hasattr(player, 'tags'):
+                    try:
+                        hero_ent_id = player.tags.get(GameTag.HERO_ENTITY, 0)
+                        if hero_ent_id:
+                            ec = self.game_tracker.entity_cache
+                            hero_ent = ec.get_entity(hero_ent_id)
+                            if hero_ent:
+                                hero_id = hero_ent.get('card_id', '')
+                    except Exception:
+                        pass
                 if hero_id:
                     meta = self.global_tracker._card_metadata(hero_id)
                     cls = meta.get('cardClass', '')
@@ -758,6 +782,11 @@ class CoreLogMonitor:
 
             # 更新牌库/武器/地点计数
             self._refresh_opp_counts(opp_player)
+
+            # 同步刷新我方计数（与对方计数使用相同的直接枚举方式）
+            # 确保 player_deck_remaining 和 player_hand_count 准确，
+            # 不依赖 on_full_entity/on_zone_change 的增量追踪
+            self._refresh_our_counts(our_player)
 
             return our_controller, opp_controller
 
@@ -815,6 +844,95 @@ class CoreLogMonitor:
         gt.count_opp_hand(opp_entities)
         gt.update_opp_weapon(opp_entities)
         gt.update_opp_locations(opp_entities)
+
+    def _refresh_our_counts(self, our_player):
+        """统一更新我方牌库/手牌计数（与对手使用相同的直接枚举方式）。
+
+        与 _refresh_opp_counts 对应，确保 player_deck_remaining 和
+        player_hand_count 准确。注意：on_full_entity 只记录 initial_deck_size
+        而不初始化 deck_remaining，deck_remaining 靠 on_zone_change 追踪。
+        在 batch 模式下 zone change 可能不完整，需要直接枚举作为权威来源。
+        """
+        our_entities = list(our_player.entities)
+        gt = self.global_tracker
+        gt.state.player_deck_remaining = sum(
+            1 for e in our_entities if getattr(e, 'zone', 0) == ZONE_DECK
+        )
+        gt.state.player_hand_count = sum(
+            1 for e in our_entities if getattr(e, 'zone', 0) == ZONE_HAND
+        )
+        initial_total = (
+            gt.state.player_deck_remaining
+            + gt.state.player_hand_count
+            + gt.state.player_initial_deck_size  # already tracked heroes etc
+        )
+        # 如果直接枚举的牌库+手牌数 > 已记录的 initial_deck_size，
+        # 说明 on_full_entity 漏记了若干初始牌库卡牌，弥补之
+        deck_and_hand = gt.state.player_deck_remaining + gt.state.player_hand_count
+        if deck_and_hand > gt.state.player_initial_deck_size:
+            gt.state.player_initial_deck_size = deck_and_hand
+
+    def _build_player_hand_card_map(self) -> Dict[int, str]:
+        """构建 entity_id → card_id 的完整映射。
+
+        合并两个来源:
+        1. entity_cache (SHOW_ENTITY / FULL_ENTITY 捕获的 card_id)
+        2. global_tracker.state.player_hand_card_ids (区域追踪记录的 card_id)
+
+        返回: {entity_id: card_id}
+        """
+        from hearthstone.enums import GameTag
+        result: Dict[int, str] = {}
+
+        # 来源1: entity_cache
+        for eid, edata in self.game_tracker.entity_cache.items():
+            cid = edata.get("card_id", "")
+            if cid:
+                result[eid] = cid
+
+        # 来源2: global_tracker.state.player_hand_card_ids
+        try:
+            phci = self.global_tracker.state.player_hand_card_ids
+            for eid, (cid, zone) in phci.items():
+                if cid:
+                    result[eid] = cid
+        except (AttributeError, KeyError):
+            pass
+
+        return result
+
+    def _extract_player_hand_cards(self) -> List[str]:
+        """从 entity_cache 提取我方手牌 card_id 列表。
+
+        遍历 entity_cache 查找 zone=HAND 且 controller=我方 的实体，
+        提取其 card_id。用于 MCTS 诊断管线构建真实手牌。
+
+        注意: entity_cache 中 ZONE 标签存储为字符串 (如 'HAND'),
+        CONTROLLER 标签存储为 int (如 1)。
+        如果 entity_cache 中 card_id 为空，则回退查
+        _build_player_hand_card_map() 的全局映射。
+        """
+        from hearthstone.enums import GameTag, Zone
+        our_ctrl = self.global_tracker.our_controller
+        if not our_ctrl:
+            return []
+        # 预先构建全局 card_id 映射作为后备
+        global_map = self._build_player_hand_card_map()
+        hand_cards = []
+        for eid, edata in self.game_tracker.entity_cache.items():
+            tags = edata.get("tags", {})
+            zone_str = tags.get(GameTag.ZONE, "")
+            controller = tags.get(GameTag.CONTROLLER, -1)
+            card_id = edata.get("card_id", "")
+            if zone_str == "HAND" and controller == our_ctrl:
+                if card_id:
+                    hand_cards.append(card_id)
+                elif eid in global_map:
+                    hand_cards.append(global_map[eid])
+                else:
+                    # 仍无 card_id → 跳过（MCTS 无法模拟未知卡牌）
+                    pass
+        return hand_cards
 
     def _emit_game_started(self, our_controller: int, opp_controller: int):
         """构建并发送 game_started 信号（消除 _on_game_start 和 _try_enrich_player_info 中的重复构建代码）。"""
@@ -886,17 +1004,11 @@ class CoreLogMonitor:
             our_controller, opp_controller = enriched
             self.global_tracker.set_controllers(our_controller, opp_controller)
 
-        # 检查 PlayerName 是否已就绪：PlayerID=... PlayerName=... 行在
-        # DebugPrintGame() 中，位于 CREATE_GAME 块之后。如果 _player_names
-        # 为空，说明 PlayerName 行尚未被 _parse_player_name_line 解析，
-        # 此时 _detect_my_idx 和 _detect_my_idx 只能靠 fallback 猜测。
-        # 延迟桥接，等到 PlayerName 解析完毕后再以正确 controller 桥接，
-        # 避免「先错桥 → 后修正 → 全量重桥」的开销和噪声。
-        if not self._player_names:
-            self._defer_initial_bridge = True
-            logger.debug("PlayerName 尚未就绪，延迟初始桥接")
-            # 不桥接、不发通知，等 _notify_state_update 处理
-            return
+        # 注意：不再延迟桥接。虽然 PlayerName 可能在 FULL_ENTITY 之后才出现，
+        # 但即时桥接确保 zone change 追踪可在 TAG_CHANGE 到达时正确检测
+        # DECK→HAND 等区域转换（关键修复: 避免 batch 模式丢失 zone change）。
+        # 如果 controller 分配有误，后续 _player_names 填充后通过
+        # _handle_controller_correction 修正。
 
         # 桥接实体事件到 GlobalTracker（在 controller 确定之后）
         self._bridge_entities_to_global_tracker()
@@ -937,33 +1049,64 @@ class CoreLogMonitor:
 
     def _notify_state_update(self):
         """通知 UI 更新游戏状态。"""
-        # 延迟初始桥接处理
-        if self._defer_initial_bridge:
-            # PlayerName 此前在 _on_game_start 时尚未就绪（CREATE_GAME 块
-            # 在 PlayerName 行之前），桥接被推迟。现在 PlayerName 应已就绪，
-            # 先尝试补充玩家信息。
-            # _try_enrich_player_info 内部若检测到 controller 变化，
-            # 会调用 _handle_controller_correction → 清除 _bridged_entities
-            # → _bridge_entities_to_global_tracker（以正确 controller 桥接）。
-            self._try_enrich_player_info()
-            if self._player_names:
-                self._defer_initial_bridge = False
-                logger.debug("延迟初始桥接完成")
-                # 延迟路径已完成桥接（通过 _handle_controller_correction），
-                # 直接构建状态并发送通知，跳过下面的常规桥接流程
-                state = self.build_state_dict()
-                if self.on_state_updated:
-                    self.on_state_updated(state)
-                return
-            # _player_names 仍为空 → 跳过本次通知
-            return
-
         # 常规流程：先桥接新实体，再补充玩家信息
+        # 注意：不再有延迟桥接路径。所有实体到达后即时桥接，
+        # 确保 zone change 追踪可检测到 DECK→HAND 等区域转换。
         self._bridge_new_entities()
         self._try_enrich_player_info()
         state = self.build_state_dict()
         if self.on_state_updated:
             self.on_state_updated(state)
+
+    # ── DeckPoolTracker 辅助 ──────────────────────────────────
+
+    def _build_sampled_hand_cards(
+        self, known_hand_ids: List[str], hand_count: int
+    ) -> List[str]:
+        """用 DeckPoolTracker 从可用池采样填充未知手牌。
+
+        Args:
+            known_hand_ids: 已知手牌的 card_id 列表（来自 entity_cache）
+            hand_count: 当前手牌总数
+
+        Returns:
+            填充后的手牌 card_id 列表（已知 + 采样），
+            如果初始化失败或 hand_count <= 0 则直接返回 known_hand_ids。
+        """
+        if hand_count <= 0 or not known_hand_ids and hand_count == 0:
+            return known_hand_ids
+
+        gt_state = self.global_tracker.state
+        player_class_en = gt_state.player_hero_class
+        if not player_class_en:
+            return known_hand_ids
+
+        try:
+            from analysis.utils.deck_pool_tracker import DeckPoolTracker
+
+            tracker = DeckPoolTracker(player_class_en)
+
+            # 1) 我方已打出的卡牌
+            for cid in gt_state.player_cards_played_history:
+                tracker.register_player_played(cid)
+
+            # 2) 对手打出的卡牌（区分衍生 vs 非衍生）
+            for kc in gt_state.opp_known_cards:
+                # 从 CardSource 判断是否衍生
+                from analysis.watcher.global_tracker import CardSource
+                is_derived = kc.source in (CardSource.GENERATED,)
+                tracker.register_opp_played(kc.card_id, is_derived)
+
+            # 3) 采样填充
+            sampled = tracker.fill_unknown_hand(
+                known_hand_ids, hand_count,
+                seed=self.game_tracker.get_current_turn(),
+            )
+            return sampled
+
+        except Exception as e:
+            logger.warning("_build_sampled_hand_cards failed: %s", e)
+            return known_hand_ids
 
     def build_state_dict(self) -> dict:
         """构建游戏状态字典用于 UI 展示。"""
@@ -980,6 +1123,11 @@ class CoreLogMonitor:
         secret_report = gt.get_secret_report()
         known_hand = gt.get_opp_known_hand()
         card_breakdown = gt.get_opp_card_breakdown()
+
+        player_hand_cards = self._extract_player_hand_cards()
+        sampled_hand_cards = self._build_sampled_hand_cards(
+            player_hand_cards, gt_state.player_hand_count,
+        )
 
         return {
             "in_game": self.game_tracker.in_game,
@@ -1044,6 +1192,10 @@ class CoreLogMonitor:
             "bayesian": bayesian,
             "secret_report": secret_report,
             "card_breakdown": card_breakdown,
+            # 我方手牌 card_id 列表（从 entity_cache 提取，供 MCTS 模拟用）
+            "player_hand_cards": player_hand_cards,
+            # 用 DeckPoolTracker 采样填充后的完整手牌（unknown slots 从可用池采样）
+            "sampled_hand_cards": sampled_hand_cards,
             "player_stats": {
                 "minions_played": gt_state.player_stats.minions_played,
                 "spells_played": gt_state.player_stats.spells_played,
@@ -1169,15 +1321,22 @@ class CoreLogMonitor:
         # 如果实体在桥接之前已经发生过区域变化，应使用最早记录的区域
         initial_zone = self._last_known_zones.get(entity_id, fields.zone)
 
-        # P1 #5: 对手 DECK 实体即使没有 card_id 也需要调用 on_full_entity
-        # 以确保 opp_initial_deck_size 正确计数
+        # P1 #5: DECK 实体即使没有 card_id 也需要调用 on_full_entity
+        # 以确保 initial_deck_size 正确计数。双方都需要处理：
+        # - 对手隐藏卡牌（没有 card_id 的 DECK 实体）→ opp_initial_deck_size
+        # - 我方隐藏卡牌（同上，但我方视角）→ player_initial_deck_size
         is_opp_deck_no_cardid = (
             not fields.card_id
             and fields.controller == gt.opp_controller
             and fields.zone == ZONE_DECK
         )
+        is_player_deck_no_cardid = (
+            not fields.card_id
+            and fields.controller == gt.our_controller
+            and fields.zone == ZONE_DECK
+        )
 
-        if fields.card_id or is_opp_deck_no_cardid:
+        if fields.card_id or is_opp_deck_no_cardid or is_player_deck_no_cardid:
             # 先调用 on_full_entity（记录实体出生 + 检测硬币 + 牌库计数）
             gt.on_full_entity(
                 entity_id=entity_id,
@@ -1322,11 +1481,16 @@ class CoreLogMonitor:
 
         logger.info("加载已有日志: %s", path)
 
-        # 使用 _process_lines 逐行处理，确保实时桥接
+        # 按行逐条处理，确保每个 TAG_CHANGE ZONE 都能被 _detect_zone_changes_from_cache
+        # 捕获到区域变化。之前一次性喂入所有行会导致 entity_cache 中只有实体的最终区域，
+        # DECK→HAND 等过渡丢失（关键修复）。
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as f:
-                lines = f.readlines()
-            self._process_lines([line.rstrip("\n") for line in lines])
+                for line in f:
+                    stripped = line.rstrip("\n").rstrip("\r")
+                    if not stripped:
+                        continue
+                    self._process_lines([stripped])
         except Exception as e:
             logger.error("加载日志失败: %s", e)
 

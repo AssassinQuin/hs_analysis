@@ -12,7 +12,6 @@ COLLECTIBLE_JSON = DATA_DIR / "zhCN" / "cards.collectible.json"
 ENUMS_PATH = PROJECT_ROOT / "hearthstone_enums.json"
 
 CURVE_PARAMS_PATH = DATA_DIR / "curve_params.json"
-SCORING_REPORT_PATH = DATA_DIR / "scoring_report.json"
 CARD_LIST_PATH = DATA_DIR / "card_list.json"
 
 # ── External APIs ────────────────────────────────────────────────────────

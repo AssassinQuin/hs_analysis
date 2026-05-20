@@ -28,7 +28,7 @@ def _get_spell_target_resolver():
     global _spell_target_resolver
     if _spell_target_resolver is None:
         try:
-            from analysis.search.engine.mechanics import SpellTargetResolver
+            from analysis.card.engine.mechanics.targeting import SpellTargetResolver
             _spell_target_resolver = SpellTargetResolver()
         except (ImportError, AttributeError):
             _spell_target_resolver = False
@@ -590,7 +590,7 @@ def _enum_play_spell(
                     eff.damage > 0 or eff.random_damage > 0 or eff.aoe_damage > 0
                 )
 
-                from analysis.search.engine.mechanics import SpellTargetResolver
+                from analysis.card.engine.mechanics.targeting import SpellTargetResolver
 
                 has_target_keyword = SpellTargetResolver.has_targeting_keyword(text)
                 if not (has_damage and has_target_keyword):
@@ -821,6 +821,111 @@ def _probe_tags_for_card(state: GameState, card) -> set[str]:
     if cost >= 6:
         tags.add("RESOURCE_HOLD")
     return tags
+
+
+# ═══════════════════════════════════════════════════════════════
+# Opponent action enumeration (for MCTS opponent turn simulation)
+# ═══════════════════════════════════════════════════════════════
+
+
+def enumerate_opponent_legal(state: GameState) -> List[Action]:
+    """Generate all legal actions during the opponent's turn.
+
+    Uses state.opponent.hand and state.opponent.board instead of
+    state.hand / state.board. Called by MCTS when is_opponent_turn
+    is True, creating genuine prediction diversity across worlds
+    with different opponent.hand content.
+    """
+    actions: List[Action] = []
+
+    # 1. Opponent PLAY actions — cards from opponent.hand
+    opp_mana = state.opponent.mana_available
+    for idx, card in enumerate(state.opponent.hand):
+        eff_cost = getattr(card, "cost", 0)
+        if eff_cost > opp_mana:
+            continue
+
+        ctype = (getattr(card, "card_type", "") or "").upper()
+
+        if ctype == "MINION":
+            if len(state.opponent.board) >= 7:
+                continue
+            # Simple: place at a position
+            for pos in range(len(state.opponent.board) + 1):
+                actions.append(Action(
+                    action_type=ActionType.PLAY,
+                    card_index=idx,
+                    position=pos,
+                ))
+        elif ctype == "SPELL":
+            # Simplified: allow playing spells
+            actions.append(Action(
+                action_type=ActionType.PLAY,
+                card_index=idx,
+            ))
+        elif ctype == "WEAPON":
+            actions.append(Action(
+                action_type=ActionType.PLAY,
+                card_index=idx,
+            ))
+        elif ctype == "HERO":
+            actions.append(Action(
+                action_type=ActionType.HERO_REPLACE,
+                card_index=idx,
+            ))
+
+    # 2. Opponent ATTACK actions — opponent minions attack our side
+    our_board = state.board
+    our_taunts = [m for m in our_board if m.has_taunt]
+
+    for src_idx, minion in enumerate(state.opponent.board):
+        if not can_attack(minion, state):
+            continue
+
+        if our_taunts:
+            # Must attack taunt minions only
+            for t in our_taunts:
+                real_idx = _find_friendly_minion_index(state, t)
+                if real_idx >= 0:
+                    actions.append(Action(
+                        action_type=ActionType.ATTACK,
+                        source_index=src_idx,
+                        target_index=real_idx + 1,
+                    ))
+        else:
+            # Can attack our hero
+            actions.append(Action(
+                action_type=ActionType.ATTACK,
+                source_index=src_idx,
+                target_index=0,
+            ))
+            # Can attack our non-stealthed minions
+            for tgt_idx, our_minion in enumerate(our_board):
+                if our_minion.has_stealth:
+                    continue
+                actions.append(Action(
+                    action_type=ActionType.ATTACK,
+                    source_index=src_idx,
+                    target_index=tgt_idx + 1,
+                ))
+
+    # 3. Opponent HERO_POWER
+    hp_cost = state.opponent.hero.hero_power_cost
+    if not state.opponent.hero.hero_power_used and opp_mana >= hp_cost:
+        actions.append(Action(action_type=ActionType.HERO_POWER))
+
+    # 4. Opponent END_TURN (switch back to us)
+    actions.append(Action(action_type=ActionType.END_TURN))
+
+    return actions
+
+
+def _find_friendly_minion_index(state: GameState, minion: Minion) -> int:
+    """Find the board index of a friendly minion by identity."""
+    for i, m in enumerate(state.board):
+        if m is minion:
+            return i
+    return -1
 
 
 # Backward-compatible alias

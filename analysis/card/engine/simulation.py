@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import dataclasses
+import re
 from typing import TYPE_CHECKING
 
 from analysis.card.abilities.definition import Action, ActionType
@@ -24,12 +25,261 @@ log = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────
+# Inlined from analysis/search/corpse.py — Corpse resource system
+# ──────────────────────────────────────────────────────────────
+
+@dataclasses.dataclass
+class CorpseEffect:
+    """A parsed corpse cost + effect pair from card text."""
+    cost: int
+    is_optional: bool
+    effect_text: str
+
+
+_CORPSE_SPEND_RE = re.compile(
+    r"Spend\s*(\d+)\s*Corpse(?:s)?"
+    r"|Spend\s*up\s*to\s*(\d+)\s*Corpse(?:s)?"
+)
+
+
+def _parse_corpse_effects(card_text: str) -> list[CorpseEffect]:
+    """Parse corpse spend requirements from card text."""
+    if not card_text:
+        return []
+
+    effects: list[CorpseEffect] = []
+    text = card_text or ""
+
+    for m in _CORPSE_SPEND_RE.finditer(text):
+        spend_exact = m.group(1)
+        spend_up_to = m.group(2)
+
+        if spend_up_to:
+            effects.append(CorpseEffect(
+                cost=int(spend_up_to),
+                is_optional=True,
+                effect_text=text[m.end():].strip()[:80],
+            ))
+        elif spend_exact:
+            effects.append(CorpseEffect(
+                cost=int(spend_exact),
+                is_optional=False,
+                effect_text=text[m.end():].strip()[:80],
+            ))
+
+    return effects
+
+
+def _gain_corpses(state: "GameState", amount: int) -> "GameState":
+    """Add corpses to state."""
+    return dataclasses.replace(state, corpses=state.corpses + amount)
+
+
+def _has_double_corpse_gen(state: "GameState") -> bool:
+    """Check if Falric is on the friendly board for double corpse generation."""
+    for m in state.board:
+        if "Falric" in (m.name or ""):
+            return True
+    return False
+
+
+# ──────────────────────────────────────────────────────────────
+# Inlined from analysis/search/corrupt.py — Corrupt mechanic
+# ──────────────────────────────────────────────────────────────
+
+def _has_corrupt(card) -> bool:
+    mechanics = set(getattr(card, 'mechanics', []) or [])
+    return 'CORRUPT' in mechanics
+
+
+def _corrupt_upgrade_card(card: Card) -> Card:
+    old_cost = getattr(card, 'cost', 0)
+    new_cost = old_cost + 1
+
+    return Card(
+        dbf_id=getattr(card, 'dbf_id', 0),
+        name=getattr(card, 'name', ''),
+        cost=new_cost,
+        original_cost=new_cost,
+        card_type=getattr(card, 'card_type', ''),
+        attack=getattr(card, 'attack', 0) + 1,
+        health=getattr(card, 'health', 0) + 1,
+        text=getattr(card, 'text', ''),
+        rarity=getattr(card, 'rarity', ''),
+        card_class=getattr(card, 'card_class', ''),
+        race=getattr(card, 'race', ''),
+        mechanics=[m for m in (getattr(card, 'mechanics', []) or []) if m != 'CORRUPT'],
+    )
+
+
+def _check_corrupt_upgrade(state: "GameState", played_card) -> "GameState":
+    played_cost = getattr(played_card, 'cost', 0)
+    for i, card in enumerate(state.hand):
+        if not _has_corrupt(card):
+            continue
+        card_cost = getattr(card, 'cost', 0)
+        if played_cost > card_cost:
+            state.hand[i] = _corrupt_upgrade_card(card)
+    return state
+
+
+# ──────────────────────────────────────────────────────────────
+# Inlined from analysis/search/imbue.py — Imbue hero power system
+# ──────────────────────────────────────────────────────────────
+
+_IMBUE_HERO_POWERS = {
+    "DRUID": {
+        "effect": "summon",
+        "base_attack": 1,
+        "base_health": 1,
+        "scaling": True,
+    },
+    "HUNTER": {
+        "effect": "damage",
+        "base_damage": 1,
+        "scaling": True,
+    },
+    "MAGE": {
+        "effect": "damage",
+        "base_damage": 1,
+        "scaling": True,
+    },
+    "PALADIN": {
+        "effect": "summon",
+        "base_attack": 1,
+        "base_health": 1,
+        "scaling": True,
+    },
+    "PRIEST": {
+        "effect": "heal",
+        "base_heal": 2,
+        "scaling": True,
+    },
+    "ROGUE": {
+        "effect": "weapon",
+        "base_attack": 1,
+        "base_durability": 2,
+        "scaling": True,
+    },
+    "SHAMAN": {
+        "effect": "random_totem",
+    },
+    "WARLOCK": {
+        "effect": "damage_self_draw",
+        "base_damage": 2,
+        "base_draw": 1,
+    },
+    "WARRIOR": {
+        "effect": "armor",
+        "base_armor": 2,
+        "scaling": True,
+    },
+    "DEMONHUNTER": {
+        "effect": "damage",
+        "base_damage": 1,
+        "scaling": True,
+    },
+    "DEATHKNIGHT": {
+        "effect": "armor",
+        "base_armor": 2,
+        "scaling": True,
+    },
+}
+
+
+def _apply_hero_power(state: "GameState") -> "GameState":
+    """Apply the hero power effect based on class and imbue_level."""
+    raw_class = getattr(state.hero, "hero_class", "")
+    if hasattr(raw_class, "name"):
+        hero_class = str(getattr(raw_class, "name")).upper()
+    else:
+        hero_class = (str(raw_class) if raw_class is not None else "").upper()
+    imbue_level = getattr(state.hero, "imbue_level", 0)
+
+    power_info = _IMBUE_HERO_POWERS.get(hero_class)
+    if power_info is None:
+        # Generic fallback: deal 1 + imbue_level damage
+        if state.opponent.board:
+            state.opponent.board[0].health -= (1 + imbue_level)
+        else:
+            state.opponent.hero.hp -= (1 + imbue_level)
+        return state
+
+    effect = power_info.get("effect", "")
+
+    if effect == "damage":
+        base = power_info.get("base_damage", 1)
+        total = base + imbue_level
+        if state.opponent.board:
+            state.opponent.board[0].health -= total
+        else:
+            state.opponent.hero.hp -= total
+
+    elif effect == "heal":
+        base = power_info.get("base_heal", 2)
+        total = base + imbue_level
+        state.hero.hp += total
+
+    elif effect == "armor":
+        base = power_info.get("base_armor", 2)
+        total = base + imbue_level
+        state.hero.armor += total
+
+    elif effect == "summon":
+        base_atk = power_info.get("base_attack", 1)
+        base_hp = power_info.get("base_health", 1)
+        atk = base_atk + imbue_level
+        hp = base_hp + imbue_level
+        if not state.board_full():
+            state.board.append(Minion(
+                name="Hero Power Minion",
+                attack=atk,
+                health=hp,
+                max_health=hp,
+                owner="friendly",
+            ))
+
+    elif effect == "weapon":
+        base_atk = power_info.get("base_attack", 1)
+        base_dur = power_info.get("base_durability", 2)
+        atk = base_atk + imbue_level
+        state.hero.weapon = Weapon(
+            attack=atk,
+            health=base_dur,
+            name="Hero Power Weapon",
+        )
+
+    elif effect == "random_totem":
+        if not state.board_full():
+            state.board.append(Minion(
+                name="Totem",
+                attack=0,
+                health=1,
+                max_health=1,
+                owner="friendly",
+            ))
+
+    elif effect == "damage_self_draw":
+        dmg = power_info.get("base_damage", 2)
+        draw_count = power_info.get("base_draw", 1)
+        state.hero.hp -= dmg
+        for _ in range(draw_count):
+            if state.deck_remaining > 0:
+                state.deck_remaining -= 1
+            else:
+                state.fatigue_damage += 1
+                state.hero.hp -= state.fatigue_damage
+
+    return state
+
+
+# ──────────────────────────────────────────────────────────────
 # Target resolution helper
 # ──────────────────────────────────────────────────────────────
 
 
 def _resolve_action_target(s: "GameState", action: Action):
-    """从 action.target_index 解析为具体目标实体。"""
+    """Resolve action.target_index to a concrete target entity."""
     target = None
     action_target = getattr(action, 'target_index', -1)
     if action_target == 0:
@@ -46,8 +296,6 @@ def _is_temporary_mana_effect(text_lower: str) -> bool:
     if "gain" in text_lower and "mana crystal" in text_lower and "this turn" in text_lower:
         return True
     if "gain" in text_lower and "empty mana crystal" in text_lower:
-        return True
-    if "获得" in text_lower and "法力水晶" in text_lower and "本回合" in text_lower:
         return True
     return False
 
@@ -126,12 +374,11 @@ def _validate_and_pay_cost(s, card, card_idx: int):
 
     # Corpse cost guard
     try:
-        from analysis.search.corpse import parse_corpse_effects
-        corpse_effects = parse_corpse_effects(card_text)
+        corpse_effects = _parse_corpse_effects(card_text)
         for ce in corpse_effects:
             if not ce.is_optional and s.corpses < ce.cost:
                 return None
-    except (ImportError, AttributeError):
+    except (AttributeError, TypeError):
         pass
 
     # Opponent cost modifiers
@@ -207,10 +454,10 @@ def _resolve_deaths(state: "GameState", max_cascade: int = 3) -> "GameState":
 
 
 def _execute_deathrattles(state: "GameState", dead_queue: list) -> "GameState":
-    """执行亡语效果: 优先 CardPower 数据驱动，保留 enchantment 亡语。"""
+    """Execute deathrattle effects: enchantment-based first, then CardPower data-driven."""
     s = state
     for minion in dead_queue:
-        # Enchantment-based 亡语（来自附魔触发器）
+        # Enchantment-based deathrattles (from trigger attachments)
         for ench in list(getattr(minion, "enchantments", [])):
             if ench.trigger_type == "deathrattle" and ench.trigger_effect:
                 try:
@@ -224,12 +471,12 @@ def _execute_deathrattles(state: "GameState", dead_queue: list) -> "GameState":
                     )
                 except Exception as exc:
                     log.debug(
-                        "Enchantment 亡语执行失败: %s — %s",
+                        "Enchantment deathrattle failed: %s — %s",
                         ench.trigger_effect,
                         exc,
                     )
 
-        # CardPower 数据驱动亡语
+        # CardPower data-driven deathrattle
         card_ref = getattr(minion, "card_ref", None)
         power = None
         if card_ref is not None:
@@ -242,7 +489,7 @@ def _execute_deathrattles(state: "GameState", dead_queue: list) -> "GameState":
                 try:
                     s = spell.execute(s, source=minion, target=None)
                 except Exception as exc:
-                    log.debug("CardPower 亡语执行失败 %s: %s",
+                    log.debug("CardPower deathrattle failed %s: %s",
                               getattr(minion, "name", "?"), exc)
 
     return s
@@ -329,8 +576,15 @@ def apply_action(state: "GameState", action: Action) -> "GameState":
     Single entry point for all state transitions. Dispatches to the
     appropriate handler based on action type. Uses engine/dispatch.py
     for effect execution and engine/target.py for target resolution.
+
+    When s.is_opponent_turn is True, dispatches to opponent-specific
+    handlers so card actions use opponent.hand instead of state.hand.
     """
     s = state.copy()
+
+    # ── Opponent turn dispatch ──
+    if s.is_opponent_turn:
+        return _apply_opponent_action(s, action)
 
     if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
         s = _play_card(s, action)
@@ -403,33 +657,32 @@ def _play_card(s: "GameState", action: Action) -> "GameState":
     _handle_overdraw(s)
 
     try:
-        from analysis.search.corrupt import check_corrupt_upgrade
-        s = check_corrupt_upgrade(s, card)
-    except (ImportError, AttributeError):
+        s = _check_corrupt_upgrade(s, card)
+    except (AttributeError, TypeError):
         pass
 
     return s
 
 
 def _play_minion(s: "GameState", card, action: Action, card_idx: int) -> "GameState":
-    """打出随从牌: 支付费用（已支付），放置到场上，执行 CardPower 战吼。"""
+    """Execute a minion card: place on board, trigger v2 SpellExecutor battlecry."""
     new_minion = Minion.from_card(card)
 
-    # Hand-transform: 替换属性为对手最后打出的随从
+    # Hand-transform: replace attributes with opponent's last played minion
     _apply_hand_transform(s, card, new_minion)
 
     pos = min(action.position, len(s.board))
     s.board.insert(pos, new_minion)
 
-    # ── 战吼处理: CardPower 数据驱动 ──
-    power = getattr(card, 'power', None)
-    if power is not None and power.has_battlecry:
-        for spell in power.battlecry:
-            try:
-                target = _resolve_action_target(s, action)
-                s = spell.execute(s, source=new_minion, target=target)
-            except Exception as exc:
-                log.debug("CardPower 战吼执行失败 %s: %s", getattr(card, 'name', '?'), exc)
+    # Battlecry dispatch via v2 SpellExecutor (no v1 CardPower fallback)
+    target = _resolve_action_target(s, action)
+    try:
+        from analysis.card.abilities.executor import SpellExecutor
+        ability = getattr(card, 'ability', None)
+        if ability and ability.has_any and ability.on_play:
+            s = SpellExecutor.execute(ability, s, source=new_minion, target=target)
+    except Exception as exc:
+        log.debug("v2 battlecry failed %s: %s", getattr(card, 'name', '?'), exc)
 
     # Legacy: choose one
     try:
@@ -465,22 +718,16 @@ def _play_minion(s: "GameState", card, action: Action, card_idx: int) -> "GameSt
 
 
 def _play_spell(s: "GameState", card, action: Action) -> "GameState":
-    """打出法术牌: 支付费用（已支付），执行 CardPower 效果链。"""
-    # CardPower 数据驱动路径
-    power = getattr(card, 'power', None)
-    if power is not None and (power.has_on_play or power.has_battlecry):
-        # 选择 on_play 或 battlecry
-        spells = power.on_play if power.has_on_play else power.battlecry
-        # combo 检查
-        if power.has_combo and hasattr(s, 'cards_played_this_turn') and s.cards_played_this_turn:
-            spells = power.combo
+    """Execute a spell card via v2 SpellExecutor (no v1 fallback)."""
+    target = _resolve_action_target(s, action)
 
-        for spell in spells:
-            try:
-                target = _resolve_action_target(s, action)
-                s = spell.execute(s, source=card, target=target)
-            except Exception as exc:
-                log.debug("CardPower 法术执行失败 %s: %s", getattr(card, 'name', '?'), exc)
+    try:
+        from analysis.card.abilities.executor import SpellExecutor
+        ability = getattr(card, 'ability', None)
+        if ability and ability.has_any and ability.on_play:
+            s = SpellExecutor.execute(ability, s, source=card, target=target)
+    except Exception as exc:
+        log.debug("v2 spell execute failed %s: %s", getattr(card, 'name', '?'), exc)
 
     # Spell-transform: replace hand cards that copy cast spells
     try:
@@ -539,13 +786,10 @@ def _play_spell(s: "GameState", card, action: Action) -> "GameState":
                 school_match = _re.search(r'cast\s+a\s+(\w+)\s+spell', loc_lower)
                 if school_match and school_match.group(1).upper() == spell_school.upper():
                     loc.cooldown_current = 0
-            # CN fallback
-            if "施放" in loc_text and spell_school:
-                import re as _re
-                school_cn = {"FEL": "邪能", "FIRE": "火焰", "FROST": "冰霜",
-                             "ARCANE": "奥术", "NATURE": "自然", "SHADOW": "暗影",
-                             "HOLY": "神圣"}.get(spell_school.upper(), "")
-                if school_cn and school_cn in loc_text:
+            # English text check (location text may have english_text attr)
+            if spell_school:
+                loc_en = getattr(loc, "english_text", "") or ""
+                if "reopen" in loc_en.lower() and spell_school.upper() in loc_en.upper():
                     loc.cooldown_current = 0
 
     # Recompute auras
@@ -593,9 +837,9 @@ def _play_location(s: "GameState", card, action: Action) -> "GameState":
 
 
 def _play_hero_card(s: "GameState", card, action: Action) -> "GameState":
-    """Handle HERO card replacement."""
+    """Handle HERO card placement (armor, class, power upgrade)."""
     try:
-        from analysis.search.engine.mechanics import HeroCardHandler
+        from analysis.card.engine.mechanics.hero_card import HeroCardHandler
         return HeroCardHandler().apply_hero_card(s, card)
     except (ImportError, AttributeError):
         try:
@@ -633,10 +877,9 @@ def _attack(s: "GameState", action: Action) -> "GameState":
 
     # Corpse generation
     try:
-        from analysis.search.corpse import gain_corpses, has_double_corpse_gen
-        amount = 2 if has_double_corpse_gen(s) else 1
-        s = gain_corpses(s, amount)
-    except (ImportError, AttributeError):
+        amount = 2 if _has_double_corpse_gen(s) else 1
+        s = _gain_corpses(s, amount)
+    except (AttributeError, TypeError):
         pass
 
     # Recompute auras
@@ -797,9 +1040,8 @@ def _hero_power(s: "GameState", action: Action) -> "GameState":
 
     # Dispatch hero power via abilities system
     try:
-        from analysis.search.imbue import apply_hero_power
-        s = apply_hero_power(s)
-    except (ImportError, AttributeError):
+        s = _apply_hero_power(s)
+    except (AttributeError, TypeError):
         pass
 
     return s
@@ -811,8 +1053,13 @@ def _hero_power(s: "GameState", action: Action) -> "GameState":
 
 
 def _end_turn(s: "GameState", action: Action) -> "GameState":
-    """End turn: draw card for next turn, increment turn, reset mana."""
-    # Apply overload
+    """End OUR turn, switch to opponent turn.
+
+    Overload is recorded (affects OUR next turn). Opponent mana is
+    estimated from current turn_number. The turn counter and card draw
+    are deferred to _opponent_end_turn.
+    """
+    # Apply overload (affects OUR next turn, not opponent's)
     s.mana.overloaded = s.mana.overload_next
     s.mana.overload_next = 0
     s.mana.available -= s.mana.overloaded
@@ -837,16 +1084,7 @@ def _end_turn(s: "GameState", action: Action) -> "GameState":
 
     s.cards_played_this_turn = []
 
-    # Draw a card (uses deck_list.pop(0) when available, stub fallback)
-    s = _draw_card(s)
-
-    # Increment turn and mana
-    s.turn_number += 1
-    if s.mana.max_mana < s.mana.max_mana_cap:
-        s.mana.max_mana += 1
-    s.mana.available = s.mana.max_mana - s.mana.overloaded
-
-    # Clear expired modifiers
+    # Clear expired modifiers (own modifiers cleared, opponent's persist)
     s.mana.modifiers = []
     s.opponent.opp_cost_modifiers = [
         m
@@ -878,6 +1116,202 @@ def _end_turn(s: "GameState", action: Action) -> "GameState":
 
     # Resolve any deaths from end-of-turn effects
     s = _resolve_deaths(s)
+
+    # ── Switch to opponent turn ──
+    # Turn counter, card draw, and our mana are handled in
+    # _opponent_end_turn when the opponent finishes their turn.
+    s.is_opponent_turn = True
+
+    # Estimate opponent mana: same crystal count as current turn
+    opp_mana = min(s.turn_number, 10)
+    s.opponent.mana_available = opp_mana
+    s.opponent.mana_max = opp_mana
+
+    return s
+
+
+# ═══════════════════════════════════════════════════════════════
+# Opponent turn handlers
+# ═══════════════════════════════════════════════════════════════
+# These dispatch when state.is_opponent_turn is True.
+# Instead of accessing state.hand (our hand), they use
+# state.opponent.hand and state.opponent.board to simulate
+# plausible opponent actions during MCTS rollouts.
+# ═══════════════════════════════════════════════════════════════
+
+
+def _apply_opponent_action(s: "GameState", action: Action) -> "GameState":
+    """Dispatch opponent actions during is_opponent_turn."""
+    if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
+        return _opponent_play_card(s, action)
+    elif action.action_type == ActionType.ATTACK:
+        return _opponent_attack(s, action)
+    elif action.action_type == ActionType.HERO_POWER:
+        return _opponent_hero_power(s)
+    elif action.action_type == ActionType.END_TURN:
+        return _opponent_end_turn(s, action)
+    return s
+
+
+def _opponent_play_card(s: "GameState", action: Action) -> "GameState":
+    """Opponent plays a card from their hand to their board."""
+    card_idx = action.card_index
+    if card_idx < 0 or card_idx >= len(s.opponent.hand):
+        return s
+    card = s.opponent.hand[card_idx]
+
+    eff_cost = getattr(card, 'cost', 0)
+    if eff_cost > s.opponent.mana_available:
+        return s
+    s.opponent.mana_available -= eff_cost
+
+    # Remove from opponent hand
+    s.opponent.hand.pop(card_idx)
+
+    ctype = (getattr(card, 'card_type', '') or '').upper()
+    if ctype == 'MINION':
+        if len(s.opponent.board) < 7:
+            new_minion = Minion.from_card(card)
+            pos = min(action.position, len(s.opponent.board))
+            # Attacker can attack this turn (summoning sickness)
+            new_minion.can_attack = False  # summoning sickness
+            s.opponent.board.insert(pos, new_minion)
+    elif ctype == 'SPELL':
+        # Simplified spell: deal damage to our hero
+        # (real battlecry/spell execution is too complex for rollout)
+        try:
+            from analysis.card.data.card_effects import get_effects
+            eff = get_effects(card)
+            if eff and eff.damage > 0:
+                _apply_damage_to_hero(s.hero, eff.damage)
+        except (ImportError, AttributeError):
+            # Fallback: deal card's attack value as damage
+            atk = getattr(card, 'attack', 0)
+            if atk > 0:
+                _apply_damage_to_hero(s.hero, atk)
+    elif ctype == 'WEAPON':
+        # Equip weapon for opponent hero
+        s.opponent.hero.weapon = Weapon(
+            attack=getattr(card, 'attack', 0),
+            health=getattr(card, 'health', 1),
+            name=getattr(card, 'name', ''),
+        )
+    elif ctype == 'HERO':
+        # Opponent hero card — give armor
+        armor = getattr(card, 'armor', 0) or 0
+        if armor > 0:
+            s.opponent.hero.armor += armor
+
+    # Resolve deaths (opponent's board minions that died from spell effects)
+    s.opponent.board = [m for m in s.opponent.board if m.health > 0]
+    s.board = [m for m in s.board if m.health > 0]
+
+    return s
+
+
+def _opponent_attack(s: "GameState", action: Action) -> "GameState":
+    """Opponent minion attacks our hero or our minions.
+
+    source_index indexes into s.opponent.board (opponent's minions).
+    target_index: 0 = our hero, 1+ = our minion (1-based).
+    """
+    src_idx = action.source_index
+    if src_idx < 0 or src_idx >= len(s.opponent.board):
+        return s
+    source = s.opponent.board[src_idx]
+
+    if not source.can_attack_now:
+        return s
+
+    tgt_idx = action.target_index
+    if tgt_idx == 0:
+        # Attack our hero
+        _apply_damage_to_hero(s.hero, source.attack)
+        if source.has_lifesteal:
+            s.opponent.hero.hp = min(
+                s.opponent.hero.max_hp,
+                s.opponent.hero.hp + source.attack,
+            )
+    else:
+        # Attack our minion
+        our_idx = tgt_idx - 1
+        if our_idx < 0 or our_idx >= len(s.board):
+            return s
+        target = s.board[our_idx]
+
+        # Target takes damage
+        if target.has_divine_shield:
+            target.has_divine_shield = False
+        else:
+            target.health -= source.attack
+
+        # Counter-attack
+        if source.has_divine_shield:
+            source.has_divine_shield = False
+        else:
+            source.health -= target.attack
+
+        # Poisonous
+        if source.has_poisonous and not target.has_divine_shield:
+            target.health = 0
+
+    # Mark attacker as used
+    source.can_attack = False
+
+    # Resolve deaths
+    s.opponent.board = [m for m in s.opponent.board if m.health > 0]
+    s.board = [m for m in s.board if m.health > 0]
+
+    return s
+
+
+def _opponent_hero_power(s: "GameState") -> "GameState":
+    """Opponent uses their hero power: simplified stub.
+
+    Deals 1 damage to our hero (generic hero power).
+    """
+    hp_cost = s.opponent.hero.hero_power_cost
+    if s.opponent.hero.hero_power_used:
+        return s
+    if hp_cost > s.opponent.mana_available:
+        return s
+
+    s.opponent.mana_available -= hp_cost
+    s.opponent.hero.hero_power_used = True
+    _apply_damage_to_hero(s.hero, 1)
+    return s
+
+
+def _opponent_end_turn(s: "GameState", action: Action) -> "GameState":
+    """End opponent turn, switch back to OUR turn.
+
+    Increments turn counter, draws a card for us, resets our mana
+    (accounting for overload recorded in _end_turn), and clears
+    opponent's mana.
+    """
+    s.is_opponent_turn = False
+
+    # Increment turn (deferred from _end_turn)
+    s.turn_number += 1
+
+    # Draw a card for us
+    s = _draw_card(s)
+
+    # Set up our mana for new turn
+    if s.mana.max_mana < s.mana.max_mana_cap:
+        s.mana.max_mana += 1
+    s.mana.available = s.mana.max_mana - s.mana.overloaded
+
+    # Clear opponent's turn mana
+    s.opponent.mana_available = 0
+    s.opponent.mana_max = 0
+
+    # Reset opponent hero power
+    s.opponent.hero.hero_power_used = False
+
+    # Unfreeze OUR frozen minions (opponent's turn is over)
+    for m in s.board:
+        m.frozen_until_next_turn = False
 
     return s
 
@@ -949,7 +1383,7 @@ def _hero_replace(s: "GameState", action: Action) -> "GameState":
         s.mana.consume_modifiers(card)
         s.cards_played_this_turn.append(card)
         try:
-            from analysis.search.engine.mechanics import HeroCardHandler
+            from analysis.card.engine.mechanics.hero_card import HeroCardHandler
             s = HeroCardHandler().apply_hero_card(s, card)
         except (ImportError, AttributeError):
             armor = getattr(card, "armor", 0) or 0
@@ -1006,8 +1440,8 @@ def _apply_hand_transform(s: "GameState", card, minion: Minion) -> None:
 
     if eff is None:
         # Fallback: text-based hand-transform detection
-        text = getattr(card, "text", "") or ""
-        if not ('手牌' in text and '变成' in text):
+        text = getattr(card, "english_text", "") or getattr(card, "text", "") or ""
+        if 'becomes' not in text.lower():
             return
         import re as _re
         m = _re.search(r'(\d+)/(\d+)', text)

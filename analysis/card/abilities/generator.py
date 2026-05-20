@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""generator.py — 从 CardDB 数据自动生成 card_abilities.json 骨架。
+"""generator.py — 已弃用，请使用 generator_v2.py。
 
-> **本文件功能**: 从 CardDB 数据自动生成 card_abilities.json 骨架。解析 mechanics 字段推断基本能力
-> （BATTLECRY/DEATHRATTLE/DISCOVER 等），生成 MetaStone 风格的 JSON 定义。
+> ⚠️ DEPRECATED (Phase 3): 旧版 v1 生成器，输出 card_abilities.json。
+> 新版 generator_v2.py 输出 card_abilities_v2.json (递归 SpellDesc)。
 
 生成逻辑:
   1. 纯关键字随从 → 空 abilities（由 Tag 系统处理）
@@ -34,18 +34,25 @@ _DEFAULT_OUTPUT = PROJECT_ROOT / "analysis" / "card" / "data" / "card_abilities.
 
 # ── 需要生成 abilities 的 mechanics 关键字 ────────────────────
 _TRIGGER_MECHANICS = {
-    "BATTLECRY",
-    "DEATHRATTLE",
-    "DISCOVER",
-    "COMBO",
-    "SPELLBURST",
-    "INSPIRE",
-    "OVERLOAD",
-    "SECRET",
-    "QUEST",
-    "OUTCAST",
-    "FRENZY",
-    "FINALE",
+    "BATTLECRY", "DEATHRATTLE", "DISCOVER", "COMBO",
+    "SPELLBURST", "INSPIRE", "OVERLOAD", "SECRET",
+    "QUEST", "OUTCAST", "FRENZY", "FINALE",
+}
+
+# ── Mechanic → handler 注册表 ─────────────────────────────────
+# handler(text) -> List[dict] | None  (None=skip this mechanic)
+# most trigger types share _parse_simple_battlecry
+_MECHANIC_HANDLERS: Dict[str, Any] = {
+    "BATTLECRY":    ("BATTLECRY", _parse_simple_battlecry),
+    "DEATHRATTLE":  ("DEATHRATTLE", _parse_simple_deathrattle),
+    "COMBO":        ("COMBO", _parse_simple_battlecry),
+    "SPELLBURST":   ("SPELLBURST", _parse_simple_battlecry),
+    "INSPIRE":      ("INSPIRE", _parse_simple_battlecry),
+    "FRENZY":       ("FRENZY", _parse_simple_battlecry),
+    "FINALE":       ("FINALE", _parse_simple_battlecry),
+    "OUTCAST":      ("OUTCAST", _parse_simple_battlecry),
+    "DISCOVER":     ("DISCOVER", lambda t: [{"class": "DiscoverSpell"}]),
+    "OVERLOAD":     None,   # cost modifier, not an effect
 }
 
 # ── 纯关键字 mechanics（由 Tag 系统处理，不需要 abilities） ──
@@ -69,52 +76,71 @@ _TAG_ONLY_MECHANICS = {
     "INFERNAL",
 }
 
-# ── 中文文本匹配模式 ──────────────────────────────────────────
+# ── 文本清理工具 ─────────────────────────────────────────────
+_RE_HTML = re.compile(r"</?[a-zA-Z]+>")
+_RE_X_PREFIX = re.compile(r"\[x\]")
 
-# "造成{n}点伤害"
-_RE_DAMAGE = re.compile(r"造成(\d+)点伤害")
-# "恢复{n}点生命值" 或 "恢复#{n}点生命值" (法力值引用)
-_RE_HEAL = re.compile(r"恢复(\d+)点生命值")
-# "召唤{n}个" 或 "召唤" + 卡牌名
-_RE_SUMMON = re.compile(r"召唤(\d+)个(.+?)(?:。|$)")
-_RE_SUMMON_SIMPLE = re.compile(r"召唤(.+?)(?:。|$)")
-# "抽{n}张牌"
-_RE_DRAW = re.compile(r"抽(\d+)张牌")
-# "获得{n}点护甲"
-_RE_ARMOR = re.compile(r"获得(\d+)点护甲")
-# "发现"
-_RE_DISCOVER = re.compile(r"发现")
-# "+{n}/+{n}" 或 "+{n}攻击力" 等
+
+def _clean(text: str) -> str:
+    """移除 HTML 标签、[x] 前缀、多余空白后返回纯文本。"""
+    t = _RE_HTML.sub("", text)
+    t = _RE_X_PREFIX.sub("", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+# ── 英文文本匹配模式 ──────────────────────────────────────────
+
+# "Deal [$#]N damage" — $ for spellpower-scalable, # for fixed
+_RE_DAMAGE = re.compile(r"[Dd]eal\s*[\$#]?\s*(\d+)\s+damage")
+# "Restore [$#]N Health"
+_RE_HEAL = re.compile(r"[Rr]estore\s*[\$#]?\s*(\d+)\s+[Hh]ealth")
+# "Draw N card(s)" or "Draw a card"
+_RE_DRAW = re.compile(r"[Dd]raw\s+(\d+|a|an)\s*(?:cards?|copies?)?")
+# "Gain [$#]N Armor"
+_RE_ARMOR = re.compile(r"[Gg]ain\s*[\$#]?\s*(\d+)\s+[Aa]rmor")
+# "Summon a N/N minion" or "Summon two 2/2 Treants" — simple suffix match
+_RE_SUMMON = re.compile(r"[Ss]ummon\s+(\d+|a|an|two|three)?\s*(.+?)?(?:\.|$)")
+_RE_SUMMON_SIMPLE = re.compile(r"[Ss]ummon\s+(?:a|an)?\s*(.+?)(?:\.|$)")
+# "Discover"
+_RE_DISCOVER = re.compile(r"[Dd]iscover")
+# "+N/+N"
 _RE_BUFF = re.compile(r"\+(\d+)/\+(\d+)")
-_RE_BUFF_ATK = re.compile(r"\+(\d+)攻击力")
-_RE_BUFF_HP = re.compile(r"\+(\d+)生命值")
-# "摧毁" 随从
-_RE_DESTROY = re.compile(r"摧毁")
-# "沉默"
-_RE_SILENCE = re.compile(r"沉默")
-# "冻结"
-_RE_FREEZE = re.compile(r"冻结(.+?)(?:。|$)")
-# "变形"
-_RE_TRANSFORM = re.compile(r"变形为(.+?)(?:。|$)")
-# "复制"
-_RE_COPY = re.compile(r"复制")
-# "获得控制权"
-_RE_TAKE_CONTROL = re.compile(r"获得控制权")
-# "洗入"
-_RE_SHUFFLE = re.compile(r"洗入(.+?)(?:。|$)")
-# "装备"
-_RE_EQUIP_WEAPON = re.compile(r"装备(.+?)(?:。|$)")
-# "获得法力值"
-_RE_MANA = re.compile(r"获得(\d+)个法力水晶")
-# "弃牌"
-_RE_DISCARD = re.compile(r"弃(\d+)张牌")
-# "返回手牌"
-_RE_RETURN = re.compile(r"返回手牌")
+# "Destroy"
+_RE_DESTROY = re.compile(r"[Dd]estroy")
+# "Silence"
+_RE_SILENCE = re.compile(r"[Ss]ilence")
+# "Freeze"
+_RE_FREEZE = re.compile(r"[Ff]reeze")
+# "Transform"
+_RE_TRANSFORM = re.compile(r"[Tt]ransform\s(?:into\s)?(.+?)(?:\.|$)")
+# "Copy"
+_RE_COPY = re.compile(r"[Cc]opy")
+# "Take control"
+_RE_TAKE_CONTROL = re.compile(r"[Tt]ake\s+control")
+# "Shuffle into"
+_RE_SHUFFLE = re.compile(r"[Ss]huffle\s+(.+?)\s+into")
+# "Equip a weapon"
+_RE_EQUIP_WEAPON = re.compile(r"[Ee]quip")
+# "Gain N Mana Crystal"
+_RE_MANA = re.compile(r"[Gg]ain\s*(?:\w+\s+)*?(\d+)\s+Mana")
+# "Discard N" or "Discard a"
+_RE_DISCARD = re.compile(r"[Dd]iscard\s+(\d+|a|an)")
+# "Return to hand"
+_RE_RETURN = re.compile(r"[Rr]eturn\s+(?:to\s+\w+\s+)?hand")
 
 
 # ═══════════════════════════════════════════════════════════════
 # 辅助函数
 # ═══════════════════════════════════════════════════════════════
+
+def _en_int(sval: str) -> int:
+    """将英文字符串转整数：数字字符串直接解析，"a"/"an" = 1，否则 0。"""
+    if sval.isdigit():
+        return int(sval)
+    if sval.lower() in ("a", "an"):
+        return 1
+    return 0
+
 
 def _extract_number(text: str) -> Optional[int]:
     """从文本中提取第一个数字。
@@ -165,128 +191,113 @@ def _make_todo(text: str) -> dict:
 
 
 def _parse_simple_battlecry(text: str) -> List[dict]:
-    """解析简单战吼文本，推断 Spell 类。
+    """Parse simple battlecry text, infer Spell classes.
 
-    参数:
-        text: 卡牌描述文本
-    返回:
-        推断出的 Spell action 列表
+    Uses English text from card DB with English regex patterns.
     """
     actions: List[dict] = []
-    remaining = text
+    remaining = _clean(text)
 
-    # 发现
+    # Discover (usually exclusive)
     if _RE_DISCOVER.search(remaining):
         actions.append({"class": "DiscoverSpell"})
-        return actions  # 发现通常独占效果
+        return actions
 
-    # 造成伤害
+    # Deal damage
     m = _RE_DAMAGE.search(remaining)
     if m:
         value = int(m.group(1))
-        # 判断目标类型
         target = _infer_damage_target(remaining)
         actions.append({"class": "DamageSpell", "value": value, "target": target})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 治疗效果
+    # Heal
     m = _RE_HEAL.search(remaining)
     if m:
         value = int(m.group(1))
         actions.append({"class": "HealSpell", "value": value, "target": "FRIENDLY_HERO"})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 抽牌
+    # Draw
     m = _RE_DRAW.search(remaining)
     if m:
-        count = int(m.group(1))
-        actions.append({"class": "DrawSpell", "count": count})
-        remaining = remaining[:m.start()] + remaining[m.end():]
+        count = _en_int(m.group(1))
+        if count:
+            actions.append({"class": "DrawSpell", "count": count})
+            remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 获得护甲
+    # Gain Armor
     m = _RE_ARMOR.search(remaining)
     if m:
         value = int(m.group(1))
         actions.append({"class": "ArmorSpell", "value": value})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 增益效果
+    # Buff +N/+N
     m = _RE_BUFF.search(remaining)
     if m:
         atk, hp = int(m.group(1)), int(m.group(2))
         actions.append({"class": "BuffSpell", "attack": atk, "health": hp, "target": "SELF"})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 召唤
-    m = _RE_SUMMON.search(remaining)
-    if m:
-        count = int(m.group(1))
-        card_name = m.group(2).strip()
-        actions.append({"class": "SummonSpell", "_count": count, "_card_name": card_name})
-        remaining = remaining[:m.start()] + remaining[m.end():]
-    else:
-        m = _RE_SUMMON_SIMPLE.search(remaining)
-        if m:
-            card_name = m.group(1).strip()
-            actions.append({"class": "SummonSpell", "_card_name": card_name})
-            remaining = remaining[:m.start()] + remaining[m.end():]
-
-    # 摧毁
+    # Destroy
     if _RE_DESTROY.search(remaining):
         actions.append({"class": "DestroySpell", "target": "TARGET"})
 
-    # 沉默
+    # Silence
     if _RE_SILENCE.search(remaining):
         actions.append({"class": "SilenceSpell", "target": "TARGET"})
 
-    # 冻结
-    m = _RE_FREEZE.search(remaining)
-    if m:
+    # Freeze
+    if _RE_FREEZE.search(remaining):
         actions.append({"class": "FreezeSpell", "target": "TARGET"})
 
-    # 变形
+    # Transform
     m = _RE_TRANSFORM.search(remaining)
     if m:
         card_name = m.group(1).strip()
         actions.append({"class": "TransformSpell", "_card_name": card_name})
 
-    # 复制
+    # Copy
     if _RE_COPY.search(remaining):
         actions.append({"class": "CopySpell", "target": "TARGET"})
 
-    # 获得控制权
+    # Take control
     if _RE_TAKE_CONTROL.search(remaining):
         actions.append({"class": "TakeControlSpell", "target": "TARGET"})
 
-    # 洗入牌库
+    # Summon
+    if _RE_SUMMON.search(remaining):
+        actions.append({"class": "SummonSpell"})
+
+    # Shuffle into deck
     m = _RE_SHUFFLE.search(remaining)
     if m:
         card_name = m.group(1).strip()
         actions.append({"class": "ShuffleSpell", "_card_name": card_name})
 
-    # 装备武器
-    m = _RE_EQUIP_WEAPON.search(remaining)
-    if m:
-        card_name = m.group(1).strip()
-        actions.append({"class": "WeaponEquipSpell", "_card_name": card_name})
+    # Equip weapon
+    if _RE_EQUIP_WEAPON.search(remaining):
+        actions.append({"class": "WeaponEquipSpell"})
 
-    # 获得法力水晶
+    # Gain Mana Crystal
     m = _RE_MANA.search(remaining)
     if m:
         value = int(m.group(1))
         actions.append({"class": "ManaSpell", "value": value})
 
-    # 弃牌
+    # Discard
     m = _RE_DISCARD.search(remaining)
     if m:
-        count = int(m.group(1))
-        actions.append({"class": "DiscardSpell", "count": count})
+        count = _en_int(m.group(1))
+        if count:
+            actions.append({"class": "DiscardSpell", "count": count})
 
-    # 返回手牌
+    # Return to hand
     if _RE_RETURN.search(remaining):
         actions.append({"class": "ReturnSpell", "target": "TARGET"})
 
-    # 如果没有推断出任何 action，标记 TODO
+    # Fallback: no action inferred → TODO
     if not actions:
         actions.append(_make_todo(text))
 
@@ -294,42 +305,37 @@ def _parse_simple_battlecry(text: str) -> List[dict]:
 
 
 def _parse_simple_deathrattle(text: str) -> List[dict]:
-    """解析简单亡语文本，推断 Spell 类。
+    """Parse simple deathrattle text, infer Spell classes.
 
-    参数:
-        text: 卡牌描述文本
-    返回:
-        推断出的 Spell action 列表
+    Uses English text with English regex patterns.
     """
     actions: List[dict] = []
+    text = _clean(text)
 
-    # 召唤（亡语最常见）
-    m = _RE_SUMMON.search(text)
-    if m:
-        count = int(m.group(1))
-        card_name = m.group(2).strip()
-        actions.append({"class": "SummonSpell", "_count": count, "_card_name": card_name})
-        return actions
-
-    m = _RE_SUMMON_SIMPLE.search(text)
-    if m:
-        card_name = m.group(1).strip()
-        actions.append({"class": "SummonSpell", "_card_name": card_name})
-        return actions
-
-    # 造成伤害（亡语随机目标）
+    # Deal damage (deathrattle defaults to random enemy target)
     m = _RE_DAMAGE.search(text)
     if m:
         value = int(m.group(1))
         actions.append({"class": "DamageSpell", "value": value, "target": "RANDOM_ENEMY_CHARACTER"})
 
-    # 抽牌
+    # Draw
     m = _RE_DRAW.search(text)
     if m:
-        count = int(m.group(1))
-        actions.append({"class": "DrawSpell", "count": count})
+        count = _en_int(m.group(1))
+        if count:
+            actions.append({"class": "DrawSpell", "count": count})
 
-    # 如果没有推断出任何 action，标记 TODO
+    # Summon (common deathrattle)
+    if _RE_SUMMON.search(text):
+        actions.append({"class": "SummonSpell"})
+
+    # +N/+N buff
+    m = _RE_BUFF.search(text)
+    if m:
+        atk, hp = int(m.group(1)), int(m.group(2))
+        actions.append({"class": "BuffSpell", "attack": atk, "health": hp, "target": "SELF"})
+
+    # Fallback: no action inferred → TODO
     if not actions:
         actions.append(_make_todo(text))
 
@@ -337,17 +343,14 @@ def _parse_simple_deathrattle(text: str) -> List[dict]:
 
 
 def _parse_spell_text(text: str) -> List[dict]:
-    """解析法术牌文本，推断 Spell 类。
+    """Parse spell card text, infer Spell classes.
 
-    参数:
-        text: 法术牌描述文本
-    返回:
-        推断出的 Spell action 列表
+    Uses English text with English regex patterns.
     """
     actions: List[dict] = []
-    remaining = text
+    remaining = _clean(text)
 
-    # 造成伤害
+    # Deal damage
     m = _RE_DAMAGE.search(remaining)
     if m:
         value = int(m.group(1))
@@ -355,97 +358,98 @@ def _parse_spell_text(text: str) -> List[dict]:
         actions.append({"class": "DamageSpell", "value": value, "target": target})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 治疗效果
+    # Heal
     m = _RE_HEAL.search(remaining)
     if m:
         value = int(m.group(1))
         actions.append({"class": "HealSpell", "value": value, "target": "FRIENDLY_HERO"})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 抽牌
+    # Draw
     m = _RE_DRAW.search(remaining)
     if m:
-        count = int(m.group(1))
-        actions.append({"class": "DrawSpell", "count": count})
-        remaining = remaining[:m.start()] + remaining[m.end():]
+        count = _en_int(m.group(1))
+        if count:
+            actions.append({"class": "DrawSpell", "count": count})
+            remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 获得护甲
+    # Gain Armor
     m = _RE_ARMOR.search(remaining)
     if m:
         value = int(m.group(1))
         actions.append({"class": "ArmorSpell", "value": value})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 增益效果
+    # Buff +N/+N
     m = _RE_BUFF.search(remaining)
     if m:
         atk, hp = int(m.group(1)), int(m.group(2))
         actions.append({"class": "BuffSpell", "attack": atk, "health": hp, "target": "TARGET"})
         remaining = remaining[:m.start()] + remaining[m.end():]
 
-    # 召唤
-    m = _RE_SUMMON.search(remaining)
-    if m:
-        count = int(m.group(1))
-        card_name = m.group(2).strip()
-        actions.append({"class": "SummonSpell", "_count": count, "_card_name": card_name})
-        remaining = remaining[:m.start()] + remaining[m.end():]
-    else:
-        m = _RE_SUMMON_SIMPLE.search(remaining)
-        if m:
-            card_name = m.group(1).strip()
-            actions.append({"class": "SummonSpell", "_card_name": card_name})
-            remaining = remaining[:m.start()] + remaining[m.end():]
-
-    # 发现
+    # Discover
     if _RE_DISCOVER.search(remaining):
         actions.append({"class": "DiscoverSpell"})
         remaining = _RE_DISCOVER.sub("", remaining)
 
-    # 摧毁
+    # Destroy
     if _RE_DESTROY.search(remaining):
         actions.append({"class": "DestroySpell", "target": "TARGET"})
 
-    # 沉默
+    # Silence
     if _RE_SILENCE.search(remaining):
         actions.append({"class": "SilenceSpell", "target": "TARGET"})
 
-    # 冻结
-    m = _RE_FREEZE.search(remaining)
-    if m:
+    # Freeze
+    if _RE_FREEZE.search(remaining):
         actions.append({"class": "FreezeSpell", "target": "TARGET"})
 
-    # 变形
+    # Transform
     m = _RE_TRANSFORM.search(remaining)
     if m:
         card_name = m.group(1).strip()
         actions.append({"class": "TransformSpell", "_card_name": card_name})
 
-    # 复制
+    # Copy
     if _RE_COPY.search(remaining):
         actions.append({"class": "CopySpell", "target": "TARGET"})
 
-    # 获得控制权
+    # Take control
     if _RE_TAKE_CONTROL.search(remaining):
         actions.append({"class": "TakeControlSpell", "target": "TARGET"})
 
-    # 获得法力水晶
+    # Summon
+    if _RE_SUMMON.search(remaining):
+        actions.append({"class": "SummonSpell"})
+
+    # Gain Mana Crystal
     m = _RE_MANA.search(remaining)
     if m:
         value = int(m.group(1))
         actions.append({"class": "ManaSpell", "value": value})
 
-    # 弃牌
+    # Discard
     m = _RE_DISCARD.search(remaining)
     if m:
-        count = int(m.group(1))
-        actions.append({"class": "DiscardSpell", "count": count})
+        count = _en_int(m.group(1))
+        if count:
+            actions.append({"class": "DiscardSpell", "count": count})
 
-    # 返回手牌
+    # Return to hand
     if _RE_RETURN.search(remaining):
         actions.append({"class": "ReturnSpell", "target": "TARGET"})
 
-    # 如果没有推断出任何 action，标记 TODO
+    # Shuffle into deck
+    m = _RE_SHUFFLE.search(remaining)
+    if m:
+        card_name = m.group(1).strip()
+        actions.append({"class": "ShuffleSpell", "_card_name": card_name})
+
+    # Equip weapon
+    if _RE_EQUIP_WEAPON.search(remaining):
+        actions.append({"class": "WeaponEquipSpell"})
+
+    # Fallback: no action inferred → TODO
     if not actions:
         actions.append(_make_todo(text))
 
@@ -453,25 +457,22 @@ def _parse_spell_text(text: str) -> List[dict]:
 
 
 def _infer_damage_target(text: str) -> str:
-    """从文本推断伤害目标类型。
+    """从英文文本推断伤害目标类型。
 
-    参数:
-        text: 卡牌描述文本
-    返回:
-        目标选择器字符串
+    Returns target selector string for Spell JSON.
     """
-    text_lower = text.lower()
-    if "所有" in text and ("敌人" in text or "敌方" in text):
+    t = text.lower()
+    if "all enemy" in t or "all enemies" in t:
         return "ALL_ENEMY_CHARACTERS"
-    if "所有" in text and ("随从" in text):
+    if "all minion" in t or "all other minion" in t:
         return "ALL_MINIONS"
-    if "随机" in text and ("敌人" in text or "敌方" in text):
+    if "random enemy" in t or "random" in t and "enemy" in t:
         return "RANDOM_ENEMY_CHARACTER"
-    if "随机" in text:
+    if "random" in t:
         return "RANDOM_ENEMY_MINION"
-    if "敌人" in text or "敌方" in text:
+    if "enemy minion" in t or "enemy" in t:
         return "ENEMY_MINION"
-    # 默认：需要目标选择
+    # Default: requires target selection
     return "TARGET"
 
 
@@ -528,7 +529,7 @@ def generate_abilities_json(output_path: Optional[str] = None) -> dict:
         name = card.get("name", "")
         card_type = card.get("type", "")
         mechanics = card.get("mechanics", [])
-        text = card.get("text", "")
+        text = card.get("englishText", "") or card.get("text", "")
 
         if not card_id or not name:
             continue
@@ -603,6 +604,12 @@ def generate_abilities_json(output_path: Optional[str] = None) -> dict:
             elif mechanic == "FINALE":
                 actions = _parse_simple_battlecry(text)
                 abilities.append({"trigger": "FINALE", "actions": actions})
+            elif mechanic == "OUTCAST":
+                actions = _parse_simple_battlecry(text)
+                abilities.append({"trigger": "OUTCAST", "actions": actions})
+            elif mechanic == "OVERLOAD":
+                # OVERLOAD is a cost modifier, not an effect — skip
+                continue
             else:
                 # 其他触发器标记 TODO
                 abilities.append({

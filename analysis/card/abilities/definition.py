@@ -46,13 +46,13 @@ class AbilityTrigger(Enum):
     ACTIVATE = "ACTIVATE"
     TRIGGER_VISUAL = "TRIGGER_VISUAL"
     # ── Keyword triggers (detected from card text) ──
-    HERALD = "HERALD"           # 兆示: increment herald counter, summon soldier
-    IMBUE = "IMBUE"             # 灌注: upgrade hero power
-    KINDRED = "KINDRED"         # 延系: conditional bonus if race/school matches
-    COLOSSAL = "COLOSSAL"       # 巨型: summon appendage minions
-    CORPSE_SPEND = "CORPSE_SPEND"  # 残骸: spend corpse resource for bonus
-    CORPSE_GAIN = "CORPSE_GAIN"    # 获得残骸
-    DORMANT = "DORMANT"         # 休眠: enter dormant for N turns
+    HERALD = "HERALD"           # increment herald counter, summon soldier
+    IMBUE = "IMBUE"             # upgrade hero power
+    KINDRED = "KINDRED"         # conditional bonus if race/school matches
+    COLOSSAL = "COLOSSAL"       # summon appendage minions
+    CORPSE_SPEND = "CORPSE_SPEND"  # spend corpse resource for bonus
+    CORPSE_GAIN = "CORPSE_GAIN"    # gain corpse resource
+    DORMANT = "DORMANT"         # enter dormant for N turns
 
 
 # ──────────────────────────────────────────────────────────────
@@ -422,19 +422,101 @@ class CardAbility:
 
 
 # ══════════════════════════════════════════════════════════════
-# Action — re-exported from analysis.effects.types
+# Action — high-level player actions
 # ══════════════════════════════════════════════════════════════
 
-from analysis.effects.types import Action as _Action
-from analysis.effects.types import action_key as _action_key
-from analysis.effects.types import action_in_list as _action_in_list
-from analysis.effects.types import ActionKind
+class ActionKind(Enum):
+    """High-level player actions in a turn.
 
-# Re-export for backward compatibility — new code should import from
-# analysis.effects.types directly.
-Action = _Action
-action_key = _action_key
-action_in_list = _action_in_list
+    These are distinct from EffectKind (effects happen *because* of actions).
+    An action may trigger multiple effects (e.g., PLAY triggers a Battlecry).
+    """
+    PLAY = "play"
+    PLAY_WITH_TARGET = "play_with_target"
+    ATTACK = "attack"
+    HERO_POWER = "hero_power"
+    ACTIVATE_LOCATION = "activate_location"
+    HERO_REPLACE = "hero_replace"
+    DISCOVER_PICK = "discover_pick"
+    CHOOSE_ONE = "choose_one"
+    TRANSFORM = "transform"
+    END_TURN = "end_turn"
+    PASS = "pass"
 
-# Backward-compatible alias: old code references ActionType
+
+# Backward-compatible alias
 ActionType = ActionKind
+
+
+@dataclass
+class Action:
+    """A single action a player can take."""
+    action_type: ActionKind
+    card_id: str = ""
+    card_index: int = -1
+    source_index: int = -1
+    target_index: int = -1
+    target_id: str = ""
+    position: int = -1
+    discover_choice_index: int = -1
+    data: int = 0
+    step_order: int = 0
+    meta_tags: frozenset[str] = field(default_factory=frozenset)
+
+    def describe(self, state: Any = None) -> str:
+        at = self.action_type
+        ci = self.card_index
+        ti = self.target_index
+        si = self.source_index
+        di = self.discover_choice_index
+        if at == ActionKind.PLAY:
+            card_name = "unknown"
+            if state is not None and 0 <= ci < len(state.hand):
+                card_name = state.hand[ci].name or f"card#{ci}"
+            tgt = f" -> target#{ti}" if ti > 0 else ""
+            return f"hand[{ci}] play [{card_name}]{tgt}"
+        elif at == ActionKind.PLAY_WITH_TARGET:
+            card_name = "unknown"
+            if state is not None and 0 <= ci < len(state.hand):
+                card_name = state.hand[ci].name or f"card#{ci}"
+            return f"hand[{ci}] directed play [{card_name}] -> target#{ti}"
+        elif at == ActionKind.ATTACK:
+            src = "weapon" if si == -1 else f"minion#{si}"
+            return f"{src} attack target#{ti}"
+        elif at == ActionKind.HERO_POWER:
+            return "hero power"
+        elif at == ActionKind.END_TURN:
+            return "end turn"
+        elif at == ActionKind.ACTIVATE_LOCATION:
+            return f"activate location#{si}"
+        elif at == ActionKind.HERO_REPLACE:
+            card_name = "unknown"
+            if state is not None and 0 <= ci < len(state.hand):
+                card_name = state.hand[ci].name or "hero"
+            return f"hand[{ci}] replace hero [{card_name}]"
+        elif at == ActionKind.DISCOVER_PICK:
+            return f"discover pick#{di}"
+        elif at == ActionKind.TRANSFORM:
+            return f"transform target#{ti}"
+        elif at == ActionKind.CHOOSE_ONE:
+            return f"choose_one#{self.data} pick#{di}"
+        return f"unknown action({at})"
+
+
+def action_key(action: Action) -> tuple:
+    """Return a hashable key for action comparison."""
+    card_name = getattr(action, '_card_name', '') or ''
+    return (
+        action.action_type,
+        action.card_index,
+        action.position,
+        action.source_index,
+        action.target_index,
+        card_name,
+    )
+
+
+def action_in_list(action: Action, legal: list) -> bool:
+    """Check if *action* matches any action in *legal* (by key)."""
+    ak = action_key(action)
+    return any(action_key(la) == ak for la in legal)

@@ -21,10 +21,19 @@ from typing import Callable, Optional, TextIO
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-from analysis.effects.types import Action
-from analysis.search.engine_adapter import UnifiedSearchResult, GameEngine, create_engine
-from analysis.utils.score_provider import load_scores_into_hand
+from analysis.card.abilities.definition import Action
 from analysis.utils.bayesian_opponent import classify_card_playstyle
+
+try:
+    from analysis.search.engine_adapter import UnifiedSearchResult, GameEngine, create_engine
+    _HAS_SEARCH_ENGINE = True
+except ImportError:
+    UnifiedSearchResult = object  # type: ignore[misc]
+    GameEngine = object  # type: ignore[misc]
+    _HAS_SEARCH_ENGINE = False
+
+    def create_engine(*args, **kwargs):  # type: ignore[misc]
+        raise RuntimeError("v1 search engine removed (analysis.search deleted)")
 
 log = logging.getLogger(__name__)
 
@@ -122,8 +131,9 @@ class TerminalDisplay:
         term_lines.append(decision_text)
         file_lines.append(f"│ {decision_text}")
 
-        if result.best_sequence:
-            action_desc = result.best_sequence[0].describe(state)
+        best_seq = getattr(result, "best_chromosome", getattr(result, "best_sequence", None))
+        if best_seq:
+            action_desc = best_seq[0].describe(state)
             term_lines.append(f">>> {action_desc}")
             file_lines.append(f"│ >>> {action_desc}")
 
@@ -132,30 +142,31 @@ class TerminalDisplay:
             file_lines.append("│ ○ 次优操作:")
             for rank, (alt_seq, fitness) in enumerate(result.alternatives, 1):
                 if alt_seq:
-                    gap = result.fitness - fitness
+                    gap = (getattr(result, 'best_fitness', 0) or getattr(result, 'fitness', 0)) - fitness
                     alt_desc = alt_seq[0].describe(state)
                     file_lines.append(f"│    {rank}. {alt_desc}  (score: {fitness:+.2f} | 差距: {gap:.2f})")
                     if rank <= 2:
                         term_lines.append(f"  {rank}. {alt_desc[:40]}")
 
-        if show_probabilities and getattr(result, 'action_stats', None):
+        if show_probabilities and getattr(result, 'action_probs', None):
             file_lines.append("│")
             file_lines.append("│ [动作统计]")
-            for stat in result.action_stats:
+            for stat in result.action_probs:
                 desc = stat.action.describe(state)
                 if len(desc) > 20:
                     desc = desc[:20]
-                bar = self._progress_bar(stat.visit_probability, 20)
+                prob = getattr(stat, 'probability', getattr(stat, 'visit_probability', 0))
+                bar = self._progress_bar(prob, 20)
                 file_lines.append(
-                    f"│ {desc:<20s} {bar} {stat.visit_probability * 100:5.1f}%  "
+                    f"│ {desc:<20s} {bar} {prob * 100:5.1f}%  "
                     f"胜率: {stat.win_rate * 100:.1f}%  (visits: {stat.visit_count})"
                 )
 
-            stats = result.action_stats
+            stats = result.action_probs
             if stats:
                 top3 = stats[:3]
                 prob_parts = " | ".join(
-                    f"{s.action.describe(state)[:15]}:{s.visit_probability * 100:.0f}%"
+                    f"{s.action.describe(state)[:15]}:{getattr(s, 'probability', getattr(s, 'visit_probability', 0)) * 100:.0f}%"
                     for s in top3
                 )
                 term_lines.append(f"[概率] {prob_parts}")
@@ -174,7 +185,7 @@ class TerminalDisplay:
             file_lines.append("│")
             file_lines.append(f"│ {mcts_summary}")
 
-            detailed_log = result.detailed_log
+            detailed_log = getattr(result, 'mcts_detailed_log', None) or getattr(result, 'detailed_log', None)
             if detailed_log and detailed_log.entries:
                 entries = detailed_log.entries
                 n = len(entries)
@@ -323,8 +334,7 @@ class DecisionLoop:
         2. GameTracker parses lines incrementally
         3. On turn start (MAIN_READY/MAIN_ACTION):
            a. StateBridge converts to GameState
-           b. load_scores_into_hand() populates card scores
-           c. MCTSEngine.search() finds best action sequence
+            b. MCTSEngine.search() finds best action sequence
            d. DecisionPresenter outputs the recommendation
     """
 
@@ -368,6 +378,7 @@ class DecisionLoop:
         self._bridge = StateBridge()
         self._running = False
         self._last_turn = 0
+        self._last_mcts_turn: int | None = None  # last turn MCTS actually ran on
         self._last_decision_signature: tuple | None = None
         self._last_replan_at = 0.0
         self._replan_cooldown_s = float(self.engine_params.get("replan_cooldown_s", 0.8))
@@ -472,6 +483,7 @@ class DecisionLoop:
         if event == "game_start":
             log.info("New game detected")
             self._last_turn = 0
+            self._last_mcts_turn = None
             self._last_decision_signature = None
             # 通知 GameEngine 单例游戏开始
             self._game_engine.on_game_start()
@@ -483,6 +495,7 @@ class DecisionLoop:
         elif event == "game_end":
             log.info("Game ended")
             self._last_turn = 0
+            self._last_mcts_turn = None
             self._last_decision_signature = None
             # 通知 GameEngine 单例游戏结束
             self._game_engine.on_game_end()
@@ -608,13 +621,25 @@ class DecisionLoop:
             log.warning("Cannot export game state, skipping decision")
             return
 
+        current_turn = state.turn_number
+
+        # Skip MCTS on opponent's turn — save compute for our turns only.
+        # Hearthstone turns alternate: 1→Us, 2→Opp, 3→Us, 4→Opp...
+        # If last MCTS was on turn N, the next *our* turn is N+2.
+        if self._last_mcts_turn is not None:
+            if current_turn <= self._last_mcts_turn:
+                log.debug("Turn %d: already processed, skipping", current_turn)
+                return
+            if current_turn == self._last_mcts_turn + 1:
+                log.debug("Turn %d: opponent turn, skipping MCTS", current_turn)
+                return
+
         sig = self._state_signature(state)
         self._run_search_and_present(state, sig)
+        self._last_mcts_turn = current_turn
         self._last_replan_at = time.perf_counter()
 
     def _run_search_and_present(self, state, signature: tuple | None = None) -> None:
-        load_scores_into_hand(state)
-
         opp_playstyle = _infer_opp_playstyle(state)
         state.opp_playstyle = opp_playstyle
 
@@ -672,7 +697,7 @@ class DecisionLoop:
             log.debug(f"Eval logging failed: {e}")
 
     @staticmethod
-    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "unified", time_budget_ms: float = 8000.0, num_worlds: int = 7, **engine_kwargs) -> None:
+    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "mcts", time_budget_ms: float = 8000.0, num_worlds: int = 7, **engine_kwargs) -> None:
         """One-shot: analyze an entire Power.log file and output decisions for each turn."""
         log_path = Path(path)
         if not log_path.exists():
@@ -709,8 +734,6 @@ class DecisionLoop:
                     if state.turn_number == 0:
                         last_turn = current_turn
                         continue
-
-                    load_scores_into_hand(state)
 
                     start_time = time.perf_counter()
                     result = game_engine.search(state)

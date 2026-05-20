@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+pytest.skip("BattlecryDispatcher (analysis.effects) deleted in v1 cleanup", allow_module_level=True)
 
 from analysis.card.engine.state import GameState, Minion, OpponentState, HeroState
 from analysis.effects.orchestration.battlecry import BattlecryDispatcher

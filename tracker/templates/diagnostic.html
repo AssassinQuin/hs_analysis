@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HS 诊断 — Power.log 分析仪表盘</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #1a1d23;
+      --bg-card: #252830;
+      --bg-hover: #2d303a;
+      --border: #3a3d46;
+      --text: #e0e0e0;
+      --text-dim: #888;
+      --accent-blue: #4a9eff;
+      --accent-green: #4caf50;
+      --accent-red: #f44336;
+      --accent-orange: #ff9800;
+      --accent-purple: #9c27b0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg-dark);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+      margin: 0;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .app-header {
+      background: linear-gradient(135deg, #1e2128, #2a2d36);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .app-header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+    .app-header .badge { font-size: 11px; padding: 3px 10px; }
+    .status-dot {
+      display: inline-block;
+      width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 6px;
+    }
+    .status-dot.idle { background: var(--text-dim); }
+    .status-dot.running { background: var(--accent-orange); animation: pulse 1s infinite; }
+    .status-dot.done { background: var(--accent-green); }
+    .status-dot.error { background: var(--accent-red); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* ── Layout ── */
+    .app-layout {
+      display: flex;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+    }
+
+    /* ── Turn sidebar ── */
+    .turn-sidebar {
+      width: 200px;
+      min-width: 200px;
+      background: #1e2128;
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .turn-sidebar .turn-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .turn-sidebar .turn-item:hover { background: var(--bg-hover); }
+    .turn-sidebar .turn-item.active {
+      background: rgba(74, 158, 255, 0.12);
+      border-left-color: var(--accent-blue);
+    }
+    .turn-sidebar .turn-num { font-weight: 600; }
+    .turn-sidebar .turn-meta { color: var(--text-dim); font-size: 11px; }
+    .turn-sidebar .has-mcts { color: var(--accent-purple); font-size: 11px; }
+    .turn-sidebar .has-error { color: var(--accent-red); }
+
+    /* ── Main content ── */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+
+    /* ── Section cards ── */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .section-card .card-header {
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-card .card-body { padding: 12px 16px; }
+
+    /* ── Table ── */
+    .diagnostic-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .diagnostic-table th {
+      color: var(--text-dim);
+      font-weight: 500;
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .diagnostic-table td {
+      padding: 5px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: top;
+    }
+    .diagnostic-table tr:hover td { background: var(--bg-hover); }
+    .diagnostic-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+    .diagnostic-table .numeric.mono { font-family: 'SF Mono', 'Fira Code', monospace; }
+
+    /* ── Status indicators ── */
+    .match-yes { color: var(--accent-green); }
+    .match-no { color: var(--accent-red); }
+    .match-unknown { color: var(--text-dim); }
+
+    /* ── Progress bar ── */
+    .progress-thin { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .progress-thin .bar { height: 100%; background: var(--accent-blue); transition: width 0.3s; border-radius: 2px; }
+
+    /* ── Raw log viewer ── */
+    .raw-log-viewer {
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #bbb;
+    }
+    .raw-log-viewer .hl-create { color: #4a9eff; }
+    .raw-log-viewer .hl-tag { color: #ff9800; }
+    .raw-log-viewer .hl-action { color: #4caf50; }
+    .raw-log-viewer .hl-number { color: #ce93d8; }
+
+    /* ── Summary stats ── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .stat-item {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .stat-item .stat-label { font-size: 11px; color: var(--text-dim); }
+    .stat-item .stat-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+
+    /* ── Loading overlay ── */
+    .loading-overlay {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 60vh;
+      flex-direction: column;
+      gap: 16px;
+      color: var(--text-dim);
+    }
+    .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Code highlights ── */
+    .hl-yellow { color: #ffc107; }
+    .hl-cyan { color: #4dd0e1; }
+    .hl-green { color: #4caf50; }
+    .hl-red { color: #f44336; }
+    .hl-dim { color: #666; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .turn-sidebar { width: 120px; min-width: 120px; }
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════ Header ════ -->
+<header class="app-header">
+  <h1>🃏 HS 诊断</h1>
+  <span class="badge bg-secondary" id="statusBadge">
+    <span class="status-dot idle" id="statusDot"></span>
+    <span id="statusText">等待分析</span>
+  </span>
+  <span class="badge bg-dark" id="gameInfo" style="display:none"></span>
+  <div class="ms-auto d-flex gap-2">
+    <button class="btn btn-sm btn-outline-secondary" onclick="startAnalysis()" id="btnAnalyze">
+      ▶ 分析日志
+    </button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadDemo()">📂 加载 Power.log</button>
+  </div>
+</header>
+
+<!-- ════ Layout ════ -->
+<div class="app-layout">
+
+  <!-- Turn sidebar -->
+  <nav class="turn-sidebar" id="turnSidebar">
+    <div style="padding:12px 16px;font-size:11px;color:var(--text-dim)">
+      选择回合查看详情
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main class="main-content" id="mainContent">
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div>正在分析 Power.log ...</div>
+      <div class="progress-thin" style="width:200px">
+        <div class="bar" id="progressBar" style="width:5%"></div>
+      </div>
+      <div id="progressMsg" style="font-size:12px"></div>
+    </div>
+
+    <div id="turnContent" style="display:none">
+      <!-- Turn title -->
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <h4 class="m-0" id="turnTitle">回合 1</h4>
+        <span class="badge bg-dark" id="turnMeta"></span>
+        <span class="badge bg-danger" id="turnErrors" style="display:none"></span>
+      </div>
+
+      <!-- Game state overview -->
+      <div class="section-card">
+        <div class="card-header">📊 游戏状态</div>
+        <div class="card-body">
+          <div class="stat-grid" id="stateStats"></div>
+        </div>
+      </div>
+
+      <!-- MCTS Panel -->
+      <div class="section-card" id="mctsSection">
+        <div class="card-header">
+          🔬 MCTS / UCT 模拟节点
+          <span class="badge bg-secondary ms-auto" id="mctsStatsBadge"></span>
+        </div>
+        <div class="card-body">
+          <div id="mctsEmpty" class="text-center py-4" style="color:var(--text-dim)">
+            该回合未运行 MCTS 搜索
+          </div>
+          <div id="mctsContent" style="display:none">
+            <!-- Best sequence -->
+            <div class="mb-3">
+              <div style="font-size:12px;font-weight:600;margin-bottom:6px">最佳动作序列:</div>
+              <div id="mctsBestSeq" class="d-flex flex-wrap gap-1"></div>
+            </div>
+            <!-- Action stats table -->
+            <div style="font-size:12px;font-weight:600;margin-bottom:6px">根节点子节点统计</div>
+            <table class="diagnostic-table" id="mctsTable">
+              <thead>
+                <tr>
+                  <th>动作</th>
+                  <th style="width:60px">类型</th>
+                  <th style="width:60px" class="numeric">访问数</th>
+                  <th style="width:60px" class="numeric">总奖励</th>
+                  <th style="width:60px" class="numeric">Q 值</th>
+                  <th style="width:60px" class="numeric">访问概率</th>
+                  <th style="width:60px" class="numeric">胜率</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hand Prediction Panel -->
+      <div class="section-card">
+        <div class="card-header">
+          🎯 对手手牌判断
+          <span class="badge bg-secondary ms-auto" id="archetypeBadge"></span>
+        </div>
+        <div class="card-body">
+          <div id="hpEmpty" class="text-center py-4" style="color:var(--text-dim)">
+            该回合无手牌预测数据
+          </div>
+          <div id="hpContent" style="display:none">
+            <!-- Archetype info -->
+            <div class="mb-2 d-flex gap-3 align-items-center flex-wrap" id="archetypeInfo"></div>
+            <!-- Probability table -->
+            <div style="font-size:12px;font-weight:600;margin-bottom:6px">手牌概率分布</div>
+            <table class="diagnostic-table" id="hpTable">
+              <thead>
+                <tr>
+                  <th>卡牌</th>
+                  <th>费用</th>
+                  <th>类型</th>
+                  <th style="width:80px">概率</th>
+                  <th>来源</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <!-- MCTS top hand predictions -->
+            <div id="mctsHandSection" style="display:none" class="mt-3">
+              <div style="font-size:12px;font-weight:600;margin-bottom:4px">MCTS 手牌推断 Top</div>
+              <table class="diagnostic-table" id="mctsHandTable">
+                <thead><tr><th>卡牌ID</th><th style="width:80px">概率</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card Execution Comparison -->
+      <div class="section-card">
+        <div class="card-header">
+          ⚖️ 卡牌执行 vs 模拟效果
+          <span class="badge bg-secondary ms-auto" id="simBadge"></span>
+        </div>
+        <div class="card-body">
+          <div id="simEmpty" class="text-center py-4" style="color:var(--text-dim)">
+            该回合无卡牌打出
+          </div>
+          <div id="simContent" style="display:none">
+            <table class="diagnostic-table" id="simTable">
+              <thead>
+                <tr>
+                  <th>卡牌</th>
+                  <th>实际效果</th>
+                  <th>模拟效果</th>
+                  <th style="width:50px">匹配</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Raw Log Viewer -->
+      <div class="section-card">
+        <div class="card-header">
+          📜 Power.log 原始行
+          <span class="badge bg-secondary ms-auto" id="logLineCount"></span>
+          <button class="btn btn-sm btn-outline-secondary ms-2 py-0" onclick="toggleRawLog()">展开</button>
+        </div>
+        <div class="card-body" id="rawLogBody" style="display:none">
+          <div class="raw-log-viewer" id="rawLogViewer"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════
+
+let result = null;
+let currentTurn = null;
+let pollInterval = null;
+let rawLogVisible = false;
+
+// ═══════════════════════════════════════════════════════════
+// Polling
+// ═══════════════════════════════════════════════════════════
+
+function startPolling() {
+  if (pollInterval) return;
+  pollInterval = setInterval(pollStatus, 1000);
+}
+
+function stopPolling() {
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+}
+
+async function pollStatus() {
+  try {
+    const resp = await fetch('/api/status');
+    const data = await resp.json();
+    updateStatusBar(data);
+    if (!data.running && data.has_result && !result) {
+      await loadResult();
+    }
+    if (data.running) {
+      document.getElementById('loadingOverlay').style.display = 'flex';
+      document.getElementById('turnContent').style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+function updateStatusBar(data) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  const badge = document.getElementById('statusBadge');
+  const progBar = document.getElementById('progressBar');
+  const progMsg = document.getElementById('progressMsg');
+
+  if (data.running) {
+    dot.className = 'status-dot running';
+    txt.textContent = data.progress?.message || '分析中...';
+    badge.className = 'badge bg-warning text-dark';
+    if (data.progress?.current && data.progress?.total) {
+      const pct = Math.round(data.progress.current / data.progress.total * 100);
+      progBar.style.width = pct + '%';
+      progMsg.textContent = `回合 ${data.progress.current}/${data.progress.total}`;
+    }
+  } else if (data.has_result) {
+    dot.className = 'status-dot done';
+    txt.textContent = `${data.turn_count} 回合 | ${data.error_count} 错误`;
+    badge.className = 'badge bg-success';
+  } else if (data.progress?.status === 'error') {
+    dot.className = 'status-dot error';
+    txt.textContent = data.progress.message || '错误';
+    badge.className = 'badge bg-danger';
+  } else {
+    dot.className = 'status-dot idle';
+    txt.textContent = '等待分析';
+    badge.className = 'badge bg-secondary';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Load result
+// ═══════════════════════════════════════════════════════════
+
+async function loadResult() {
+  try {
+    const resp = await fetch('/api/result');
+    result = await resp.json();
+    stopPolling();
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('turnContent').style.display = 'block';
+    buildSidebar();
+    if (result.turns && result.turns.length > 0) {
+      showTurn(result.turns[0].turn_number);
+    }
+  } catch(e) {
+    console.error('Failed to load result:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Build sidebar
+// ═══════════════════════════════════════════════════════════
+
+function buildSidebar() {
+  const sidebar = document.getElementById('turnSidebar');
+  sidebar.innerHTML = '';
+  if (!result?.turns) return;
+
+  // Game info at top
+  const gi = result.game_info || {};
+  const infoEl = document.createElement('div');
+  infoEl.style.cssText = 'padding:10px 14px;border-bottom:1px solid var(--border);margin-bottom:4px';
+  infoEl.innerHTML = `
+    <div style="font-size:12px;font-weight:600">${gi.player_class || '? '} vs ${gi.opp_class || ' ?'}</div>
+    <div style="font-size:10px;color:var(--text-dim)">${gi.player_class_en || ''} vs ${gi.opp_class_en || ''}</div>
+  `;
+  sidebar.appendChild(infoEl);
+
+  // Turn list
+  for (const t of result.turns) {
+    const item = document.createElement('div');
+    item.className = 'turn-item';
+    item.dataset.turn = t.turn_number;
+    item.onclick = () => showTurn(t.turn_number);
+
+    let statusHtml = `<span class="turn-num">回合 ${t.turn_number}</span>`;
+    const hasMcts = t.mcts_action_stats && t.mcts_action_stats.length > 0;
+
+    let metaParts = [];
+    if (t.opponent?.hand_count != null) metaParts.push(`手${t.opponent.hand_count}`);
+    if (hasMcts) metaParts.push('<span class="has-mcts">MCTS</span>');
+
+    item.innerHTML = `
+      ${statusHtml}
+      <span class="turn-meta">${metaParts.join(' ')}</span>
+    `;
+    sidebar.appendChild(item);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Show turn
+// ═══════════════════════════════════════════════════════════
+
+function showTurn(num) {
+  currentTurn = num;
+  const t = result.turns.find(x => x.turn_number === num);
+  if (!t) return;
+
+  // Update sidebar active
+  document.querySelectorAll('.turn-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.turn) === num);
+  });
+
+  // Title
+  document.getElementById('turnTitle').textContent = `回合 ${num}`;
+
+  // State stats
+  renderStateStats(t);
+
+  // MCTS
+  renderMCTS(t);
+
+  // Hand prediction
+  renderHandPrediction(t);
+
+  // Card execution comparison
+  renderSimComparison(t);
+
+  // Raw logs
+  loadRawLogs(num);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Render: Game State
+// ═══════════════════════════════════════════════════════════
+
+function renderStateStats(t) {
+  const el = document.getElementById('stateStats');
+  const p = t.player || {};
+  const o = t.opponent || {};
+
+  el.innerHTML = `
+    <div class="stat-item">
+      <div class="stat-label">我方手牌</div>
+      <div class="stat-value">${p.hand_count ?? '?'}</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">我方牌库</div>
+      <div class="stat-value">${p.deck_count ?? '?'}</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">我方血量</div>
+      <div class="stat-value">${p.health ?? '?'}<span style="font-size:12px;color:var(--text-dim)">/${p.armor > 0 ? '🛡'+p.armor : ''}</span></div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">我方水晶</div>
+      <div class="stat-value">${p.mana ?? '?'}<span style="font-size:12px;color:var(--text-dim)">/${p.max_mana ?? '?'}</span></div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">对手手牌</div>
+      <div class="stat-value">${o.hand_count ?? '?'}</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">对手牌库</div>
+      <div class="stat-value">${o.deck_count ?? '?'}</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">对手血量</div>
+      <div class="stat-value">${o.health ?? '?'}<span style="font-size:12px;color:var(--text-dim)">/${o.armor > 0 ? '🛡'+o.armor : ''}</span></div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Render: MCTS
+// ═══════════════════════════════════════════════════════════
+
+function renderMCTS(t) {
+  const hasMcts = t.mcts_action_stats && t.mcts_action_stats.length > 0;
+  document.getElementById('mctsEmpty').style.display = hasMcts ? 'none' : 'block';
+  document.getElementById('mctsContent').style.display = hasMcts ? 'block' : 'none';
+
+  if (!hasMcts) return;
+
+  // Stats badge
+  document.getElementById('mctsStatsBadge').textContent =
+    `${t.mcts_iterations} iter | ${t.mcts_nodes} nodes | ${t.mcts_elapsed_ms}ms`;
+
+  // Best sequence
+  const seqEl = document.getElementById('mctsBestSeq');
+  seqEl.innerHTML = (t.mcts_best_seq || []).map((a, i) =>
+    `<span class="badge bg-dark">${i+1}. ${truncate(a, 50)}</span>`
+  ).join('');
+
+  // Action stats table
+  const tbody = document.querySelector('#mctsTable tbody');
+  tbody.innerHTML = '';
+  for (const s of (t.mcts_action_stats || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td title="${esc(s.action)}">${truncate(s.action, 40)}</td>
+      <td><span class="badge bg-secondary">${esc(s.action_type)}</span></td>
+      <td class="numeric mono">${s.visit_count}</td>
+      <td class="numeric mono">${s.total_reward.toFixed(3)}</td>
+      <td class="numeric mono ${s.q_value >= 0 ? 'hl-green' : 'hl-red'}">${s.q_value.toFixed(4)}</td>
+      <td class="numeric mono">${(s.visit_probability * 100).toFixed(1)}%</td>
+      <td class="numeric mono ${s.win_rate >= 0.5 ? 'hl-green' : 'hl-red'}">${(s.win_rate * 100).toFixed(1)}%</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Render: Hand Prediction
+// ═══════════════════════════════════════════════════════════
+
+function renderHandPrediction(t) {
+  const hp = t.hand_predictions || [];
+  const hasHp = hp.length > 0;
+  document.getElementById('hpEmpty').style.display = hasHp ? 'none' : 'block';
+  document.getElementById('hpContent').style.display = hasHp ? 'block' : 'none';
+
+  if (!hasHp) return;
+
+  // Archetype badge
+  const archName = t.archetype_name || '未知';
+  const archConf = (t.archetype_confidence * 100).toFixed(0);
+  document.getElementById('archetypeBadge').textContent = `${archName} (${archConf}%)`;
+
+  // Archetype info
+  const archEl = document.getElementById('archetypeInfo');
+  archEl.innerHTML = `
+    <span class="badge bg-info">原型: ${esc(archName)}</span>
+    <span class="badge bg-secondary">置信度: ${archConf}%</span>
+    <span class="badge bg-secondary">手牌预测: ${hp.length} 项</span>
+  `;
+
+  // Table
+  const tbody = document.querySelector('#hpTable tbody');
+  tbody.innerHTML = '';
+  for (const h of hp) {
+    const probPct = (h.probability * 100).toFixed(0);
+    const probWidth = Math.min(h.probability * 100, 100);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div>${esc(h.name || h.card_id)}</div>
+        <div style="font-size:10px;color:var(--text-dim)">${h.card_id || ''}</div>
+      </td>
+      <td>${h.cost ?? '?'}</td>
+      <td>${h.card_type || ''}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="progress-thin" style="flex:1;width:60px">
+            <div class="bar" style="width:${probWidth}%"></div>
+          </div>
+          <span class="mono">${probPct}%</span>
+        </div>
+      </td>
+      <td><span class="badge bg-dark">${h.source || '?'}</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  // MCTS hand predictions
+  const mctsTop = t.mcts_top_predictions || [];
+  const hasMctsHand = mctsTop.length > 0;
+  document.getElementById('mctsHandSection').style.display = hasMctsHand ? 'block' : 'none';
+  if (hasMctsHand) {
+    const mtbody = document.querySelector('#mctsHandTable tbody');
+    mtbody.innerHTML = '';
+    for (const h of mctsTop) {
+      const probPct = ((h.probability || 0) * 100).toFixed(0);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${esc(h.card_id || '')}</td>
+        <td class="mono">${probPct}%</td>
+      `;
+      mtbody.appendChild(tr);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Render: Card Execution vs Simulation
+// ═══════════════════════════════════════════════════════════
+
+function renderSimComparison(t) {
+  const checks = t.simulation_checks || [];
+  const hasChecks = checks.length > 0;
+  document.getElementById('simEmpty').style.display = hasChecks ? 'none' : 'block';
+  document.getElementById('simContent').style.display = hasChecks ? 'block' : 'none';
+
+  if (!hasChecks) return;
+
+  // Badge
+  const matchCount = checks.filter(c => c.match === true).length;
+  const mismatchCount = checks.filter(c => c.match === false).length;
+  const unkCount = checks.filter(c => c.match == null).length;
+  document.getElementById('simBadge').textContent =
+    `${matchCount} ✓ | ${mismatchCount} ✗ | ${unkCount} ?`;
+
+  const tbody = document.querySelector('#simTable tbody');
+  tbody.innerHTML = '';
+  for (const c of checks) {
+    const matchIcon = c.match === true ? '✅' : (c.match === false ? '❌' : '❓');
+    const matchClass = c.match === true ? 'match-yes' : (c.match === false ? 'match-no' : 'match-unknown');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div>${esc(c.name || c.card_id)}</div>
+        <div style="font-size:10px;color:var(--text-dim)">${c.card_id || ''}</div>
+      </td>
+      <td>${esc(c.actual_effect || '?')}</td>
+      <td>${esc(c.simulated_effect || '?')}</td>
+      <td class="${matchClass}" style="text-align:center;font-size:18px">${matchIcon}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Raw log viewer
+// ═══════════════════════════════════════════════════════════
+
+async function loadRawLogs(num) {
+  try {
+    const resp = await fetch(`/api/raw_lines/${num}`);
+    const data = await resp.json();
+    const lines = data.lines || [];
+    document.getElementById('logLineCount').textContent = `${lines.length} 行`;
+    document.getElementById('rawLogViewer').textContent = lines.join('');
+  } catch(e) {
+    document.getElementById('rawLogViewer').textContent = 'Failed to load';
+  }
+}
+
+function toggleRawLog() {
+  rawLogVisible = !rawLogVisible;
+  document.getElementById('rawLogBody').style.display = rawLogVisible ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+// Actions
+// ═══════════════════════════════════════════════════════════
+
+async function startAnalysis() {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('turnContent').style.display = 'none';
+  document.getElementById('btnAnalyze').disabled = true;
+  document.getElementById('btnAnalyze').textContent = '⏳ 分析中...';
+
+  try {
+    const resp = await fetch('/api/start_analysis', { method: 'POST' });
+    const data = await resp.json();
+    startPolling();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+async function loadDemo() {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('turnContent').style.display = 'none';
+  document.getElementById('loadingOverlay').querySelector('div:nth-child(2)').textContent = '加载 Power.log ...';
+
+  try {
+    const resp = await fetch('/api/start_analysis', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+    });
+    const data = await resp.json();
+    startPolling();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function truncate(s, max) {
+  if (!s) return '';
+  return s.length > max ? s.substring(0, max) + '...' : s;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════
+
+// Auto-poll on load
+startPolling();
+</script>
+
+</body>
+</html>

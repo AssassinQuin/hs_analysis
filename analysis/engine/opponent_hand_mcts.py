@@ -542,9 +542,15 @@ class OpponentTurnSimulator:
         Returns:
             SimulatedBehavior 模拟的对手行为
         """
-        from analysis.effects.rules.enumeration import enumerate_legal_actions
-        from analysis.effects.simulation.actions import apply_action
-        from analysis.effects.types import ActionKind as ActionType
+        try:
+            from analysis.card.engine.rules import enumerate_legal_actions
+            from analysis.card.engine.simulation import apply_action
+            from analysis.card.abilities.definition import ActionKind as ActionType
+        except ImportError:
+            raise RuntimeError(
+                "v1 effects engine removed. opponent_hand_mcts.py "
+                "needs migration to v2 (analysis.card.engine)."
+            )
 
         played_cards = []
         total_mana_spent = 0
@@ -602,8 +608,14 @@ class OpponentTurnSimulator:
         2. 场面价值（随从总属性更高的更好）
         3. 伤害效率（打脸伤害更高的更好）
         """
-        from analysis.effects.types import ActionKind as ActionType
-        from analysis.effects.simulation.actions import apply_action
+        try:
+            from analysis.card.abilities.definition import ActionKind as ActionType
+            from analysis.card.engine.simulation import apply_action
+        except ImportError:
+            raise RuntimeError(
+                "v1 effects engine removed. opponent_hand_mcts.py "
+                "needs migration to v2 (analysis.card.engine)."
+            )
 
         if not actions:
             return None

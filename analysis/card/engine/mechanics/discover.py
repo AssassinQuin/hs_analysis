@@ -10,13 +10,14 @@ effects by selecting the best card and adding it to hand.
 from __future__ import annotations
 
 import logging
+import random
 import re
+from dataclasses import dataclass
 from typing import List, Optional
 
 from analysis.card.data.card_data import get_index
 from analysis.card.engine.deterministic import det_top_k
 from analysis.card.models.card import Card
-from analysis.utils.score_provider import ScoreProvider
 from analysis.card.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, RACE_EN_NORMALIZE as _RACE_EN_MAP
 
 logger = logging.getLogger(__name__)
@@ -24,29 +25,16 @@ logger = logging.getLogger(__name__)
 _DISCOVER_COST_RED_CN = re.compile(r'发现.*?法力值消耗减少[（(]\s*(\d+)\s*[）)]')
 _DISCOVER_COST_RED_EN = re.compile(r'discover.*?costs?\s*(\d+)\s*less', re.IGNORECASE)
 
-_score_provider: Optional[ScoreProvider] = None
-
-
-def _get_score_provider() -> ScoreProvider:
-    global _score_provider
-    if _score_provider is None:
-        _score_provider = ScoreProvider()
-    return _score_provider
-
-
 def _card_score(card: dict) -> float:
-    dbf_id = card.get('dbfId') or card.get('dbf_id')
-    if dbf_id is not None:
-        try:
-            siv = _get_score_provider().get_score(int(dbf_id))
-            if siv > 0:
-                return siv
-        except (TypeError, ValueError):
-            pass
+    """Score a discover option from raw card stats — no external scoring data."""
     card_type = (card.get('type') or '').upper()
     if card_type == 'MINION':
-        return (card.get('attack', 0) + card.get('health', 0) + card.get('cost', 0)) / 3.0
-    return card.get('cost', 0) * 0.8
+        atk = card.get('attack', 0) or 0
+        hp = card.get('health', 0) or 0
+        cost = max(card.get('cost', 0) or 0, 1)
+        return (atk * 1.0 + hp * 0.8) / cost * 3.0
+    cost = card.get('cost', 0) or 0
+    return cost * 1.5
 
 
 def get_discover_cost_reduction(source_card_text: str, english_text: str = '') -> int:
@@ -225,6 +213,169 @@ def generate_discover_pool(
 
 
 # ===================================================================
+# Inlined from analysis.search.rune — DK rune system
+# ===================================================================
+
+# spellSchool → rune name (Chinese)
+RUNE_MAP: dict[str, str] = {
+    "FROST": "冰霜符文",
+    "SHADOW": "邪恶符文",
+    "FIRE": "鲜血符文",
+}
+
+
+def get_rune_type(card: dict) -> str | None:
+    """Determine the rune type of a card.
+
+    Checks spellSchool first, then hardcoded lookup.
+    Returns rune name in Chinese (e.g., "冰霜符文") or None.
+    """
+    # Check spellSchool
+    school = card.get("spellSchool", "") or ""
+    if isinstance(school, str) and school.upper() in RUNE_MAP:
+        return RUNE_MAP[school.upper()]
+
+    return None
+
+
+def filter_by_rune(pool: list[dict], rune_name: str) -> list[dict]:
+    """Filter a discover pool to cards with the given rune type.
+
+    rune_name should be Chinese: "冰霜符文", "邪恶符文", "鲜血符文".
+    """
+    return [c for c in pool if get_rune_type(c) == rune_name]
+
+
+def parse_rune_discover_target(card_text: str) -> str | None:
+    """Parse "发现一张XX符文牌" from card text.
+
+    Returns the rune name in Chinese, or None.
+    """
+    if not card_text or not isinstance(card_text, str):
+        return None
+
+    # "发现一张冰霜符文牌" / "发现一张邪恶符文牌" / "发现一张鲜血符文牌"
+    for rune_name in RUNE_MAP.values():
+        if rune_name in card_text:
+            return rune_name
+
+    return None
+
+
+# ===================================================================
+# Inlined from analysis.search.dark_gift — Dark Gift enchantment system
+# ===================================================================
+
+@dataclass
+class DarkGiftEnchantment:
+    """A predefined Dark Gift bonus."""
+    name: str
+    attack_bonus: int = 0
+    health_bonus: int = 0
+    keyword: str = ""  # WINDFURY, LIFESTEAL, DIVINE_SHIELD, TAUNT, etc.
+    effect: str = ""    # Descriptive effect text
+
+
+# ~10 predefined Dark Gift enchantments (based on game data)
+DARK_GIFT_ENCHANTMENTS: list[DarkGiftEnchantment] = [
+    DarkGiftEnchantment(name="混沌之力", attack_bonus=2, health_bonus=2),
+    DarkGiftEnchantment(name="暗影之拥", attack_bonus=1, health_bonus=3),
+    DarkGiftEnchantment(name="狂乱之赐", attack_bonus=3, health_bonus=1),
+    DarkGiftEnchantment(name="风行之赐", keyword="WINDFURY"),
+    DarkGiftEnchantment(name="吸血之赐", keyword="LIFESTEAL"),
+    DarkGiftEnchantment(name="圣盾之赐", keyword="DIVINE_SHIELD"),
+    DarkGiftEnchantment(name="嘲讽之赐", keyword="TAUNT"),
+    DarkGiftEnchantment(name="突袭之赐", keyword="RUSH"),
+    DarkGiftEnchantment(name="亡语伤害", effect="deathrattle_damage:2"),
+    DarkGiftEnchantment(name="战吼抽牌", effect="battlecry_draw:1"),
+]
+
+
+def apply_dark_gift(card: dict) -> dict:
+    """Apply a random Dark Gift enchantment to a card dict.
+
+    Modifies attack/health or adds keyword/effect in-place.
+    Returns the modified card.
+    """
+    if not DARK_GIFT_ENCHANTMENTS:
+        return card
+
+    gift = random.choice(DARK_GIFT_ENCHANTMENTS)
+
+    # Apply stat bonuses
+    if gift.attack_bonus:
+        card["attack"] = card.get("attack", 0) + gift.attack_bonus
+    if gift.health_bonus:
+        card["health"] = card.get("health", 0) + gift.health_bonus
+
+    # Apply keyword
+    if gift.keyword:
+        mechanics = card.get("mechanics", [])
+        if not isinstance(mechanics, list):
+            mechanics = []
+        mechanics.append(gift.keyword)
+        card["mechanics"] = mechanics
+
+    # Track dark gift application
+    card["dark_gift"] = gift.name
+
+    return card
+
+
+def filter_dark_gift_pool(pool: list[dict], constraint: str = "") -> list[dict]:
+    """Filter a discover pool for cards eligible for Dark Gift.
+
+    constraint: type filter like "亡语" (deathrattle), "龙" (dragon), etc.
+    Returns cards matching the constraint (all cards if constraint is empty).
+    """
+    if not constraint:
+        return pool
+
+    result = []
+    for card in pool:
+        text = card.get("text", "") or ""
+        card_type = card.get("type", "") or card.get("card_type", "") or ""
+        race = card.get("race", "") or ""
+        mechanics = card.get("mechanics", []) or []
+
+        # Check constraint match
+        if constraint == "亡语":
+            if "亡语" in text or "DEATHRATTLE" in mechanics:
+                result.append(card)
+        elif constraint == "龙":
+            if "龙" in text or "DRAGON" in race.upper():
+                result.append(card)
+        elif constraint in text:
+            result.append(card)
+        elif constraint.upper() in race.upper():
+            result.append(card)
+
+    return result
+
+
+def parse_dark_gift_constraint(card_text: str) -> str:
+    """Parse the type constraint from a Dark Gift discover card.
+
+    E.g., "发现一张具有黑暗之赐的亡语随从牌" → "亡语"
+    E.g., "发现一张具有黑暗之赐的龙牌" → "龙"
+    """
+    if not card_text:
+        return ""
+
+    # Look for pattern: "具有黑暗之赐的XX牌"
+    m = re.search(r'具有.*?黑暗之赐.*?的\s*(\S+?)\s*牌', card_text)
+    if m:
+        return m.group(1)
+
+    return ""
+
+
+def has_dark_gift_discover(card_text: str) -> bool:
+    """Check if card text triggers a Dark Gift discover."""
+    return "黑暗之赐" in (card_text or "")
+
+
+# ===================================================================
 # Discover resolution
 # ===================================================================
 
@@ -241,12 +392,7 @@ def resolve_discover(state, card_text: str, hero_class: str = '', english_text: 
         school = constraints.get('school')
         cost_max = constraints.get('cost_max')
 
-        rune_name = None
-        try:
-            from analysis.search.rune import parse_rune_discover_target, filter_by_rune
-            rune_name = parse_rune_discover_target(card_text)
-        except ImportError:
-            pass
+        rune_name = parse_rune_discover_target(card_text)
 
         from_past_only = '来自过去' in card_text or 'from the past' in (english_text or '').lower()
         use_wild_pool = from_past_only
@@ -259,24 +405,13 @@ def resolve_discover(state, card_text: str, hero_class: str = '', english_text: 
         )
 
         if rune_name and pool:
-            try:
-                pool = filter_by_rune(pool, rune_name)
-            except (ValueError, TypeError):
-                pass
+            pool = filter_by_rune(pool, rune_name)
 
-        dark_gift_active = False
-        try:
-            from analysis.search.dark_gift import (
-                has_dark_gift_discover, filter_dark_gift_pool,
-                parse_dark_gift_constraint, apply_dark_gift,
-            )
-            dark_gift_active = has_dark_gift_discover(english_text or '')
-            if dark_gift_active and pool:
-                dg_constraint = parse_dark_gift_constraint(english_text or '')
-                if dg_constraint:
-                    pool = filter_dark_gift_pool(pool, dg_constraint)
-        except ImportError:
-            pass
+        dark_gift_active = has_dark_gift_discover(english_text or '')
+        if dark_gift_active and pool:
+            dg_constraint = parse_dark_gift_constraint(english_text or '')
+            if dg_constraint:
+                pool = filter_dark_gift_pool(pool, dg_constraint)
 
         if not pool:
             chosen_raw = {
@@ -295,11 +430,7 @@ def resolve_discover(state, card_text: str, hero_class: str = '', english_text: 
         else:
             sample = det_top_k(pool, min(3, len(pool)), score_fn=_card_score)
             if dark_gift_active:
-                try:
-                    from analysis.search.dark_gift import apply_dark_gift as _apply_dg
-                    sample = [_apply_dg(c.copy()) for c in sample]
-                except (ImportError, TypeError, ValueError):
-                    pass
+                sample = [apply_dark_gift(c.copy()) for c in sample]
             chosen_raw = max(sample, key=lambda c: _card_score(c))
 
         chosen_card = Card.from_hsdb_dict(chosen_raw)

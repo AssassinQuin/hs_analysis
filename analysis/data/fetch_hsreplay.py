@@ -41,7 +41,6 @@ from analysis.config import (
     HSREPLAY_CARDS_URL,
     HSREPLAY_ARCHETYPES_URL,
     UNIFIED_DB_PATH,
-    SCORING_REPORT_PATH,
     HSREPLAY_CACHE_DB,
     CACHE_DAYS,
     PROJECT_ROOT,
@@ -53,7 +52,6 @@ from analysis.utils.http import http_get_json
 # ── Paths ──────────────────────────────────────────
 DB_PATH = str(HSREPLAY_CACHE_DB)
 UNIFIED_PATH = str(UNIFIED_DB_PATH)
-V2_REPORT_PATH = str(SCORING_REPORT_PATH)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -170,9 +168,8 @@ def generate_card_stats_from_v2(archetypes):
         list of (dbfId, fetch_date, winrate, deck_winrate, play_rate,
                  keep_rate, avg_turns, class_stats) tuples
     """
-    # Load V2 scores and card data
+    # Load card data
     cards_by_dbf = {}
-    v2_scores = {}
 
     if os.path.exists(UNIFIED_PATH):
         with open(UNIFIED_PATH, "r", encoding="utf-8") as f:
@@ -180,14 +177,6 @@ def generate_card_stats_from_v2(archetypes):
                 dbf = c.get("dbfId")
                 if dbf:
                     cards_by_dbf[dbf] = c
-
-    if os.path.exists(V2_REPORT_PATH):
-        with open(V2_REPORT_PATH, "r", encoding="utf-8") as f:
-            report = json.load(f)
-            for c in report.get("cards", []):
-                # Match by name since V2 report may not have dbfId
-                name = c.get("name", "")
-                v2_scores[name] = c.get("score", 0)
 
     # Build archetype membership: which cards appear in which archetypes
     card_archetype_count = Counter()
@@ -221,20 +210,14 @@ def generate_card_stats_from_v2(archetypes):
         card_type = card.get("type", "")
         name = card.get("name", "")
 
-        # Base V2 score (normalized)
-        v2 = v2_scores.get(name, 0)
-
         # Archetype appearance count
         arch_count = card_archetype_count.get(dbf, 0)
 
         # --- Winrate derivation ---
-        # Higher V2 score → higher expected winrate
-        # V2 scores range roughly -10 to +40, map to 48%-58% winrate range
-        # Use sigmoid-like mapping
-        v2_norm = max(0, v2 + 10) / 50.0  # normalize to [0, 1] range
-        base_winrate = 0.47 + 0.12 * v2_norm  # 47% - 59%
+        # Cards appearing in more archetype signatures tend to be stronger
+        base_winrate = 0.48  # baseline
 
-        # Archetype presence bonus: cards in many archetypes tend to be good
+        # Archetype presence bonus
         if arch_count > 0:
             arch_bonus = min(0.03, 0.005 * math.log1p(arch_count))
         else:

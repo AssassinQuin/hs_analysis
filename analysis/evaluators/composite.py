@@ -114,13 +114,36 @@ def target_selection_eval(state: GameState) -> float:
     return friendly_power - enemy_power + hero_delta + dead_enemies * 10
 
 
+def _hand_card_value(card) -> float:
+    """Score a hand card from its raw stats — no external scoring data needed.
+
+    - Minion:  (attack * 1.0 + health * 0.8) / max(cost, 1)  → stats-per-mana efficiency
+    - Spell:   cost * 1.5  (spells are flexible, cost proxies impact)
+    - Weapon:  attack * durability * 0.5  (total damage potential)
+    - Other:   cost * 0.8  (generic placeholder)
+    """
+    ct = (getattr(card, "card_type", "") or "").upper()
+    cost = max(getattr(card, "cost", 0) or 0, 1)
+    atk = getattr(card, "attack", 0) or 0
+    hp = getattr(card, "health", 0) or 0
+    dur = getattr(card, "durability", 0) or 0
+
+    if ct in ("MINION", "") and hp > 0:
+        return (atk * 1.0 + hp * 0.8) / cost * 3.0  # scale to ~10pt range
+    if ct == "WEAPON":
+        return (atk * dur * 0.5) / cost * 3.0
+    if ct == "SPELL":
+        return cost * 1.5
+    return cost * 0.8
+
+
 def evaluate(state: GameState, weights: dict | None = None) -> float:
     if bsv_fusion is not None:
         return bsv_fusion(state)
 
     w = {**DEFAULT_WEIGHTS, **(weights or {})}
 
-    hand_score = sum(getattr(c, "score", 0.0) for c in state.hand)
+    hand_score = sum(_hand_card_value(c) for c in state.hand)
 
     board_score     = eval_board(state)
     threat_score    = eval_threat(state)
@@ -145,9 +168,9 @@ def evaluate_delta(state_before: GameState, state_after: GameState,
 
 
 def quick_eval(state: GameState) -> float:
-    v7_adj = sum(getattr(c, "score", 0.0) for c in state.hand)
+    hand_val = sum(_hand_card_value(c) for c in state.hand)
     threat = -(max(0, 30 - state.hero.hp - state.hero.armor) * 0.5)
-    return v7_adj + 1.5 * threat
+    return hand_val + 1.5 * threat
 
 
 def evaluate_with_risk(state: GameState, weights: dict | None = None, risk_report=None) -> float:

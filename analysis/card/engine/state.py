@@ -10,18 +10,35 @@ import copy
 import dataclasses
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional
 
 from analysis.card.abilities.keywords import KeywordSet
 from analysis.card.engine.tags import (
     GameTag, has_tag, mechanics_to_tags, set_tag, get_tag,
 )
 
-if TYPE_CHECKING:
-    from analysis.search.mechanics_state import MechanicsState
-    from analysis.search.zone_manager import ZoneManager
-
 log = logging.getLogger(__name__)
+
+
+# ──────────────────────────────────────────────────────────────
+# Inlined from analysis/search/corpse.py — Corpse resource helpers
+# ──────────────────────────────────────────────────────────────
+
+# 法瑞克 (Falric) — "你获得的残骸量为正常的两倍"
+_STATE_FALRIC_NAME = "法瑞克"
+
+
+def _state_gain_corpses(state: GameState, amount: int) -> GameState:
+    """Add corpses to state."""
+    return dataclasses.replace(state, corpses=state.corpses + amount)
+
+
+def _state_has_double_corpse_gen(state: GameState) -> bool:
+    """Check if 法瑞克 is on the friendly board for double corpse generation."""
+    for m in state.board:
+        if _STATE_FALRIC_NAME in (m.name or ""):
+            return True
+    return False
 
 
 @dataclass
@@ -494,6 +511,10 @@ class OpponentState:
     opp_tutor_evidence: list = field(default_factory=list)  # 对手定向检索证据
     opp_deck_insert_events: list = field(default_factory=list)  # 对手塞牌事件记录
 
+    # ---- 对手回合模拟（MCTS opponent turn） ----
+    mana_available: int = 0  # 对手当回合可用法力
+    mana_max: int = 0  # 对手最大法力
+
     def copy(self) -> "OpponentState":
         """拷贝对手状态，含所有可变容器和嵌套英雄"""
         return dataclasses.replace(
@@ -553,6 +574,7 @@ class GameState:
     last_played_card: dict | None = (
         None  # 上次打出的卡牌（用于符文/条件检查）
     )
+    is_opponent_turn: bool = False  # 当前是否为对手回合（MCTS对手回合模拟）
     _defer_deaths: bool = (
         False  # 阶段死亡延迟：推迟死亡结算到阶段结束
     )
@@ -562,46 +584,10 @@ class GameState:
     _pending_dead_enemy: list = field(
         default_factory=list
     )  # 延迟死亡的敌方随从
-    _mechanics: Optional[object] = (
-        None  # MechanicsState（延迟初始化，Phase 2集成）
-    )
-    _zones: Optional[object] = (
-        None  # tuple[ZoneManager, ZoneManager]（延迟初始化，Phase 3集成）
-    )
-
     # ── Phase 1 新增字段 ──
     graveyard: List = field(default_factory=list)                    # 已死亡随从（复活用）
     cards_drawn_this_turn: int = 0          # 本回合抽牌数
     spells_cast_this_turn: int = 0          # 本回合施法数
-
-    # ------------------------------------------------------------------
-    # ZoneManager 访问（Phase 3集成）
-    # ------------------------------------------------------------------
-
-    @property
-    def zones(self):
-        """(友方ZoneManager, 敌方ZoneManager) 元组
-
-        首次访问时从传统列表字段延迟初始化。
-        """
-        if self._zones is None:
-            from analysis.search.zone_manager import ZoneManager
-            friendly = ZoneManager(
-                hand=list(self.hand),
-                board=list(self.board) + list(self.locations),
-                deck=list(self.deck_list) if self.deck_list else [],
-                secrets=[],
-            )
-            enemy = ZoneManager(
-                board=list(self.opponent.board),
-                secrets=list(self.opponent.secrets),
-            )
-            self._zones = (friendly, enemy)
-        return self._zones
-
-    @zones.setter
-    def zones(self, value):
-        self._zones = value
 
     # ------------------------------------------------------------------
     # 工具方法
@@ -632,11 +618,6 @@ class GameState:
         for f in GameState._FIELDS:
             name = f.name
             val = getattr(self, name)
-
-            # 懒初始化缓存 → 重置
-            if name in ("_mechanics", "_zones"):
-                kwargs[name] = None
-                continue
 
             # 死亡延迟 → 重置为默认值
             if name == "_defer_deaths":
@@ -685,7 +666,16 @@ class GameState:
             else:
                 kwargs[name] = val
 
-        return GameState(**kwargs)
+        result = GameState(**kwargs)
+
+        # 复制动态属性 (非 dataclass field, 如 _deck)
+        _sd = object()  # sentinel
+        for _dyn_attr in ('_deck',):
+            _val = getattr(self, _dyn_attr, _sd)
+            if _val is not _sd:
+                setattr(result, _dyn_attr, list(_val) if isinstance(_val, list) else _val)
+
+        return result
 
     def is_lethal(self) -> bool:
         """对手英雄 HP + 护甲 <= 0 时为 True"""
@@ -699,20 +689,6 @@ class GameState:
     def location_full(self) -> bool:
         """友方地点已满（上限2个）时为 True"""
         return len(self.locations) >= 2
-
-    # -- MechanicsState 访问（Phase 2集成）-----------------------
-
-    @property
-    def mechanics(self):
-        """延迟初始化的 MechanicsState（用于机制特定状态）"""
-        if self._mechanics is None:
-            from analysis.search.mechanics_state import MechanicsState
-            self._mechanics = MechanicsState()
-        return self._mechanics
-
-    @mechanics.setter
-    def mechanics(self, value):
-        self._mechanics = value
 
     def has_taunt_on_board(self) -> bool:
         """友方是否有嘲讽随从"""
@@ -764,12 +740,11 @@ class GameState:
         self.board = [m for m in self.board if m.health > 0]
         self.opponent.board = [m for m in self.opponent.board if m.health > 0]
 
-        # 3. 残骸获取 — expected failures: missing corpse module
+        # 3. 残骸获取
         try:
-            from analysis.search.corpse import gain_corpses, has_double_corpse_gen
-            amount = 2 if has_double_corpse_gen(self) else 1
-            self = gain_corpses(self, amount)
-        except (ImportError, AttributeError, TypeError) as e:
+            amount = 2 if _state_has_double_corpse_gen(self) else 1
+            self = _state_gain_corpses(self, amount)
+        except (AttributeError, TypeError) as e:
             log.debug("flush_deaths: 残骸获取跳过: %s", e)
 
         # 4. 光环重算 — expected failures: missing aura module, invalid minion

@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""power.py — 卡牌能力容器 (CardPower)。
-
-> **本文件功能**: 定义 CardPower dataclass，统一管理一张卡的所有能力定义。
-> 参考 RosettaStone/SabberStone 的 Power 类设计。
+"""power.py — 卡牌能力容器 (CardPower) [DEPRECATED: 请改用 CardAbility + SpellExecutor v2]。
 
 CardPower 将 card_abilities.json 中的能力按触发类型分组，
 提供类型安全的访问接口，替代当前分散的 abilities 列表。

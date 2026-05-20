@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""spells.py — MetaStone 风格的 Spell 效果系统。
+"""spells.py — 旧版 Spell 效果系统 [DEPRECATED: 新版在 analysis/card/spells/ 下]。
 
-核心架构:
-  Spell ABC       — 效果基类，所有可执行效果的抽象接口
-  SPELL_REGISTRY  — 类名 → Spell 类的注册表，支持反射加载
-  MetaSpell       — 组合模式，顺序执行多个子 Spell
-  ConditionalSpell — 条件分支 Spell
+保留以供旧版 card_abilities.json / CardPower 向后兼容。
+新版使用 analysis/card/spells/ 下的递归 Spell 系统。
 
 Spell 实例从 card_abilities.json 的 {"class": "DamageSpell", ...} 加载，
 运行时通过 SPELL_REGISTRY 查找并实例化。
@@ -181,6 +178,14 @@ class NoOpSpell(Spell):
     @classmethod
     def from_dict(cls, data: dict) -> "NoOpSpell":
         return cls()
+
+
+# 显式注册 TODO 类名，让它走 NoOpSpell 而非触发 log.warning。
+# card_abilities.json 中有 ~415 个 TODO 条目 → 文本回退系统
+# (_apply_text_spell_effects) 已处理实际效果。
+_SPELL_REGISTRY_ALIASES = {"TODO": NoOpSpell}
+for _name, _cls in _SPELL_REGISTRY_ALIASES.items():
+    SPELL_REGISTRY[_name] = _cls
 
 
 @register_spell

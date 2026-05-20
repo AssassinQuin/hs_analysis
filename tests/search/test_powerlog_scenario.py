@@ -9,6 +9,9 @@ import sys
 import tempfile
 import unittest
 
+import pytest
+pytest.skip("power_parser (analysis.search) deleted in v1 cleanup", allow_module_level=True)
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from analysis.search.power_parser import parse_power_log, extract_game_state

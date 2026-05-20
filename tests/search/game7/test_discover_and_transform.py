@@ -5,6 +5,7 @@ and hand-transform detection work correctly on Game 7 states.
 """
 
 import pytest
+pytest.skip("MCTSEngine (analysis.search.mcts) deleted in v1 cleanup", allow_module_level=True)
 
 from analysis.card.abilities.loader import load_abilities
 from analysis.search.mcts import MCTSEngine, MCTSConfig

@@ -67,10 +67,10 @@ class DeckInfo:
             deck = Deck.from_deckstring(self.code)
             hero_dbf = list(deck.heroes)[0] if deck.heroes else None
 
-            from analysis.card.data.hsdb import get_db, get_hero_class_map
+            from analysis.card.data.card_data import get_db, get_hero_class_map
             from analysis.utils.hero_class import hero_dbf_to_class, class_to_cn
             hero_class_map = get_hero_class_map()
-            db = get_db(load_xml=False, build_indexes=False)
+            db = get_db(load_xml=False)
 
             self.hero_class = "UNKNOWN"
             if hero_dbf is not None:

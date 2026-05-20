@@ -46,7 +46,6 @@ from analysis.watcher.state_bridge import StateBridge
 from analysis.search.engine_adapter import GameEngine, UnifiedSearchResult
 from analysis.effects.rules.enumeration import enumerate_legal_actions
 from analysis.effects.types import ActionKind as ActionType
-from analysis.utils.score_provider import load_scores_into_hand
 from hearthstone.enums import GameTag, Zone as HZone, CardType as HCardType
 
 
@@ -144,6 +143,8 @@ def run_full_flow_simulation(
         "uct_constant": 0.5,
         "time_decay_gamma": 0.4,
         "max_actions_per_turn": 8,
+        "debug_mode": True,
+        "log_interval": 200,
     })
     report.engine_id = id(game_engine)
     report.mcts_engine_id = id(game_engine.mcts_engine)
@@ -415,12 +416,6 @@ def run_full_flow_simulation(
                 if bayesian_state.get("playstyle") and bayesian_state["playstyle"] != "unknown":
                     print(f"│ 对手风格: {bayesian_state['playstyle']}")
 
-                # 加载卡牌评分
-                try:
-                    load_scores_into_hand(state)
-                except Exception:
-                    pass
-
                 # MCTS 搜索
                 if len(non_end) <= 1:
                     if non_end:
@@ -459,9 +454,9 @@ def run_full_flow_simulation(
                         marker = ">>>" if i == 0 else "   "
                         print(f"│ {marker} {i+1}. {a.describe(state)}")
                     print(f"│ Fitness: {result.fitness:+.4f}")
-                    print(f"│ Iters: {s.iterations}  Nodes: {s.nodes_created}  "
-                          f"Evals: {s.evaluations_done}  Worlds: {s.world_count}")
-                    print(f"│ Time: {s.time_used_ms:.0f}ms")
+
+                    # Print detailed MCTS debug info
+                    print_mcts_search_detail(result, state)
 
                     report.our_decisions += 1
                 except Exception as e:
@@ -574,6 +569,80 @@ def analyze_report(report: FlowReport) -> str:
 
 # ── 主入口 ────────────────────────────────────────────────
 
+def setup_logging(verbose: bool = False):
+    """Configure logging for MCTS engine (more verbose than default)."""
+    level = logging.DEBUG if verbose else logging.INFO
+    fmt = "%(name)s: %(levelname)s %(message)s"
+    logging.basicConfig(level=level, format=fmt, force=True)
+    # Quiet down noisy libraries
+    logging.getLogger("hearthstone").setLevel(logging.WARNING)
+    logging.getLogger("hslog").setLevel(logging.WARNING)
+    # Enable sim_logger output at INFO level
+    logging.getLogger("analysis.search.sim_logger").setLevel(logging.DEBUG)
+    logging.getLogger("analysis.card.engine.simulation").setLevel(logging.DEBUG)
+    logging.getLogger("analysis.search.mcts.engine").setLevel(logging.DEBUG if verbose else logging.INFO)
+    logging.getLogger("analysis.search.mcts.simulation").setLevel(logging.DEBUG)
+
+
+def print_mcts_search_detail(result, state):
+    """Print detailed MCTS search debug info including root children and rollout traces."""
+    from analysis.search.sim_logger import get_sim_logger, set_sim_logger
+
+    sim_log = get_sim_logger()
+    sim_log.enabled = True
+
+    s = result.mcts_stats
+    print(f"│ ├─ MCTS 搜索统计:")
+    print(f"│ │   Iterations: {s.iterations}")
+    print(f"│ │   Nodes:      {s.nodes_created}")
+    print(f"│ │   Evals:      {s.evaluations_done}")
+    print(f"│ │   Worlds:     {s.world_count}")
+    print(f"│ │   Time:       {s.time_used_ms:.0f}ms")
+    print(f"│ │   Iters/sec:  {s.iterations / max(s.time_used_ms, 1) * 1000:.0f}")
+    if s.world_count > 0:
+        avg_eval_per_world = s.evaluations_done / s.world_count
+        print(f"│ │   Avg evals/world: {avg_eval_per_world:.0f}")
+
+    # Action stats from root
+    if hasattr(result, 'action_stats') and result.action_stats:
+        print(f"│ ├─ 根节点动作统计(Top 8):")
+        for ast in sorted(result.action_stats, key=lambda x: x.visit_count, reverse=True)[:8]:
+            desc = ast.action.describe(state) if hasattr(ast.action, 'describe') else str(ast.action)
+            print(f"│ │   visits={ast.visit_count:3d}  "
+                  f"q={ast.q_value:+.4f}  wr={ast.win_rate:.0%}  "
+                  f"{desc[:60]}")
+
+    # Detailed log entries
+    detailed = getattr(result, 'detailed_log', None)
+    if detailed and detailed.entries:
+        print(f"│ ├─ MCTS 迭代进度日志:")
+        for e in detailed.entries[::max(1, len(detailed.entries) // 5)]:
+            print(f"│ │   iter={e['iter']:5d}  "
+                  f"nodes={e['nodes']:5d}  "
+                  f"evals={e['evals']:5d}  "
+                  f"best_q={e['best_q']:+.4f}  "
+                  f"depth={e['depth']}")
+
+    # Simulation log
+    sim_export = sim_log.to_dict()
+    if sim_export.get("phases"):
+        print(f"│ ├─ 模拟效果链路(Top phases):")
+        for phase in sim_export["phases"][:3]:
+            s = phase.get("summary", {})
+            print(f"│ │   Phase: {phase['phase_name']} turn={phase['turn']} "
+                  f"actions={s.get('action_count',0)} "
+                  f"effects={s.get('effect_count',0)} "
+                  f"deaths={s.get('death_count',0)} "
+                  f"dur={phase.get('duration_ms',0):.0f}ms")
+            # Show first few steps
+            for step in phase.get("steps", [])[:5]:
+                print(f"│ │     [{step['type']}] {step['detail'][:80]}")
+            if len(phase.get("steps", [])) > 5:
+                print(f"│ │     ... ({len(phase['steps']) - 5} more steps)")
+            print(f"│ │")
+    sim_log.reset()
+
+
 def main():
     parser = argparse.ArgumentParser(description="全流程模拟验证 — CoreLogMonitor + Power.log 逐行解析 + MCTS 单例引擎")
     parser.add_argument("log_path", nargs="?", default="Power.log",
@@ -586,6 +655,8 @@ def main():
                         help="游戏日志目录 (含 Decks.log)")
     parser.add_argument("--output-report", type=str, default=None,
                         help="报告输出路径 (default: logs/full_flow_report.txt)")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="打印详细 MCTS 调试日志")
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.WARNING, format="%(name)s: %(message)s")
@@ -610,6 +681,8 @@ def main():
                 log_path = str(fp)
                 print(f"使用测试日志: {fp.name}")
                 break
+
+    setup_logging(verbose=args.verbose)
 
     print(f"{'='*60}")
     print(f"全流程模拟验证")

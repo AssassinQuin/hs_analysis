@@ -9,7 +9,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你的手牌中有龙牌，复原两个法力水晶。"
+              "text_raw": "<b>Battlecry:</b> If you're\nholding a Dragon, refresh\n2 Mana Crystals."
             }
           ]
         }
@@ -21,8 +21,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个2/2的树人"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -40,8 +39,7 @@
               "target": "TARGET"
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "两个1/2的魔像"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -53,8 +51,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "随机将5张法力值消耗大于或等于（8）点的随从牌洗入你的牌库，其属性值翻倍。"
+              "class": "ShuffleSpell",
+              "_card_name": "5 random minions"
             }
           ]
         }
@@ -81,8 +79,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>兆示</b>{0}。对所有敌方随从造成$4点伤害。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -96,7 +95,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>潜行</b>。<b>亡语：</b><b>兆示</b>{0}。"
+              "text_raw": "Stealth Deathrattle: Herald {0}."
             }
           ]
         }
@@ -110,7 +109,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b><b>兆示</b>{0}，并使该士兵获得<b>突袭</b>。"
+              "text_raw": "<b>Battlecry:</b> <b>Herald</b> {0}. Give the Soldier <b>Rush</b>."
             }
           ]
         }
@@ -124,7 +123,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你手牌中或战场上的一个随从获得等同于本随从攻击力的攻击力。"
+              "text_raw": "<b>Battlecry:</b> Give a minion in your hand or battlefield Attack equal to this minion's Attack."
             }
           ]
         }
@@ -138,7 +137,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你的下一张法力值消耗小于或等于（3）点的鱼人牌会消耗生命值，而非法力值。"
+              "text_raw": "[x]<b>Battlecry:</b> Your next Murloc\nthat costs (3) or less costs\n Health instead of Mana."
             }
           ]
         }
@@ -152,7 +151,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>扰魔。亡语：</b>将消灭本随从的随从变形成为无面复制者。"
+              "text_raw": "Elusive Deathrattle: Transform the minion that killed this into a Faceless Replicator."
             }
           ]
         }
@@ -166,7 +165,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你的对手获得一张法力值消耗为（2）的黏弹。黏弹相邻的卡牌法力值消耗增加（1）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Give your\nopponent a 2-Cost\nSabotage. Cards next\nto it cost (1) more."
             }
           ]
         }
@@ -179,8 +178,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择你手牌中的一张牌，将其变形成为幸运币。"
+              "class": "TransformSpell",
+              "_card_name": "a Coin"
             }
           ]
         }
@@ -194,7 +193,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将所有敌方随从移回其拥有者的\n手牌。"
+              "text_raw": "<b>Battlecry:</b> Return all\nenemy minions to their owner's hand."
             }
           ]
         }
@@ -207,7 +206,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "随机获取一张另一职业的<i>已拼合的</i><b>裂变</b>牌。"
+              "text_raw": "Get a random <b>Shatter</b> card from another class. <i>(It's already combined).</i>"
             }
           ]
         }
@@ -219,8 +218,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>可交易</b>\n消灭一个<b>传说</b>\n随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -234,7 +233,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择你手牌中的一张法术牌，使其获得<b>法术伤害+1</b>。"
+              "text_raw": "[x]<b>Battlecry:</b> Choose a\nspell in your hand to\ngive <b>Spell Damage +1</b>."
             }
           ]
         }
@@ -247,8 +246,13 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一条2/2的雏龙"
+              "class": "SummonSpell"
+            },
+            {
+              "class": "BuffSpell",
+              "attack": 1,
+              "health": 1,
+              "target": "SELF"
             }
           ]
         }
@@ -262,7 +266,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你的套牌中随从牌的法力值消耗之和为100，使你牌库中的随从获得总计100点的属性值。"
+              "text_raw": "[x]<b>Battlecry:</b> If the total Cost\nof your starting minions was\n100, split 100 stats among\nminions in your deck."
             }
           ]
         }
@@ -275,7 +279,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将一个敌方随从移回其拥有者的手牌，并使其无法在下回合中使用。"
+              "text_raw": "[x]Return an enemy\n minion to its owner's\nhand. They can't play\nit next turn."
             }
           ]
         }
@@ -289,7 +293,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>在本局对战中，你的治疗效果恢复的生命值增加2点。"
+              "text_raw": "<b>Battlecry:</b> Your healing effects restore 2 more Health this game."
             }
           ]
         }
@@ -301,8 +305,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "为一个随从恢复所有生命值。抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -314,8 +318,14 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$5点伤害。如果该随从死亡，则为敌方英雄恢复#5点生命值。"
+              "class": "DamageSpell",
+              "value": 5,
+              "target": "ENEMY_MINION"
+            },
+            {
+              "class": "HealSpell",
+              "value": 5,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -348,12 +358,11 @@
               "target": "TARGET"
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "一个它的复制"
-            },
-            {
               "class": "CopySpell",
               "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -368,7 +377,7 @@
             {
               "class": "DamageSpell",
               "value": 15,
-              "target": "ALL_ENEMY_CHARACTERS"
+              "target": "TARGET"
             }
           ]
         }
@@ -380,8 +389,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有随从造成$4点伤害。如果你控制着<b>传说</b>牌，本牌的法力值消耗为（1）点。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "ALL_MINIONS"
             }
           ]
         }
@@ -393,8 +403,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一条6/6的龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -408,7 +417,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你手牌和牌库中所有法术牌获得<b>法术伤害+1</b>。"
+              "text_raw": "[x]<b>Battlecry:</b> Give all spells\nin your hand and deck\n<b>Spell Damage +1.</b>"
             }
           ]
         }
@@ -422,7 +431,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>获取一张法力值消耗为（2）的法术，该法术可以造成等同于本随从攻击力的伤害。"
+              "text_raw": "Deathrattle: Get a 2-Cost spell that deals this minion's Attack damage."
             }
           ]
         }
@@ -434,8 +443,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "五条5/4的亡灵幼龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -449,7 +457,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>制造一条自定义的亡灵龙。如果你的手牌中有龙牌，制造的这条龙的法力值消耗减少（3）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Craft a custom\nUndead Dragon. If you're\n holding a Dragon, reduce the\nCreation's Cost by (3)."
             }
           ]
         }
@@ -461,8 +469,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（4）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -474,14 +481,7 @@
         {
           "actions": [
             {
-              "class": "BuffSpell",
-              "attack": 1,
-              "health": 1,
-              "target": "TARGET"
-            },
-            {
-              "class": "SummonSpell",
-              "_card_name": "两条4/2的幼龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -494,7 +494,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "你的随从的回合结束效果会触发两次。持续3回合。"
+              "text_raw": "Your minions' end of turn effects trigger twice. Lasts 3 turns."
             }
           ]
         }
@@ -508,7 +508,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机吞食对手的两张手牌，然后<b>休眠</b>2回合。<b>亡语：</b>吐回吞食的牌。"
+              "text_raw": "[x]<b>Battlecry:</b> Devour 2 random\ncards from the opponent's hand,\nthen go <b>Dormant</b> for 2 turns.\n<b>Deathrattle:</b> Return them."
             }
           ]
         },
@@ -517,7 +517,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机吞食对手的两张手牌，然后<b>休眠</b>2回合。<b>亡语：</b>吐回吞食的牌。"
+              "text_raw": "Battlecry: Devour 2 random cards from the opponent's hand, then go Dormant for 2 turns. Deathrattle: Return them."
             }
           ]
         }
@@ -530,8 +530,11 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -564,8 +567,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$2点伤害。随机对一个敌方随从造成$1点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "RANDOM_ENEMY_CHARACTER"
             }
           ]
         }
@@ -577,8 +581,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>裂变</b>\n造成$4点伤害。对所有敌人造成$2点伤害。123743造成$4点伤害。对所有敌人造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -592,7 +597,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>选择你手牌中的一张牌\n并弃掉。"
+              "text_raw": "[x]<b>Taunt</b>\n<b>Battlecry:</b> Choose a card in\nyour hand to discard."
             }
           ]
         }
@@ -604,8 +609,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有随从造成$3点伤害。重复\n此效果，每次伤害减少1点。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "ALL_MINIONS"
             }
           ]
         }
@@ -617,8 +623,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "直到敌方回合结束，夺取一个敌方随从的控制权。在本回合中，该随从无法攻击。"
+              "class": "TakeControlSpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -632,7 +638,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b><b>兆示</b>{0}。使死亡之翼的法力值消耗减少（{1}）点。<i>（随<b>兆示</b>的次数提升！）</i>"
+              "text_raw": "[x]<b>Battlecry:</b> <b>Herald</b> {0}.\nReduce Deathwing's\nCost by ({1}).\n <i>(<b>Herald</b> to improve!)</i>"
             }
           ]
         }
@@ -644,8 +650,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "随机对两个敌方随从造成$2点伤害。<i>（每回合都会升级！）</i>"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "RANDOM_ENEMY_CHARACTER"
             }
           ]
         }
@@ -657,8 +664,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个法力值消耗为（1）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -672,7 +678,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭</b>。<b>战吼：</b><b>兆示</b>{0}。"
+              "text_raw": "<b>Rush</b>\n<b>Battlecry:</b> <b>Herald</b> {0}."
             }
           ]
         }
@@ -684,8 +690,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有随从造成$1点伤害。每有一个随从死亡，抽一\n张牌。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "ALL_MINIONS"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -697,8 +708,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个3/3并具有<b>嘲讽</b>的纳迦"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -711,7 +721,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>兆示</b>{0}。在本回合中，你的英雄拥有<b>吸血</b>。"
+              "text_raw": "<b>Herald</b> {0}.\nYour hero has \n<b>Lifesteal</b> this turn."
             }
           ]
         }
@@ -723,8 +733,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对你的对手最左边和最右边的随从造成$5点伤害。<b>流放：</b>重复一次。"
+              "class": "DamageSpell",
+              "value": 5,
+              "target": "TARGET"
             }
           ]
         }
@@ -738,7 +749,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>造成等同于本随从攻击力的伤害。<i>（当本牌在你手中时，使用一张龙牌即可将本牌变为8/8的龙！）</i>"
+              "text_raw": "[x]<b>Battlecry:</b> Deal damage\nequal to this minion's Attack.\n<i>(While in hand, play a Dragon to\n become an 8/8 Dragon!)</i>"
             }
           ]
         }
@@ -752,7 +763,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>在本局对战中，你的龙拥有<b>突袭</b>。<i>（当本牌在你手中时，使用一张龙牌即可将本牌变为12/12的龙！）</i>"
+              "text_raw": "[x]<b>Battlecry:</b> Your Dragons\nhave <b>Rush</b> this game.\n<i>(While in hand, play a Dragon to\nbecome a 12/12 Dragon!)</i>"
             }
           ]
         }
@@ -765,7 +776,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将一个敌方随从的生命值变为1。如果你的手牌中有龙牌，再选择一个。"
+              "text_raw": "[x]Set an enemy\nminion's Health to 1.\nIf you're holding a\nDragon, pick another."
             }
           ]
         }
@@ -779,7 +790,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张法力值消耗小于或等于（3）点的龙牌。"
+              "text_raw": "<b>Battlecry:</b> Get a random\nDragon that costs\n(3) or less."
             }
           ]
         }
@@ -810,7 +821,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "再次使用你在本局对战中使用过的每一张法力值消耗为（1）的牌<i>（尽可能以敌人为目标）</i>。"
+              "text_raw": "[x]Replay each 1-Cost\ncard you've played\nthis game <i>(targeting\nenemies if possible.)</i>"
             }
           ]
         }
@@ -823,7 +834,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>兆示</b>{0}。获取两张1/1并具有<b>突袭</b>的元素牌。"
+              "text_raw": "[x]<b>Herald</b> {0}.\nGet two 1/1 Elementals\nwith <b>Rush</b>."
             }
           ]
         }
@@ -837,7 +848,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择并吸收你手牌中一张法力值消耗小于或等于（4）点的法术牌。<b>亡语：</b>施放该法术。"
+              "text_raw": "[x]<b>Battlecry:</b> Choose a spell\nin your hand that costs\n(4) or less to absorb. \n<b>Deathrattle:</b> Cast it."
             }
           ]
         },
@@ -846,7 +857,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择并吸收你手牌中一张法力值消耗小于或等于（4）点的法术牌。<b>亡语：</b>施放该法术。"
+              "text_raw": "Battlecry: Choose a spell in your hand that costs (4) or less to absorb. Deathrattle: Cast it."
             }
           ]
         }
@@ -860,7 +871,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使一个友方随从获得<b>超级风怒</b>，且该随从无法攻击英雄。"
+              "text_raw": "[x]<b>Battlecry:</b> Give a friendly\nminion <b>Mega-Windfury</b>.\nIt can't attack heroes."
             }
           ]
         }
@@ -874,7 +885,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b><b>兆示</b>{0}。"
+              "text_raw": "<b>Taunt</b>\n<b>Battlecry:</b> <b>Herald</b> {0}."
             }
           ]
         }
@@ -888,7 +899,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择你手牌中的一张牌，在你的回合开始时，其法力值消耗减少（1）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Choose a\n card in your hand.\n At the start of your turns,\n reduce its Cost by (1)."
             }
           ]
         }
@@ -900,8 +911,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "原随从"
+              "class": "TransformSpell",
+              "_card_name": "all friendly minions into ones that cost (1) more"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -913,8 +927,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽两张牌。在本局对战中，友方角色每攻击过一次，本牌的法力值消耗便减少（1）点。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -926,8 +940,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "法力值消耗为（3），（2）和（1）的随从各一个"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -940,8 +953,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张牌，并使其法力值消耗减少（10）点。如果减少的溢出量还有剩余，重复此效果。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -953,8 +966,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有随从造成$1点伤害<i>（战场上每有一个随从都会提高）</i>。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "ALL_MINIONS"
             }
           ]
         }
@@ -966,8 +980,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有随从造成$1点伤害。在本回合中，使你的英雄获得+3攻击力。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "ALL_MINIONS"
             }
           ]
         }
@@ -979,8 +994,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个受伤的随从造成$8点伤害。如果伤害超过目标生命值，将能造成剩余伤害的本牌移回手牌。"
+              "class": "DamageSpell",
+              "value": 8,
+              "target": "TARGET"
             }
           ]
         }
@@ -993,8 +1009,12 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个毁灭之焰"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "RANDOM_ENEMY_CHARACTER"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1019,8 +1039,7 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "使一个随从获得\n“<b>亡语：</b>从你的手牌中随机召唤一个\n随从。”"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1068,7 +1087,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "随机获取一张圣骑士光环牌，其持续时间增加一回合。"
+              "text_raw": "Get a random Paladin Aura. It lasts an additional turn."
             }
           ]
         }
@@ -1096,7 +1115,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>选择一个敌方随从，偷取其3点生命值，触发三次。"
+              "text_raw": "[x]<b>Taunt</b>. <b>Battlecry:</b> Choose\nan enemy minion to steal 3\n Health from, three times."
             }
           ]
         }
@@ -1123,8 +1142,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "ShuffleSpell",
-              "_card_name": "你的牌库"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1138,7 +1157,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b><b>兆示</b>{0}。"
+              "text_raw": "<b>Taunt</b>\n <b>Battlecry:</b> <b>Herald</b> {0}."
             }
           ]
         }
@@ -1151,8 +1170,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个法力值消耗为（4）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1166,16 +1184,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>解锁你<b>过载</b>的法力水晶。\n<b>过载：</b>（3）"
-            }
-          ]
-        },
-        {
-          "trigger": "OVERLOAD",
-          "actions": [
-            {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>解锁你<b>过载</b>的法力水晶。\n<b>过载：</b>（3）"
+              "text_raw": "Deathrattle: Unlock your Overloaded Mana Crystals. Overload: (3)"
             }
           ]
         }
@@ -1188,8 +1197,9 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b><b>战吼：</b>兆示</b>{0}。<b>亡语：</b>为你的英雄恢复#3点生命值。"
+              "class": "HealSpell",
+              "value": 3,
+              "target": "FRIENDLY_HERO"
             }
           ]
         },
@@ -1198,7 +1208,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b><b>战吼：</b>兆示</b>{0}。<b>亡语：</b>为你的英雄恢复#3点生命值。"
+              "text_raw": "Battlecry: Herald {0}. Deathrattle: Restore #3 Health to your hero."
             }
           ]
         }
@@ -1212,7 +1222,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>吸血</b>。<b>战吼：</b><b>兆示</b>{0}。"
+              "text_raw": "<b>Lifesteal</b>\n<b>Battlecry:</b> <b>Herald</b> {0}."
             }
           ]
         }
@@ -1224,8 +1234,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>兆示</b>{0}。<b>连击：</b>造成$3点伤害。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -1236,6 +1247,10 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 3
+            },
             {
               "class": "BuffSpell",
               "attack": 2,
@@ -1254,7 +1269,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择你手牌中的一张牌并弃掉。<b>亡语：</b>重新获取弃掉的牌，其法力值消耗减少（1）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Choose a card in\nyour hand to discard.\n<b>Deathrattle:</b> Get it back.\nIt costs (1) less."
             }
           ]
         },
@@ -1263,7 +1278,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择你手牌中的一张牌并弃掉。<b>亡语：</b>重新获取弃掉的牌，其法力值消耗减少（1）点。"
+              "text_raw": "Battlecry: Choose a card in your hand to discard. Deathrattle: Get it back. It costs (1) less."
             }
           ]
         }
@@ -1275,8 +1290,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$8点伤害。使你手牌中一张随机牌的法力值消耗减少，减少的量等于超过目标生命值的伤害。"
+              "class": "DamageSpell",
+              "value": 8,
+              "target": "RANDOM_ENEMY_MINION"
             }
           ]
         }
@@ -1290,7 +1306,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>选择你手牌中的一张法术牌，将其拆分为两张法力值消耗与其相同的随机法术牌。"
+              "text_raw": "<b>Battlecry:</b> Choose a spell\nin your hand. Split it into\ntwo random spells of the same Cost."
             }
           ]
         }
@@ -1303,8 +1319,11 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1317,8 +1336,21 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
+              "class": "DestroySpell",
+              "target": "TARGET"
+            }
+          ]
+        }
+      ]
+    },
+    "CATA_EVENT_110": {
+      "name": "破碎的巨龙之魂",
+      "abilities": [
+        {
+          "actions": [
+            {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你在本回合中施放过火焰法术，消灭一个随从。"
+              "text_raw": "[x]<b>Start of Game</b>:\nBreak into 6 Essences.\nAdjoining Essences\nare cast together."
             }
           ]
         }
@@ -1330,22 +1362,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个1/1的树苗"
-            }
-          ]
-        }
-      ]
-    },
-    "CORE_AT_052": {
-      "name": "图腾魔像",
-      "abilities": [
-        {
-          "trigger": "OVERLOAD",
-          "actions": [
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
+            },
             {
-              "class": "TODO",
-              "text_raw": "<b>过载：</b>（1）"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1357,8 +1379,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "恢复#5点生命值。"
+              "class": "HealSpell",
+              "value": 5,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -1370,8 +1393,7 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "召唤三只1/1并具有“<b>亡语：</b>随机获取一张野兽牌”的\n结网蛛。"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1383,8 +1405,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$3点伤害。获得3点\n护甲值。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "ArmorSpell",
+              "value": 3
             }
           ]
         }
@@ -1411,11 +1438,14 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "并<b>冻结</b>该随从"
+              "class": "DiscoverSpell"
             },
             {
-              "class": "DiscoverSpell"
+              "class": "FreezeSpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1428,8 +1458,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两只2/4并具有<b>嘲讽</b>的山熊宝宝"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1443,7 +1472,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>，<b>亡语：</b>为所有友方角色恢复#8点生命值。"
+              "text_raw": "Taunt Deathrattle: Restore #8 Health to all friendly characters."
             }
           ]
         }
@@ -1455,8 +1484,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>吸血</b>\n造成$4点伤害，随机分配到所有敌方随从\n身上。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -1484,6 +1514,11 @@
         {
           "actions": [
             {
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
+            },
+            {
               "class": "DiscoverSpell"
             }
           ]
@@ -1496,8 +1531,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只1/1并具有<b>突袭</b>的土狼"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1509,8 +1548,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个3/6的水元素"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1522,8 +1560,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从和你的英雄各造成$4点伤害。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "TARGET"
             }
           ]
         }
@@ -1536,8 +1575,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗等同于你手牌数量的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1549,8 +1587,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个1/1并具有<b>突袭</b>的“火花”"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1564,7 +1601,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>连击：</b>使一个友方随从获得+4攻击力。"
+              "text_raw": "<b>Combo:</b> Give a friendly minion +4 Attack."
             }
           ]
         }
@@ -1576,8 +1613,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$3点伤害。\n如果你没有其他手牌，则抽一张牌。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1589,8 +1631,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "在本回合中，使你的英雄获得+2攻击力。抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1602,12 +1644,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个3/6的水元素"
-            },
-            {
               "class": "FreezeSpell",
               "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1621,7 +1662,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n选择一个敌方随从。与其战斗至死！"
+              "text_raw": "<b>Battlecry:</b> Choose\nan enemy minion.\nBattle it to the death!"
             }
           ]
         }
@@ -1635,7 +1676,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>\n造成等同于本随从攻击力的伤害，随机分配到所有敌人身上。"
+              "text_raw": "Deathrattle: Deal this minion's Attack damage randomly split among all enemies."
             }
           ]
         }
@@ -1646,6 +1687,10 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            },
             {
               "class": "BuffSpell",
               "attack": 2,
@@ -1685,7 +1730,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你的下一张恶魔牌的法力值消耗减少（2）点。"
+              "text_raw": "<b>Battlecry:</b> The next Demon you play costs (2) less."
             }
           ]
         }
@@ -1698,8 +1743,8 @@
           "trigger": "OUTCAST",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>流放：</b>抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1711,8 +1756,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽一张牌。<b>流放：</b>再抽一张。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1724,8 +1769,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>吸血</b>。\n对一个随从造成$3点伤害。<b>流放：</b>法力值消耗为（1）点。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -1739,7 +1785,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "你的英雄<b>免疫</b>。<b>战吼：</b>在本回合中，你的下一张恶魔牌的法力值消耗为（0）。"
+              "text_raw": "Your hero is <b>Immune</b>. <b>Battlecry:</b> Your next Demon this turn costs (0)."
             }
           ]
         }
@@ -1753,7 +1799,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>复活你在本局对战中死亡的法力值消耗最高的随从。"
+              "text_raw": "<b>Battlecry:</b> Resurrect\nyour highest-Cost minion\nthat died this game."
             }
           ]
         }
@@ -1766,8 +1812,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗与本随从相同的随从”"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -1779,8 +1824,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "随机对两个敌方随从造成$3点伤害。每有一个随从死亡，抽一张牌。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "RANDOM_ENEMY_CHARACTER"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1808,8 +1858,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "为一个友方角色恢复#12点生命值。抽一张牌。"
+              "class": "HealSpell",
+              "value": 12,
+              "target": "FRIENDLY_HERO"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1838,8 +1893,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个随从"
+              "class": "TODO",
+              "text_raw": "[x]<b>Taunt</b>\n<b>Battlecry:</b> Your opponent\nsummons a random minion\nfrom their hand."
             }
           ]
         }
@@ -1851,8 +1906,14 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌方随从造成$2点伤害，为所有友方角色恢复#2点\n生命值。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_ENEMY_CHARACTERS"
+            },
+            {
+              "class": "HealSpell",
+              "value": 2,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -1864,8 +1925,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$3点伤害。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -1877,8 +1939,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "使一个随从获得+2生命值。\n抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1905,8 +1967,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽两张牌。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -1917,6 +1979,11 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
             {
               "class": "FreezeSpell",
               "target": "TARGET"
@@ -1931,6 +1998,11 @@
         {
           "actions": [
             {
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_ENEMY_CHARACTERS"
+            },
+            {
               "class": "FreezeSpell",
               "target": "TARGET"
             }
@@ -1944,8 +2016,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$6点伤害。"
+              "class": "DamageSpell",
+              "value": 6,
+              "target": "TARGET"
             }
           ]
         }
@@ -1957,8 +2030,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌方随从造成$5点伤害。"
+              "class": "DamageSpell",
+              "value": 5,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -1985,8 +2059,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽一张牌，该牌的法力值消耗减少（3）点。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -1998,8 +2072,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有角色造成$3点伤害。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -2011,8 +2086,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个未受伤的随从造成$2点\n伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
             }
           ]
         }
@@ -2025,7 +2101,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使你的武器获得+2攻击力。"
+              "text_raw": "Give your weapon +2 Attack."
             }
           ]
         }
@@ -2037,8 +2113,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭一个敌方随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2050,8 +2126,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌人造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -2063,8 +2140,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$3点伤害。抽一张牌。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2076,8 +2158,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭一个受伤的敌方随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2091,7 +2173,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>在本回合中，使一个随从获得+2攻击力。"
+              "text_raw": "<b>Battlecry:</b> Give a minion +2 Attack this turn."
             }
           ]
         }
@@ -2120,7 +2202,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b>每个玩家抽一张牌。"
+              "text_raw": "<b>Battlecry and Deathrattle:</b> Each player draws a card."
             }
           ]
         },
@@ -2129,7 +2211,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b>每个玩家抽一张牌。"
+              "text_raw": "Battlecry and Deathrattle: Each player draws a card."
             }
           ]
         }
@@ -2143,7 +2225,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n在本回合中，你的下一张<b>连击</b>牌法力值消耗减少（2）点。"
+              "text_raw": "<b>Battlecry:</b> Your next\n<b>Combo</b> card this turn costs (2) less."
             }
           ]
         }
@@ -2157,7 +2239,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机将一张海盗牌置入你的手牌。"
+              "text_raw": "<b>Battlecry:</b> Add a random Pirate to your hand."
             }
           ]
         }
@@ -2171,7 +2253,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>将一张“奥术飞弹”法术牌置入你的\n手牌。"
+              "text_raw": "Deathrattle: Add an 'Arcane Missiles' spell to your hand."
             }
           ]
         }
@@ -2185,7 +2267,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你对手的下一个英雄技能的法力值消耗增加（2）点。"
+              "text_raw": "<b>Battlecry:</b> Your opponent's next Hero Power costs (2) more."
             }
           ]
         }
@@ -2209,8 +2291,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
             }
           ]
         }
@@ -2224,7 +2307,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机\n将2张法师法术牌置入你的手牌。"
+              "text_raw": "<b>Battlecry:</b> Add 2 random Mage spells to your hand."
             }
           ]
         }
@@ -2237,7 +2320,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使一个友方亡灵获得<b>剧毒</b>。"
+              "text_raw": "Give a friendly\nUndead <b>Poisonous</b>."
             }
           ]
         }
@@ -2250,8 +2333,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "你获得的<b>残骸</b>量为正常的两倍。<b>战吼：</b>抽一张消耗<b>残骸</b>的牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2285,8 +2368,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>可交易</b>\n<b>战吼：</b>消灭一个具有<b>嘲讽</b>的敌方随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2299,8 +2382,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>可交易</b>\n<b>战吼：</b>消灭一个攻击力大于或等于7的随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2313,8 +2396,9 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n恢复#2点生命值。"
+              "class": "HealSpell",
+              "value": 2,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -2327,8 +2411,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>法术伤害+1</b>，<b>亡语：</b>抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2342,7 +2426,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你的对手获得两根香蕉。"
+              "text_raw": "<b>Battlecry:</b> Give your opponent 2 Bananas."
             }
           ]
         }
@@ -2356,7 +2440,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n你每有一张手牌，便获得+1生命值。"
+              "text_raw": "<b>Battlecry:</b> Gain +1 Health for each card in your hand."
             }
           ]
         }
@@ -2370,7 +2454,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使相邻的随从获得<b>嘲讽</b>。"
+              "text_raw": "<b>Battlecry:</b> Give adjacent minions <b>Taunt</b>."
             }
           ]
         }
@@ -2384,7 +2468,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n使一个随从的攻击力和生命值互换。"
+              "text_raw": "<b>Battlecry:</b> Swap the Attack and Health of a minion."
             }
           ]
         }
@@ -2412,8 +2496,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2427,7 +2511,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你的其他鱼人获得+2生命值。"
+              "text_raw": "<b>Battlecry:</b> Give your other Murlocs +2 Health."
             }
           ]
         }
@@ -2440,8 +2524,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个5/5的贝恩·血蹄"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -2453,8 +2536,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌方随从造成$1点伤害，抽一张牌。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "ALL_ENEMY_CHARACTERS"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2467,8 +2555,7 @@
           "trigger": "COMBO",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个2/1的迪菲亚强盗"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -2496,7 +2583,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "在本回合中，你所施放的下一个法术的法力值消耗减少（2）点。"
+              "text_raw": "The next spell you cast this turn costs (2) less."
             }
           ]
         }
@@ -2508,8 +2595,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>抉择：</b>\n对一个随从造成$3点伤害；或者造成$1点伤害并抽一张牌。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2525,6 +2617,9 @@
               "attack": 1,
               "health": 1,
               "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -2536,8 +2631,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "在本回合中，获得一个\n法力水晶。"
+              "class": "ManaSpell",
+              "value": 1
             }
           ]
         }
@@ -2551,7 +2646,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机将一张<b>传说</b>随从牌置入你的\n手牌。"
+              "text_raw": "<b>Battlecry:</b> Add a random <b>Legendary</b> minion to your hand."
             }
           ]
         }
@@ -2577,8 +2672,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭所有攻击力大于或等于5的随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2591,8 +2686,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>消灭一个随从并获得其生命值。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2604,8 +2699,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$3点伤害，<b>过载：</b>（1）"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -2617,22 +2713,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "使一个随从变形成为一只0/1并具有<b>嘲讽</b>的青蛙。"
-            }
-          ]
-        }
-      ]
-    },
-    "CORE_EX1_250": {
-      "name": "土元素",
-      "abilities": [
-        {
-          "trigger": "OVERLOAD",
-          "actions": [
-            {
-              "class": "TODO",
-              "text_raw": "<b>嘲讽</b>，<b>过载：</b>（2）"
+              "class": "TransformSpell",
+              "_card_name": "a minion into a 0/1 Frog with Taunt"
             }
           ]
         }
@@ -2644,8 +2726,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌方随从造成$3点伤害，<b>过载：</b>（1）"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -2657,8 +2740,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$1点伤害。抽一张牌。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2671,7 +2759,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>奥秘：</b>当你的对手施放一个法术时，<b>反制</b>该法术。"
+              "text_raw": "<b>Secret:</b> When your opponent casts a spell, <b>Counter</b> it."
             }
           ]
         }
@@ -2696,8 +2784,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$1点伤害。如果该随从死亡，抽一张牌。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2709,8 +2802,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭一个随从，为你的英雄恢复#3点生命值。"
+              "class": "HealSpell",
+              "value": 3,
+              "target": "FRIENDLY_HERO"
+            },
+            {
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2724,7 +2822,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>冲锋</b>，<b>战吼：</b>随机弃两张牌。"
+              "text_raw": "<b>Charge</b>. <b>Battlecry:</b> Discard two random cards."
             }
           ]
         }
@@ -2736,8 +2834,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭所有随从和地标。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -2766,7 +2864,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使一个其他友方随从获得<b>圣盾</b>。"
+              "text_raw": "<b>Battlecry:</b> Give a friendly minion <b>Divine Shield</b>."
             }
           ]
         }
@@ -2780,7 +2878,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>圣盾</b>，<b>嘲讽</b>，<b>亡语：</b>装备一把5/3的\n灰烬使者。"
+              "text_raw": "Divine Shield, Taunt Deathrattle: Equip a 5/3 Ashbringer."
             }
           ]
         }
@@ -2792,8 +2890,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$2点伤害，如果\n它依然存活，则抽一张牌。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -2806,8 +2909,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个1/1的鱼人斥候"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -2818,6 +2920,10 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            },
             {
               "class": "ArmorSpell",
               "value": 5
@@ -2832,8 +2938,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>奥秘：</b>当你的英雄受到攻击，对所有敌人造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -2846,7 +2953,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>奥秘：</b>当一个敌方随从攻击时，将其移回拥有者的手牌，并且法力值消耗增加（2）点。"
+              "text_raw": "<b>Secret:</b> When an enemy minion attacks, return it to its owner's hand. It costs (2) more."
             }
           ]
         }
@@ -2859,7 +2966,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将所有随从的生命值变为1。"
+              "text_raw": "Change the Health of ALL minions to 1."
             }
           ]
         }
@@ -2873,7 +2980,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽，战吼：</b>随机将一张萨满祭司法术牌置入你的手牌。"
+              "text_raw": "<b>Taunt</b>\n<b>Battlecry:</b> Add a random Shaman spell to your hand."
             }
           ]
         }
@@ -2885,8 +2992,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只6/6的老鼠"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -2902,6 +3008,11 @@
               "class": "DamageSpell",
               "value": 3,
               "target": "ENEMY_MINION"
+            },
+            {
+              "class": "HealSpell",
+              "value": 3,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -2915,7 +3026,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>\n你的对手每有一张手牌，本随从便失去1点生命值。"
+              "text_raw": "[x]<b>Taunt</b>\n<b>Battlecry:</b> Lose 1 Health\nfor each card in your\nopponent's hand."
             }
           ]
         }
@@ -2939,8 +3050,10 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "三个1/1的白银之手新兵，装备一把1/4的武器"
+              "class": "SummonSpell"
+            },
+            {
+              "class": "WeaponEquipSpell"
             }
           ]
         }
@@ -2953,8 +3066,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个<b>传说</b>随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -2966,8 +3078,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>吸血</b>\n对一个随从造成\n$3点伤害。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -2981,7 +3094,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>，<b>吸血</b>\n<b>亡语：</b>随机消灭一个敌方随从。"
+              "text_raw": "Taunt, Lifesteal Deathrattle: Destroy a random enemy minion."
             }
           ]
         }
@@ -2995,7 +3108,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>移除你对手的牌库顶的一张牌。"
+              "text_raw": "<b>Battlecry:</b> Remove\nthe top card of your opponent's deck."
             }
           ]
         }
@@ -3029,8 +3142,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>抽取野兽牌，龙牌和鱼人牌各一张。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -3065,7 +3178,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机将一张另一职业的卡牌置入你的手牌。"
+              "text_raw": "<b>Battlecry:</b> Add a random card from another class to your hand."
             }
           ]
         }
@@ -3083,8 +3196,7 @@
               "target": "TARGET"
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（2）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3144,8 +3256,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>奥秘：</b>在你的对手使用一张随从牌后，对该随从造成$6点伤害，超过其生命值的伤害将由对方英雄\n承受。"
+              "class": "DamageSpell",
+              "value": 6,
+              "target": "TARGET"
             }
           ]
         }
@@ -3161,8 +3274,7 @@
               "value": 6
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗小于或等于（4）点的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3175,8 +3287,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "三个1/3并具有<b>嘲讽</b>的恶魔"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3188,8 +3299,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "恢复#12点生命值，随机分配到所有友方角色上。"
+              "class": "HealSpell",
+              "value": 12,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -3203,7 +3315,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>\n获得3点护甲值。"
+              "text_raw": "Deathrattle: Gain 3 Armor."
             }
           ]
         }
@@ -3217,7 +3329,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n获得等同于你的武器攻击力的攻击力。"
+              "text_raw": "<b>Battlecry:</b> Gain Attack equal to the Attack\nof your weapon."
             }
           ]
         }
@@ -3229,8 +3341,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个野兽伙伴"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3270,8 +3381,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "全部三个动物伙伴"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3319,8 +3429,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（2）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3347,8 +3456,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "本随从的两个复制"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3360,12 +3468,16 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一条5/5的冰霜巨龙"
+              "class": "DamageSpell",
+              "value": 5,
+              "target": "ALL_ENEMY_CHARACTERS"
             },
             {
               "class": "FreezeSpell",
               "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3390,8 +3502,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭攻击力最高的敌方随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -3416,8 +3528,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个2/2并具有<b>嘲讽</b>的僵尸"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3446,7 +3557,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>将最多6份<b>残骸</b>复活为1/3并具有<b>嘲讽</b>的复活的步兵。"
+              "text_raw": "<b>Taunt</b>\n<b>Battlecry:</b> Raise up to\n6 <b>Corpses</b> as 1/3 Risen Footmen with <b>Taunt</b>."
             }
           ]
         }
@@ -3457,6 +3568,10 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "TransformSpell",
+              "_card_name": "this into a copy of it"
+            },
             {
               "class": "CopySpell",
               "target": "TARGET"
@@ -3482,7 +3597,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭</b>。<b>战吼，亡语：</b>获得6点护甲值。"
+              "text_raw": "Rush Battlecry and Deathrattle: Gain 6 Armor."
             }
           ]
         }
@@ -3541,8 +3656,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个恶魔"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3554,8 +3668,16 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个新的复制"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "TARGET"
+            },
+            {
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3569,7 +3691,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>下个回合你的对手法术的法力值消耗增加（1）点。"
+              "text_raw": "<b>Battlecry:</b> Your opponent's spells cost (1) more next turn."
             }
           ]
         }
@@ -3597,7 +3719,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>，<b>亡语：</b>获得8点护甲值。"
+              "text_raw": "Taunt Deathrattle: Gain 8 Armor."
             }
           ]
         }
@@ -3623,8 +3745,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个1/3并具有<b>嘲讽</b>的虚空行者"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3636,8 +3762,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$2点伤害。将“传承之火”置入你的手牌。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
             }
           ]
         }
@@ -3649,8 +3776,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两只2/7并具有<b>嘲讽</b>的龟"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3663,8 +3789,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只2/1的松鼠"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3676,8 +3801,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>吸血</b>\n造成$4点伤害。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "TARGET"
             }
           ]
         }
@@ -3690,7 +3816,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将两张其他职业的法力值消耗大于或等于（5）点的法术牌置入你的手牌。"
+              "text_raw": "Add two random\nspells from other classes\nthat cost (5) or more\nto your hand."
             }
           ]
         }
@@ -3704,7 +3830,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>对一个敌方随从造成等同于你的英雄攻击力的伤害。"
+              "text_raw": "<b>Battlecry:</b> Deal damage to an enemy minion equal to your hero's Attack."
             }
           ]
         }
@@ -3716,8 +3842,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "恢复#4点生命值。抽一张牌。"
+              "class": "HealSpell",
+              "value": 4,
+              "target": "FRIENDLY_HERO"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -3731,7 +3862,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你上回合使用的所有法术牌移回你的手牌。"
+              "text_raw": "<b>Battlecry:</b> Return all spells you played last turn to your hand."
             }
           ]
         }
@@ -3745,7 +3876,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭</b>。<b>战吼：</b>用1/1并具有<b>突袭</b>的山猫填满你的手牌。"
+              "text_raw": "<b>Rush</b>. <b>Battlecry:</b> Fill your hand with 1/1 Lynxes\nthat have <b>Rush</b>."
             }
           ]
         }
@@ -3757,8 +3888,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "具有<b>嘲讽</b>的4/8，2/4，1/2的元素各一个"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3770,8 +3900,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只6/6并具有<b>嘲讽</b>的虎鲸；或者六只1/1并具有<b>突袭</b>的海獭"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3783,8 +3912,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>奥秘：</b>在你的对手施放一个法术后，随机消灭一个敌方\n随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -3797,8 +3926,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>消灭一个随从。你的英雄受到等同于该随从生命值的\n伤害。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -3812,7 +3941,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>从<b>突袭，嘲讽，圣盾</b>或<b>风怒</b>中获得两种效果<i>（由你选择）</i>。"
+              "text_raw": "[x]<b>Battlecry:</b> Gain 2 of <b>Rush</b>,\n<b>Taunt</b>, <b>Divine Shield</b>, or\n<b>Windfury</b> <i>(your choice).</i>"
             }
           ]
         }
@@ -3826,7 +3955,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使一个友方随从获得+2生命值。"
+              "text_raw": "<b>Battlecry:</b> Give a friendly minion +2 Health."
             }
           ]
         }
@@ -3855,7 +3984,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机将一个敌方随从移回对手的\n手牌。"
+              "text_raw": "Deathrattle: Return a random enemy minion to your opponent's hand."
             }
           ]
         }
@@ -3919,7 +4048,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将一张1/2的元素牌置入你的手牌。"
+              "text_raw": "<b>Battlecry</b>: Add a 1/2 Elemental to your hand."
             }
           ]
         }
@@ -3948,7 +4077,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机将一张野兽牌置入你的手牌。"
+              "text_raw": "<b>Battlecry:</b> Add a random Beast to your hand."
             }
           ]
         }
@@ -3966,8 +4095,7 @@
               "target": "TARGET"
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "一只剑龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -3980,8 +4108,9 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>突袭</b>，<b>亡语：</b>对所有敌方随从造成\n1点伤害。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "RANDOM_ENEMY_CHARACTER"
             }
           ]
         }
@@ -4032,7 +4161,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>打开一包标准卡牌包，使用其中的所有卡牌。"
+              "text_raw": "<b>Battlecry:</b> Open a Standard Pack. Play all cards from it."
             }
           ]
         }
@@ -4046,6 +4175,9 @@
             {
               "class": "ArmorSpell",
               "value": 4
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4091,8 +4223,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗相同的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4106,7 +4237,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机使一个友方随从获得本随从的攻击力。"
+              "text_raw": "Deathrattle: Give this minion's Attack to a random friendly minion."
             }
           ]
         }
@@ -4124,20 +4255,6 @@
         }
       ]
     },
-    "CS3_007": {
-      "name": "电击学徒",
-      "abilities": [
-        {
-          "trigger": "OVERLOAD",
-          "actions": [
-            {
-              "class": "TODO",
-              "text_raw": "<b>法术伤害+1</b>\n<b>过载：</b>（1）"
-            }
-          ]
-        }
-      ]
-    },
     "CS3_022": {
       "name": "雾帆劫掠者",
       "abilities": [
@@ -4150,8 +4267,7 @@
               "target": "TARGET"
             },
             {
-              "class": "WeaponEquipSpell",
-              "_card_name": "着武器，"
+              "class": "WeaponEquipSpell"
             }
           ]
         }
@@ -4165,7 +4281,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>，<b>圣盾</b>\n<b>亡语：</b>抽取你的法力值消耗最高的\n随从牌。"
+              "text_raw": "Taunt, Divine Shield Deathrattle: Draw your highest Cost minion."
             }
           ]
         }
@@ -4178,8 +4294,13 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只3/3的野兽"
+              "class": "SummonSpell"
+            },
+            {
+              "class": "BuffSpell",
+              "attack": 1,
+              "health": 1,
+              "target": "SELF"
             }
           ]
         }
@@ -4192,8 +4313,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只野兽"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4205,8 +4325,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "三只2/1并具有<b>突袭</b>的迅猛龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4220,7 +4339,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n使相邻手牌的法力值消耗减少（1）点。"
+              "text_raw": "<b>Battlecry:</b> Reduce the Cost of adjacent cards in\nyour hand by (1)."
             }
           ]
         }
@@ -4232,8 +4351,8 @@
         {
           "actions": [
             {
-              "class": "CopySpell",
-              "target": "TARGET"
+              "class": "TODO",
+              "text_raw": "Set a friendly minion's stats to 1/1. Fill your board with copies of it."
             }
           ]
         }
@@ -4246,7 +4365,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将一个随从的属性值变为8/8。使其获得<b>冲锋</b>。"
+              "text_raw": "Set a minion's stats to 8/8. Give it <b>Charge</b>."
             }
           ]
         }
@@ -4273,6 +4392,11 @@
         {
           "actions": [
             {
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "TARGET"
+            },
+            {
               "class": "BuffSpell",
               "attack": 1,
               "health": 1,
@@ -4289,8 +4413,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一枚轻微开裂的蛋"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4303,8 +4426,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张攻击力为0的随从牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -4335,8 +4458,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "选择一个随从，将其变形成为你另选的一个不同的随从。"
+              "class": "TransformSpell",
+              "_card_name": "it into"
             }
           ]
         }
@@ -4348,11 +4471,10 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "该随从并触发其<b>亡语</b>"
+              "class": "DiscoverSpell"
             },
             {
-              "class": "DiscoverSpell"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4365,7 +4487,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使你的随从获得+1攻击力和<b>突袭</b>。它们会在你的回合结束时死亡。"
+              "text_raw": "[x]Give your minions\n+1 Attack and <b>Rush</b>. They\ndie at the end of your turn."
             }
           ]
         }
@@ -4394,8 +4516,10 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>扰魔</b>\n<b>亡语：</b>使你的手牌和牌库里的所有随从牌获得+3/+3。"
+              "class": "BuffSpell",
+              "attack": 3,
+              "health": 3,
+              "target": "SELF"
             }
           ]
         }
@@ -4408,8 +4532,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两只法力值消耗为（3）的野兽，并使其攻击随机敌人"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4420,10 +4543,6 @@
       "abilities": [
         {
           "actions": [
-            {
-              "class": "SummonSpell",
-              "_card_name": "一个<b>传说</b>随从，将其属性值变为10/10"
-            },
             {
               "class": "DiscoverSpell"
             }
@@ -4437,11 +4556,14 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个它的2/3的复制"
+              "class": "DiscoverSpell"
             },
             {
-              "class": "DiscoverSpell"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4455,7 +4577,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张另一职业的面具牌。<b>连击：</b>其法力值消耗减少（2）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Get a random\nMask from another class.\n <b>Combo:</b> It costs (2) less."
             }
           ]
         },
@@ -4464,7 +4586,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张另一职业的面具牌。<b>连击：</b>其法力值消耗减少（2）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Get a random\nMask from another class.\n <b>Combo:</b> It costs (2) less."
             }
           ]
         }
@@ -4477,7 +4599,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将一个随从的属性值变为8/10并使其获得<b>吸血</b>。随机迫使一个敌方随从攻击该随从。"
+              "text_raw": "[x]Set a minion's stats to\n8/10 and give it <b>Lifesteal</b>.\nForce a random enemy\nminion to attack it."
             }
           ]
         }
@@ -4512,8 +4634,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "该野兽"
+              "class": "SummonSpell"
             }
           ]
         },
@@ -4534,8 +4655,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗大于或等于（5）点的<b>嘲讽</b>随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4547,8 +4667,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "将一个随从的属性值变为5/4并使其获得<b>潜行</b>。抽两张牌。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -4560,8 +4680,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "法力值消耗为（6），（4）和（2）的<b>嘲讽</b>随从各一个"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4575,7 +4694,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张法力值消耗为（1）的随从牌。<b><b>亡语：</b></b>随机获取一张法力值消耗为（1）的法术牌。"
+              "text_raw": "[x]<b>Battlecry:</b> Get a random\n1-Cost minion.\n<b><b>Deathrattle:</b> </b>Get a random\n1-Cost spell."
             }
           ]
         },
@@ -4584,7 +4703,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张法力值消耗为（1）的随从牌。<b><b>亡语：</b></b>随机获取一张法力值消耗为（1）的法术牌。"
+              "text_raw": "Battlecry: Get a random 1-Cost minion. Deathrattle: Get a random 1-Cost spell."
             }
           ]
         }
@@ -4612,7 +4731,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张梦境牌。"
+              "text_raw": "<b>Battlecry:</b> Get a random Dream card."
             }
           ]
         }
@@ -4626,7 +4745,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果本牌的法力值消耗小于或等于（3）点，随机攻击两个敌方随从。"
+              "text_raw": "<b>Battlecry:</b> If this costs (3)\nor less, attack two random enemy minions."
             }
           ]
         }
@@ -4642,8 +4761,7 @@
               "value": 5
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（5）的随从并使其获得<b>嘲讽</b>"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4713,8 +4831,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n抽一张野兽牌。<b>灌注</b>你的英雄技能。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -4728,7 +4846,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭</b>。<b>亡语：</b><b>灌注</b>你的英雄技能。"
+              "text_raw": "Rush Deathrattle: Imbue your Hero Power."
             }
           ]
         }
@@ -4756,8 +4874,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "恢复#4点生命值。抽一张牌。<b>灌注</b>你的英雄技能。"
+              "class": "HealSpell",
+              "value": 4,
+              "target": "FRIENDLY_HERO"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -4770,7 +4893,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将每个随从\n洗入随机玩家\n的牌库。"
+              "text_raw": "Each minion gets shuffled into a random player's deck."
             }
           ]
         }
@@ -4782,8 +4905,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "三只2/3并具有<b>嘲讽</b>的狼；或者召唤两只4/3并具有<b>风怒</b>的猎鹰"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4795,8 +4917,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽两张牌。你无法在2回合内使用这些牌。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -4810,7 +4932,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>复活所有\n法力值消耗大于或等于（8）点的不同的友方随从。"
+              "text_raw": "[x]<b>Battlecry:</b> Resurrect all\ndifferent friendly minions\nthat cost (8) or more."
             }
           ]
         }
@@ -4822,8 +4944,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽取你套牌中和套牌之外的法术牌各一张。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -4836,7 +4958,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "选择一个随从。如果是敌方随从，将其属性值变为1/1；如果是友方随从，改为将其属性值变为3/3。"
+              "text_raw": "[x]Choose a minion. If it's\nan enemy, set its stats\nto 1/1. If it's friendly, set\nits stats to 3/3 instead."
             }
           ]
         }
@@ -4848,8 +4970,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>吸血</b>。对生命值最低的敌人造成$5点伤害，触发两次。"
+              "class": "DamageSpell",
+              "value": 5,
+              "target": "ENEMY_MINION"
             }
           ]
         }
@@ -4879,7 +5002,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你手牌中法力值消耗最高的法术变为持续3回合的光环并施放。"
+              "text_raw": "[x]<b>Battlecry:</b> Cast the highest\nCost spell from your hand as\n an Aura that lasts 3 turns."
             }
           ]
         }
@@ -4892,8 +5015,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "</b>的4/5并具有<b>嘲讽</b>的龙洗入你的牌库"
+              "class": "TODO",
+              "text_raw": "Taunt. Deathrattle: Shuffle two 4/5 Dragons with Taunt into your deck. They're Summoned When Drawn."
             }
           ]
         }
@@ -4920,8 +5043,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只3/2并具有<b>突袭</b>的狼"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4933,8 +5060,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两只3/2并具有<b>突袭</b>的狼"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "ENEMY_MINION"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -4946,8 +5077,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（2）的随从并使其获得<b>嘲讽</b>"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5015,7 +5145,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>吸血</b>。<b>战吼：</b><b>灌注</b>你的英雄技能。"
+              "text_raw": "<b>Lifesteal</b>\n<b>Battlecry:</b> <b>Imbue</b> your Hero Power."
             }
           ]
         }
@@ -5029,7 +5159,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b><b>灌注</b>你的英雄技能。"
+              "text_raw": "[x]<b>Battlecry and Deathrattle:</b>\n<b>Imbue</b> your Hero Power."
             }
           ]
         },
@@ -5038,7 +5168,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b><b>灌注</b>你的英雄技能。"
+              "text_raw": "Battlecry and Deathrattle: Imbue your Hero Power."
             }
           ]
         }
@@ -5050,11 +5180,10 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "它"
+              "class": "DiscoverSpell"
             },
             {
-              "class": "DiscoverSpell"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5088,8 +5217,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "WeaponEquipSpell",
-              "_card_name": "一把2/2的剑"
+              "class": "WeaponEquipSpell"
             }
           ]
         }
@@ -5126,8 +5254,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从\n造成$6点伤害。\n<i>（施放3个法术\n以获得<b>吸血</b>。）</i>"
+              "class": "DamageSpell",
+              "value": 6,
+              "target": "TARGET"
             }
           ]
         }
@@ -5139,8 +5268,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个法力值消耗为（3）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5152,8 +5280,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（2）的随从"
+              "class": "DestroySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5167,7 +5298,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>\n你使用的下三张法术牌会施放两次。"
+              "text_raw": "<b>Battlecry:</b> The next 3 spells you play cast twice."
             }
           ]
         }
@@ -5180,8 +5311,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一条龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5223,8 +5353,14 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌方\n角色造成$4点伤害。为所有友方角色恢复#4点生命值。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "ALL_ENEMY_CHARACTERS"
+            },
+            {
+              "class": "HealSpell",
+              "value": 4,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -5237,8 +5373,11 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个它的复制"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5250,8 +5389,14 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "为你的英雄恢复#12点生命值。在下2个回合中，每回合对你的英雄造成$3点伤害。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "HealSpell",
+              "value": 12,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -5277,8 +5422,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>抽一张法力值消耗大于或等于（7）点的随从牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -5304,7 +5449,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你使用的下一张牌会消耗<b>对手</b>的生命值而非法力值<i>（最高不超过10点）</i>。"
+              "text_raw": "[x]<b>Battlecry:</b> The next card you\nplay costs your OPPONENT'S\nHealth instead of Mana\n<i>(up to 10)</i>."
             }
           ]
         }
@@ -5316,8 +5461,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个3/6并具有<b>嘲讽</b>且无法攻击的恶魔；或者消灭一个敌方随从"
+              "class": "DestroySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5331,7 +5479,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>获得在本回合中死亡的你的随从的<b>亡语</b>。"
+              "text_raw": "<b>Battlecry:</b> Gain the\n<b>Deathrattles</b> of your minions\nthat died this turn."
             }
           ]
         }
@@ -5344,8 +5492,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "三只1/1并具有<b>突袭</b>的小鸭子"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5358,8 +5505,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机使你手牌中的所有随从牌变形成为恶魔牌。<i>（保留其原始属性值和法力值消耗。）</I>"
+              "class": "TransformSpell",
+              "_card_name": "minions in your hand into random Demons"
             }
           ]
         }
@@ -5373,7 +5520,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "在你的回合结束时，吞食一个你的牌库中的随从，并获得其属性值。<b>亡语：</b>将被吞食的随从置入手牌。"
+              "text_raw": "At the end of your turn, eat a minion in your deck and gain its stats. Deathrattle: Add them to your hand."
             }
           ]
         }
@@ -5387,7 +5534,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>使每个玩家手牌中的随机一张随从牌获得-2攻击力。"
+              "text_raw": "Deathrattle: Give a random minion in each player's hand -2 Attack."
             }
           ]
         }
@@ -5422,7 +5569,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b><b>灌注</b>你的英雄技能。使你手牌中一张随从牌的法力值消耗减少（1）点。"
+              "text_raw": "[x]<b>Battlecry:</b> <b>Imbue</b> your Hero\nPower. Reduce the Cost of a\n minion in your hand by (1)."
             }
           ]
         }
@@ -5436,7 +5583,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b><b>灌注</b>并触发你的英雄技能。"
+              "text_raw": "<b>Battlecry:</b> <b>Imbue</b> your Hero Power, then trigger it."
             }
           ]
         }
@@ -5462,8 +5609,8 @@
         {
           "actions": [
             {
-              "class": "CopySpell",
-              "target": "TARGET"
+              "class": "TODO",
+              "text_raw": "Your opponent\ndraws 2 cards. You get copies of them."
             }
           ]
         }
@@ -5475,8 +5622,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只4/4并具有<b>潜行</b>的蜘蛛"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5490,7 +5636,7 @@
           "actions": [
             {
               "class": "ShuffleSpell",
-              "_card_name": "其牌库"
+              "_card_name": "theirs"
             }
           ]
         }
@@ -5504,7 +5650,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机使你对手手牌中的1张牌困住一回合。\n<i>（你每使用过一次本随从都会提升。）</i>"
+              "text_raw": "[x]<b>Battlecry:</b> Trap 1 random card\nin your opponent's hand for a\nturn. <i>(Improved for each time\nyou've played this.)</i>"
             }
           ]
         }
@@ -5517,8 +5663,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "CopySpell",
-              "target": "TARGET"
+              "class": "TODO",
+              "text_raw": "[x]<b>Battlecry:</b> Fill your hand\nwith copies of cards from\nyour opponent's deck.\nThey cost (3) less."
             }
           ]
         }
@@ -5548,6 +5694,10 @@
             {
               "class": "ArmorSpell",
               "value": 8
+            },
+            {
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -5558,6 +5708,11 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "ALL_MINIONS"
+            },
             {
               "class": "BuffSpell",
               "attack": 2,
@@ -5575,8 +5730,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>抽一张法力值消耗大于或等于（5）点的法术牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -5589,8 +5744,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>抽两张龙牌，其法力值消耗减少（1）点。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -5604,7 +5759,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>使你手牌中具有<b>黑暗之赐</b>的随从牌的法力值消耗减少（2）点。"
+              "text_raw": "[x]<b>Taunt</b>\n<b>Battlecry:</b> Reduce the Cost\nof minions in your hand\nwith <b>Dark Gifts</b> by (2)."
             }
           ]
         }
@@ -5617,12 +5772,11 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
-            },
-            {
               "class": "CopySpell",
               "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5636,7 +5790,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b><b>嘲讽</b>。圣盾</b>\n<b>战吼：</b><b>灌注</b>你的英雄技能。"
+              "text_raw": "<b><b>Taunt</b>, Divine Shield</b>\n<b>Battlecry:</b> <b>Imbue</b> your Hero Power."
             }
           ]
         }
@@ -5648,8 +5802,12 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭一个\n友方小精灵以\n抽三张牌。"
+              "class": "DrawSpell",
+              "count": 3
+            },
+            {
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -5662,8 +5820,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两条0/2的水蛭"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5687,8 +5844,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两只1/1的蚂蚁；或者消耗2份<b>残骸</b>，对一个随从造成$4点伤害"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5700,8 +5861,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一条0/2的水蛭"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5713,8 +5878,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两条0/2的水蛭"
+              "class": "DrawSpell",
+              "count": 2
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5728,7 +5896,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>亡语：</b>分裂为1/1的甲虫。在你的回合开始时，剩余的甲虫会重组为尼珊德拉。"
+              "text_raw": "Taunt. Deathrattle: Split into 1/1 Beetles. At the start of your turn, reform with any remaining."
             }
           ]
         }
@@ -5742,7 +5910,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>攻击所有其他随从。<b>亡语：</b>复活本随从消灭的随从。"
+              "text_raw": "<b>Battlecry:</b> Attack ALL\nother minions.\n<b>Deathrattle:</b> Resurrect any this killed."
             }
           ]
         },
@@ -5751,7 +5919,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>攻击所有其他随从。<b>亡语：</b>复活本随从消灭的随从。"
+              "text_raw": "Battlecry: Attack ALL other minions. Deathrattle: Resurrect any this killed."
             }
           ]
         }
@@ -5763,8 +5931,12 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>抉择：</b>召唤两个<b>休眠</b>的魔种；或者对所有随从造成\n$2点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_MINIONS"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5776,8 +5948,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个<b>休眠</b>的魔种"
+              "class": "DrawSpell",
+              "count": 1
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5790,8 +5965,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个<b>休眠</b>的魔种"
+              "class": "SummonSpell"
             }
           ]
         },
@@ -5799,8 +5973,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个<b>休眠</b>的魔种"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -5812,8 +5985,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>抉择：</b>抽一张法术牌；或者抽一张随从牌。<i>（本牌在你手中3回合即可同时拥有两种效果！）</i>"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -5826,7 +5999,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "获取全部5张梦境牌。如果你在本牌在你手中时使用过法力值消耗更高的牌，腐蚀这些梦境牌！"
+              "text_raw": "[x]Get all 5 Dream cards.\nIf you've played a higher\nCost card while holding\nthis, corrupt them!"
             }
           ]
         }
@@ -5840,7 +6013,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b>你的下一个英雄技能的法力值消耗为（0）点。"
+              "text_raw": "<b>Battlecry and Deathrattle:</b> Your next Hero Power costs (0)."
             }
           ]
         },
@@ -5849,7 +6022,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b>你的下一个英雄技能的法力值消耗为（0）点。"
+              "text_raw": "Battlecry and Deathrattle: Your next Hero Power costs (0)."
             }
           ]
         }
@@ -5861,8 +6034,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "恢复#6点生命值。随机获取3张德鲁伊法术牌。"
+              "class": "HealSpell",
+              "value": 6,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -5876,7 +6050,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b><b>灌注</b>你的英雄技能。"
+              "text_raw": "<b>Battlecry:</b> <b>Imbue</b> your\nHero Power."
             }
           ]
         }
@@ -5926,7 +6100,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>双方玩家\n各获得一个空的\n法力水晶。"
+              "text_raw": "Deathrattle: Both players gain an empty Mana Crystal."
             }
           ]
         }
@@ -5940,7 +6114,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>获取\n一张小精灵。<b>灌注</b>你的英雄技能。"
+              "text_raw": "<b>Battlecry:</b> Get a Wisp. <b>Imbue</b> your Hero Power."
             }
           ]
         }
@@ -5965,8 +6139,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你牌库中的所有中立卡牌随机变形成为德鲁伊卡牌。"
+              "class": "TransformSpell",
+              "_card_name": "all Neutral cards in your deck into random Druid ones"
             }
           ]
         }
@@ -5979,7 +6153,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "获取一张月火术和一张星火术，使其获得<b>法术伤害+1</b>。"
+              "text_raw": "Get a Moonfire and\na Starfire. Give them <b>Spell Damage +1</b>."
             }
           ]
         }
@@ -5992,6 +6166,10 @@
           "actions": [
             {
               "class": "DiscoverSpell"
+            },
+            {
+              "class": "ShuffleSpell",
+              "_card_name": "the other two"
             }
           ]
         }
@@ -6026,7 +6204,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>使你最右边的手牌法力值消耗减少（2）点。"
+              "text_raw": "Deathrattle: Reduce the Cost of the right-most card in your hand by (2)."
             }
           ]
         }
@@ -6039,8 +6217,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个它的复制"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -6053,8 +6230,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个它的复制"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -6068,7 +6244,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>开启为期三回合的月相演变。当满月升起时，在本局对战中你的卡牌法力值消耗为（1）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Start a three\nturn lunar cycle. When the\nFull Moon rises, your cards\ncost (1) this game."
             }
           ]
         }
@@ -6080,8 +6256,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$1点伤害。<i>（每有一个在本局对战中死亡的友方随从都会提升。）</i>"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "TARGET"
             }
           ]
         }
@@ -6094,8 +6271,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张牌，在本回合中其法力值消耗减少（1）点。<i>（我认得那张牌！）</i>"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -6109,7 +6286,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>直到你的下个回合，使所有敌方随从获得-2攻击力。<b>灌注</b>你的英雄技能。"
+              "text_raw": "[x]<b>Battlecry:</b> Give all enemy\nminions -2 Attack until\nyour next turn. <b>Imbue</b>\nyour Hero Power."
             }
           ]
         }
@@ -6123,7 +6300,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>亡语：</b>将一张踏青驼鹿置于你的牌库底，其法力值消耗为（1）点。"
+              "text_raw": "Taunt. Deathrattle: Put a Meadowstrider on the bottom of your deck. It costs (1)."
             }
           ]
         }
@@ -6137,7 +6314,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张鱼人牌。"
+              "text_raw": "<b>Battlecry:</b> Get a\nrandom Murloc."
             }
           ]
         }
@@ -6149,8 +6326,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$2点伤害。<b>灌注</b>你的英雄技能。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
             }
           ]
         }
@@ -6164,7 +6342,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>复生</b>。<b>亡语：</b>装备一把1/2的匕首。如果你已经装备了武器，改为使其获得+2攻击力。"
+              "text_raw": "Reborn. Deathrattle: Equip a 1/2 Dagger. If you already have a weapon equipped, give it +2 Attack instead."
             }
           ]
         }
@@ -6176,8 +6354,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽一张亡灵牌。<b>灌注</b>你的英雄技能两次。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -6190,8 +6368,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "在本回合中每有一个随从死亡，本牌的法力值消耗便减少（1）点。<b>战吼：</b>抽两张牌。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -6203,8 +6381,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（4）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -6218,7 +6395,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你的英雄在本回合，下回合以及下下回合中获得+3攻击力。"
+              "text_raw": "[x]<b>Battlecry:</b> Give your hero\n+3 Attack this turn, next\nturn, and the turn after."
             }
           ]
         }
@@ -6229,6 +6406,11 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "TARGET"
+            },
             {
               "class": "DrawSpell",
               "count": 1
@@ -6253,8 +6435,7 @@
               "target": "TARGET"
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "两个2/2的树人"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -6267,7 +6448,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "在你的回合开始时，获得一个临时的法力水晶。持续\n3回合。"
+              "text_raw": "At the start of your turn, gain a temporary Mana Crystal. Lasts 3 turns."
             }
           ]
         }
@@ -6300,6 +6481,11 @@
         {
           "actions": [
             {
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "RANDOM_ENEMY_CHARACTER"
+            },
+            {
               "class": "BuffSpell",
               "attack": 3,
               "health": 3,
@@ -6317,7 +6503,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>延系，亡语：</b>随机获取一张<b>亡语</b>随从牌，其法力值消耗减少（2）点。"
+              "text_raw": "Kindred and Deathrattle: Get a random Deathrattle minion. It costs (2) less."
             }
           ]
         }
@@ -6330,7 +6516,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>填满你的手牌，然后清空。<b>奖励：</b>提克和托克。"
+              "text_raw": "<b>Quest:</b> Fill your hand, then empty it.\n<b>Reward: </b>Tick and Tock."
             }
           ]
         }
@@ -6344,7 +6530,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你手牌中一张随机卡牌的法力值消耗变为无穷大！<b>亡语：</b>将其变回原本消耗。"
+              "text_raw": "[x]<b>Battlecry:</b> Set the Cost of\na random card in your hand\nto INFINITY! <b>Deathrattle:</b>\nChange it back."
             }
           ]
         },
@@ -6353,7 +6539,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你手牌中一张随机卡牌的法力值消耗变为无穷大！<b>亡语：</b>将其变回原本消耗。"
+              "text_raw": "Battlecry: Set the Cost of a random card in your hand to INFINITY! Deathrattle: Change it back."
             }
           ]
         }
@@ -6381,8 +6567,16 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（1）的随从"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "RANDOM_ENEMY_MINION"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -6396,7 +6590,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你手牌中所有随从牌和武器牌获得+2攻击力。"
+              "text_raw": "<b>Battlecry:</b> Give all minions and weapons in your hand +2 Attack."
             }
           ]
         }
@@ -6407,6 +6601,10 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DestroySpell",
+              "target": "TARGET"
+            },
             {
               "class": "FreezeSpell",
               "target": "TARGET"
@@ -6422,7 +6620,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>奥秘：</b>在对手的回合结束时，对其生命值最高的随从造成无穷大的伤害。"
+              "text_raw": "<b>Secret:</b> When your enemy's turn ends, deal INFINITE damage to their highest Health minion."
             }
           ]
         }
@@ -6434,8 +6632,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>吸血</b>。对一个随从造成$3点伤害。如果该随从死亡，在你的回合结束时将本牌移回你的手牌。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -6459,8 +6658,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭所有攻击力小于或等于4的随从。<b>过载：</b>（2）。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -6474,7 +6673,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭</b>。<b><b>连击：</b>过载（2）</b>以获得<b>风怒</b>和在本回合中的<b>免疫</b>。"
+              "text_raw": "[x]<b>Rush</b>\n<b><b>Combo:</b> Overload</b> for (2) to\ngain <b>Immune</b> this turn\nand <b>Windfury</b>."
             }
           ]
         }
@@ -6487,8 +6686,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机消灭敌方随从，地标和武器各一个。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -6537,7 +6736,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>用随机的龙填满你的面板。为你的英雄恢复所有生命值。跳过你的下个回合。"
+              "text_raw": "<b>Battlecry:</b> Fill your board with random Dragons.\nFully heal your hero. Skip your next turn."
             }
           ]
         }
@@ -6593,8 +6792,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两条4/4并具有<b>嘲讽</b>的龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -6606,8 +6804,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "在你的下回合开始时，造成$6点伤害，随机分配到所有敌人身上。"
+              "class": "DamageSpell",
+              "value": 6,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -6623,6 +6822,10 @@
               "attack": 1,
               "health": 1,
               "target": "TARGET"
+            },
+            {
+              "class": "DiscardSpell",
+              "count": 1
             }
           ]
         }
@@ -6650,8 +6853,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "随机对三个敌人造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "RANDOM_ENEMY_MINION"
             }
           ]
         }
@@ -6663,8 +6867,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$3点伤害。随机弃掉一张火焰法术牌以再造成$3点。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "RANDOM_ENEMY_MINION"
+            },
+            {
+              "class": "DiscardSpell",
+              "count": 1
             }
           ]
         }
@@ -6677,7 +6886,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "抽{0}张牌。\n<i>（每回合都会升级，但本牌会在{1}回合后弃掉！）</i>1抽{0}张牌。<i>（本牌会在本回合弃掉！）</i>"
+              "text_raw": "Draw {0} card.\n<i>(Upgrades each turn,\nbut discards after {1}!)</i>1Draw {0} cards.\n<i>(Discards this turn!)</i>"
             }
           ]
         }
@@ -6690,7 +6899,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使一个友方随从获得+{0}/+{0}。<i>（每回合都会升级，但本牌会在{1}回合后弃掉！）</i>1使一个友方随从获得+{0}/+{0}。<i>（本牌会在本回合弃掉！）</i>"
+              "text_raw": "Give a friendly minion +{0}/+{0}.\n<i>(Upgrades each turn,\nbut discards after {1}!)</i>1Give a friendly\nminion +{0}/+{0}.\n<i>(Discards this turn!)</i>"
             }
           ]
         }
@@ -6703,7 +6912,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "对所有敌方随从造成${0}点伤害。<i>（每回合都会升级，但本牌会在{1}回合后弃掉！）</i>1对所有敌方随从造成${0}点伤害。<i>（本牌会在本回合弃掉！）</i>"
+              "text_raw": "Deal ${0} damage to all enemy minions. <i>(Upgrades each turn,\nbut discards after {1}!)</i>1Deal ${0} damage to all enemy minions.\n<i>(Discards this turn!)</i>"
             }
           ]
         }
@@ -6732,7 +6941,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "在本回合中你每使用过一张牌，本牌的法力值消耗便减少（1）点。<b>亡语：</b>在回合结束时，获取另一张永燃火凤。"
+              "text_raw": "Costs (1) less for each card you've played this turn. Deathrattle: At end of turn, get another Phoenix."
             }
           ]
         }
@@ -6757,8 +6966,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你已<b>灌注</b>过你的英雄技能两次，抽两张牌。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -6770,8 +6979,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "随机对一个\n敌方随从造成$4点伤害。如果你的手牌中有法力值消耗大于或等于（8）点的牌，改为造成$8点。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "RANDOM_ENEMY_CHARACTER"
             }
           ]
         }
@@ -6846,8 +7056,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>抽一张火焰法术牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -6858,6 +7068,11 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "TARGET"
+            },
             {
               "class": "DiscoverSpell"
             }
@@ -6873,7 +7088,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你每张手牌的法力值消耗各不相同，使其法力值消耗减少（2）点。"
+              "text_raw": "<b>Battlecry:</b> If every card in your hand is of a different Cost, reduce their Costs by (2)."
             }
           ]
         }
@@ -6885,8 +7100,15 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个它的8/8并具有<b>圣盾</b>的复制"
+              "class": "DrawSpell",
+              "count": 1
+            },
+            {
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -6900,7 +7122,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭。嘲讽</b>。<b>战吼：</b>选择消耗10份，20份或30份<b>残骸</b>以获得等量属性值。"
+              "text_raw": "[x]<b>Rush, Taunt</b>\n<b>Battlecry:</b> Choose to spend\n10, 20, or 30 <b>Corpses</b> to\ngain that many stats."
             }
           ]
         }
@@ -6933,8 +7155,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$5点伤害，其拥有者抽一张牌。"
+              "class": "DamageSpell",
+              "value": 5,
+              "target": "TARGET"
             }
           ]
         }
@@ -6947,8 +7170,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "ArmorSpell",
-              "value": 6
+              "class": "TODO",
+              "text_raw": "[x]<b>Battlecry:</b> If you're holding\na minion with a <b>Dark Gift</b>,\ngive your hero +3 Attack this\nturn and 6 Armor."
             }
           ]
         }
@@ -6977,7 +7200,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>免疫</b>火焰法术。<b>战吼：</b>随机对敌人施放消耗总计15点法力值的火焰法术。"
+              "text_raw": "[x]<b>Immune</b> to Fire spells.\n<b>Battlecry:</b> Cast 15 Mana\nworth of Fire spells at\nrandom enemies."
             }
           ]
         }
@@ -7005,7 +7228,363 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你的手牌中有法力值消耗大于或等于（5）点的法术牌，获得<b>圣盾</b>和<b>吸血</b>。"
+              "text_raw": "<b>Battlecry:</b> If you're holding a spell that costs (5) or more, gain <b>Divine Shield</b> and <b>Lifesteal</b>."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_041": {
+      "name": "年迈的荒语者",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Taunt</b>\n<b>Battlecry:</b> If you didn't play\na minion last turn, refresh\n3 Mana Crystals."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_042": {
+      "name": "生命绽放",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "HealSpell",
+              "value": 8,
+              "target": "FRIENDLY_HERO"
+            },
+            {
+              "class": "SummonSpell"
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_043": {
+      "name": "根心之石",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            },
+            {
+              "class": "ArmorSpell",
+              "value": 3
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_045": {
+      "name": "播种的绿龙",
+      "abilities": [
+        {
+          "trigger": "DEATHRATTLE",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "Taunt Deathrattle: Get a random Dragon. It costs (2) less."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_046": {
+      "name": "巴珊娜·符文图腾",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Battlecry:</b> Get three\n2/2 Treants. Carve 12\nMana worth of Nature\nspells into them."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_100": {
+      "name": "育植林精",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Battlecry:</b> Get a 3-Cost\nBulb that casts three\n random 1-Cost spells.\n It upgrades each turn."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_300": {
+      "name": "驯服宠物",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_301": {
+      "name": "灵语猎手",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "<b>Battlecry:</b> Choose an Animal Companion to summon."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_302": {
+      "name": "废土先锋",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "ALL_ENEMY_CHARACTERS"
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_303": {
+      "name": "迁徙的雷象",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Taunt. Battlecry:</b> Replace your\nfuture Animal Companions\nwith random Beasts that\ncost (1) more."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_304": {
+      "name": "塔雅·陆行",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "SummonSpell"
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_305": {
+      "name": "滋养自然",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "BuffSpell",
+              "attack": 2,
+              "health": 2,
+              "target": "TARGET"
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_307": {
+      "name": "自由漫步",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]Replace your future Animal\nCompanions with random\nBeasts that cost (2) more.\nChoose one to summon."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_500": {
+      "name": "迸发魔网",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]Deal ${0} damage to a\nrandom enemy minion.\nExcess damage hits\nthe enemy hero."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_501": {
+      "name": "魔力行者",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Battlecry:</b> Your Leylines\ncost (1) less this game.\n<b>Deathrattle:</b> Get a\nrandom Leyline."
+            }
+          ]
+        },
+        {
+          "trigger": "DEATHRATTLE",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "Battlecry: Your Leylines cost (1) less this game. Deathrattle: Get a random Leyline."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_502": {
+      "name": "晶化魔网",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "SummonSpell"
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_503": {
+      "name": "湍流之针",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Battlecry:</b> Your Leylines\ntrigger an additional\ntime this game."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_504": {
+      "name": "魔网枢纽",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_505": {
+      "name": "魔网地图",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "Get all 3 Leylines.\nChoose an upgrade\nfor your Leylines."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_506": {
+      "name": "秘魔刃豹",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Elusive</b>\n<b>Battlecry:</b> Increase the\neffects of your Leylines\nby 1 this game."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_800": {
+      "name": "莽撞的战场军官",
+      "abilities": [
+        {
+          "trigger": "DEATHRATTLE",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "Rush Deathrattle: Give your Silver Hand Recruits +1 Attack this game."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_802": {
+      "name": "休养",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "SummonSpell"
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_804": {
+      "name": "救赎者阿拉托尔",
+      "abilities": [
+        {
+          "trigger": "BATTLECRY",
+          "actions": [
+            {
+              "class": "TODO",
+              "text_raw": "[x]<b>Battlecry:</b> Double the\nstats of all friendly\nSilver Hand Recruits\nand give them <b>Taunt</b>."
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_805": {
+      "name": "捐助",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "BuffSpell",
+              "attack": 3,
+              "health": 3,
+              "target": "TARGET"
+            }
+          ]
+        }
+      ]
+    },
+    "MEND_900": {
+      "name": "团队协作",
+      "abilities": [
+        {
+          "actions": [
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7017,8 +7596,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>吸血</b>\n对一个随从造成$6点伤害。"
+              "class": "DamageSpell",
+              "value": 6,
+              "target": "TARGET"
             }
           ]
         }
@@ -7029,6 +7609,11 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
             {
               "class": "DiscoverSpell"
             }
@@ -7058,7 +7643,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将最多5份<b>残骸</b>复活为2/2并具有<b>突袭</b>的复活的食尸鬼。"
+              "text_raw": "Raise up to 5 <b>Corpses</b> as 2/2 Risen Ghouls with <b>Rush</b>."
             }
           ]
         }
@@ -7097,7 +7682,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>获得一份<b>残骸</b>。"
+              "text_raw": "<b>Battlecry</b>: Gain a <b>Corpse</b>."
             }
           ]
         }
@@ -7110,8 +7695,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>抽一张冰霜法术牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -7124,7 +7709,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使你的所有随从获得+1攻击力。消耗5份<b>残骸</b>，改为获得+3攻击力。"
+              "text_raw": "[x]Give your minions +1\nAttack. Spend 5 <b>Corpses</b>\nto give them +3 instead."
             }
           ]
         }
@@ -7137,8 +7722,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b>抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         },
@@ -7146,8 +7731,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼，亡语：</b>抽一张牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -7159,8 +7744,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌人造成$2点伤害。抽一张牌。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_ENEMY_CHARACTERS"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -7174,7 +7764,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使一个友方亡灵获得+2攻击力。"
+              "text_raw": "<b>Battlecry:</b> Give a friendly Undead +2 Attack."
             }
           ]
         }
@@ -7187,7 +7777,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>回溯</b>。随机将一张随从牌置入你的手牌。该牌的法力值消耗减少（3）点。"
+              "text_raw": "<b>Rewind</b>\nAdd a random minion\nto your hand. It costs\n(3) less."
             }
           ]
         }
@@ -7199,8 +7789,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>回溯</b>。随机向敌人射出3把飞刀，每把造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "RANDOM_ENEMY_MINION"
             }
           ]
         }
@@ -7214,7 +7805,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>回溯</b>。<b>战吼：</b>随机获取2张你职业的\n法术牌。"
+              "text_raw": "[x]<b>Rewind</b>\n<b>Battlecry:</b> Get 2 random\nspells from your class."
             }
           ]
         }
@@ -7226,6 +7817,10 @@
         {
           "trigger": "BATTLECRY",
           "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            },
             {
               "class": "BuffSpell",
               "attack": 2,
@@ -7243,8 +7838,9 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>回溯</b>。<b>战吼：</b>随机对一个敌人造成7点\n伤害。"
+              "class": "DamageSpell",
+              "value": 7,
+              "target": "RANDOM_ENEMY_CHARACTER"
             }
           ]
         }
@@ -7257,8 +7853,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>奇闻+</b>\n你的套牌容量为40，但其中有10张拉法姆！<b>战吼：</b>如果你使用过其余拉法姆，消灭敌方英雄。@<i>（还剩{0}个！）</i>@<i>（已经就绪！）</i>"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -7270,8 +7866,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个0/4并具有<b>嘲讽</b>的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7284,8 +7879,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>回溯</b>。<b>战吼：</b>双方玩家各随机弃一张牌。"
+              "class": "DiscardSpell",
+              "count": 1
             }
           ]
         }
@@ -7299,7 +7894,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>奇闻</b>\n<b>战吼：</b>将每种不同的光环从你的牌库中置入战场。"
+              "text_raw": "[x]<b>Fabled</b>\n<b>Battlecry:</b> Put one of each\nAura from your deck into\nthe battlefield."
             }
           ]
         }
@@ -7324,8 +7919,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "消耗总计12点法力值的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7338,8 +7932,9 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>圣盾</b>。<b>战吼：</b>为你的英雄恢复#3点生命值并使其获得<b>圣盾</b>。"
+              "class": "HealSpell",
+              "value": 3,
+              "target": "FRIENDLY_HERO"
             }
           ]
         }
@@ -7370,8 +7965,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>圣盾</b>。<b>亡语：</b>召唤一辆7/7并具有<b>圣盾</b>\n的坦克。"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7384,7 +7978,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>回溯</b>。随机获取2张神圣法术牌，为你的英雄恢复等同于其法力值消耗的生命值。"
+              "text_raw": "<b>Rewind</b>\nGet 2 random Holy spells. Restore Health to your hero equal to their Costs."
             }
           ]
         }
@@ -7413,7 +8007,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>流放：</b>直到你的下个回合，你的英雄<b>免疫</b>。"
+              "text_raw": "<b>Outcast:</b> Your hero is <b>Immune</b> until your\nnext turn."
             }
           ]
         }
@@ -7426,7 +8020,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "抽取你牌库底的两张牌。"
+              "text_raw": "Draw the bottom two cards from your deck."
             }
           ]
         }
@@ -7440,7 +8034,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>在你的下个回合开始时，将本随从的攻击力变为无穷大！"
+              "text_raw": "<b>Battlecry:</b> At the start of your next turn, set this minion's Attack to INFINITY!"
             }
           ]
         }
@@ -7459,7 +8053,7 @@
             },
             {
               "class": "ShuffleSpell",
-              "_card_name": "你的牌库"
+              "_card_name": "2 Shreds of Time"
             }
           ]
         }
@@ -7475,6 +8069,10 @@
               "attack": 1,
               "health": 1,
               "target": "TARGET"
+            },
+            {
+              "class": "ShuffleSpell",
+              "_card_name": "2 Shreds of Time"
             }
           ]
         }
@@ -7486,8 +8084,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$6点伤害，随机分配到所有敌人身上。将2张时空撕裂洗入你的牌库。"
+              "class": "DamageSpell",
+              "value": 6,
+              "target": "ALL_ENEMY_CHARACTERS"
+            },
+            {
+              "class": "ShuffleSpell",
+              "_card_name": "2 Shreds of Time"
             }
           ]
         }
@@ -7516,8 +8119,11 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7530,7 +8136,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "随机将你手牌中的一张随从牌拆成两半。"
+              "text_raw": "Split a random\nminion in your hand into two halves."
             }
           ]
         }
@@ -7542,8 +8148,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽三张法力值消耗不同的牌。"
+              "class": "DrawSpell",
+              "count": 3
             }
           ]
         }
@@ -7557,7 +8163,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你抽取你法力值消耗最高的两张牌，你的对手抽取你法力值消耗最低的两张牌。"
+              "text_raw": "[x]<b>Battlecry:</b> You draw your\n2 highest Cost cards.\nYour opponent draws your\n2 lowest Cost cards."
             }
           ]
         }
@@ -7571,7 +8177,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>回溯</b>。<b>战吼：</b>随机施放2个自然法术。"
+              "text_raw": "<b>Rewind</b>\n<b>Battlecry:</b> Cast 2 random Nature spells."
             }
           ]
         }
@@ -7590,8 +8196,7 @@
               "target": "SELF"
             },
             {
-              "class": "WeaponEquipSpell",
-              "_card_name": "一把武器，使你的武器获得"
+              "class": "WeaponEquipSpell"
             }
           ]
         }
@@ -7605,7 +8210,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>亡语：</b>随机获取一张<b>回溯</b>牌。"
+              "text_raw": "Taunt Deathrattle: Get a random Rewind card."
             }
           ]
         }
@@ -7632,8 +8237,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张随从牌。使你手牌中的随从牌获得+2生命值。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -7646,9 +8251,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_count": 2,
-              "_card_name": "<b>传说</b>随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7678,7 +8281,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机获取一张来自过去的法力值消耗为（5）的随从牌。"
+              "text_raw": "Deathrattle: Get a random 5-Cost minion from the past."
             }
           ]
         }
@@ -7692,7 +8295,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>检视三张卡牌。猜中来自你对手手牌中的卡牌，则获得+4生命值。"
+              "text_raw": "[x]<b>Taunt</b>. <b>Battlecry:</b> Look at 3\ncards. Guess which one is\nin your opponent's hand\nto gain +4 Health."
             }
           ]
         }
@@ -7706,7 +8309,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>弃掉你的手牌。获取一张无穷香蕉。"
+              "text_raw": "<b>Battlecry:</b> Discard\nyour hand. Get an\nInfinite Banana."
             }
           ]
         }
@@ -7720,7 +8323,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将一个友方随从的攻击力和生命值变为8。该随从在本回合中无法攻击英雄。"
+              "text_raw": "<b>Battlecry:</b> Set a friendly minion's Attack and Health to 8. It can't attack heroes this turn."
             }
           ]
         }
@@ -7734,7 +8337,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>在本局对战中，你每进行过一个回合，便获得+1生命值。0<i>（已进行过0个回合）</i>"
+              "text_raw": "[x]<b>Battlecry:</b> Gain +1 Health\nfor each turn you've taken\nthis game.@ <i>(@ turns)</i>"
             }
           ]
         }
@@ -7748,7 +8351,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭</b>。<b>战吼：</b>本随从的攻击力翻倍。"
+              "text_raw": "<b>Rush</b>\n<b>Battlecry:</b> Double this minion's Attack."
             }
           ]
         }
@@ -7761,8 +8364,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>亡语：</b>随机召唤一个来自过去的\n随从。"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7776,7 +8378,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将双方玩家手牌中每张牌的法力值消耗变回原消耗。"
+              "text_raw": "<b>Battlecry:</b> Set the Cost of every card in both player's hands back to their original Costs."
             }
           ]
         }
@@ -7789,8 +8391,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机召唤一个\n法力值消耗为（2）并<b>休眠</b>2回合的随从。"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7803,8 +8404,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个2/1并具有<b>扰魔</b>的悖论活体"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -7818,7 +8418,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>倒转你的牌库排序。"
+              "text_raw": "<b>Battlecry:</b> Reverse the order of your deck."
             }
           ]
         }
@@ -7832,7 +8432,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你的手牌中有龙牌，则获得<b>嘲讽</b>和<b>圣盾</b>。"
+              "text_raw": "<b>Battlecry:</b> If you're holding a Dragon, gain <b>Taunt</b> and <b>Divine Shield</b>."
             }
           ]
         }
@@ -7846,7 +8446,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机将一张法力值消耗为（8）的随从牌置入你的手牌，在你的回合开始时，其法力值消耗减少（1）点。"
+              "text_raw": "[x]<b>Battlecry:</b> Add a random\n8-Cost minion to your hand.\nAt the start of your turns,\nreduce its Cost by (1)."
             }
           ]
         }
@@ -7860,7 +8460,7 @@
           "actions": [
             {
               "class": "DrawSpell",
-              "count": 0
+              "count": 1
             }
           ]
         }
@@ -7873,8 +8473,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "WeaponEquipSpell",
-              "_card_name": "高山之王的战锤！<b>亡语：</b>将该战锤置入你的手牌"
+              "class": "TODO",
+              "text_raw": "[x]<b>Fabled</b>, <b>Rush</b>. <b>Battlecry:</b>\nBring the High King's\nHammer to ME! <b>Deathrattle:</b>\nAdd it to your hand."
             }
           ]
         },
@@ -7883,7 +8483,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>奇闻</b>\n<b>突袭</b>。<b>战吼：</b>为本随从装备高山之王的战锤！<b>亡语：</b>将该战锤置入你的手牌。"
+              "text_raw": "Fabled, Rush. Battlecry: Bring the High King's Hammer to ME! Deathrattle: Add it to your hand."
             }
           ]
         }
@@ -7895,8 +8495,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个友方随从造成$2点伤害，以随机对一个敌方随从造成$4点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "RANDOM_ENEMY_CHARACTER"
             }
           ]
         }
@@ -7908,6 +8509,10 @@
         {
           "trigger": "BATTLECRY",
           "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            },
             {
               "class": "BuffSpell",
               "attack": 1,
@@ -7924,8 +8529,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有随从造成$1点伤害。获取一张静电震击。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "ALL_MINIONS"
             }
           ]
         }
@@ -7937,8 +8543,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$5点伤害。如果该随从依然存活，抽两张牌。"
+              "class": "DamageSpell",
+              "value": 5,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -7950,8 +8561,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$1点伤害。在本回合中，使你的英雄获得+1攻击力。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "TARGET"
             }
           ]
         }
@@ -7965,7 +8577,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>吸血</b>。<b>战吼：</b>对一个敌方随从造成等同于本随从生命值的伤害。"
+              "text_raw": "[x]<b>Lifesteal</b>\n<b>Battlecry:</b> Deal damage\nto an enemy minion equal\n   to this minion's Health."
             }
           ]
         }
@@ -7979,7 +8591,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你手牌中每张随从牌的攻击力和生命值变为两者中的高值。"
+              "text_raw": "[x]<b>Battlecry:</b> Set the Attack\nand Health of every minion\nin your hand to the higher\nof the two stats."
             }
           ]
         }
@@ -7993,7 +8605,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>为一个角色恢复等同于本随从生命值的生命值。"
+              "text_raw": "[x]<b>Taunt</b>\n<b>Battlecry:</b> Restore Health\nto a character equal to\nthis minion's Health."
             }
           ]
         }
@@ -8021,6 +8633,10 @@
         {
           "actions": [
             {
+              "class": "DestroySpell",
+              "target": "TARGET"
+            },
+            {
               "class": "SilenceSpell",
               "target": "TARGET"
             }
@@ -8035,8 +8651,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个4/1的影子，并使其随机攻击一个敌方随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8049,8 +8664,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>夺取一个生命值小于或等于本随从的敌方随从的控制权。"
+              "class": "TakeControlSpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -8062,8 +8677,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>回溯</b>。随机对两个敌人造成$4点伤害。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "RANDOM_ENEMY_MINION"
             }
           ]
         }
@@ -8077,7 +8693,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>囚禁一个敌方随从，使其<b>休眠</b>10000回合。<b>亡语：</b>唤醒该随从。"
+              "text_raw": "[x]<b>Battlecry:</b> Imprison an\nenemy minion. It goes\n<b>Dormant</b> for 10,000 turns.\n   <b>Deathrattle:</b> Awaken it."
             }
           ]
         },
@@ -8086,7 +8702,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>囚禁一个敌方随从，使其<b>休眠</b>10000回合。<b>亡语：</b>唤醒该随从。"
+              "text_raw": "Battlecry: Imprison an enemy minion. It goes Dormant for 10,000 turns. Deathrattle: Awaken it."
             }
           ]
         }
@@ -8098,8 +8714,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个3/3的恶魔"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8112,7 +8727,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使一个角色获得<b>圣盾</b>。使你手牌中的随从牌获得+2生命值。"
+              "text_raw": "Give a character <b>Divine Shield</b>. Give minions in your hand +2 Health."
             }
           ]
         }
@@ -8137,7 +8752,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "在本回合中，使你的英雄获得+4攻击力。如果你的牌库中没有随从牌，使你手牌中的随从牌获得+4攻击力。"
+              "text_raw": "[x]Give your hero\n+4 Attack this turn. If your\ndeck has no minions, give\nany in hand +4 Attack."
             }
           ]
         }
@@ -8149,8 +8764,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$3点伤害。如果本牌位于你手牌的正中间，改为造成\n$5点。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -8164,7 +8780,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽牌，直到你拥有三张手牌。"
+              "text_raw": "<b>Battlecry:</b> Draw until you have 3 cards."
             }
           ]
         }
@@ -8176,8 +8792,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只法力值消耗为（3）的野兽并使其攻击随机敌人"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8191,7 +8806,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机消灭一个敌方随从。"
+              "text_raw": "Deathrattle: Destroy a random enemy minion."
             }
           ]
         }
@@ -8204,8 +8819,11 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8232,8 +8850,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "四个3/2的影子，每个影子分别随机获得两项<b>额外效果</b>"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8244,6 +8861,11 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "RANDOM_ENEMY_CHARACTER"
+            },
             {
               "class": "FreezeSpell",
               "target": "TARGET"
@@ -8272,7 +8894,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机获取一张<b>传说</b>随从牌，其法力值消耗减少（1）点。"
+              "text_raw": "Deathrattle: Get a random Legendary minion. Reduce its Cost by (1)."
             }
           ]
         }
@@ -8300,7 +8922,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "用随机亡灵牌填满你的手牌。在本回合中，这些牌消耗生命值，而非法力值。"
+              "text_raw": "Fill your hand with random Undead.\nThey cost Health instead of Mana this turn."
             }
           ]
         }
@@ -8312,8 +8934,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "在本局对战中死亡的法力值消耗最高的友方亡灵"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8327,7 +8948,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>使你的英雄获得“<b>亡语：</b>消耗最多20份<b>残骸</b>，复活你的英雄并使其具有等量生命值。”"
+              "text_raw": "[x]<b>Battlecry:</b> Give your hero\n\"<b>Deathrattle:</b> Spend up to\n20 <b>Corpses</b> to resurrect with\nthat much Health.\""
             }
           ]
         }
@@ -8341,7 +8962,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>奇闻</b>\n<b>战吼：</b>抽取邦桑迪<i>（如果他已经死亡则将其复活）</i>，选择并使其获得一项恩泽。"
+              "text_raw": "[x]<b>Fabled.</b> <b>Battlecry:</b> Draw\nBwonsamdi <i>(or resurrect\nhim if he has died)</i>. Choose\na Boon to give him."
             }
           ]
         }
@@ -8353,8 +8974,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "该随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8366,8 +8986,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一条3/5并具有<b>嘲讽</b>的龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8391,6 +9010,11 @@
         {
           "actions": [
             {
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
               "class": "ArmorSpell",
               "value": 5
             }
@@ -8411,8 +9035,11 @@
               "target": "SELF"
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8447,7 +9074,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>将你牌库底的五张牌的法力值消耗变为（1）点。"
+              "text_raw": "[x]<b>Taunt</b>\n<b>Battlecry:</b> Set the Costs\nof the bottom 5 cards\nof your deck to (1)."
             }
           ]
         }
@@ -8461,7 +9088,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你的手牌替换为你的起始手牌。在你的回合结束时\n换回。"
+              "text_raw": "[x]<b>Battlecry:</b> Replace your\nhand with your starting\nhand. Swap back at the\nend of your turn."
             }
           ]
         }
@@ -8474,7 +9101,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将你的手牌和牌库里的牌替换为来自过去的随机<b>抉择</b>牌，其法力值消耗减少（1）点。"
+              "text_raw": "[x]Replace your hand and\ndeck with random <b>Choose\nOne</b> cards from the past.\nThey cost (1) less."
             }
           ]
         }
@@ -8487,8 +9114,11 @@
           "trigger": "COMBO",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
+              "class": "CopySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8500,8 +9130,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个来自过去的法力值消耗为（1）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8513,8 +9142,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（8）的随从"
+              "class": "DestroySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8527,8 +9159,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个0/8的宝箱"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8541,8 +9172,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>消灭你的对手上回合使用的\n所有随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -8554,8 +9185,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽两张牌。你的对手每控制一个随从，本牌的法力值消耗便减少（1）点。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -8568,7 +9199,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "下个回合，你的对手卡牌的法力值消耗增加（1）点。"
+              "text_raw": "Your opponent's cards cost (1) more next turn."
             }
           ]
         }
@@ -8582,7 +9213,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>战吼：</b>本随从的生命值翻倍。"
+              "text_raw": "<b>Taunt</b>\n<b>Battlecry:</b> Double this minion's Health."
             }
           ]
         }
@@ -8615,8 +9246,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$3点伤害。如果你的手牌中有法力值消耗大于或等于（5）点的随从牌，抽一张随从牌。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -8628,8 +9264,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽两张牌，从中选择一张，使其法力值消耗减少（2）点。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -8642,8 +9278,13 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一位血斗士，使其获得+5/+5并随机攻击一个敌人"
+              "class": "SummonSpell"
+            },
+            {
+              "class": "BuffSpell",
+              "attack": 5,
+              "health": 5,
+              "target": "SELF"
             }
           ]
         }
@@ -8655,8 +9296,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个敌人造成$3点伤害，并随机对两个其他敌人造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "RANDOM_ENEMY_CHARACTER"
             }
           ]
         }
@@ -8695,8 +9337,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "法力值消耗为（10）和（1）的随从各一个，打乱其属性值"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8710,7 +9351,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>检视2个随机<b>奥秘</b>，选择其中一个为你自己施放，另一个为你的对手施放。"
+              "text_raw": "[x]<b>Battlecry:</b> Look at 2 random\n<b>Secrets</b>. Pick one to cast for\nyourself. The other casts\nfor your opponent."
             }
           ]
         }
@@ -8724,7 +9365,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取3张来自过去的法术牌。当你使用了全部3张法术牌，再获取一张时光循环者托奇。"
+              "text_raw": "[x]<b>Battlecry:</b> Get 3 random\nspells from the past. When\nyou play ALL 3, get another\nTimelooper Toki."
             }
           ]
         }
@@ -8736,8 +9377,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8767,7 +9407,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>突袭</b>。<b>战吼：</b>用随机的法力值消耗为（1）的随从填满你对手的面板。"
+              "text_raw": "[x]<b>Rush</b>. <b>Battlecry:</b> Fill your\nopponent's board with\n  random 1-Cost minions."
             }
           ]
         }
@@ -8783,8 +9423,7 @@
               "value": 10
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "两只2/3的鳄鱼"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8811,6 +9450,10 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
+              "class": "DestroySpell",
+              "target": "TARGET"
+            },
+            {
               "class": "SilenceSpell",
               "target": "TARGET"
             }
@@ -8825,8 +9468,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个0/7的末日预言者"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8839,8 +9481,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机消灭一个\n其他随从。你手牌中每有一张龙牌，重复一次。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -8852,8 +9494,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（3）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8895,7 +9536,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>如果你的套牌中的牌有10种不同的法力值消耗，制造一个自定义的地标。"
+              "text_raw": "<b>Battlecry:</b> If your deck started with 10 cards of different Costs, craft a custom location."
             }
           ]
         }
@@ -8908,8 +9549,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张<b>延系</b>牌以及另一张可以激活其效果的牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -8923,7 +9564,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>触发本局对战中死亡的5个友方随从的<b>亡语</b>。"
+              "text_raw": "[x]<b>Battlecry:</b> Trigger the\n<b>Deathrattles</b> of 5\nfriendly minions that\ndied this game."
             }
           ]
         }
@@ -8972,8 +9613,12 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "相同数量的2/1的炽烈烬火"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -8986,8 +9631,8 @@
           "actions": [
             {
               "class": "BuffSpell",
-              "attack": 2,
-              "health": 2,
+              "attack": 1,
+              "health": 1,
               "target": "TARGET"
             }
           ]
@@ -9001,8 +9646,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张火焰法术牌。<b>延系：</b>使其获得<b>法术伤害+2</b>。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -9015,8 +9660,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个2/1的炽烈烬火"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9029,8 +9673,11 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个本随从的复制"
+              "class": "DrawSpell",
+              "count": 1
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9042,8 +9689,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对生命值最低的敌人造成$2点伤害，触发三次。<b>过载：</b>（1）。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ENEMY_MINION"
             }
           ]
         }
@@ -9056,7 +9704,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>使用6个不同类型的随从牌。<b>奖励：</b>阿沙隆。"
+              "text_raw": "<b>Quest:</b> Play 6 minions\nof unique types.\n<b>Reward:</b> Ashalon."
             }
           ]
         }
@@ -9068,8 +9716,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "四个2/2的树人攻击该随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9080,6 +9727,10 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DrawSpell",
+              "count": 1
+            },
             {
               "class": "ArmorSpell",
               "value": 5
@@ -9094,8 +9745,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "三只2/1的啸天龙宝宝"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9124,8 +9774,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个0/1的永生花芽"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9137,8 +9786,11 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗相同的随从来替换它"
+              "class": "DestroySpell",
+              "target": "TARGET"
+            },
+            {
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9150,8 +9802,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽取法力值消耗为（1），（2），（3），（4）的随从牌各一张。<b>延系：</b>其法力值消耗减少（1）点。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -9164,8 +9816,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "四只2/1的啸天龙宝宝"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9178,7 +9829,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>填满你的面板，总计3回合。<b>奖励：</b>永茂之花。"
+              "text_raw": "<b>Quest:</b> Fill your board\non 3 of your turns.\n<b>Reward:</b> The Everbloom."
             }
           ]
         }
@@ -9191,8 +9842,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "三个2/1的鱼人，使其各获得一项随机<b>额外效果</b>"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9222,7 +9872,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>使你对手的手牌中一张随从牌的\n法力值消耗减少（2）点。"
+              "text_raw": "Deathrattle: Reduce the Cost of a minion in your opponent's hand by (2)."
             }
           ]
         }
@@ -9235,8 +9885,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个1/1的植物”中选择一项并获得"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9250,7 +9899,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>从<b>扰魔</b>，<b>风怒</b>或直到下回合<b>潜行</b>中选择一项获得。"
+              "text_raw": "[x]<b>Battlecry:</b> Choose to gain\n<b>Stealth</b> until your next turn,\n<b>Elusive</b>, or <b>Windfury</b>."
             }
           ]
         }
@@ -9279,7 +9928,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>直到你的下个回合开始，敌方英雄无法被治疗。"
+              "text_raw": "[x]<b>Battlecry:</b> Until the start of\nyour next turn, the enemy\nhero can't be healed."
             }
           ]
         }
@@ -9293,7 +9942,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你的下一个<b>延系</b>效果会触发两次。"
+              "text_raw": "<b>Battlecry:</b> Your next <b>Kindred</b> triggers twice."
             }
           ]
         }
@@ -9306,8 +9955,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>消灭一个友方随从，将一张骸骨置入你的手牌。骸骨可以使一个随从获得被消灭随从的攻击力和生命值。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -9321,7 +9970,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>可交易</b>\n<b>战吼：</b>获得空的法力水晶，直到双方玩家拥有的法力水晶相同。"
+              "text_raw": "[x]<b>Tradeable</b>\n<b>Battlecry:</b> Gain empty Mana\nCrystals until both players\nhave the same Mana."
             }
           ]
         }
@@ -9335,7 +9984,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>在本局对战中，你的随从牌的法力值消耗为（5）点。"
+              "text_raw": "<b>Battlecry:</b> Your minions cost (5) this game."
             }
           ]
         }
@@ -9360,7 +10009,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使你手牌中套牌之外的牌的法力值消耗减少（1）点。"
+              "text_raw": "[x]Reduce the Cost of cards\nin your hand that didn't\nstart in your deck by (1)."
             }
           ]
         }
@@ -9371,6 +10020,11 @@
       "abilities": [
         {
           "actions": [
+            {
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
+            },
             {
               "class": "DiscoverSpell"
             }
@@ -9405,9 +10059,7 @@
               "target": "TARGET"
             },
             {
-              "class": "SummonSpell",
-              "_count": 6,
-              "_card_name": "鱼人"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9421,7 +10073,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>获取一张\n法力值消耗为（1）的石头。石头可以造成$3点伤害。"
+              "text_raw": "<b>Battlecry:</b> Get a 1-Cost\nRock that deals $3 damage."
             }
           ]
         }
@@ -9435,7 +10087,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你的下一张鱼人牌的法力值消耗减少（1）点。<b>延系：</b>且会获得<b>圣盾</b>。"
+              "text_raw": "<b>Battlecry:</b> Your next\nMurloc costs (1) less.\n<b>Kindred:</b> And gains <b>Divine Shield</b>."
             }
           ]
         }
@@ -9448,8 +10100,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张法力值消耗小于或等于（3）点的<b>亡语</b>随从牌。<b>延系：</b>其法力值消耗变为（0）点。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -9462,7 +10114,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>消耗15份<b>残骸</b>。<b>奖励：</b>泰拉克斯，魔骸暴龙。"
+              "text_raw": "[x]<b>Quest:</b> Spend 15 <b>Corpses</b>.\n<b>Reward:</b> Tyrax, Bone Terror."
             }
           ]
         }
@@ -9500,7 +10152,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>从你的牌库中随机施放一个法力值消耗小于或等于（2）点的法术<i>（尽可能以本随从为目标）</i>。"
+              "text_raw": "[x]<b>Battlecry:</b> Cast a random\nspell from your deck that\ncosts (2) or less <i>(targets\nthis if possible)</i>."
             }
           ]
         }
@@ -9512,8 +10164,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对所有敌方随从造成$2点伤害。下个回合，敌方随从牌的法力值消耗增加（2）点。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_ENEMY_CHARACTERS"
             }
           ]
         }
@@ -9525,8 +10178,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "造成$4点伤害并抽一张牌。<b>延系：</b>再抽一张。"
+              "class": "DamageSpell",
+              "value": 4,
+              "target": "TARGET"
+            },
+            {
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -9566,8 +10224,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只2/2并具有<b>嘲讽</b>的亡灵野兽"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9580,7 +10237,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "使一个随从获得三项随机<b>额外效果</b>。"
+              "text_raw": "Give a minion three random <b>Bonus Effects</b>."
             }
           ]
         }
@@ -9593,7 +10250,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>使用6张<b>临时</b>牌。<b>奖励：</b>邪能地窟裂隙。"
+              "text_raw": "<b>Quest:</b> Play 6 <b>Temporary</b> cards. <b>Reward:</b> Underfel Rift."
             }
           ]
         }
@@ -9605,8 +10262,13 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消灭一个敌方随从。<b>延系：</b>对所有随从造成$2点伤害。"
+              "class": "DamageSpell",
+              "value": 2,
+              "target": "ALL_MINIONS"
+            },
+            {
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -9620,7 +10282,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>你的下一张<b>临时</b>牌的法力值消耗减少（2）点。"
+              "text_raw": "<b>Battlecry:</b> Your next <b>Temporary</b> card costs\n(2) less."
             }
           ]
         }
@@ -9645,8 +10307,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>消灭攻击力最低的敌方随从。<b>延系：</b>改为消灭攻击力最高的敌方随从。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -9691,11 +10353,10 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（2）的随从"
+              "class": "DiscoverSpell"
             },
             {
-              "class": "DiscoverSpell"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9708,8 +10369,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机弃掉一张手牌。<b>延系：</b>改为对手的一张手牌。"
+              "class": "DiscardSpell",
+              "count": 1
             }
           ]
         }
@@ -9733,8 +10394,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "在你的回合结束时，弃一张牌并用3/2的小鬼填满你的面板。持续3回合。"
+              "class": "DiscardSpell",
+              "count": 1
             }
           ]
         }
@@ -9748,7 +10409,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>亡语：</b>随机获取2张邪能法术牌。这些牌会消耗生命值，而非法力值。"
+              "text_raw": "Taunt Deathrattle: Get 2 random Fel spells. They cost Health instead of Mana."
             }
           ]
         }
@@ -9761,8 +10422,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个2/2并具有<b>剧毒</b>的黏团，以及一个2/2并具有<b>嘲讽</b>的黏团"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9776,7 +10436,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机获取两张<b>临时</b>的法力值消耗为（2）的随从牌。"
+              "text_raw": "Deathrattle: Get two random Temporary 2-Cost minions."
             }
           ]
         }
@@ -9794,8 +10454,7 @@
               "target": "TARGET"
             },
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（4）的随从"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9808,8 +10467,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只邪能野兽"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9822,8 +10480,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个2/1的炽烈烬火"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9835,8 +10492,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>任务：</b>将卡牌洗入你的牌库，总计5次。<b>奖励：</b>暮影\n大师。"
+              "class": "ShuffleSpell",
+              "_card_name": "cards"
             }
           ]
         }
@@ -9883,7 +10540,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张另一职业的武器牌。<b>连击：</b>使其获得+2攻击力。"
+              "text_raw": "[x]<b>Battlecry:</b> Get a random\nweapon from another class.\n<b>Combo:</b> Give it +2 Attack."
             }
           ]
         },
@@ -9892,7 +10549,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>随机获取一张另一职业的武器牌。<b>连击：</b>使其获得+2攻击力。"
+              "text_raw": "[x]<b>Battlecry:</b> Get a random\nweapon from another class.\n<b>Combo:</b> Give it +2 Attack."
             }
           ]
         }
@@ -9904,8 +10561,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$1点伤害<i>（你每将卡牌洗入牌库一次都会提升）</i>。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "TARGET"
             }
           ]
         }
@@ -9917,8 +10575,8 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "</b>的忍者洗入你的牌库"
+              "class": "ShuffleSpell",
+              "_card_name": "three 3/3 Ninjas with Stealth"
             }
           ]
         }
@@ -9930,8 +10588,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只1/1并具有<b>潜行</b>和<b>剧毒</b>的喷毒龙"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -9945,7 +10602,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>检视敌方牌库中的三张牌，选择一张置于其牌库顶。"
+              "text_raw": "[x]<b>Battlecry:</b> Look at 3\ncards in your enemy's deck.\nPick one to put on top."
             }
           ]
         }
@@ -9959,7 +10616,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b><b>潜行</b>。</b><b>战吼，连击，亡语：</b>施放刀扇。"
+              "text_raw": "<b><b>Stealth</b>.</b> <b>Battlecry, Combo,\nand Deathrattle:</b> Cast\n'Fan of Knives'."
             }
           ]
         },
@@ -9968,7 +10625,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b><b>潜行</b>。</b><b>战吼，连击，亡语：</b>施放刀扇。"
+              "text_raw": "Stealth. Battlecry, Combo, and Deathrattle: Cast 'Fan of Knives'."
             }
           ]
         }
@@ -9999,8 +10656,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "消耗最多5点护甲值。每消耗一点，对所有随从造成$1点伤害。"
+              "class": "DamageSpell",
+              "value": 1,
+              "target": "ALL_MINIONS"
             }
           ]
         }
@@ -10013,7 +10671,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>存活10个回合。<b>奖励：</b>拉特维厄斯，城市之眼。"
+              "text_raw": "[x]<b>Quest:</b> Survive 10 turns.\n<b>Reward: </b>Latorvius, Gaze\nof the City."
             }
           ]
         }
@@ -10026,8 +10684,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张牌。<b>亡语：</b>弃掉该牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         },
@@ -10035,8 +10693,8 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>抽一张牌。<b>亡语：</b>弃掉该牌。"
+              "class": "DrawSpell",
+              "count": 1
             }
           ]
         }
@@ -10082,7 +10740,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>嘲讽</b>。<b>亡语：</b>摧毁你牌库顶的三张牌。"
+              "text_raw": "Taunt Deathrattle: Destroy the top 3 cards of your deck."
             }
           ]
         }
@@ -10094,8 +10752,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个0/6并具有<b>嘲讽</b>的守卫"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -10108,8 +10765,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "你受伤的随从的复制，使复制获得<b>突袭</b>"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -10122,7 +10778,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>在你的回合对敌人造成刚好2点伤害，总计12次。<b>奖励：</b>格里什巨虫。"
+              "text_raw": "<b>Quest:</b> Deal exactly 2 damage to an enemy\non your turn, 12 times.\n<b>Reward:</b> Gorishi Colossus."
             }
           ]
         }
@@ -10164,8 +10820,7 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "两个<b>亡语</b>随从，并使其互相攻击！"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -10179,7 +10834,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>随机获取神圣和暗影法术牌各一张。"
+              "text_raw": "Deathrattle: Get a random Holy and Shadow spell."
             }
           ]
         }
@@ -10191,8 +10846,7 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一个法力值消耗为（4）的随从并使其获得<b>嘲讽</b>"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -10204,8 +10858,8 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "抽两张牌。<b>延系：</b>本牌法力值消耗减少（2）点。"
+              "class": "DrawSpell",
+              "count": 2
             }
           ]
         }
@@ -10218,7 +10872,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>施放4个神圣法术。<b>奖励：</b>生命之息。<b>任务：</b>施放4个暗影法术。<b>奖励：</b>死亡之触。"
+              "text_raw": "[x]<b>Quest:</b> Cast 4 Holy spells\n<b>Reward:</b> Life's Breath.\n<b>Quest:</b> Cast 4 Shadow spells.\n<b>Reward:</b> Death's Touch."
             }
           ]
         }
@@ -10231,7 +10885,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "复活法力值消耗为1，2，3的随从各一个，使其获得<b>复生</b>。"
+              "text_raw": "Resurrect a 1, 2,\nand 3-Cost minion.\nGive them <b>Reborn</b>."
             }
           ]
         }
@@ -10245,7 +10899,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>亡语：</b>获取一张法力值消耗为（1）的神圣法术牌，该牌可以使一个随从获得+2或-2生命值。"
+              "text_raw": "Deathrattle: Get a 1-Cost Holy spell that gives a minion +2 or -2 Health."
             }
           ]
         }
@@ -10257,8 +10911,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从造成$3点伤害。在本回合中，你使用的下一张野兽牌法力值消耗减少（2）点。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -10282,8 +10937,12 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "将十张法力值消耗为（1）的3/2的迅猛龙洗入你的牌库，这些迅猛龙具有“<b>战吼：</b>抽一张牌。”"
+              "class": "DrawSpell",
+              "count": 1
+            },
+            {
+              "class": "ShuffleSpell",
+              "_card_name": "ten 1-Cost 3/2 Raptors"
             }
           ]
         }
@@ -10311,8 +10970,8 @@
           "trigger": "BATTLECRY",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>战吼：</b>消灭一个随从。<b>延系：</b>获得被消灭随从的属性值。"
+              "class": "DestroySpell",
+              "target": "TARGET"
             }
           ]
         }
@@ -10325,7 +10984,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>任务：</b>使用攻击力为1，3，5，7的野兽牌各一张。<b>奖励：</b>绍克。"
+              "text_raw": "<b>Quest:</b> Play a 1, 3, 5, and 7-Attack Beast.\n<b>Reward:</b> Shokk."
             }
           ]
         }
@@ -10338,8 +10997,7 @@
           "trigger": "DEATHRATTLE",
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "<b>亡语：</b>召唤一只3/3并会从所有其他随从处\n偷取1点生命值的翼手龙。"
+              "class": "SummonSpell"
             }
           ]
         }
@@ -10352,7 +11010,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "将你英雄的生命值变为40。"
+              "text_raw": "Set your hero's\nHealth to 40."
             }
           ]
         }
@@ -10366,7 +11024,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>战吼：</b>将你手牌中的每张随从牌分别放入法力值消耗为（1）的0/1的标本罐。打破罐子即可放出随从！"
+              "text_raw": "[x]<b>Battlecry:</b> Put each minion\n in your hand into 0/1 Jars\n that cost (1). Break them\n  to release the minions!"
             }
           ]
         }
@@ -10404,8 +11062,9 @@
         {
           "actions": [
             {
-              "class": "TODO",
-              "text_raw": "对一个随从及所有相同类型的其他随从造成$3点伤害。"
+              "class": "DamageSpell",
+              "value": 3,
+              "target": "TARGET"
             }
           ]
         }
@@ -10417,8 +11076,8 @@
         {
           "actions": [
             {
-              "class": "SummonSpell",
-              "_card_name": "一只2/1具有<b>突袭</b>的异种虫幼体"
+              "class": "TODO",
+              "text_raw": "[x]Get two 1-Cost Gorishi\nStingers. Each one deals\n$2 damage and summons\na 2/1 Grub with <b>Rush</b>."
             }
           ]
         }
@@ -10446,7 +11105,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "<b>支线任务：</b>使用亡灵或野兽牌，总计3张。<b>奖励：</b>制造一个自定义的僵尸兽，其法力值消耗减少（3）点。"
+              "text_raw": "[x]<b>Sidequest:</b> Play\n3 Beasts or Undead.\n<b>Reward:</b> Craft a custom\nZombeast. It costs (3) less."
             }
           ]
         }
@@ -10459,7 +11118,7 @@
           "actions": [
             {
               "class": "TODO",
-              "text_raw": "你对手法术的法力值消耗增加（1）点。持续2个敌方回合。"
+              "text_raw": "Your opponent's\nspells cost (1) more.\nLasts 2 enemy turns."
             }
           ]
         }

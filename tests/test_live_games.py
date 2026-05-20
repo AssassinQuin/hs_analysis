@@ -19,10 +19,23 @@ from hearthstone.enums import GameTag, Zone as HZone
 
 from analysis.watcher.game_tracker import GameTracker
 from analysis.watcher.state_bridge import StateBridge
-from analysis.search.engine_adapter import UnifiedSearchResult, ActionProb, create_engine
-from analysis.effects.types import Action, ActionKind as ActionType
 from analysis.watcher.decision_loop import DecisionPresenter
-from analysis.utils.score_provider import load_scores_into_hand
+
+try:
+    from analysis.search.engine_adapter import UnifiedSearchResult, ActionProb, create_engine
+except ImportError:
+    UnifiedSearchResult = None  # type: ignore
+    ActionProb = None  # type: ignore
+    create_engine = None  # type: ignore
+
+try:
+    from analysis.effects.types import Action, ActionKind as ActionType
+except ImportError:
+    Action = None  # type: ignore
+    ActionType = None  # type: ignore
+
+if create_engine is None:
+    pytest.skip("v1 search engine (analysis.search.engine_adapter) deleted in cleanup", allow_module_level=True)
 
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -145,7 +158,6 @@ def game_states_for_search(all_turn_states):
         qualifying = [(t, s) for t, s in turn_states if t >= 3]
         if qualifying:
             _, state = qualifying[0]
-            load_scores_into_hand(state)
             states[name] = state
     return states
 
@@ -480,7 +492,7 @@ class TestDecisionPresenter:
         state = self._make_mock_state()
         presenter.present(result, state, 100.0)
         text = output.getvalue()
-        assert "[概率分布]" in text, f"Output should contain [概率分布], got:\n{text}"
+        assert "[动作统计]" in text, f"Output should contain [动作统计], got:\n{text}"
 
     def test_output_contains_mcts_stats(self):
         """With mcts_stats, output should contain [MCTS] section."""
@@ -609,7 +621,6 @@ class TestLiveGameIntegration:
             pytest.skip("No qualifying turn states from dk_vs_rogue game")
 
         _, state = turn_states[0]
-        load_scores_into_hand(state)
 
         engine_factory = create_engine("mcts", FAST_MCTS_PARAMS)
         engine = engine_factory()
@@ -633,7 +644,6 @@ class TestLiveGameIntegration:
             pytest.skip("No qualifying turn states from rogue_vs_priest game")
 
         _, state = turn_states[0]
-        load_scores_into_hand(state)
 
         # Run MCTS search
         engine_factory = create_engine("mcts", FAST_MCTS_PARAMS)

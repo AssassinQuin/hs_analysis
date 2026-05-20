@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import pytest
-pytest.skip("Mechanic module deleted — data in engine/mechanics/_data.py", allow_module_level=True)
 
 
 from analysis.card.engine.state import GameState

@@ -2,6 +2,7 @@
 """test_risk_assessor.py — Unit tests for risk evaluation."""
 
 import pytest
+pytest.skip("risk_assessor (analysis.search) deleted in v1 cleanup", allow_module_level=True)
 
 from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
 from analysis.search.risk_assessor import RiskReport, RiskAssessor

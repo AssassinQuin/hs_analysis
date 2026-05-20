@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""loader.py — JSON ability loader that replaces runtime parsing.
+"""loader.py — 旧版 JSON ability loader [DEPRECATED: 新版在 loader_v2.py]。
 
-Loads pre-built card abilities from analysis/data/card_abilities.json
-instead of parsing card text at runtime.
+保留以供旧版 card_abilities.json / CardPower 向后兼容。
+新版使用 loader_v2.py 加载 card_abilities_v2.json (递归 SpellDesc 格式)。
 
 Usage:
     python -m analysis.card.abilities.loader --build   # offline build

@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 
 import pytest
+pytest.skip("MCTSEngine (analysis.search.mcts) deleted in v1 cleanup", allow_module_level=True)
 
 from analysis.card.engine.state import (
     GameState,

@@ -2,6 +2,7 @@
 """test_action_normalize.py — Tests for action normalization utilities."""
 
 import pytest
+pytest.skip("action_normalize (analysis.search) deleted in v1 cleanup", allow_module_level=True)
 
 from analysis.card.abilities.definition import Action, ActionType
 from analysis.card.engine.state import GameState

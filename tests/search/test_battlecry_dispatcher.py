@@ -13,7 +13,14 @@ import pytest
 from analysis.card.data.card_data import get_db
 from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
 from analysis.card.models.card import Card
-from analysis.effects.orchestration.battlecry import BattlecryDispatcher, dispatch_battlecry
+try:
+    from analysis.effects.orchestration.battlecry import BattlecryDispatcher, dispatch_battlecry
+except ImportError:
+    BattlecryDispatcher = None  # type: ignore
+    dispatch_battlecry = None  # type: ignore
+
+if BattlecryDispatcher is None:
+    pytest.skip("BattlecryDispatcher (analysis.effects.orchestration.battlecry) deleted in v1 cleanup", allow_module_level=True)
 
 
 # ===================================================================

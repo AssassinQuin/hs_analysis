@@ -17,6 +17,7 @@ import sys
 import time
 
 import pytest
+pytest.skip("MCTSEngine (analysis.search.mcts) deleted in v1 cleanup", allow_module_level=True)
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 

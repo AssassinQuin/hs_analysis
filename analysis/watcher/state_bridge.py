@@ -88,9 +88,9 @@ class StateBridge:
 
     @staticmethod
     def _default_card_lookup():
-        """Create a default card_lookup using HSCardDB."""
+        """Create a default card_lookup using CardDB from card_data."""
         try:
-            from analysis.card.data.hsdb import get_db
+            from analysis.card.data.card_data import get_db
             from analysis.card.models.card import Card
             _db = get_db()
 

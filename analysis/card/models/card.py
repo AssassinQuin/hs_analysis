@@ -59,17 +59,18 @@ class Card:
                 self.roles = frozenset()
         # 延迟加载字段初始化
         self._power = None
+        self._ability = None
+        self._abilities = None
 
     def copy(self) -> "Card":
         """创建 Card 的浅拷贝，保留 _power 等非 dataclass 字段。"""
         new_card = replace(self)
-        # 保留延迟加载的 _power 属性
-        power = getattr(self, '_power', None)
-        if power is not None:
-            new_card._power = power
+        # 保留延迟加载的属性
+        for attr in ('_power', '_ability', '_abilities'):
+            val = getattr(self, attr, None)
+            if val is not None:
+                setattr(new_card, attr, val)
         return new_card
-        self._abilities = None
-        self._power = None
 
     @property
     def abilities(self):
@@ -89,6 +90,27 @@ class Card:
     @abilities.setter
     def abilities(self, value):
         self._abilities = value
+
+    @property
+    def ability(self):
+        """v2 CardAbility 对象（递归 SpellDesc 系统）。
+
+        延迟加载: 首次访问时从 card_abilities_v2.json 读取。
+        比旧版 power/abilities 系统更完整的数据驱动方式。
+        """
+        if self._ability is None:
+            try:
+                from analysis.card.abilities.loader_v2 import get_loader_v2
+                loader = get_loader_v2()
+                self._ability = loader.get(self.card_id)
+            except Exception:
+                from analysis.card.abilities.model import CardAbility
+                self._ability = CardAbility.empty()
+        return self._ability
+
+    @ability.setter
+    def ability(self, value):
+        self._ability = value
 
     @property
     def power(self):

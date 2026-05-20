@@ -2,6 +2,7 @@
 """test_opponent_simulator.py — Unit tests for opponent simulation."""
 
 import pytest
+pytest.skip("opponent_simulator (analysis.search) deleted in v1 cleanup", allow_module_level=True)
 
 from analysis.card.engine.state import GameState, Minion, HeroState, OpponentState
 from analysis.search.opponent_simulator import OpponentSimulator, SimulatedOpponentTurn
