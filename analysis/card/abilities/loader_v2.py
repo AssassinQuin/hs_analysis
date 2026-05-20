@@ -1,6 +1,6 @@
 """abilities/loader_v2.py — v2 JSON 加载器。
 
-将 card_abilities_v2.json（或 v1 格式）加载为 CardAbility 对象，
+将 card_abilities_v2.json 加载为 CardAbility 对象，
 并绑定到 Card 模型上。
 
 不同于 loader.py（加载旧版 card_abilities.json 的 AbilityTrigger/EffectSpec 格式），
@@ -11,6 +11,7 @@
     ability = loader.load_from_json(json_data)
     card.ability = ability   # v2 挂载点
 """
+
 from __future__ import annotations
 
 import json
@@ -18,7 +19,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional, TYPE_CHECKING
 
-from analysis.card.abilities.model import CardAbility, SpellDesc
+from analysis.card.abilities.model import CardAbility
 from analysis.card.abilities.registry import init_all
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class AbilityLoader:
             self.load_from_file(file_path)
         else:
             from analysis.card.abilities.generator_v2 import _DEFAULT_OUTPUT
+
             default = str(_DEFAULT_OUTPUT)
             if Path(default).exists():
                 self.load_from_file(default)
@@ -61,7 +63,7 @@ class AbilityLoader:
             log.warning("能力 JSON 文件不存在: %s", path)
             return {}
 
-        with open(path_obj, 'r', encoding='utf-8') as f:
+        with open(path_obj, "r", encoding="utf-8") as f:
             raw = json.load(f)
 
         result: Dict[str, CardAbility] = {}
@@ -76,35 +78,6 @@ class AbilityLoader:
 
         self._cache.update(result)
         log.info("从 %s 加载了 %d 张卡牌的能力", path, len(result))
-        return result
-
-    # ── 加载 v1 兼容 ──
-
-    def load_from_v1_file(self, path: str) -> Dict[str, CardAbility]:
-        """从 v1 card_abilities.json 加载为 v2 格式。
-
-        v1 格式: {"card_id": {"name": ..., "actions": [...]}}
-        v2 要求: {"card_id": {"ON_PLAY": {"class": ...}}}
-        """
-        path_obj = Path(path)
-        if not path_obj.exists():
-            return {}
-
-        from analysis.card.abilities.generator_v2 import generate_card_ability_v2
-
-        with open(path_obj, 'r', encoding='utf-8') as f:
-            raw = json.load(f)
-
-        result: Dict[str, CardAbility] = {}
-        for card_id, entry in raw.items():
-            if not isinstance(entry, dict):
-                continue
-            try:
-                v2_data = generate_card_ability_v2(entry)
-                result[card_id] = self.load_from_dict(v2_data)
-            except Exception as e:
-                log.warning("v1→v2 转换 %s 失败: %s", card_id, e)
-                result[card_id] = CardAbility.empty()
         return result
 
     # ── 绑定到 Card ──
@@ -131,20 +104,6 @@ class AbilityLoader:
             card.ability = CardAbility.empty()
 
         return card
-
-    # ── 加载旧版 generator 输出 ──
-
-    def load_from_generator(self, generator_module=None) -> Dict[str, CardAbility]:
-        """从 generator 的 _MECHANIC_HANDLERS 加载（无 JSON 文件时）。"""
-        from analysis.card.abilities.generator import CARD_ABILITIES_V2
-
-        result: Dict[str, CardAbility] = {}
-        for card_id, v2_data in CARD_ABILITIES_V2.items():
-            try:
-                result[card_id] = self.load_from_dict(v2_data)
-            except Exception:
-                result[card_id] = CardAbility.empty()
-        return result
 
     def get(self, card_id: str) -> CardAbility:
         """从缓存获取 CardAbility。"""

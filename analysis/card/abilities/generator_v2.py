@@ -23,7 +23,7 @@ import logging
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from analysis.config import PROJECT_ROOT
 
@@ -90,17 +90,47 @@ _RE_EQUIP_WEAPON = re.compile(r"[Ee]quip")
 _RE_MANA     = re.compile(r"[Gg]ain\s*(?:\w+\s+)*?(\d+)\s+Mana")
 _RE_DISCARD  = re.compile(r"[Dd]iscard\s+(\d+|a|an)")
 _RE_RETURN   = re.compile(r"[Rr]eturn\s+(?:to\s+\w+\s+)?hand")
+# "Give [target] [Keyword] [and Keyword]" — GiveKeywordSpell
+_RE_GIVE_KEYWORD = re.compile(
+    r"[Gg]ive\s+(?:\w+\s+)*?(?:"
+    r"<b>)?(Divine[\s_]+Shield|Taunt|Rush|Lifesteal|Windfury|Poisonous|"
+    r"Mega-Windfury|Stealth|Immune|Reborn|Elusive|Charge)(</b>)?",
+    re.IGNORECASE,
+)
+# "Gain [Keyword]" — also matches self-target keyword gain
+_RE_GAIN_KEYWORD = re.compile(
+    r"[Gg]ain\s+(?:"
+    r"<b>)?(Divine[\s_]+Shield|Taunt|Rush|Lifesteal|Windfury|Poisonous|"
+    r"Mega-Windfury|Stealth|Immune|Reborn|Elusive)(</b>)?",
+    re.IGNORECASE,
+)
+# "+X Attack" standalone (not part of +N/+N) — in battlecry context
+_RE_BUFF_ATTACK = re.compile(r"[Gg]ain\s*\+?(\d+)\s+Attack\b")
+# "+X Health" standalone  
+_RE_BUFF_HEALTH = re.compile(r"[Gg]ive\s+(?:\w+\s+)*?\+(\d+)\s+Health\b")
+# "Add [a/an/random] X to your hand"
+_RE_ADD_TO_HAND = re.compile(
+    r"[Aa]dd\s+(?:a|an|two|three|4|5)?\s*(?:random\s+)?(.+?)\s+to\s+(?:your|the|their|his|her)\s+hand",
+    re.IGNORECASE,
+)
+# "Fill your hand with X" — draw variant
+_RE_FILL_HAND = re.compile(r"[Ff]ill\s+your\s+hand\s+with\s+(.+?)(?:\.|$)", re.IGNORECASE)
+# "Change/set [the] Health [of ALL minions] to N"
+_RE_SET_HEALTH = re.compile(
+    r"(?:[Cc]hange|set)\s+(?:the\s+)?Health\s+(?:of\s+ALL\s+minions\s+)?to\s+(\d+)",
+    re.IGNORECASE,
+)
+# "Set [a | target's] stats to N/N"
+_RE_SET_STATS = re.compile(
+    r"[Ss]et\s+(?:\w+\s+)*?stats\s+to\s+(\d+)\s*/\s*(\d+)",
+    re.IGNORECASE,
+)
+# "Gain [a] Corpse(s)"
+_RE_CORPSE = re.compile(r"[Gg]ain\s+(?:a|an|(\d+))?\s*<b>Corpse</b>", re.IGNORECASE)
 # Aura detection: cards that give ongoing buffs to other minions
 _RE_AURA = re.compile(
     r"(?:your\s+other\s+minions|your\s+minions|adjacent\s+minions|"
     r"your\s+(?:\w+\s+)*minions|all\s+other\s+\w+)\s+have\s+",
-    re.IGNORECASE,
-)
-# Trigger detection: at the start/end of your turn, after you play, etc.
-_RE_TRIGGER = re.compile(
-    r"(?:at\s+(?:the\s+)?(?:start|end)\s+of\s+(?:your|each)\s+turn"
-    r"|after\s+(?:your\s+hero\s+)?attacks"
-    r"|whenever\s+(?:you\s+)?(?:play|cast|summon))",
     re.IGNORECASE,
 )
 
@@ -183,7 +213,7 @@ def _register_buff(card_id: str, atk: int, hp: int) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 解析逻辑 (复用 generator.py 的模式)
+# 解析逻辑
 # ═══════════════════════════════════════════════════════════════
 
 def _infer_damage_target(text: str) -> str:
@@ -295,6 +325,68 @@ def _parse_battlecry(text: str) -> List[dict]:
     if _RE_RETURN.search(remaining):
         actions.append({"class": "ReturnSpell", "target": "TARGET"})
 
+    # ── 新增强力模式 ──
+    # Give [target] [Keyword] — GiveKeywordSpell
+    m = _RE_GIVE_KEYWORD.search(remaining)
+    if m:
+        kw = _clean(m.group(1))
+        actions.append({"class": "GiveKeywordSpell", "keyword": kw, "target": "TARGET"})
+        remaining = _RE_GIVE_KEYWORD.sub(" ", remaining, count=1)
+
+    # Gain [Keyword] — self target (if not already matched by Give)
+    if not m:
+        m2 = _RE_GAIN_KEYWORD.search(remaining)
+        if m2:
+            kw = _clean(m2.group(1))
+            actions.append({"class": "GiveKeywordSpell", "keyword": kw, "target": "SELF"})
+
+    # +X Attack standalone (not part of +N/+N)
+    m = _RE_BUFF_ATTACK.search(remaining)
+    if m:
+        atk = int(m.group(1))
+        target = "SELF" if "gain" in remaining[:m.start()].lower()[-20:] else "TARGET"
+        actions.append({"class": "BuffSpell", "attack_bonus": atk, "target": target})
+        remaining = remaining[:m.start()] + remaining[m.end():]
+
+    # +X Health standalone (already consumed if +N/+N was matched above)
+    m = _RE_BUFF_HEALTH.search(remaining)
+    if m:
+        hp = int(m.group(1))
+        actions.append({"class": "BuffSpell", "health_bonus": hp, "target": "TARGET"})
+        remaining = remaining[:m.start()] + remaining[m.end():]
+
+    # Set Health to N (生而平等: "Change the Health of ALL minions to 1")
+    m = _RE_SET_HEALTH.search(remaining)
+    if m:
+        value = int(m.group(1))
+        actions.append({"class": "SetAttributeSpell", "attribute": "CURRENT_HP", "value": value, "target": "ALL_MINIONS"})
+        remaining = _RE_SET_HEALTH.sub(" ", remaining)
+
+    # Set stats to N/N
+    m = _RE_SET_STATS.search(remaining)
+    if m:
+        atk, hp = int(m.group(1)), int(m.group(2))
+        actions.append({"class": "BuffSpell", "attack_bonus": 0, "health_bonus": 0, "set_attack": atk, "set_health": hp, "target": "TARGET"})
+
+    # Add [random] X to your hand
+    m = _RE_ADD_TO_HAND.search(remaining)
+    if m:
+        card_desc = _clean(m.group(1))
+        actions.append({"class": "AddToHandSpell", "text_raw": card_desc})
+        remaining = _RE_ADD_TO_HAND.sub(" ", remaining)
+
+    # Fill your hand with X
+    m = _RE_FILL_HAND.search(remaining)
+    if m:
+        card_desc = _clean(m.group(1))
+        actions.append({"class": "FillHandSpell", "text_raw": card_desc})
+
+    # Gain Corpse
+    m = _RE_CORPSE.search(remaining)
+    if m:
+        count = int(m.group(1)) if m.group(1) else 1
+        actions.append({"class": "CorpseSpell", "value": count})
+
     if not actions:
         actions.append(_make_todo(text))
 
@@ -304,26 +396,37 @@ def _parse_battlecry(text: str) -> List[dict]:
 def _parse_deathrattle(text: str) -> List[dict]:
     """从英文文本中推断 DEATHRATTLE 效果列表 (v1 actions)。"""
     actions: List[dict] = []
-    text = _clean(text)
+    remaining = _clean(text)
 
-    m = _RE_DAMAGE.search(text)
+    m = _RE_DAMAGE.search(remaining)
     if m:
         value = int(m.group(1))
         actions.append({"class": "DamageSpell", "value": value, "target": "RANDOM_ENEMY_CHARACTER"})
+        remaining = remaining[:m.start()] + remaining[m.end():]
 
-    m = _RE_DRAW.search(text)
+    m = _RE_DRAW.search(remaining)
     if m:
         count = _en_int(m.group(1))
         if count:
             actions.append({"class": "DrawSpell", "value": count})
+            remaining = remaining[:m.start()] + remaining[m.end():]
 
-    if _RE_SUMMON.search(text):
+    if _RE_SUMMON.search(remaining):
         actions.append({"class": "SummonSpell"})
 
-    m = _RE_BUFF.search(text)
+    m = _RE_BUFF.search(remaining)
     if m:
         atk, hp = int(m.group(1)), int(m.group(2))
         actions.append({"class": "BuffSpell", "attack_bonus": atk, "health_bonus": hp, "target": "SELF"})
+        remaining = remaining[:m.start()] + remaining[m.end():]
+
+    # Destroy
+    if _RE_DESTROY.search(remaining):
+        actions.append({"class": "DestroySpell", "target": "ALL_ENEMY_CHARACTERS" if "all" in remaining.lower() else "TARGET"})
+
+    # Return to hand
+    if _RE_RETURN.search(remaining):
+        actions.append({"class": "ReturnSpell", "target": "TARGET"})
 
     if not actions:
         actions.append(_make_todo(text))
@@ -377,11 +480,14 @@ def _parse_aura(text: str) -> Optional[dict]:
 
 
 def _detect_trigger_event(text: str) -> Optional[str]:
-    """检测文本中是否包含触发器事件。
+    """检测英文文本中的触发器事件。
     
     返回事件名 (如 "TURN_END", "AFTER_ATTACK") 或 None。
     """
-    t = text.lower()
+    # 先清理文本（去 HTML tag / [x] 前缀 / 多余空白 / 换行）
+    cleaned = _clean(text)
+    t = cleaned.lower()
+    # ── 英文模式 ──
     if "at the start of your turn" in t or "at the start of each turn" in t:
         return "TURN_START"
     if "at the end of your turn" in t or "at the end of each turn" in t:
@@ -392,63 +498,48 @@ def _detect_trigger_event(text: str) -> Optional[str]:
         return "AFTER_PLAY_CARD"
     if "after you cast" in t or "whenever you cast" in t:
         return "AFTER_CAST_SPELL"
+
+    # ── 更多英文触发模式 ──
+    if "after you use your hero power" in t or "whenever you use your hero power" in t:
+        return "AFTER_HERO_POWER"
+    if ("whenever you" in t or "after you" in t) and "spend" in t:
+        return "AFTER_CONDITION"
+    if ("whenever you" in t or "after you" in t) and "summon" in t:
+        return "AFTER_SUMMON"
+    if ("whenever you" in t or "after you" in t) and "draw" in t:
+        return "AFTER_DRAW"
+    if ("whenever you" in t or "after you" in t) and ("restore" in t or "heal" in t):
+        return "AFTER_HEAL"
+    if ("whenever" in t or "after" in t) and "this" in t and "attacks" in t:
+        return "AFTER_ATTACK"
+    if ("whenever" in t or "after" in t) and "this" in t and "takes" in t and "damage" in t:
+        return "WHEN_DAMAGED"
+    if ("whenever" in t or "after" in t) and "this" in t and ("survives" in t or "survive" in t):
+        return "WHEN_DAMAGED"
+    if "while damaged" in t or "when damaged" in t:
+        return "WHEN_DAMAGED"
+    if ("whenever" in t or "after" in t) and "friendly" in t and ("dies" in t or "death" in t or "destroyed" in t):
+        return "AFTER_FRIENDLY_DEATH"
+    if ("whenever" in t or "after" in t) and ("enemy" in t or "opponent" in t) and ("dies" in t or "death" in t or "destroyed" in t):
+        return "AFTER_MINION_DEATH"
+    if ("whenever" in t or "after" in t) and "minion" in t and ("dies" in t or "death" in t):
+        return "AFTER_MINION_DEATH"
+    if "while this is in your hand" in t or "while you hold this" in t:
+        return "IN_HAND"
+    if "if you\u2019re holding" in t or "if you're holding" in t or "if you hold" in t:
+        return "IN_HAND"
+    if "dormant" in t:
+        return "DORMANT"
+    if "at the end of each" in t and "turn" in t:
+        return "TURN_END"
+    if "at the start of each" in t and "turn" in t:
+        return "TURN_START"
+    if ("whenever" in t or "after" in t) and "discard" in t:
+        return "AFTER_CONDITION"
+    if ("whenever" in t or "after" in t) and "gain" in t and "armor" in t:
+        return "AFTER_CONDITION"
+    
     return None
-
-
-# ═══════════════════════════════════════════════════════════════
-# v2 转换入口
-# ═══════════════════════════════════════════════════════════════
-
-def generate_card_ability_v2(entry: dict) -> dict:
-    """将 v1 格式 entry 转为 v2 SpellDesc JSON。
-
-    v1: {"name": "Fireball", "abilities": [{"actions": [...]}]}
-    v2: {"ON_PLAY": {"class": "DamageSpell", ...}}
-    """
-    abilities = entry.get("abilities", [])
-    if not abilities:
-        # 空 → 从 text 重新解析
-        text = entry.get("text", entry.get("englishText", ""))
-        if text:
-            actions = _parse_spell(text)
-            return {
-                "ON_PLAY": _actions_to_spell_desc(actions),
-            }
-        return {}
-
-    # v1 abilities = [{"trigger": "BATTLECRY", "actions": [...]}, ...]
-    result: dict = {}
-    for ab in abilities:
-        trigger = ab.get("trigger", "")
-        actions = ab.get("actions", [])
-
-        if trigger == "BATTLECRY":
-            result["ON_PLAY"] = _actions_to_spell_desc(actions)
-        elif trigger in ("COMBO", "OUTCAST", "DEATHRATTLE"):
-            result[trigger] = _actions_to_spell_desc(actions)
-        elif trigger in ("SPELLBURST", "INSPIRE", "FRENZY", "FINALE"):
-            # 这些作为 TRIGGERS
-            triggers = result.setdefault("TRIGGERS", [])
-            triggers.append({
-                "event": trigger,
-                "spell": _actions_to_spell_desc(actions),
-            })
-        elif trigger == "DISCOVER":
-            existing = result.get("ON_PLAY")
-            desc = {"class": "DiscoverSpell"}
-            if existing:
-                # 合并到 MetaSpell
-                if existing.get("class") == "MetaSpell":
-                    existing["spells"].append(desc)
-                else:
-                    result["ON_PLAY"] = {"class": "MetaSpell", "spells": [existing, desc]}
-            else:
-                result["ON_PLAY"] = desc
-        else:
-            # 未知 trigger → 仍然输出
-            result[trigger] = _actions_to_spell_desc(actions)
-
-    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -499,14 +590,106 @@ def generate_abilities_json_v2(output_path: Optional[str] = None) -> Dict[str, A
 
         # ── 武器牌 ──
         if card_type == "WEAPON":
+            # 纯关键字武器（仅 LIFESTEAL 等）→ 跳过
+            if mechanics and all(m in _TAG_ONLY_MECHANICS for m in mechanics):
+                stats["tag_only"] += 1
+                continue
+            if not text:
+                continue
+
+            ability_entry: dict = {}
+            has_todo_flag = False
+
+            for mechanic in mechanics:
+                if mechanic == "BATTLECRY":
+                    actions = _parse_battlecry(text)
+                    ability_entry["ON_PLAY"] = _actions_to_spell_desc(actions)
+                    if any(a.get("class") == "TODO" for a in actions):
+                        has_todo_flag = True
+                elif mechanic == "DEATHRATTLE":
+                    actions = _parse_deathrattle(text)
+                    ability_entry["DEATHRATTLE"] = _actions_to_spell_desc(actions)
+                    if any(a.get("class") == "TODO" for a in actions):
+                        has_todo_flag = True
+                elif mechanic == "TRIGGER_VISUAL":
+                    trigger_event = _detect_trigger_event(text) if text else None
+                    if trigger_event:
+                        actions = _parse_battlecry(text)
+                        triggers = ability_entry.setdefault("TRIGGERS", [])
+                        triggers.append({
+                            "event": trigger_event,
+                            "spell": _actions_to_spell_desc(actions),
+                        })
+                        if any(a.get("class") == "TODO" for a in actions):
+                            has_todo_flag = True
+                    else:
+                        # 未识别的触发事件 → TODO
+                        triggers = ability_entry.setdefault("TRIGGERS", [])
+                        triggers.append({
+                            "event": "CUSTOM_TRIGGER",
+                            "spell": {"class": "TODO", "text_raw": text},
+                        })
+                        has_todo_flag = True
+                elif mechanic == "CHOOSE_ONE":
+                    # 复合效果 → TODO
+                    ability_entry["ON_PLAY"] = _make_todo(text)
+                    has_todo_flag = True
+                # 其他 mechanic 忽略
+
+            # Fallback: 有文本但无匹配 mechanic → 按 ON_PLAY 解析
+            if not ability_entry and text:
+                actions = _parse_battlecry(text)
+                ability_entry["ON_PLAY"] = _actions_to_spell_desc(actions)
+                if any(a.get("class") == "TODO" for a in actions):
+                    has_todo_flag = True
+
+            if ability_entry:
+                result[card_id] = ability_entry
+                if has_todo_flag:
+                    stats["todo"] += 1
+                else:
+                    stats["inferred"] += 1
+            else:
+                stats["tag_only"] += 1
+            continue
+
+        # ── 英雄牌 ──
+        if card_type == "HERO":
+            if not text:
+                stats["tag_only"] += 1
+                continue
+            actions = _parse_battlecry(text)
+            v2_entry = {"ON_PLAY": _actions_to_spell_desc(actions)}
+            result[card_id] = v2_entry
+            if any(a.get("class") == "TODO" for a in actions):
+                stats["todo"] += 1
+            else:
+                stats["inferred"] += 1
+            continue
+
+        # ── 地标牌 ──
+        if card_type == "LOCATION":
+            if not text:
+                continue
+            actions = _parse_spell(text)
+            v2_entry = {"ON_PLAY": _actions_to_spell_desc(actions)}
+            result[card_id] = v2_entry
+            if any(a.get("class") == "TODO" for a in actions):
+                stats["todo"] += 1
+            else:
+                stats["inferred"] += 1
+                stats["spell"] += 1
             continue
 
         # ── 随从牌 ──
         if card_type != "MINION":
             continue
 
-        # 纯关键字
-        if not mechanics or all(m in _TAG_ONLY_MECHANICS for m in mechanics):
+        # 纯关键字（无文本的可跳过）
+        if not mechanics and not text:
+            stats["tag_only"] += 1
+            continue
+        if mechanics and all(m in _TAG_ONLY_MECHANICS for m in mechanics) and not text:
             stats["tag_only"] += 1
             continue
 
@@ -566,6 +749,16 @@ def generate_abilities_json_v2(output_path: Optional[str] = None) -> Dict[str, A
             # 如果只有 on-play 对应的 trigger，可能也需要 ON_PLAY
             # (这里按需, 暂不自动加)
 
+        # Fallback: 有文本但无 trigger 事件，尝试按 ON_PLAY 解析
+        if not ability_entry and text:
+            actions = _parse_battlecry(text)
+            if actions and actions[0].get("class") != "TODO":
+                ability_entry["ON_PLAY"] = _actions_to_spell_desc(actions)
+            # 即使有 TODO 也保留，避免无声丢弃
+            elif actions:
+                ability_entry["ON_PLAY"] = _actions_to_spell_desc(actions)
+                has_todo_flag = True
+
         if ability_entry:
             result[card_id] = ability_entry
             if has_todo_flag:
@@ -573,15 +766,19 @@ def generate_abilities_json_v2(output_path: Optional[str] = None) -> Dict[str, A
             else:
                 stats["inferred"] += 1
 
-    # ── 写文件 ──
+    # ── 写文件 (按 key 排序，大小写不敏感) ──
+    result_sorted = dict(sorted(result.items(), key=lambda kv: kv[0].casefold()))
     if output_path:
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2),
+            json.dumps(result_sorted, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         log.info("v2 JSON 已写入 %s", out)
+
+    # ── 应用手动覆盖 ──
+    _apply_manual_overrides(result, output_path)
 
     log.info(
         "v2 生成完成: 总计 %d 张, 纯关键字 %d, 推断成功 %d, "
@@ -591,6 +788,36 @@ def generate_abilities_json_v2(output_path: Optional[str] = None) -> Dict[str, A
     )
 
     return result
+
+
+def _apply_manual_overrides(result: dict, output_path: Optional[str] = None) -> None:
+    """将 card_abilities_v2_manual.json 中的覆盖应用到 result (就地)。"""
+    manual_path = Path(__file__).resolve().parent.parent / "data" / "card_abilities_v2_manual.json"
+    if not manual_path.exists():
+        return
+    try:
+        manual = json.loads(manual_path.read_text(encoding="utf-8"))
+        overrides = manual.get("manual_overrides", manual)
+        merged = 0
+        for cid, override_data in overrides.items():
+            if cid not in result:
+                log.warning("手动覆盖卡牌 %s 不存在，跳过", cid)
+                continue
+            for key, val in override_data.items():
+                if key in result[cid] and isinstance(result[cid][key], dict) and isinstance(val, dict):
+                    result[cid][key].update(val)
+                else:
+                    result[cid][key] = val
+                merged += 1
+        if merged and output_path:
+            result_sorted = dict(sorted(result.items(), key=lambda kv: kv[0].casefold()))
+            Path(output_path).write_text(
+                json.dumps(result_sorted, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        log.info("手动覆盖已合并: %d 条目 (来自 %s)", merged, manual_path.name)
+    except Exception as e:
+        log.warning("合并手动覆盖失败: %s", e)
 
 
 # ═══════════════════════════════════════════════════════════════
