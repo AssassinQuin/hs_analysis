@@ -1,0 +1,2867 @@
+{
+  "manual_overrides": {
+    "CATA_472": {
+      "DEATHRATTLE": {
+        "class": "TODO",
+        "text_raw": "Deathrattle: Trigger a random friendly minion's end of turn effect.",
+        "note": "Complex: selects random friendly minion and re-triggers its TURN_END effect"
+      }
+    },
+    "CATA_580": {
+      "ON_PLAY": {
+        "class": "TODO",
+        "text_raw": "Battlecry: Herald {0}.",
+        "note": "Herald mechanic: shows 3 options, picks one to improve card"
+      }
+    },
+    "CORE_BT_781": {
+      "TRIGGERS": [
+        {
+          "event": "DAMAGE_PREVENTION",
+          "spell": {
+            "class": "TODO",
+            "text_raw": "Whenever your hero would take damage, this loses 1 Durability instead.",
+            "note": "Passive damage redirection: hero damage -> weapon durability loss"
+          }
+        }
+      ]
+    },
+    "CORE_DAL_720": {
+      "DEATHRATTLE": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ReturnSpell",
+            "target": "RANDOM_FRIENDLY_MINION"
+          },
+          {
+            "class": "ManaCostReductionSpell",
+            "target": "NONE",
+            "value": 2,
+            "note": "Returned minion costs (2) less"
+          }
+        ]
+      }
+    },
+    "CORE_TRL_111": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": {
+          "class": "BoardCountCondition",
+          "params": {
+            "target": "FRIENDLY_MINIONS",
+            "filter": {
+              "class": "RaceFilter",
+              "params": {
+                "race": "BEAST"
+              }
+            },
+            "comparison": ">=",
+            "count": 1
+          }
+        },
+        "then": {
+          "class": "BuffSpell",
+          "target": "SELF",
+          "health_bonus": 1
+        }
+      }
+    },
+    "EDR_525": {
+      "ON_PLAY": {
+        "class": "ChooseOneSpell",
+        "spells": [
+          {
+            "name": "Gain Poisonous",
+            "spell": {
+              "class": "GiveKeywordSpell",
+              "keyword": "POISONOUS",
+              "target": "SELF",
+              "duration": 1
+            }
+          },
+          {
+            "name": "Gain Deathrattle",
+            "spell": {
+              "class": "AddEnchantmentSpell",
+              "target": "SELF",
+              "trigger": {
+                "event": "DEATHRATTLE",
+                "spell": {
+                  "class": "DamageSpell",
+                  "target": "ALL_ENEMY_CHARACTERS",
+                  "value": 2
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "EDR_812": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ConditionalSpell",
+            "condition": {
+              "class": "LastPlayedCardCondition",
+              "params": {
+                "keyword": "UNHOLY_RUNE"
+              }
+            },
+            "then": {
+              "class": "BuffSpell",
+              "target": "SELF",
+              "attack_bonus": 1
+            }
+          },
+          {
+            "class": "ConditionalSpell",
+            "condition": {
+              "class": "LastPlayedCardCondition",
+              "params": {
+                "keyword": "BLOOD_RUNE"
+              }
+            },
+            "then": {
+              "class": "BuffSpell",
+              "target": "SELF",
+              "health_bonus": 1
+            }
+          }
+        ]
+      }
+    },
+    "EDR_842": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_HERO_ATTACKS",
+          "spell": {
+            "class": "DamageSpell",
+            "target": "RANDOM_ENEMY_CHARACTER",
+            "value": {
+              "provider": "attribute",
+              "target": "FRIENDLY_HERO",
+              "attribute": "ATTACK"
+            },
+            "filter": {
+              "class": "NotFilter",
+              "params": {
+                "filter": {
+                  "class": "AttackTargetFilter"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "END_001": {
+      "ON_PLAY": {
+        "class": "TODO",
+        "text_raw": "Battlecry: Imbue your Hero Power.",
+        "note": "Imbue mechanic: upgrades hero power"
+      }
+    },
+    "END_012": {
+      "ON_PLAY": {
+        "class": "SetAttributeSpell",
+        "target": "SELF",
+        "attribute": "ATTACK",
+        "value": 999,
+        "duration": 1,
+        "note": "Set weapon attack to INFINITY for this turn. Cannot attack heroes is a passive restriction."
+      }
+    },
+    "FIR_922": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": {
+          "class": "HoldingCondition",
+          "params": {
+            "filter": {
+              "class": "HasKeywordFilter",
+              "params": {
+                "keyword": "DARK_GIFT"
+              }
+            }
+          }
+        },
+        "then": {
+          "class": "BuffSpell",
+          "target": "SELF",
+          "attack_bonus": 3
+        }
+      }
+    },
+    "TIME_444": {
+      "DEATHRATTLE": {
+        "class": "AddToHandSpell",
+        "card_filter": {
+          "class": "RaceFilter",
+          "params": {
+            "race": "DEMON"
+          },
+          "note": "Random Demon from the past"
+        }
+      }
+    },
+    "CATA_301": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "duration": 1,
+        "attack_bonus": 0,
+        "health_bonus": 0,
+        "note": "Aura: Your next Healing effect this turn deals damage instead — modifies heal-to-damage conversion"
+      }
+    },
+    "EDR_520": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ManaSpell",
+            "target": "SPEND_ALL",
+            "note": "Spends all remaining mana"
+          },
+          {
+            "class": "DiscoverSpell",
+            "pool": "SPELL",
+            "count": 3,
+            "value": {
+              "provider": "mana_spent",
+              "source": "this_turn"
+            },
+            "note": "Cast a random spell that costs the amount of mana spent"
+          }
+        ]
+      }
+    },
+    "CATA_190h": {
+      "ON_PLAY": {
+        "class": "TODO",
+        "text_raw": "Battlecry: Choose Cataclysm to unleash! Herald twice to upgrade.",
+        "note": "Herald mechanic: shows 3 options, picks one to improve. Hero card with stages."
+      }
+    },
+    "CATA_111": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": "HAND_CONTAINS_DRAGON",
+        "if_true": {
+          "class": "ManaSpell",
+          "spell_type": "REFRESH",
+          "value": 2
+        }
+      }
+    },
+    "CATA_150": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "EnqueueSpell",
+            "target": "FRIENDLY_MINIONS",
+            "spell": {
+              "class": "TriggerDeathrattleSpell"
+            }
+          }
+        }
+      ]
+    },
+    "CATA_158": {
+      "DEATHRATTLE": {
+        "class": "DiscoverSpell",
+        "spell_type": "FORETELLING"
+      }
+    },
+    "CATA_161": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "MINION_HAND_OR_BATTLEFIELD",
+        "buff_type": "ATTACK",
+        "value": "SELF_ATTACK"
+      }
+    },
+    "CATA_180": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "PLAYER",
+        "effect": "NEXT_MURLOC_COSTS_HEALTH",
+        "value": 3
+      }
+    },
+    "CATA_185": {
+      "DEATHRATTLE": {
+        "class": "TransformSpell",
+        "target": "KILLER_MINION",
+        "into": "SELF_COPY"
+      }
+    },
+    "CATA_186": {
+      "ON_PLAY": {
+        "class": "AddCardSpell",
+        "target": "OPPONENT",
+        "card": "SLIMEBOMB",
+        "cost": 2
+      }
+    },
+    "CATA_201": {
+      "ON_PLAY": {
+        "class": "ReturnSpell",
+        "target": "ALL_ENEMY_MINIONS"
+      }
+    },
+    "CATA_202": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "note": "Discover a random Fission card from another class"
+      }
+    },
+    "CATA_209": {
+      "ON_PLAY": {
+        "class": "AddKeywordSpell",
+        "target": "SPELL_IN_HAND",
+        "keyword": "SPELLPOWER",
+        "value": 1
+      }
+    },
+    "CATA_213": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": "DECK_MINION_TOTAL_COST_EQUALS_100",
+        "if_true": {
+          "class": "BuffSpell",
+          "target": "MINIONS_IN_DECK",
+          "buff_type": "RANDOM_STATS",
+          "total_value": 100
+        }
+      }
+    },
+    "CATA_215": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ReturnSpell",
+            "target": "ENEMY_MINION"
+          },
+          {
+            "class": "EnchantSpell",
+            "target": "ENEMY_HAND_CARD",
+            "duration": 1,
+            "note": "Returned card can't be played next turn"
+          }
+        ]
+      }
+    },
+    "CATA_216": {
+      "ON_PLAY": {
+        "class": "AuraBuffSpell",
+        "target": "PLAYER",
+        "effect": "HEALING_BONUS",
+        "value": 2,
+        "duration": "GAME"
+      }
+    },
+    "CATA_305": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "ConditionalSpell",
+            "condition": "SELF_FULL_HEALTH",
+            "if_true": {
+              "class": "BuffSpell",
+              "target": "SELF",
+              "buff_type": "HEALTH",
+              "value": 3
+            }
+          }
+        }
+      ]
+    },
+    "CATA_458": {
+      "ON_PLAY": {
+        "class": "AddKeywordSpell",
+        "target": "SPELLS_IN_HAND_AND_DECK",
+        "keyword": "SPELLPOWER",
+        "value": 1
+      }
+    },
+    "CATA_464": {
+      "DEATHRATTLE": {
+        "class": "GenerateSpell",
+        "cost": 2,
+        "effect": {
+          "class": "DamageSpell",
+          "target": "TARGET",
+          "value": "SELF_ATTACK"
+        }
+      }
+    },
+    "CATA_467": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_ATTACK",
+          "spell": {
+            "class": "BuffSpell",
+            "attack_bonus": 2,
+            "target": "RANDOM_FRIENDLY_MINION"
+          }
+        }
+      ]
+    },
+    "CATA_470": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": "HAND_CONTAINS_DRAGON",
+        "if_true": {
+          "class": "DiscoverSpell",
+          "spell_type": "CUSTOM_UNDEAD_DRAGON",
+          "cost_modifier": -3
+        },
+        "if_false": {
+          "class": "DiscoverSpell",
+          "spell_type": "CUSTOM_UNDEAD_DRAGON"
+        }
+      }
+    },
+    "CATA_474": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "DiscoverSpell",
+            "spell_type": "RANDOM_HOLY_SPELL",
+            "cost_modifier": -3
+          }
+        }
+      ]
+    },
+    "CATA_480": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_MINIONS",
+        "duration": 3,
+        "attack_bonus": 0,
+        "health_bonus": 0,
+        "note": "End-of-turn effects trigger twice"
+      }
+    },
+    "CATA_481": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "RandomSpell",
+            "target": "OPPONENT_HAND",
+            "count": 2,
+            "effect": "REMOVE_FROM_HAND"
+          },
+          {
+            "class": "EnchantSpell",
+            "target": "SELF",
+            "effect": "DORMANT",
+            "value": 2
+          }
+        ]
+      },
+      "DEATHRATTLE": {
+        "class": "AddCardSpell",
+        "target": "OPPONENT",
+        "card": "STORED_DEVoured",
+        "count": "ALL"
+      }
+    },
+    "CATA_490": {
+      "ON_PLAY": {
+        "class": "DiscardSpell",
+        "target": "HAND",
+        "value": 1,
+        "choice": true
+      }
+    },
+    "CATA_497": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscoverSpell",
+            "spell_type": "FORETELLING"
+          },
+          {
+            "class": "ManaSpell",
+            "target": "DEATHWING_IN_DECK",
+            "value": -1,
+            "note": "Reduction scales with Foretell count"
+          }
+        ]
+      }
+    },
+    "CATA_525": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "spell_type": "FORETELLING"
+      }
+    },
+    "CATA_530": {
+      "ON_PLAY": {
+        "class": "AddKeywordSpell",
+        "keyword": "LIFESTEAL",
+        "target": "FRIENDLY_HERO",
+        "duration": 1,
+        "note": "Hero gains Lifesteal this turn"
+      }
+    },
+    "CATA_552": {
+      "ON_PLAY": {
+        "class": "DamageSpell",
+        "target": "TARGET",
+        "value": {
+          "provider": "self_attack"
+        }
+      }
+    },
+    "CATA_553": {
+      "ON_PLAY": {
+        "class": "GiveKeywordSpell",
+        "keyword": "Rush",
+        "target": "FRIENDLY_DRAGONS",
+        "duration": "GAME"
+      }
+    },
+    "CATA_554": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "text_raw": "Set an enemy minion's Health to 1. If you're holding a Dragon, choose another.",
+        "condition": {
+          "class": "HandCondition",
+          "params": {
+            "card_type": "MINION",
+            "race": "DRAGON"
+          }
+        },
+        "then": {
+          "class": "MetaSpell",
+          "spells": [
+            {
+              "class": "EnchantSpell",
+              "target": "ENEMY_MINION",
+              "health_bonus": -99,
+              "note": "Set Health to 1"
+            },
+            {
+              "class": "EnchantSpell",
+              "target": "ENEMY_MINION",
+              "health_bonus": -99,
+              "note": "Set second target Health to 1"
+            }
+          ]
+        },
+        "else_spell": {
+          "class": "EnchantSpell",
+          "target": "ENEMY_MINION",
+          "health_bonus": -99,
+          "note": "Set Health to 1"
+        }
+      }
+    },
+    "CATA_556": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "card_type": "DRAGON",
+        "max_cost": 3
+      }
+    },
+    "CATA_561": {
+      "ON_PLAY": {
+        "class": "RepeatSpell",
+        "count": 2,
+        "spell": {
+          "class": "SummonSpell",
+          "note": "1/1 Rush Elemental"
+        }
+      }
+    },
+    "CATA_563": {
+      "ON_PLAY": {
+        "class": "EnqueueSpell",
+        "target": "HAND_SPELL",
+        "max_cost": 4,
+        "choice": true,
+        "note": "Absorb chosen spell from hand"
+      },
+      "DEATHRATTLE": {
+        "class": "MetaSpell",
+        "note": "Cast the absorbed spell"
+      }
+    },
+    "CATA_565": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "spell_type": "FORETELLING"
+      }
+    },
+    "CATA_566": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "HAND",
+        "choice": true,
+        "note": "Attach cost reduction trigger to chosen hand card"
+      },
+      "TRIGGERS": [
+        {
+          "event": "TURN_START",
+          "spell": {
+            "class": "ManaSpell",
+            "target": "ENCHANTED_CARD",
+            "value": -1
+          }
+        }
+      ]
+    },
+    "CATA_621": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "note": "Random Paladin Aura card with +1 duration"
+      }
+    },
+    "CATA_699": {
+      "ON_PLAY": {
+        "class": "RepeatSpell",
+        "count": 3,
+        "spell": {
+          "class": "MetaSpell",
+          "spells": [
+            {
+              "class": "DamageSpell",
+              "target": "TARGET",
+              "value": 3
+            },
+            {
+              "class": "HealSpell",
+              "target": "FRIENDLY_HERO",
+              "value": 3
+            }
+          ]
+        }
+      }
+    },
+    "CATA_722": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "spell_type": "FORETELLING"
+      }
+    },
+    "CATA_724": {
+      "DEATHRATTLE": {
+        "class": "ManaSpell",
+        "spell_type": "UNLOCK_OVERLOAD"
+      }
+    },
+    "CATA_725": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "spell_type": "FORETELLING"
+      },
+      "DEATHRATTLE": {
+        "class": "HealSpell",
+        "target": "FRIENDLY_HERO",
+        "value": 3
+      }
+    },
+    "CATA_780": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "spell_type": "FORETELLING"
+      }
+    },
+    "CATA_786": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_CAST_SPELL",
+          "spell": {
+            "class": "RandomSpell",
+            "note": "Cast a random spell of same cost from another class"
+          }
+        }
+      ]
+    },
+    "CATA_897": {
+      "ON_PLAY": {
+        "class": "DiscardSpell",
+        "target": "HAND",
+        "value": 1,
+        "choice": true,
+        "note": "Track discarded card for deathrattle"
+      },
+      "DEATHRATTLE": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ReturnSpell",
+            "note": "Return the discarded card"
+          },
+          {
+            "class": "ManaSpell",
+            "value": -1,
+            "target": "RETURNED_CARD"
+          }
+        ]
+      }
+    },
+    "CATA_979": {
+      "ON_PLAY": {
+        "class": "TransformSpell",
+        "target": "HAND_SPELL",
+        "choice": true,
+        "note": "Split chosen spell into 2 random spells of same cost"
+      }
+    },
+    "CORE_BAR_310": {
+      "DEATHRATTLE": {
+        "class": "HealSpell",
+        "target": "ALL_FRIENDLY_CHARACTERS",
+        "value": 8
+      }
+    },
+    "CORE_BOT_576": {
+      "COMBO": {
+        "class": "BuffSpell",
+        "attack_bonus": 4,
+        "target": "FRIENDLY_MINION"
+      }
+    },
+    "CORE_BT_201": {
+      "DEATHRATTLE": {
+        "class": "RandomSpell",
+        "spell": {
+          "class": "DamageSpell",
+          "target": "ALL_ENEMY_CHARACTERS",
+          "value": {
+            "provider": "self_attack"
+          }
+        },
+        "note": "Damage equal to self attack, randomly split among all enemies"
+      }
+    },
+    "CORE_BT_416": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": -2,
+        "target": "NEXT_DEMON_CARD",
+        "note": "Next Demon card costs 2 less"
+      }
+    },
+    "CORE_CATA_001": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": 0,
+        "target": "NEXT_DEMON_CARD",
+        "duration": 1,
+        "note": "Next Demon costs 0 this turn"
+      }
+    },
+    "CORE_CATA_002": {
+      "ON_PLAY": {
+        "class": "SummonSpell",
+        "note": "Resurrect highest-cost friendly minion that died this game"
+      }
+    },
+    "CORE_CFM_790": {
+      "ON_PLAY": {
+        "class": "SummonSpell",
+        "target": "RANDOM_ENEMY_HAND_MINION",
+        "note": "Opponent summons a random minion from their hand"
+      }
+    },
+    "CORE_CS2_074": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "attack_bonus": 2,
+        "target": "FRIENDLY_WEAPON"
+      }
+    },
+    "CORE_CS2_122": {
+      "AURA": {
+        "class": "AuraBuffSpell",
+        "attack_bonus": 1,
+        "target": "OTHER_FRIENDLY_MINIONS"
+      }
+    },
+    "CORE_CS2_188": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "attack_bonus": 2,
+        "target": "TARGET"
+      }
+    },
+    "CORE_DMF_067": {
+      "ON_PLAY": {
+        "class": "DrawSpell",
+        "target": "BOTH_PLAYERS",
+        "value": 1
+      },
+      "DEATHRATTLE": {
+        "class": "DrawSpell",
+        "target": "BOTH_PLAYERS",
+        "value": 1
+      }
+    },
+    "CORE_DMF_511": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": -2,
+        "target": "NEXT_COMBO_CARD",
+        "duration": 1,
+        "note": "Next Combo card costs 2 less this turn"
+      }
+    },
+    "CORE_DRG_107": {
+      "DEATHRATTLE": {
+        "class": "AddToHandSpell",
+        "text_raw": "Arcane Missiles spell"
+      }
+    },
+    "CORE_DRG_403": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": 2,
+        "target": "ENEMY_HERO_POWER",
+        "note": "Opponent's next Hero Power costs 2 more"
+      }
+    },
+    "CORE_ETC_111": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "ShuffleSpell",
+            "pool": "SPELL",
+            "random": true,
+            "target": "OPPONENT_DECK_TOP"
+          }
+        }
+      ]
+    },
+    "CORE_EX1_014": {
+      "ON_PLAY": {
+        "class": "AddToHandSpell",
+        "target": "ENEMY_HERO",
+        "card": "Bananas",
+        "value": 2,
+        "note": "Give opponent 2 Bananas"
+      }
+    },
+    "CORE_EX1_043": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "SELF",
+        "health_bonus": {
+          "provider": "hand_size"
+        },
+        "note": "Gain +1 Health per card in hand"
+      }
+    },
+    "CORE_EX1_145": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": -2,
+        "target": "FRIENDLY_NEXT_SPELL",
+        "duration": 1,
+        "note": "Next spell costs (2) less this turn"
+      }
+    },
+    "CORE_EX1_162": {
+      "AURA": {
+        "class": "AuraBuffSpell",
+        "attack_bonus": 1,
+        "target": "ADJACENT_MINIONS"
+      }
+    },
+    "CORE_EX1_287": {
+      "ON_PLAY": {
+        "class": "CounterSpell",
+        "note": "Secret: When opponent casts a spell, Counter it"
+      }
+    },
+    "CORE_EX1_310": {
+      "ON_PLAY": {
+        "class": "DiscardSpell",
+        "value": 2
+      }
+    },
+    "CORE_EX1_383": {
+      "DEATHRATTLE": {
+        "class": "WeaponEquipSpell",
+        "weapon": "Ashbringer",
+        "note": "Equip a 5/3 Ashbringer"
+      }
+    },
+    "CORE_EX1_611": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ReturnSpell",
+            "target": "ENEMY_MINION"
+          },
+          {
+            "class": "ManaSpell",
+            "value": 2,
+            "target": "RETURNED_CARD",
+            "note": "Costs (2) more"
+          }
+        ],
+        "note": "Secret: When enemy minion attacks, return it to hand; costs (2) more"
+      }
+    },
+    "CORE_GIL_623": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "SELF",
+        "health_bonus": {
+          "provider": "negative_hand_size",
+          "target": "ENEMY_HAND"
+        },
+        "note": "Lose 1 Health per card in opponent's hand"
+      }
+    },
+    "CORE_ICC_407": {
+      "ON_PLAY": {
+        "class": "DestroySpell",
+        "target": "TOP_ENEMY_DECK_CARD",
+        "note": "Remove top card of opponent's deck (mill)"
+      }
+    },
+    "CORE_LOOT_413": {
+      "DEATHRATTLE": {
+        "class": "ArmorSpell",
+        "value": 3
+      }
+    },
+    "CORE_NEW1_018": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "SELF",
+        "attack_bonus": {
+          "provider": "weapon_attack"
+        },
+        "note": "Gain Attack equal to your weapon's Attack"
+      }
+    },
+    "CORE_RLK_506": {
+      "ON_PLAY": {
+        "class": "CorpseSpell",
+        "value": 6,
+        "spell": {
+          "class": "SummonSpell",
+          "card": "Reanimated Recruit",
+          "note": "1/3 Taunt minion"
+        },
+        "note": "Spend up to 6 Corpses to summon that many 1/3 Taunt Recruits"
+      }
+    },
+    "CORE_RLK_657": {
+      "ON_PLAY": {
+        "class": "ArmorSpell",
+        "value": 6
+      },
+      "DEATHRATTLE": {
+        "class": "ArmorSpell",
+        "value": 6
+      }
+    },
+    "CORE_SCH_713": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": 1,
+        "target": "ENEMY_SPELLS",
+        "duration": 1,
+        "note": "Next turn opponent's spells cost 1 more"
+      }
+    },
+    "CORE_SW_068": {
+      "DEATHRATTLE": {
+        "class": "ArmorSpell",
+        "value": 8
+      }
+    },
+    "CORE_TRL_240": {
+      "ON_PLAY": {
+        "class": "DamageSpell",
+        "target": "TARGET_ENEMY_MINION",
+        "value": {
+          "provider": "hero_attack"
+        }
+      }
+    },
+    "CORE_TRL_345": {
+      "ON_PLAY": {
+        "class": "ReturnSpell",
+        "target": "SPELLS_PLAYED_LAST_TURN",
+        "note": "Return all spells played last turn to hand"
+      }
+    },
+    "CORE_ULD_178": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "choices": [
+          "RUSH",
+          "TAUNT",
+          "DIVINE_SHIELD",
+          "WINDFURY"
+        ],
+        "pick_count": 2,
+        "note": "Choose 2 of Rush, Taunt, Divine Shield, or Windfury"
+      }
+    },
+    "CORE_ULD_280": {
+      "DEATHRATTLE": {
+        "class": "ReturnSpell",
+        "target": "RANDOM_ENEMY_MINION",
+        "note": "Return a random enemy minion to opponent's hand"
+      }
+    },
+    "CORE_YOD_026": {
+      "DEATHRATTLE": {
+        "class": "BuffSpell",
+        "target": "RANDOM_FRIENDLY_MINION",
+        "attack_bonus": {
+          "provider": "self_attack"
+        },
+        "note": "Random friendly minion gains this minion's Attack"
+      }
+    },
+    "CS3_020": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_HERO_ATTACKS",
+          "spell": {
+            "class": "DamageSpell",
+            "target": "HERO_ATTACK_TARGET",
+            "value": {
+              "provider": "self_attack"
+            }
+          }
+        }
+      ]
+    },
+    "CS3_024": {
+      "DEATHRATTLE": {
+        "class": "DrawSpell",
+        "target": "HIGHEST_COST_FRIENDLY_MINION_IN_DECK",
+        "value": 1,
+        "note": "Draw your highest-cost minion card"
+      }
+    },
+    "DINO_137": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": -1,
+        "target": "ADJACENT_HAND_CARDS",
+        "note": "Adjacent cards in hand cost 1 less"
+      }
+    },
+    "DINO_402": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "EnchantSpell",
+            "target": "FRIENDLY_MINION",
+            "attack_bonus": -99,
+            "health_bonus": -99,
+            "note": "Set to 1/1"
+          },
+          {
+            "class": "SummonCopySpell",
+            "target": "FRIENDLY_MINION",
+            "note": "Fill board with copies of the 1/1"
+          }
+        ]
+      }
+    },
+    "DINO_412": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "AddToHandSpell",
+            "pool": "MULTI_TYPE_MINION",
+            "note": "Random minion with multiple minion types"
+          }
+        }
+      ]
+    },
+    "DINO_417": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "BuffSpell",
+            "target": "FRIENDLY_MINIONS",
+            "attack_bonus": 1
+          },
+          {
+            "class": "AddKeywordSpell",
+            "keyword": "RUSH",
+            "target": "FRIENDLY_MINIONS"
+          },
+          {
+            "class": "EnchantSpell",
+            "target": "FRIENDLY_MINIONS",
+            "duration": 1,
+            "note": "Die at end of turn"
+          }
+        ]
+      }
+    },
+    "DINO_427": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "filter": "OTHER_CLASS_MASK",
+        "note": "Get a random other-class Mask card"
+      },
+      "COMBO": {
+        "class": "DiscoverSpell",
+        "filter": "OTHER_CLASS_MASK",
+        "bonus": {
+          "class": "ManaSpell",
+          "value": -2
+        },
+        "note": "Get a random other-class Mask that costs 2 less"
+      }
+    },
+    "DINO_434": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "filter": {
+          "cost": 1,
+          "type": "MINION"
+        },
+        "note": "Get a random 1-cost minion"
+      },
+      "DEATHRATTLE": {
+        "class": "DiscoverSpell",
+        "filter": {
+          "cost": 1,
+          "type": "SPELL"
+        },
+        "note": "Get a random 1-cost spell"
+      }
+    },
+    "EDR_001": {
+      "ON_PLAY": {
+        "class": "AddToHandSpell",
+        "pool": "DREAM"
+      }
+    },
+    "EDR_014": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": {
+          "class": "SelfCostCondition",
+          "params": {
+            "max_cost": 3
+          }
+        },
+        "then": {
+          "class": "RepeatSpell",
+          "spell": {
+            "class": "DamageSpell",
+            "target": "RANDOM_ENEMY_MINION",
+            "value": {
+              "provider": "self_attack"
+            }
+          },
+          "count": 2
+        }
+      }
+    },
+    "EDR_031": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "RepeatSpell",
+            "spell": {
+              "class": "PlayTopDeckSpell"
+            },
+            "count": 3
+          }
+        }
+      ]
+    },
+    "EDR_227": {
+      "DEATHRATTLE": {
+        "class": "ImbueSpell"
+      }
+    },
+    "EDR_232": {
+      "ON_PLAY": {
+        "class": "ShuffleSpell",
+        "target": "ALL_MINIONS",
+        "note": "Shuffle each minion into a random player's deck"
+      }
+    },
+    "EDR_238": {
+      "ON_PLAY": {
+        "class": "SummonSpell",
+        "target": "FRIENDLY_GRAVEYARD",
+        "filter": {
+          "class": "CostFilter",
+          "params": {
+            "min_cost": 8
+          }
+        },
+        "unique": true
+      }
+    },
+    "EDR_254": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_CAST_SPELL",
+          "spell": {
+            "class": "BuffSpell",
+            "target": "SELF",
+            "attack_bonus": {
+              "provider": "played_card_cost"
+            }
+          }
+        }
+      ]
+    },
+    "EDR_259": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "HIGHEST_COST_SPELL_IN_HAND",
+        "duration": 3,
+        "aura": true
+      }
+    },
+    "EDR_260": {
+      "DEATHRATTLE": {
+        "class": "RepeatSpell",
+        "spell": {
+          "class": "ShuffleSpell",
+          "card_id": "EDR_260t"
+        },
+        "count": 2
+      }
+    },
+    "EDR_449": {
+      "ON_PLAY": {
+        "class": "ImbueSpell"
+      }
+    },
+    "EDR_451": {
+      "ON_PLAY": {
+        "class": "ImbueSpell"
+      },
+      "DEATHRATTLE": {
+        "class": "ImbueSpell"
+      }
+    },
+    "EDR_453": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "DamageSpell",
+            "target": "RANDOM_ENEMY_MINION",
+            "value": {
+              "provider": "self_attack"
+            },
+            "overflow": true
+          }
+        }
+      ]
+    },
+    "EDR_462": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "AddToHandSpell",
+            "pool": "DRAGON"
+          }
+        }
+      ]
+    },
+    "EDR_464": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "trigger": {
+          "event": "AFTER_PLAY_SPELL",
+          "spell": {
+            "class": "CopySpell"
+          }
+        },
+        "count": 3
+      }
+    },
+    "EDR_489": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "duration": 1,
+        "cost_override": {
+          "type": "opponent_health",
+          "max": 10
+        }
+      }
+    },
+    "EDR_491": {
+      "ON_PLAY": {
+        "class": "CopySpell",
+        "target": "FRIENDLY_MINIONS_DIED_THIS_TURN",
+        "copy_what": "DEATHRATTLE"
+      }
+    },
+    "EDR_494": {
+      "DEATHRATTLE": {
+        "class": "AddToHandSpell",
+        "source": "eaten_minion"
+      },
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "AddToHandSpell"
+          }
+        }
+      ]
+    },
+    "EDR_495": {
+      "DEATHRATTLE": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "BuffSpell",
+            "target": "RANDOM_FRIENDLY_HAND_MINION",
+            "attack_bonus": -2
+          },
+          {
+            "class": "BuffSpell",
+            "target": "RANDOM_ENEMY_HAND_MINION",
+            "attack_bonus": -2
+          }
+        ]
+      }
+    },
+    "EDR_518": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ImbueSpell"
+          },
+          {
+            "class": "ManaSpell",
+            "target": "RANDOM_FRIENDLY_HAND_MINION",
+            "value": -1
+          }
+        ]
+      }
+    },
+    "EDR_519": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ImbueSpell"
+          },
+          {
+            "class": "TriggerHeroPowerSpell"
+          }
+        ]
+      }
+    },
+    "EDR_522": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DrawSpell",
+            "target": "ENEMY_HERO",
+            "count": 2
+          },
+          {
+            "class": "CopySpell",
+            "target": "ENEMY_DRAWN_CARDS",
+            "note": "Get copies of drawn cards"
+          }
+        ]
+      }
+    },
+    "EDR_526": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "RANDOM_ENEMY_HAND_CARD",
+        "duration": 1,
+        "effect": "TRAP",
+        "scaling": {
+          "provider": "times_played",
+          "base": 1
+        }
+      }
+    },
+    "EDR_530": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "AddToHandSpell",
+            "pool": "NATURE_SPELL"
+          }
+        }
+      ]
+    },
+    "EDR_654": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "target": "FRIENDLY_HAND_MINIONS_WITH_DARK_GIFTS",
+        "value": -2
+      }
+    },
+    "EDR_800": {
+      "ON_PLAY": {
+        "class": "ImbueSpell"
+      }
+    },
+    "EDR_816": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "BuffSpell",
+            "target": "OTHER_FRIENDLY_MINIONS",
+            "attack_bonus": 1
+          }
+        }
+      ]
+    },
+    "EDR_818": {
+      "DEATHRATTLE": {
+        "class": "SummonSpell",
+        "card_id": "EDR_818t",
+        "count": "self_health"
+      }
+    },
+    "EDR_819": {
+      "ON_PLAY": {
+        "class": "DamageSpell",
+        "target": "ALL_OTHER_MINIONS",
+        "value": {
+          "provider": "self_attack"
+        }
+      },
+      "DEATHRATTLE": {
+        "class": "SummonSpell",
+        "source": "killed_by_self"
+      }
+    },
+    "EDR_846": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "text_raw": "Get all 5 Dream cards. Corrupted if you played a higher-cost card while holding this.",
+        "condition": {
+          "class": "CorruptCondition",
+          "params": {}
+        },
+        "then": {
+          "class": "DiscoverSpell",
+          "note": "Get all 5 Corrupted Dream cards"
+        },
+        "else_spell": {
+          "class": "DiscoverSpell",
+          "note": "Get all 5 Dream cards"
+        }
+      }
+    },
+    "EDR_847": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "target": "FRIENDLY_HERO_POWER",
+        "value": 0,
+        "count": 1
+      },
+      "DEATHRATTLE": {
+        "class": "ManaSpell",
+        "target": "FRIENDLY_HERO_POWER",
+        "value": 0,
+        "count": 1
+      }
+    },
+    "EDR_849": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_PLAY_MINION",
+          "spell": {
+            "class": "AddKeywordSpell",
+            "target": "TRIGGERING_MINION",
+            "random": true,
+            "pool": "BONUS_EFFECTS"
+          }
+        }
+      ]
+    },
+    "EDR_852": {
+      "ON_PLAY": {
+        "class": "ImbueSpell"
+      }
+    },
+    "EDR_861": {
+      "DEATHRATTLE": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "ManaSpell",
+            "target": "FRIENDLY_HERO",
+            "value": 1,
+            "empty": true
+          },
+          {
+            "class": "ManaSpell",
+            "target": "ENEMY_HERO",
+            "value": 1,
+            "empty": true
+          }
+        ]
+      }
+    },
+    "EDR_871": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "AddToHandSpell",
+            "card_id": "CS2_231"
+          },
+          {
+            "class": "ImbueSpell"
+          }
+        ]
+      }
+    },
+    "EDR_874": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscoverSpell",
+            "note": "Add Moonfire to hand with Spell Damage +1"
+          },
+          {
+            "class": "DiscoverSpell",
+            "note": "Add Starfire to hand with Spell Damage +1"
+          }
+        ]
+      }
+    },
+    "EDR_890": {
+      "DEATHRATTLE": {
+        "class": "ManaSpell",
+        "target": "RIGHTMOST_FRIENDLY_HAND_CARD",
+        "value": -2
+      }
+    },
+    "EDR_895": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "duration": 3,
+        "full_moon_effect": {
+          "class": "ManaSpell",
+          "target": "ALL_FRIENDLY_CARDS",
+          "value": 1
+        }
+      }
+    },
+    "EDR_970": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "BuffSpell",
+            "target": "ALL_ENEMY_MINIONS",
+            "attack_bonus": -2,
+            "duration": 1
+          },
+          {
+            "class": "ImbueSpell"
+          }
+        ]
+      }
+    },
+    "EDR_978": {
+      "DEATHRATTLE": {
+        "class": "ShuffleSpell",
+        "card_id": "EDR_978",
+        "cost_override": 1,
+        "position": "bottom"
+      }
+    },
+    "EDR_999": {
+      "ON_PLAY": {
+        "class": "AddToHandSpell",
+        "pool": "MURLOC"
+      }
+    },
+    "END_002": {
+      "DEATHRATTLE": {
+        "class": "ConditionalSpell",
+        "condition": {
+          "class": "HasWeaponCondition"
+        },
+        "then": {
+          "class": "BuffSpell",
+          "target": "FRIENDLY_WEAPON",
+          "attack_bonus": 2
+        },
+        "else_spell": {
+          "class": "WeaponEquipSpell",
+          "note": "Equip a 1/2 Dagger"
+        }
+      }
+    },
+    "END_006": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "BuffSpell",
+            "target": "FRIENDLY_HERO",
+            "attack_bonus": 3,
+            "duration": 1
+          },
+          {
+            "class": "EnchantSpell",
+            "target": "FRIENDLY_HERO",
+            "attack_bonus": 3,
+            "duration": 2,
+            "note": "+3 Attack next turn"
+          },
+          {
+            "class": "EnchantSpell",
+            "target": "FRIENDLY_HERO",
+            "attack_bonus": 3,
+            "duration": 3,
+            "note": "+3 Attack turn after"
+          }
+        ]
+      }
+    },
+    "END_011": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "duration": 3,
+        "attack_bonus": 0,
+        "health_bonus": 0,
+        "note": "At start of your turn, gain a temporary mana crystal"
+      }
+    },
+    "END_015": {
+      "DEATHRATTLE": {
+        "class": "DiscoverSpell",
+        "note": "Get a random Deathrattle minion that costs (2) less"
+      }
+    },
+    "END_016": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_ATTACK",
+          "spell": {
+            "class": "DiscardSpell",
+            "value": 1
+          }
+        }
+      ]
+    },
+    "END_018": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "RANDOM_FRIENDLY_HAND_CARD",
+        "cost_override": 999,
+        "note": "Set a random card in hand cost to infinity"
+      },
+      "DEATHRATTLE": {
+        "class": "EnchantSpell",
+        "target": "ENCHANTED_CARD",
+        "cost_restore": true,
+        "note": "Restore the infinity-cost card to its original cost"
+      }
+    },
+    "END_021": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "BuffSpell",
+            "target": "FRIENDLY_HAND_MINIONS",
+            "attack_bonus": 2
+          },
+          {
+            "class": "BuffSpell",
+            "target": "FRIENDLY_HAND_WEAPONS",
+            "attack_bonus": 2
+          }
+        ]
+      }
+    },
+    "END_024": {
+      "ON_PLAY": {
+        "class": "DamageSpell",
+        "target": "ENEMY_MINION_HIGHEST_HP",
+        "value": 99999,
+        "note": "Secret: At end of opponent's turn, deal massive damage to highest-HP enemy minion"
+      }
+    },
+    "END_029": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "DiscoverSpell",
+            "note": "Get a random Shadow spell"
+          }
+        }
+      ]
+    },
+    "END_037": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "SummonSpell",
+            "note": "Fill board with random Dragons"
+          },
+          {
+            "class": "HealSpell",
+            "target": "FRIENDLY_HERO",
+            "value": 9999,
+            "note": "Fully heal hero"
+          },
+          {
+            "class": "EnchantSpell",
+            "target": "FRIENDLY_HERO",
+            "note": "Skip your next turn"
+          }
+        ]
+      }
+    },
+    "FIR_911": {
+      "ON_PLAY": {
+        "class": "DrawSpell",
+        "value": {
+          "provider": "variable",
+          "base": 1
+        },
+        "note": "Draw cards equal to escalation counter; card discards itself after N turns"
+      }
+    },
+    "FIR_913": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_CAST_SPELL",
+          "filter": {
+            "class": "SpellSchoolFilter",
+            "params": {
+              "school": "FIRE"
+            }
+          },
+          "spell": {
+            "class": "DiscoverSpell",
+            "note": "Get a random Elemental with cost reduced by 3"
+          }
+        }
+      ]
+    },
+    "FIR_914": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "FRIENDLY_MINION",
+        "attack_bonus": {
+          "provider": "variable",
+          "base": 1
+        },
+        "health_bonus": {
+          "provider": "variable",
+          "base": 1
+        },
+        "note": "Buff scales each turn; card discards itself after N turns"
+      }
+    },
+    "FIR_916": {
+      "ON_PLAY": {
+        "class": "DamageSpell",
+        "target": "ALL_ENEMY_MINIONS",
+        "value": {
+          "provider": "variable",
+          "base": 1
+        },
+        "note": "Damage scales each turn; card discards itself after N turns"
+      }
+    },
+    "FIR_919": {
+      "DEATHRATTLE": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "note": "At end of turn, get another Everburning Phoenix"
+      }
+    },
+    "FIR_940": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": {
+          "class": "HandUniqueCostCondition"
+        },
+        "then": {
+          "class": "EnchantSpell",
+          "target": "FRIENDLY_HAND",
+          "cost_bonus": -2,
+          "note": "Reduce cost of all cards in hand by 2"
+        }
+      }
+    },
+    "FIR_951": {
+      "ON_PLAY": {
+        "class": "ChooseOneSpell",
+        "note": "Choose to spend 10, 20, or 30 Corpses to gain that many stats as Attack+Health",
+        "spells": [
+          {
+            "name": "10 Corpses",
+            "spell": {
+              "class": "BuffSpell",
+              "target": "SELF",
+              "attack_bonus": 5,
+              "health_bonus": 5,
+              "note": "Spend 10 Corpses"
+            }
+          },
+          {
+            "name": "20 Corpses",
+            "spell": {
+              "class": "BuffSpell",
+              "target": "SELF",
+              "attack_bonus": 10,
+              "health_bonus": 10,
+              "note": "Spend 20 Corpses"
+            }
+          },
+          {
+            "name": "30 Corpses",
+            "spell": {
+              "class": "BuffSpell",
+              "target": "SELF",
+              "attack_bonus": 15,
+              "health_bonus": 15,
+              "note": "Spend 30 Corpses"
+            }
+          }
+        ]
+      }
+    },
+    "FIR_956": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": {
+          "class": "HandCondition",
+          "params": {
+            "keyword": "DARK_GIFT"
+          }
+        },
+        "then": {
+          "class": "MetaSpell",
+          "spells": [
+            {
+              "class": "BuffSpell",
+              "target": "FRIENDLY_HERO",
+              "attack_bonus": 3,
+              "duration": 1
+            },
+            {
+              "class": "ArmorSpell",
+              "value": 6
+            }
+          ]
+        }
+      }
+    },
+    "FIR_959": {
+      "ON_PLAY": {
+        "class": "RandomSpell",
+        "note": "Cast 15 Mana worth of random Fire spells at random enemies"
+      }
+    },
+    "MEND_041": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": {
+          "class": "DidNotPlayLastTurnCondition",
+          "params": {
+            "card_type": "MINION"
+          }
+        },
+        "then": {
+          "class": "ManaSpell",
+          "value": 3,
+          "note": "Refresh 3 Mana Crystals"
+        }
+      }
+    },
+    "MEND_045": {
+      "DEATHRATTLE": {
+        "class": "DiscoverSpell",
+        "note": "Get a random Dragon that costs (2) less"
+      }
+    },
+    "MEND_046": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "RepeatSpell",
+            "spell": {
+              "class": "SummonSpell",
+              "note": "Summon a 2/2 Treant"
+            },
+            "count": 3
+          },
+          {
+            "class": "EnchantSpell",
+            "note": "Carve 12 Mana worth of Nature spells into the Treants"
+          }
+        ]
+      }
+    },
+    "MEND_100": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "note": "Get a 3-Cost Bulb location that casts three random 1-Cost spells, upgrades each turn"
+      }
+    },
+    "MEND_301": {
+      "ON_PLAY": {
+        "class": "ChooseOneSpell",
+        "note": "Choose an Animal Companion to summon"
+      }
+    },
+    "MEND_303": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "note": "Replace future Animal Companions with random Beasts that cost 1 more"
+      }
+    },
+    "MEND_307": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscoverSpell",
+            "note": "Choose an Animal Companion (becomes random Beast costing +2)"
+          },
+          {
+            "class": "SummonSpell",
+            "note": "Summon the chosen Animal Companion"
+          }
+        ]
+      }
+    },
+    "MEND_500": {
+      "ON_PLAY": {
+        "class": "RepeatSpell",
+        "count": {
+          "provider": "variable",
+          "base": 1
+        },
+        "spell": {
+          "class": "DamageSpell",
+          "target": "RANDOM_ENEMY_MINION",
+          "value": {
+            "provider": "variable",
+            "base": 4
+          },
+          "note": "Overflow damage hits enemy hero"
+        }
+      }
+    },
+    "MEND_501": {
+      "ON_PLAY": {
+        "class": "AuraBuffSpell",
+        "target": "FRIENDLY_LEYLINES",
+        "cost_bonus": -1,
+        "note": "Your Leylines cost (1) less this game"
+      },
+      "DEATHRATTLE": {
+        "class": "DiscoverSpell",
+        "note": "Get a random Leyline"
+      }
+    },
+    "MEND_503": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "note": "Your Leylines trigger an additional time this game"
+      }
+    },
+    "MEND_505": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscoverSpell",
+            "note": "Get all 3 Manathirst cards"
+          },
+          {
+            "class": "DiscoverSpell",
+            "note": "Choose a Manathirst upgrade"
+          }
+        ]
+      }
+    },
+    "MEND_506": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "note": "Increase the effects of your Leylines by 1 this game"
+      }
+    },
+    "MEND_800": {
+      "DEATHRATTLE": {
+        "class": "AuraBuffSpell",
+        "target": "FRIENDLY_SILVER_HAND_RECRUITS",
+        "attack_bonus": 1,
+        "note": "Give your Silver Hand Recruits +1 Attack this game"
+      }
+    },
+    "RLK_060": {
+      "ON_PLAY": {
+        "class": "RepeatSpell",
+        "count": {
+          "provider": "resource",
+          "resource": "CORPSES",
+          "max": 5
+        },
+        "spell": {
+          "class": "SummonSpell",
+          "note": "2/2 Rush Reanimated Ghoul"
+        }
+      }
+    },
+    "RLK_061": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "SummonSpell",
+            "card_id": "RLK_061t",
+            "note": "Summon a 1/3 Risen Footman with Taunt using 1 Corpse"
+          }
+        }
+      ]
+    },
+    "RLK_503": {
+      "ON_PLAY": {
+        "class": "CorpseSpell",
+        "value": 1
+      }
+    },
+    "RLK_707": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "text_raw": "Give your minions +1 Attack. Spend 5 Corpses to give them +3 instead.",
+        "condition": {
+          "class": "ResourceCondition",
+          "params": {
+            "resource": "CORPSES",
+            "count": 5
+          }
+        },
+        "then": {
+          "class": "BuffSpell",
+          "target": "FRIENDLY_MINIONS",
+          "attack_bonus": 3
+        },
+        "else_spell": {
+          "class": "BuffSpell",
+          "target": "FRIENDLY_MINIONS",
+          "attack_bonus": 1
+        }
+      }
+    },
+    "RLK_720": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "DamageSpell",
+            "target": "ENEMY_LOWEST_HP",
+            "value": {
+              "provider": "self_attack"
+            },
+            "note": "Attack the lowest Health enemy"
+          }
+        }
+      ]
+    },
+    "RLK_958": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "TARGET",
+        "filter": {
+          "class": "RaceFilter",
+          "params": {
+            "race": "UNDEAD"
+          }
+        },
+        "attack_bonus": 2
+      }
+    },
+    "TIME_002": {
+      "ON_PLAY": {
+        "class": "RandomSpell",
+        "value": 2,
+        "target": "FRIENDLY_HAND",
+        "card_type": "SPELL",
+        "note": "随机获取2张职业法术牌"
+      }
+    },
+    "TIME_009": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "note": "将每种不同的光环从牌库置入战场"
+      }
+    },
+    "TIME_018": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscoverSpell",
+            "count": 2,
+            "note": "Random Holy spells"
+          },
+          {
+            "class": "HealSpell",
+            "target": "FRIENDLY_HERO",
+            "value": {
+              "provider": "generated_card_cost",
+              "note": "Heal equal to total cost of generated spells"
+            }
+          }
+        ]
+      }
+    },
+    "TIME_021": {
+      "OUTCAST": {
+        "class": "AddKeywordSpell",
+        "keyword": "IMMUNE",
+        "target": "FRIENDLY_HERO",
+        "duration": 1,
+        "note": "英雄免疫直到下个回合"
+      }
+    },
+    "TIME_023": {
+      "ON_PLAY": {
+        "class": "DrawSpell",
+        "count": 2,
+        "note": "Draw from bottom of deck"
+      }
+    },
+    "TIME_024": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "SELF",
+        "note": "下个回合开始时攻击力变为无穷大",
+        "trigger": "TURN_START"
+      }
+    },
+    "TIME_030": {
+      "ON_PLAY": {
+        "class": "TransformSpell",
+        "target": "RANDOM_FRIENDLY_HAND_MINION",
+        "note": "Split a random minion in hand into two halves"
+      }
+    },
+    "TIME_032": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DrawSpell",
+            "value": 2,
+            "target": "FRIENDLY_DECK",
+            "filter": "HIGHEST_COST",
+            "note": "抽取法力值最高的两张牌"
+          },
+          {
+            "class": "DrawSpell",
+            "value": 2,
+            "target": "ENEMY_HAND",
+            "filter": "LOWEST_COST",
+            "note": "对手抽取法力值最低的两张牌"
+          }
+        ],
+        "note": "你抽最高费用2张，对手抽你最低费用2张"
+      }
+    },
+    "TIME_033": {
+      "ON_PLAY": {
+        "class": "RandomSpell",
+        "value": 2,
+        "spell_school": "NATURE",
+        "note": "随机施放2个自然法术"
+      }
+    },
+    "TIME_035": {
+      "DEATHRATTLE": {
+        "class": "RandomSpell",
+        "value": 1,
+        "target": "FRIENDLY_HAND",
+        "keyword": "REWIND",
+        "note": "随机获取一张回溯牌"
+      }
+    },
+    "TIME_040": {
+      "DEATHRATTLE": {
+        "class": "RandomSpell",
+        "value": 1,
+        "target": "FRIENDLY_HAND",
+        "card_type": "MINION",
+        "cost": 5,
+        "note": "随机获取一张过去法力值消耗为5的随从牌"
+      }
+    },
+    "TIME_041": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "condition": "GUESS_CARD",
+        "spell": {
+          "class": "BuffSpell",
+          "target": "SELF",
+          "health_bonus": 4
+        },
+        "note": "猜中对手手牌则+4生命值"
+      }
+    },
+    "TIME_042": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscardSpell",
+            "target": "FRIENDLY_HAND"
+          },
+          {
+            "class": "AddToHandSpell",
+            "card": "INFINITE_BANANA"
+          }
+        ],
+        "note": "弃掉手牌，获取一张无穷香蕉"
+      }
+    },
+    "TIME_043": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "BuffSpell",
+            "target": "TARGET_FRIENDLY_MINION",
+            "attack_bonus": "SET_8",
+            "health_bonus": "SET_8"
+          },
+          {
+            "class": "AddKeywordSpell",
+            "keyword": "CANNOT_ATTACK_HERO",
+            "target": "TARGET_FRIENDLY_MINION",
+            "duration": 1
+          }
+        ],
+        "note": "将友方随从攻血变为8，本回合无法攻击英雄"
+      }
+    },
+    "TIME_048": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "SELF",
+        "health_bonus": {
+          "provider": "turns_played",
+          "base": 0,
+          "per_turn": 1
+        },
+        "note": "每进行一个回合+1生命值"
+      }
+    },
+    "TIME_051": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "SELF",
+        "attack_bonus": "DOUBLE",
+        "note": "攻击力翻倍"
+      }
+    },
+    "TIME_057": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "target": "ALL_HAND_CARDS",
+        "value": "REVERT",
+        "note": "双方手牌法力值消耗变回原消耗"
+      }
+    },
+    "TIME_061": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "note": "倒转牌库排序"
+      }
+    },
+    "TIME_209": {
+      "ON_PLAY": {
+        "class": "WeaponEquipSpell",
+        "weapon": "高山之王的战锤",
+        "note": "装备高山之王的战锤"
+      },
+      "DEATHRATTLE": {
+        "class": "AddToHandSpell",
+        "card": "高山之王的战锤",
+        "note": "将该战锤置入手牌"
+      }
+    },
+    "TIME_427": {
+      "ON_PLAY": {
+        "class": "DamageSpell",
+        "target": "ENEMY_MINION",
+        "value": {
+          "provider": "SELF_HEALTH",
+          "base": 0
+        },
+        "note": "造成等同于本随从生命值的伤害"
+      }
+    },
+    "TIME_429": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "FRIENDLY_HAND_MINIONS",
+        "attack_bonus": "MAX_OF_ATK_HP",
+        "health_bonus": "MAX_OF_ATK_HP",
+        "note": "手牌中随从牌攻血变为两者高值"
+      }
+    },
+    "TIME_431": {
+      "ON_PLAY": {
+        "class": "HealSpell",
+        "target": "TARGET_CHARACTER",
+        "value": {
+          "provider": "SELF_HEALTH",
+          "base": 0
+        },
+        "note": "恢复等同于本随从生命值的生命"
+      }
+    },
+    "TIME_442": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "TARGET_ENEMY_MINION",
+        "keyword": "DORMANT",
+        "duration": 10000,
+        "note": "囚禁敌方随从使其休眠10000回合"
+      },
+      "DEATHRATTLE": {
+        "class": "EnchantSpell",
+        "target": "IMPRISONED_MINION",
+        "note": "唤醒被囚禁的随从"
+      }
+    },
+    "TIME_449": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "text_raw": "Give your hero +4 Attack this turn. If your deck has no minions, give minions in hand +4 Attack.",
+        "condition": {
+          "class": "DeckCondition",
+          "params": {
+            "card_type": "MINION",
+            "comparison": "==",
+            "count": 0
+          }
+        },
+        "then": {
+          "class": "MetaSpell",
+          "spells": [
+            {
+              "class": "BuffSpell",
+              "target": "FRIENDLY_HERO",
+              "attack_bonus": 4,
+              "duration": 1
+            },
+            {
+              "class": "BuffSpell",
+              "target": "FRIENDLY_HAND_MINIONS",
+              "attack_bonus": 4
+            }
+          ]
+        },
+        "else_spell": {
+          "class": "BuffSpell",
+          "target": "FRIENDLY_HERO",
+          "attack_bonus": 4,
+          "duration": 1
+        }
+      }
+    },
+    "TIME_601": {
+      "ON_PLAY": {
+        "class": "DrawSpell",
+        "target": "FRIENDLY_HAND",
+        "value": 3,
+        "condition": "UNTIL_HAND_SIZE",
+        "note": "抽牌直到拥有三张手牌"
+      }
+    },
+    "TIME_613": {
+      "DEATHRATTLE": {
+        "class": "RandomSpell",
+        "value": 1,
+        "target": "FRIENDLY_HAND",
+        "card_type": "MINION",
+        "rarity": "LEGENDARY",
+        "cost_modifier": -1,
+        "note": "随机获取传说随从，法力值消耗减少1点"
+      }
+    },
+    "TIME_618": {
+      "ON_PLAY": {
+        "class": "AddKeywordSpell",
+        "keyword": "DEATHRATTLE",
+        "target": "FRIENDLY_HERO",
+        "note": "英雄获得亡语：消耗最多20份残骸复活英雄"
+      }
+    },
+    "TIME_619": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DrawSpell",
+            "card": "邦桑迪",
+            "note": "抽取邦桑迪"
+          },
+          {
+            "class": "DiscoverSpell",
+            "note": "选择使其获得一项恩泽"
+          }
+        ],
+        "note": "抽取邦桑迪（如果已死亡则复活），选择恩泽"
+      }
+    },
+    "TIME_705": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "target": "FRIENDLY_DECK_BOTTOM_5",
+        "value": 1,
+        "note": "牌库底五张牌法力值消耗变为1点"
+      }
+    },
+    "TIME_706": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "TransformSpell",
+            "target": "FRIENDLY_HAND",
+            "note": "手牌替换为起始手牌"
+          },
+          {
+            "class": "EnqueueSpell",
+            "trigger": "TURN_END",
+            "spell": {
+              "class": "TransformSpell",
+              "target": "FRIENDLY_HAND",
+              "note": "换回"
+            }
+          }
+        ],
+        "note": "手牌替换为起始手牌，回合结束换回"
+      }
+    },
+    "TIME_716": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "ENEMY_CARDS",
+        "duration": 1,
+        "note": "Opponent cards cost (1) more next turn"
+      }
+    },
+    "TIME_720": {
+      "ON_PLAY": {
+        "class": "BuffSpell",
+        "target": "SELF",
+        "health_bonus": "DOUBLE",
+        "note": "生命值翻倍"
+      }
+    },
+    "TIME_860": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "value": 2,
+        "card_type": "SECRET",
+        "note": "检视2个随机奥秘，选择一个为己施放，另一个为对手施放"
+      }
+    },
+    "TIME_861": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "RandomSpell",
+            "value": 3,
+            "target": "FRIENDLY_HAND",
+            "card_type": "SPELL",
+            "note": "随机获取3张来自过去的法术牌"
+          },
+          {
+            "class": "EnqueueSpell",
+            "trigger": "ALL_SPELLS_PLAYED",
+            "spell": {
+              "class": "AddToHandSpell",
+              "card": "时光循环者托奇",
+              "note": "用完全部法术后再获取一张托奇"
+            }
+          }
+        ],
+        "note": "获取3张过去法术，用完后获得托奇"
+      }
+    },
+    "TIME_872": {
+      "ON_PLAY": {
+        "class": "SummonSpell",
+        "target": "ENEMY_BOARD",
+        "value": "FULL_BOARD",
+        "cost": 1,
+        "note": "用法力值消耗为1的随从填满对手面板"
+      }
+    },
+    "TLC_100": {
+      "ON_PLAY": {
+        "class": "ConditionalSpell",
+        "text_raw": "Battlecry: If your deck started with 10 cards of different Costs, craft a custom location.",
+        "condition": {
+          "class": "DeckCostVarietyCondition",
+          "params": {
+            "unique_costs": 10
+          }
+        },
+        "then": {
+          "class": "DiscoverSpell",
+          "note": "Craft a custom location"
+        }
+      }
+    },
+    "TLC_106": {
+      "ON_PLAY": {
+        "class": "RepeatSpell",
+        "spell": {
+          "class": "RandomSpell",
+          "note": "Trigger deathrattle of random friendly minion that died this game"
+        },
+        "count": 5
+      }
+    },
+    "TLC_224": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_PLAY_CARD",
+          "filter": {
+            "class": "SpellSchoolFilter",
+            "params": {
+              "school": "FIRE"
+            }
+          },
+          "spell": {
+            "class": "BuffSpell",
+            "target": "SELF",
+            "attack_bonus": {
+              "provider": "played_card_cost"
+            },
+            "health_bonus": {
+              "provider": "played_card_cost"
+            }
+          }
+        }
+      ]
+    },
+    "TLC_244": {
+      "DEATHRATTLE": {
+        "class": "EnchantSpell",
+        "target": "RANDOM_ENEMY_HAND_MINION",
+        "cost_bonus": -2,
+        "note": "Reduce Cost of a random minion in opponent's hand by 2"
+      }
+    },
+    "TLC_250": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "ENEMY_HERO",
+        "duration": 2,
+        "note": "Enemy hero can't be healed until start of your next turn"
+      }
+    },
+    "TLC_251": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "note": "Your next Kindred effect triggers twice"
+      }
+    },
+    "TLC_255": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": "match_opponent",
+        "note": "Gain empty Mana Crystals until both players have equal mana"
+      }
+    },
+    "TLC_257": {
+      "ON_PLAY": {
+        "class": "AuraBuffSpell",
+        "target": "FRIENDLY_HAND_MINIONS",
+        "cost_override": 5,
+        "note": "All friendly minions in hand and deck cost 5 this game"
+      }
+    },
+    "TLC_364": {
+      "ON_PLAY": {
+        "class": "ManaSpell",
+        "value": -1,
+        "target": "FRIENDLY_HAND_NON_DECK_CARDS",
+        "note": "Non-deck cards in hand cost (1) less"
+      }
+    },
+    "TLC_427": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "note": "Get a 1-Cost Rock spell that deals 3 damage"
+      }
+    },
+    "TLC_428": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "note": "Your next Murloc costs (1) less; Kindred: and gains Divine Shield"
+      }
+    },
+    "TLC_430": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "RandomSpell",
+            "note": "Recast a random Holy spell you cast this turn (targets this if possible)"
+          }
+        }
+      ]
+    },
+    "TLC_438": {
+      "ON_PLAY": {
+        "class": "RandomSpell",
+        "note": "Cast a random spell from deck that costs 2 or less (targets self if possible)"
+      }
+    },
+    "TLC_444": {
+      "ON_PLAY": {
+        "class": "RepeatSpell",
+        "count": 3,
+        "spell": {
+          "class": "AddKeywordSpell",
+          "target": "TARGET",
+          "keyword": "RANDOM_BONUS_EFFECT"
+        },
+        "note": "Give a minion 3 random bonus effects"
+      }
+    },
+    "TLC_450": {
+      "ON_PLAY": {
+        "class": "EnchantSpell",
+        "target": "FRIENDLY_HERO",
+        "note": "Your next Temporary card costs (2) less"
+      }
+    },
+    "TLC_467": {
+      "DEATHRATTLE": {
+        "class": "RepeatSpell",
+        "spell": {
+          "class": "DiscoverSpell",
+          "note": "Get a random Fel spell that costs Health instead of Mana"
+        },
+        "count": 2
+      }
+    },
+    "TLC_469": {
+      "DEATHRATTLE": {
+        "class": "RepeatSpell",
+        "spell": {
+          "class": "RandomSpell",
+          "note": "Get a random Temporary 2-Cost minion"
+        },
+        "count": 2
+      }
+    },
+    "TLC_480": {
+      "TRIGGERS": [
+        {
+          "event": "TURN_END",
+          "spell": {
+            "class": "EnchantSpell",
+            "target": "ENEMY_MINIONS",
+            "attack_bonus": -99,
+            "health_bonus": -99,
+            "note": "Set all enemy minions Attack and Health to 1"
+          }
+        }
+      ]
+    },
+    "TLC_516": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "note": "Get a random weapon from another class"
+      },
+      "COMBO": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscoverSpell",
+            "note": "Get a random weapon from another class"
+          },
+          {
+            "class": "BuffSpell",
+            "target": "LAST_PLAYED",
+            "attack_bonus": 2,
+            "note": "Give the weapon +2 Attack"
+          }
+        ]
+      }
+    },
+    "TLC_521": {
+      "ON_PLAY": {
+        "class": "DiscoverSpell",
+        "note": "Look at 3 cards in enemy deck, pick one to put on top"
+      }
+    },
+    "TLC_522": {
+      "ON_PLAY": {
+        "class": "DamageSpell",
+        "target": "ENEMY_MINIONS",
+        "value": 1,
+        "note": "Cast Fan of Knives: 1 damage to all enemy minions"
+      },
+      "DEATHRATTLE": {
+        "class": "DamageSpell",
+        "target": "ENEMY_MINIONS",
+        "value": 1,
+        "note": "Cast Fan of Knives: 1 damage to all enemy minions"
+      }
+    },
+    "TLC_814": {
+      "DEATHRATTLE": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DiscoverSpell",
+            "note": "Get a random Holy spell"
+          },
+          {
+            "class": "DiscoverSpell",
+            "note": "Get a random Shadow spell"
+          }
+        ]
+      }
+    },
+    "TLC_820": {
+      "DEATHRATTLE": {
+        "class": "DiscoverSpell",
+        "note": "Get a 1-Cost Holy spell that gives +2 or -2 Health to a minion"
+      }
+    },
+    "TLC_835": {
+      "ON_PLAY": {
+        "class": "SetAttributeSpell",
+        "attribute": "CURRENT_HP",
+        "value": 40,
+        "target": "FRIENDLY_HERO"
+      }
+    },
+    "TLC_836": {
+      "TRIGGERS": [
+        {
+          "event": "AFTER_PLAY_CARD",
+          "filter": {
+            "class": "CardCostFilter",
+            "params": {
+              "cost": 1,
+              "card_type": "MINION"
+            }
+          },
+          "spell": {
+            "class": "BuffSpell",
+            "target": "PLAYED_MINION",
+            "attack_bonus": {
+              "provider": "played_card_attack"
+            },
+            "health_bonus": {
+              "provider": "played_card_health"
+            },
+            "note": "Double its stats"
+          }
+        },
+        {
+          "event": "AFTER_CAST_SPELL",
+          "filter": {
+            "class": "CardCostFilter",
+            "params": {
+              "cost": 1,
+              "card_type": "SPELL"
+            }
+          },
+          "spell": {
+            "class": "RepeatSpell",
+            "spell": {
+              "class": "NoOpSpell"
+            },
+            "count": 1,
+            "note": "Cast the 1-Cost spell again"
+          }
+        }
+      ]
+    },
+    "TLC_841": {
+      "ON_PLAY": {
+        "class": "TransformSpell",
+        "target": "FRIENDLY_HAND_MINIONS",
+        "note": "Put each minion in hand into 0/1 Jar tokens that cost 1"
+      }
+    },
+    "TLC_902": {
+      "ON_PLAY": {
+        "class": "RepeatSpell",
+        "count": 2,
+        "spell": {
+          "class": "DiscoverSpell",
+          "note": "1-cost Grisly Stingworm - Battlecry: deal 2 damage, summon 2/1 Rush Xeno Larva"
+        }
+      }
+    },
+    "TTN_851": {
+      "ON_PLAY": {
+        "class": "AuraBuffSpell",
+        "target": "ENEMY_SPELLS",
+        "duration": 2,
+        "note": "Opponent spells cost (1) more for 2 enemy turns"
+      }
+    }
+  }
+}
