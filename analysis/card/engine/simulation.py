@@ -1153,14 +1153,32 @@ def _apply_opponent_action(s: "GameState", action: Action) -> "GameState":
     return s
 
 
+def _opponent_card_effective_cost(card, opp_state: "GameState") -> int:
+    """Calculate effective cost for an opponent card, applying opp_cost_modifiers."""
+    base = getattr(card, 'cost', 0)
+    card_type = (getattr(card, 'card_type', '') or '').upper()
+    for mod_type, mod_val, mod_scope in opp_state.opponent.opp_cost_modifiers:
+        if mod_type == "opp_spell_increase" and card_type == "SPELL":
+            base += mod_val
+        elif mod_type == "opp_hero_power_increase":
+            pass  # handled separately
+    return max(0, base)
+
+
 def _opponent_play_card(s: "GameState", action: Action) -> "GameState":
-    """Opponent plays a card from their hand to their board."""
+    """Opponent plays a card from their hand to their board.
+
+    Incorporates:
+    - opp_cost_modifiers for spell cost increases
+    - Better spell effect diversity (AOE, heal, buff)
+    - Simple battlecry stat buff for minions
+    """
     card_idx = action.card_index
     if card_idx < 0 or card_idx >= len(s.opponent.hand):
         return s
     card = s.opponent.hand[card_idx]
 
-    eff_cost = getattr(card, 'cost', 0)
+    eff_cost = _opponent_card_effective_cost(card, s)
     if eff_cost > s.opponent.mana_available:
         return s
     s.opponent.mana_available -= eff_cost
@@ -1173,40 +1191,110 @@ def _opponent_play_card(s: "GameState", action: Action) -> "GameState":
         if len(s.opponent.board) < 7:
             new_minion = Minion.from_card(card)
             pos = min(action.position, len(s.opponent.board))
-            # Attacker can attack this turn (summoning sickness)
             new_minion.can_attack = False  # summoning sickness
+            new_minion.owner = "enemy"
+
+            # Simple battlecry shim: taunt/token-related buffs
+            mechanics = set(getattr(card, 'mechanics', []) or [])
+            if 'TAUNT' in mechanics:
+                new_minion.has_taunt = True
+            if 'RUSH' in mechanics or 'CHARGE' in mechanics:
+                new_minion.can_attack = True
+            if 'LIFESTEAL' in mechanics:
+                new_minion.has_lifesteal = True
+            if 'DIVINE_SHIELD' in mechanics:
+                new_minion.has_divine_shield = True
+
             s.opponent.board.insert(pos, new_minion)
     elif ctype == 'SPELL':
-        # Simplified spell: deal damage to our hero
-        # (real battlecry/spell execution is too complex for rollout)
-        try:
-            from analysis.card.data.card_effects import get_effects
-            eff = get_effects(card)
-            if eff and eff.damage > 0:
-                _apply_damage_to_hero(s.hero, eff.damage)
-        except (ImportError, AttributeError):
-            # Fallback: deal card's attack value as damage
-            atk = getattr(card, 'attack', 0)
-            if atk > 0:
-                _apply_damage_to_hero(s.hero, atk)
+        _opponent_play_spell(s, card)
     elif ctype == 'WEAPON':
-        # Equip weapon for opponent hero
         s.opponent.hero.weapon = Weapon(
             attack=getattr(card, 'attack', 0),
             health=getattr(card, 'health', 1),
             name=getattr(card, 'name', ''),
         )
     elif ctype == 'HERO':
-        # Opponent hero card — give armor
         armor = getattr(card, 'armor', 0) or 0
         if armor > 0:
             s.opponent.hero.armor += armor
+        hp = getattr(card, 'hp', 0) or 0
+        if hp > 0:
+            s.opponent.hero.hp = min(s.opponent.hero.max_hp, s.opponent.hero.hp + hp)
 
-    # Resolve deaths (opponent's board minions that died from spell effects)
+    # Resolve deaths
     s.opponent.board = [m for m in s.opponent.board if m.health > 0]
     s.board = [m for m in s.board if m.health > 0]
 
     return s
+
+
+def _opponent_play_spell(s: "GameState", card) -> None:
+    """Opponent spell effects with basic diversity (AOE, heal, buff, damage)."""
+    try:
+        from analysis.card.data.card_effects import get_effects
+        eff = get_effects(card)
+    except (ImportError, AttributeError):
+        eff = None
+
+    card_text = (getattr(card, 'text', '') or getattr(card, 'english_text', '') or '').lower()
+    mechanics = set(getattr(card, 'mechanics', []) or [])
+    school = (getattr(card, 'spell_school', '') or '').upper()
+
+    # 1. Direct damage (highest confidence)
+    damage = 0
+    if eff and eff.damage > 0:
+        damage = eff.damage
+    else:
+        damage = getattr(card, 'attack', 0)
+
+    if damage > 0:
+        # AOE detection: card_text containing "all" + "minions" or "enemy"
+        if ('all' in card_text and 'minion' in card_text) or 'deal' in card_text and 'all' in card_text:
+            # AOE: damage all our minions
+            for m in s.board:
+                m.health -= damage
+        elif ('aoe' in mechanics or school == 'FIRE' and damage >= 2):
+            # Fire school or AOE-tagged spells often have splash
+            for m in s.board:
+                m.health -= damage
+        else:
+            # Single target: damage our hero
+            _apply_damage_to_hero(s.hero, damage)
+
+    # 2. Healing (card text contains "heal" or "restore")
+    heal_amount = getattr(card, 'healing', 0) or 0
+    if heal_amount <= 0 and eff and hasattr(eff, 'heal') and eff.heal > 0:
+        heal_amount = eff.heal
+    if heal_amount <= 0 and ('heal' in card_text or 'restore' in card_text):
+        heal_amount = max(2, damage) if damage else 3
+    if heal_amount > 0:
+        s.opponent.hero.hp = min(s.opponent.hero.max_hp, s.opponent.hero.hp + heal_amount)
+
+    # 3. Armor gain
+    armor_val = getattr(card, 'armor', 0) or 0
+    if armor_val > 0:
+        s.opponent.hero.armor += armor_val
+
+    # 4. Buff own minions (if text contains "give" and "minion")
+    if 'give' in card_text and 'minion' in card_text:
+        buff_atk = 1 if 'attack' in card_text else 0
+        buff_hp = 1 if 'health' in card_text else 0
+        if buff_atk > 0 or buff_hp > 0:
+            for m in s.opponent.board:
+                m.attack += buff_atk
+                m.health += buff_hp
+                m.max_health += buff_hp
+
+    # 5. Draw detection
+    if 'draw' in card_text:
+        draw_count = 1
+        import re as _re
+        m = _re.search(r'draw\s+(\d+)', card_text)
+        if m:
+            draw_count = int(m.group(1))
+        for _ in range(draw_count):
+            s = _opponent_draw_card(s)
 
 
 def _opponent_attack(s: "GameState", action: Action) -> "GameState":
@@ -1265,10 +1353,28 @@ def _opponent_attack(s: "GameState", action: Action) -> "GameState":
     return s
 
 
-def _opponent_hero_power(s: "GameState") -> "GameState":
-    """Opponent uses their hero power: simplified stub.
+def _opponent_draw_card(state: "GameState") -> "GameState":
+    """Draw a card for the opponent during their turn simulation."""
+    if state.opponent.deck_remaining <= 0:
+        # Simplified fatigue: 1 damage per draw when deck is empty
+        state.opponent.hero.hp -= max(1, state.turn_number // 5)
+    else:
+        state.opponent.deck_remaining -= 1
+        if len(state.opponent.hand) < 10:
+            # Add unknown placeholder card
+            state.opponent.hand.append(Card(
+                dbf_id=-1,
+                name="Opponent Draw",
+                cost=0,
+                card_type="SPELL",
+            ))
+    return state
 
-    Deals 1 damage to our hero (generic hero power).
+
+def _opponent_hero_power(s: "GameState") -> "GameState":
+    """Opponent uses their hero power — class-specific effects.
+
+    Mirrors the friendly _IMBUE_HERO_POWERS table but applied against us.
     """
     hp_cost = s.opponent.hero.hero_power_cost
     if s.opponent.hero.hero_power_used:
@@ -1278,16 +1384,99 @@ def _opponent_hero_power(s: "GameState") -> "GameState":
 
     s.opponent.mana_available -= hp_cost
     s.opponent.hero.hero_power_used = True
-    _apply_damage_to_hero(s.hero, 1)
+
+    raw_class = getattr(s.opponent.hero, "hero_class", "")
+    if hasattr(raw_class, "name"):
+        hero_class = str(getattr(raw_class, "name")).upper()
+    else:
+        hero_class = (str(raw_class) if raw_class is not None else "").upper()
+
+    power_info = _IMBUE_HERO_POWERS.get(hero_class)
+    if power_info is None:
+        # Generic fallback: deal 1 damage to our hero
+        _apply_damage_to_hero(s.hero, 1)
+        return s
+
+    effect = power_info.get("effect", "")
+
+    if effect == "damage":
+        base = power_info.get("base_damage", 1)
+        total = base + getattr(s.opponent.hero, "imbue_level", 0)
+        # Opponent's damage effect targets US (our hero or our board)
+        if s.board:
+            s.board[0].health -= total
+        else:
+            _apply_damage_to_hero(s.hero, total)
+
+    elif effect == "heal":
+        base = power_info.get("base_heal", 2)
+        total = base + getattr(s.opponent.hero, "imbue_level", 0)
+        # Opponent heals THEIR hero
+        s.opponent.hero.hp = min(
+            s.opponent.hero.max_hp,
+            s.opponent.hero.hp + total,
+        )
+
+    elif effect == "armor":
+        base = power_info.get("base_armor", 2)
+        total = base + getattr(s.opponent.hero, "imbue_level", 0)
+        s.opponent.hero.armor += total
+
+    elif effect == "summon":
+        base_atk = power_info.get("base_attack", 1)
+        base_hp = power_info.get("base_health", 1)
+        imbue = getattr(s.opponent.hero, "imbue_level", 0)
+        atk = base_atk + imbue
+        hp_val = base_hp + imbue
+        if len(s.opponent.board) < 7:
+            s.opponent.board.append(Minion(
+                name="Opponent HP Minion",
+                attack=atk,
+                health=hp_val,
+                max_health=hp_val,
+                owner="enemy",
+                can_attack=True,  # already had the turn to play HP, can't attack same turn
+            ))
+
+    elif effect == "weapon":
+        base_atk = power_info.get("base_attack", 1)
+        base_dur = power_info.get("base_durability", 2)
+        imbue = getattr(s.opponent.hero, "imbue_level", 0)
+        atk = base_atk + imbue
+        s.opponent.hero.weapon = Weapon(
+            attack=atk,
+            health=base_dur,
+            name="Opponent HP Weapon",
+        )
+
+    elif effect == "random_totem":
+        if len(s.opponent.board) < 7:
+            s.opponent.board.append(Minion(
+                name="Opponent Totem",
+                attack=0,
+                health=1,
+                max_health=1,
+                owner="enemy",
+                can_attack=False,
+            ))
+
+    elif effect == "damage_self_draw":
+        dmg = power_info.get("base_damage", 2)
+        draw_count = power_info.get("base_draw", 1)
+        # Opponent takes self-damage and draws
+        s.opponent.hero.hp -= dmg
+        for _ in range(draw_count):
+            s = _opponent_draw_card(s)
+
     return s
 
 
 def _opponent_end_turn(s: "GameState", action: Action) -> "GameState":
     """End opponent turn, switch back to OUR turn.
 
-    Increments turn counter, draws a card for us, resets our mana
-    (accounting for overload recorded in _end_turn), and clears
-    opponent's mana.
+    Increments turn counter, draws a card for us, draws a card for opponent,
+    resets our mana (accounting for overload recorded in _end_turn), and
+    clears opponent's turn mana.
     """
     s.is_opponent_turn = False
 
@@ -1297,12 +1486,15 @@ def _opponent_end_turn(s: "GameState", action: Action) -> "GameState":
     # Draw a card for us
     s = _draw_card(s)
 
+    # Draw a card for opponent (simulates opponent drawing on their turn)
+    s = _opponent_draw_card(s)
+
     # Set up our mana for new turn
     if s.mana.max_mana < s.mana.max_mana_cap:
         s.mana.max_mana += 1
     s.mana.available = s.mana.max_mana - s.mana.overloaded
 
-    # Clear opponent's turn mana
+    # Clear opponent's turn mana and reset
     s.opponent.mana_available = 0
     s.opponent.mana_max = 0
 
@@ -1311,6 +1503,10 @@ def _opponent_end_turn(s: "GameState", action: Action) -> "GameState":
 
     # Unfreeze OUR frozen minions (opponent's turn is over)
     for m in s.board:
+        m.frozen_until_next_turn = False
+
+    # Unfreeze opponent minions (our turn just ended from their perspective)
+    for m in s.opponent.board:
         m.frozen_until_next_turn = False
 
     return s

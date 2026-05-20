@@ -842,6 +842,11 @@ def enumerate_opponent_legal(state: GameState) -> List[Action]:
     opp_mana = state.opponent.mana_available
     for idx, card in enumerate(state.opponent.hand):
         eff_cost = getattr(card, "cost", 0)
+        # Apply opponent cost modifiers (e.g. "opponent's next spell costs N more")
+        card_type = (getattr(card, "card_type", "") or "").upper()
+        for mod_type, mod_val, _ in state.opponent.opp_cost_modifiers:
+            if mod_type == "opp_spell_increase" and card_type == "SPELL":
+                eff_cost += mod_val
         if eff_cost > opp_mana:
             continue
 

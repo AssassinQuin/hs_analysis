@@ -9,6 +9,7 @@ works on any GameState without needing game-specific heuristics.
 """
 from __future__ import annotations
 
+import logging
 import math
 import random
 import time
@@ -24,6 +25,8 @@ from analysis.card.engine.rules import (
 from analysis.card.engine.simulation import apply_action
 from analysis.card.engine.state import GameState
 
+log = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -36,8 +39,12 @@ class MCTSConfig:
     iterations: int = 800
     rollout_depth: int = 15
     time_budget_ms: int = 1000          # used when called from real-time pipeline
-    use_heuristic_rollout: bool = False  # if True use heuristic policy
+    use_heuristic_rollout: bool = True   # if True use heuristic opponent policy
     verbose: bool = False
+
+    # multi-turn lookahead
+    max_turns_ahead: int = 1            # how many of OUR turns to expand in tree (1=current only)
+    max_opponent_tree_actions: int = 5   # limit opponent branch expansion in tree
 
     # pruning
     expand_all_children: bool = True     # expand all legal actions on first visit
@@ -66,6 +73,10 @@ class MCTSNode:
     untried_actions: List[Action] = field(default_factory=list)
     is_terminal: bool = False
     depth: int = 0
+
+    # Multi-turn tracking
+    turn_depth: int = 0       # how many of OUR turns deep (0 = current turn)
+    is_player_turn: bool = True  # True = our turn, False = opponent turn
 
     @property
     def q_value(self) -> float:
@@ -103,10 +114,21 @@ class MCTSNode:
         best = max(self.children, key=lambda c: c.visit_count)
         return (best.action, best)
 
+    def get_action_sequence(self) -> List[Action]:
+        """Return the action sequence from root to this node."""
+        actions: List[Action] = []
+        current: Optional[MCTSNode] = self
+        while current is not None and current.action is not None:
+            actions.append(current.action)
+            current = current.parent
+        actions.reverse()
+        return actions
+
     def __repr__(self) -> str:
         desc = self.action.describe()[:40] if self.action else "ROOT"
+        turn_label = "P" if self.is_player_turn else "O"
         return (f"Node({desc} | v={self.visit_count} "
-                f"q={self.q_value:.3f} ucb={self.ucb1 if self.visit_count else 'inf':.3f})")
+                f"q={self.q_value:.3f} td={self.turn_depth} {turn_label})")
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +146,7 @@ class MCTSResult:
     search_stats: Dict                     # timing, depth, etc.
     num_nodes: int = 0
     tree_depth: int = 0
+    best_sequence: List[Action] = field(default_factory=list)  # full action plan
 
     def top_actions(self, k: int = 5) -> List[Tuple[str, float, int]]:
         """Return top-k (description, q_value, visit_count) triples."""
@@ -179,7 +202,7 @@ def _default_reward(state: GameState) -> float:
 
 
 def _random_rollout(state: GameState, depth: int,
-                    reward_fn: Callable[[GameState], float]) -> float:
+                     reward_fn: Callable[[GameState], float]) -> float:
     """
     Simulate random play from `state` up to `depth` actions.
     Alternates between our turn and opponent turn based on
@@ -201,6 +224,133 @@ def _random_rollout(state: GameState, depth: int,
         if not legal:
             break
         action = random.choice(legal)
+        s = apply_action(s, action)
+    return reward_fn(s)
+
+
+def _score_opponent_action(state: GameState, action: Action) -> float:
+    """Heuristic score for an opponent action during rollout.
+
+    Higher score = more likely to be selected. Used for weighted
+    random sampling instead of pure uniform random.
+
+    Scoring logic:
+    - Favorable trades: killing our minions efficiently
+    - Go face when ahead (aggro) or no taunts
+    - Play cards: prefer lower-cost first (curve efficiency)
+    - Hero power: moderate priority
+    - End turn: lowest priority
+    """
+    if action.action_type == ActionKind.END_TURN:
+        return 0.1  # always possible but deprioritized
+
+    if action.action_type == ActionKind.HERO_POWER:
+        return 25.0  # moderate priority
+
+    if action.action_type == ActionKind.ATTACK:
+        src_idx = action.source_index
+        if src_idx < 0 or src_idx >= len(state.opponent.board):
+            return 5.0
+        source = state.opponent.board[src_idx]
+        score = 10.0
+
+        tgt_idx = action.target_index
+        if tgt_idx == 0:
+            # Attacking our hero — prefer when no taunts and strong board
+            our_taunts = [m for m in state.board if m.has_taunt]
+            if our_taunts:
+                # Can't go face through taunts — but this action shouldn't
+                # be legal if there are taunts, so score it low
+                score = 1.0
+            else:
+                # Prefer going face with strong attackers
+                score = 15.0 + source.attack
+        elif tgt_idx > 0:
+            # Attacking our minion — score by trade efficiency
+            our_idx = tgt_idx - 1
+            if our_idx < len(state.board):
+                target = state.board[our_idx]
+                # Favorable trade: source survives or kills for less cost
+                if target.attack >= source.health:
+                    score = 30.0  # unfavorable trade
+                elif source.attack >= target.health:
+                    if source.health > target.attack:
+                        score = 35.0  # clean favorable trade
+                    else:
+                        score = 25.0  # even trade
+                else:
+                    score = 20.0  # chip damage
+                # Prioritize killing divine shield targets
+                if target.has_divine_shield:
+                    score += 10.0
+                # Prioritize killing high-threat minions
+                score += target.attack * 0.5
+        return max(0.1, score)
+
+    if action.action_type in (ActionKind.PLAY, ActionKind.PLAY_WITH_TARGET):
+        card_idx = action.card_index
+        if card_idx < 0 or card_idx >= len(state.opponent.hand):
+            return 5.0
+        card = state.opponent.hand[card_idx]
+        cost = getattr(card, 'cost', 0)
+        card_type = (getattr(card, 'card_type', '') or '').upper()
+
+        # Prefer playing lower-cost cards first (better curve utilization)
+        score = 20.0 - cost * 0.5
+
+        if card_type == 'MINION':
+            # Bonus for board presence
+            atk = getattr(card, 'attack', 0)
+            hp = getattr(card, 'health', 0)
+            score += (atk + hp) * 0.3
+            # Bonus for rush/charge (immediate impact)
+            mechanics = set(getattr(card, 'mechanics', []) or [])
+            if 'RUSH' in mechanics or 'CHARGE' in mechanics:
+                score += 8.0
+        elif card_type == 'SPELL':
+            # Bonus for spell that might do something impactful
+            score += 5.0
+
+        return max(0.1, score)
+
+    return 10.0
+
+
+def _heuristic_rollout(state: GameState, depth: int,
+                       reward_fn: Callable[[GameState], float]) -> float:
+    """
+    Rollout with heuristic opponent policy.
+
+    Our actions: still random (exploration).
+    Opponent actions: weighted random based on _score_opponent_action.
+
+    This gives more realistic opponent behavior in rollouts while
+    maintaining the stochastic diversity that MCTS needs.
+    """
+    s = state
+    for _ in range(depth):
+        game_over = check_game_over(s)
+        if game_over is not None:
+            break
+
+        if s.is_opponent_turn:
+            legal = enumerate_opponent_legal(s)
+        else:
+            legal = enumerate_legal(s)
+        if not legal:
+            break
+
+        if s.is_opponent_turn and len(legal) > 1:
+            # Use weighted selection for opponent actions
+            scores = [_score_opponent_action(s, a) for a in legal]
+            total = sum(scores)
+            if total > 0:
+                weights = [sc / total for sc in scores]
+                action = random.choices(legal, weights=weights)[0]
+            else:
+                action = random.choice(legal)
+        else:
+            action = random.choice(legal)
         s = apply_action(s, action)
     return reward_fn(s)
 
@@ -227,12 +377,15 @@ class MCTSUCT:
         root.untried_actions = self._legal_actions(state)
         root.config = self.config  # stash config on root for child access
         root.is_terminal = check_game_over(state) is not None
+        root.turn_depth = 0
+        root.is_player_turn = not state.is_opponent_turn
 
         start_time = time.monotonic()
         deadline = start_time + self.config.time_budget_s
 
         iteration = 0
         max_depth_reached = 0
+        max_turn_depth = 0
         nodes_before = 0
 
         while iteration < self.config.iterations:
@@ -256,15 +409,28 @@ class MCTSUCT:
 
             if node.depth > max_depth_reached:
                 max_depth_reached = node.depth
+            if node.turn_depth > max_turn_depth:
+                max_turn_depth = node.turn_depth
             iteration += 1
 
         # Build result
         result = self._build_result(root, iteration, max_depth_reached,
                                     time.monotonic() - start_time)
 
+        # Extract best sequence: follow the greedy visit-count path from root
+        if result.best_node:
+            # Greedy path: at each level pick the most-visited child
+            seq: List[Action] = []
+            current = root
+            while current.children:
+                best_child = max(current.children, key=lambda c: c.visit_count)
+                seq.append(best_child.action)
+                current = best_child
+            result.best_sequence = seq
+
         if self.config.verbose:
             print(f"[MCTS] {iteration} iter | {result.num_nodes} nodes | "
-                  f"depth={max_depth_reached} | "
+                  f"depth={max_depth_reached} | turns={max_turn_depth} | "
                   f"best={result.best_action.describe() if result.best_action else 'N/A'}")
 
         return result
@@ -277,10 +443,57 @@ class MCTSUCT:
             time_budget_ms=time_budget_ms,
             rollout_depth=self.config.rollout_depth,
             use_heuristic_rollout=self.config.use_heuristic_rollout,
+            max_turns_ahead=self.config.max_turns_ahead,
+            max_opponent_tree_actions=self.config.max_opponent_tree_actions,
             verbose=self.config.verbose,
         )
         engine = MCTSUCT(cfg, self.reward_fn)
         return engine.search(state)
+
+    def predict_opponent_turn(self, state: GameState,
+                              time_budget_ms: int = 500,
+                              iterations: int = 200) -> Optional[Action]:
+        """Predict the opponent's most likely action by running MCTS
+        with the opponent as the root player.
+
+        Call this when state.is_opponent_turn is True to predict what
+        the opponent will do. The opponent's actions are explored in
+        the tree, and the most-visited action is returned.
+
+        The reward function is INVERTED (opponent's perspective) so
+        MCTS finds the action the opponent would think is best.
+
+        Returns None if no legal opponent actions exist.
+        """
+        if not state.is_opponent_turn:
+            log.debug("predict_opponent_turn called on player turn, skipping")
+            return None
+
+        legal = enumerate_opponent_legal(state)
+        if not legal:
+            return None
+
+        # Use opponent-perspective reward (negate our default reward)
+        def opponent_reward(s: GameState) -> float:
+            return -self.reward_fn(s)
+
+        cfg = MCTSConfig(
+            exploration_constant=self.config.exploration_constant,
+            iterations=iterations,
+            time_budget_ms=time_budget_ms,
+            rollout_depth=self.config.rollout_depth,
+            use_heuristic_rollout=self.config.use_heuristic_rollout,
+            max_turns_ahead=1,  # opponent only searches their current turn
+            max_opponent_tree_actions=10,
+            expand_all_children=True,
+            verbose=False,
+        )
+        engine = MCTSUCT(cfg, opponent_reward)
+        result = engine.search(state)
+
+        if result.best_action:
+            return result.best_action
+        return None
 
     # ------------------------------------------------------------------ steps
 
@@ -297,7 +510,14 @@ class MCTSUCT:
         return current
 
     def _expand(self, node: MCTSNode) -> Optional[MCTSNode]:
-        """Expand one untried action, returning the new child node."""
+        """Expand one untried action, returning the new child node.
+
+        Tracks turn_depth (number of OUR turns explored) and
+        is_player_turn. Expansion is limited by max_turns_ahead:
+        - We always expand the first turn (turn_depth=0)
+        - Opponent turn nodes are always expanded (they're "free" depth)
+        - Additional OUR turns are only expanded if turn_depth < max_turns_ahead
+        """
         if not node.untried_actions:
             return None
 
@@ -309,19 +529,46 @@ class MCTSUCT:
                 print(f"[MCTS] apply_action failed: {action} → {exc}")
             return node
 
+        child_turn_depth = node.turn_depth
+        child_is_player = not next_state.is_opponent_turn
+
+        # Increment turn_depth when we transition to our turn
+        # (opponent's END_TURN → our turn = next turn)
+        if child_is_player and not node.is_player_turn:
+            child_turn_depth = node.turn_depth + 1
+
         child = MCTSNode(
             state=next_state,
             action=action,
             parent=node,
             depth=node.depth + 1,
             is_terminal=check_game_over(next_state) is not None,
+            turn_depth=child_turn_depth,
+            is_player_turn=child_is_player,
         )
-        child.untried_actions = self._legal_actions(next_state)
+
+        # Only expand children if within turn budget
+        if child_is_player and child_turn_depth >= self.config.max_turns_ahead:
+            # Limit reached: don't expand further, rollout from here
+            child.untried_actions = []
+        else:
+            # Limit opponent branch expansion for performance
+            actions = self._legal_actions(next_state)
+            if not child_is_player and len(actions) > self.config.max_opponent_tree_actions:
+                # For opponent turns: keep END_TURN + hero power + top attacks
+                opp_actions = [a for a in actions if a.action_type == ActionKind.END_TURN]
+                opp_actions += [a for a in actions if a.action_type == ActionKind.HERO_POWER]
+                attack_actions = [a for a in actions if a.action_type == ActionKind.ATTACK]
+                opp_actions += attack_actions[:self.config.max_opponent_tree_actions - len(opp_actions)]
+                child.untried_actions = opp_actions
+            else:
+                child.untried_actions = actions
+
         child.config = self.config  # propagate config
 
         node.children.append(child)
 
-        if self.config.expand_all_children:
+        if self.config.expand_all_children and child.untried_actions:
             # expand all remaining children immediately
             for a in list(node.untried_actions):
                 node.untried_actions.remove(a)
@@ -329,14 +576,25 @@ class MCTSUCT:
                     s = apply_action(node.state, a)
                 except Exception:
                     continue
+
+                td = node.turn_depth
+                ipt = not s.is_opponent_turn
+                if ipt and not node.is_player_turn:
+                    td = node.turn_depth + 1
+
+                if ipt and td >= self.config.max_turns_ahead:
+                    continue  # skip beyond budget
+
                 c = MCTSNode(
                     state=s,
                     action=a,
                     parent=node,
                     depth=node.depth + 1,
                     is_terminal=check_game_over(s) is not None,
+                    turn_depth=td,
+                    is_player_turn=ipt,
                 )
-                c.untried_actions = self._legal_actions(s)
+                c.untried_actions = self._legal_actions(s) if not (ipt and td >= self.config.max_turns_ahead) else []
                 c.config = self.config
                 node.children.append(c)
 
@@ -344,8 +602,11 @@ class MCTSUCT:
 
     def _simulate(self, node: MCTSNode) -> float:
         """DEFAULT POLICY: run a rollout from node state, return reward."""
+        if self.config.use_heuristic_rollout:
+            return _heuristic_rollout(node.state, self.config.rollout_depth,
+                                       self.reward_fn)
         return _random_rollout(node.state, self.config.rollout_depth,
-                               self.reward_fn)
+                                self.reward_fn)
 
     def _backpropagate(self, node: MCTSNode, reward: float) -> None:
         """Backpropagate reward up the tree to the root."""
@@ -408,6 +669,7 @@ class MCTSUCT:
                 "num_nodes": num_nodes,
                 "config_exploration": self.config.exploration_constant,
                 "config_iterations": self.config.iterations,
+                "max_turns_ahead": self.config.max_turns_ahead,
             },
             num_nodes=num_nodes,
             tree_depth=max_depth,
