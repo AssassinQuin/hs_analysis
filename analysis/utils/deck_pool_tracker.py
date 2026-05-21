@@ -47,18 +47,26 @@ class DeckPoolTracker:
         hand = tracker.fill_unknown_hand(["CATA_154"], 7)
     """
 
-    def __init__(self, player_class: str = "ROGUE"):
+    def __init__(self, player_class: str = "ROGUE",
+                 initial_pool: Optional[Set[str]] = None):
         from analysis.card.data.card_data import get_db
 
         self.db = get_db()
         self.player_class = player_class
 
-        # 初始可能池：标准该职业 + 中立可收集卡牌
-        self._pool: Set[str] = self._build_initial_pool()
-        logger.info(
-            "DeckPoolTracker[%s]: 初始池 %d 张",
-            player_class, len(self._pool),
-        )
+        # 初始可能池：优先用传入选定池（Bayesian 预选卡组），否则标准该职业+中立
+        if initial_pool is not None:
+            self._pool: Set[str] = set(initial_pool)
+            logger.info(
+                "DeckPoolTracker[%s]: 使用预选卡组池 %d 张",
+                player_class, len(self._pool),
+            )
+        else:
+            self._pool: Set[str] = self._build_initial_pool()
+            logger.info(
+                "DeckPoolTracker[%s]: 初始池 %d 张",
+                player_class, len(self._pool),
+            )
 
         # 追踪集合
         self._confirmed_hand: Dict[int, str] = {}

@@ -118,6 +118,35 @@ def parse_raw_lines_by_turn(lines: List[str]) -> Dict[int, List[str]]:
 # Phase 2: MCTS 诊断
 # ═══════════════════════════════════════════════════════════
 
+def _get_bayesian_top_deck_cards(monitor) -> Optional[list]:
+    """从 Bayesian 模型获取 top-1 卡组的 card_id 列表。"""
+    try:
+        bayesian = getattr(monitor.global_tracker, '_bayesian_model', None)
+        if bayesian is None:
+            return None
+        top = bayesian.get_top_decks(1)
+        if not top:
+            return None
+        aid, name, prob = top[0]
+        deck = bayesian._find_deck(aid)
+        if not deck:
+            return None
+        card_ids = []
+        for dbf in deck["cards"]:
+            info = bayesian.cards_by_dbf.get(dbf)
+            if info and info.get("cardId"):
+                card_ids.append(info["cardId"])
+        if card_ids:
+            logger.info(
+                "Bayesian top-1 deck [%s] (prob=%.0f%%): %d 张卡牌作为采样池",
+                name, prob * 100, len(card_ids),
+            )
+        return card_ids
+    except Exception as e:
+        logger.debug("Bayesian top deck lookup failed: %s", e)
+        return None
+
+
 def run_mcts_diagnostic(
     state_dict: Dict,
     game_state,
@@ -559,7 +588,15 @@ def analyze_power_log(
             player_class_en = result.game_info.get("player_class_en", "")
             if player_class_en:
                 from analysis.utils.deck_pool_tracker import DeckPoolTracker
-                pool_tracker = DeckPoolTracker(player_class_en)
+
+                # 从 Bayesian 模型获取 top-1 卡组作为初始采样池
+                bayesian_pool = _get_bayesian_top_deck_cards(monitor)
+                if bayesian_pool:
+                    pool_tracker = DeckPoolTracker(
+                        player_class_en, initial_pool=set(bayesian_pool))
+                else:
+                    pool_tracker = DeckPoolTracker(player_class_en)
+
                 # 填入所有已知卡牌数据
                 # a) 玩家已打出的牌
                 for play in final_state.get("player_cards_played_history", []):
