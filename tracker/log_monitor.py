@@ -26,6 +26,41 @@ from typing import Optional, Callable, Dict, List
 
 from dataclasses import dataclass
 
+
+# ── 抑制 hslog 第三方库的已知噪音 warning ─────────────────────
+# hslog.parser.ParsingState.block_end() 使用 logging.warning()（root logger），
+# 在 Power.log 文件切分边界或对局末尾会产生 "Orphaned BLOCK_END" 等 warning。
+# 这些是 hslog 解析器对日志格式非标准的容错，不影响游戏状态跟踪。
+_hslog_filter_installed = False
+
+
+def _install_hslog_noise_filter():
+    global _hslog_filter_installed
+    if _hslog_filter_installed:
+        return
+    _hslog_filter_installed = True
+
+    _HSLOG_NOISE_PATTERNS = (
+        "Orphaned BLOCK_END",
+        "Orphaned SUB_SPELL_END",
+        "Broken mulligan nesting",
+        "Broken option nesting",
+        "Metadata Info outside of META_DATA",
+        "SubSpell Source outside of SUB_SPELL",
+        "SubSpell Target outside of SUB_SPELL",
+        "Could not correctly parse",
+    )
+
+    class _HSLogNoiseFilter(logging.Filter):
+        def filter(self, record):
+            msg = record.getMessage()
+            return not any(p in msg for p in _HSLOG_NOISE_PATTERNS)
+
+    logging.getLogger().addFilter(_HSLogNoiseFilter())
+
+
+_install_hslog_noise_filter()
+
 from analysis.watcher.game_tracker import GameTracker, EntityCache
 from analysis.watcher.global_tracker import GlobalTracker
 from analysis.card.constants.hs_enums import (
@@ -275,9 +310,9 @@ class CoreLogMonitor:
         self._re_player_name = re.compile(r"PlayerID=(\d+),\s*PlayerName=(.+)")
 
         # 已知我方玩家名称（跨游戏持久化）
-        # 一旦通过 AI_TAG / BattleTag 等正确识别我方名称后，后续游戏直接用此名称匹配
-        # 避免 PvP 双方都有 BattleTag 时默认 my_idx=0 导致 50% 概率反转
-        self._our_known_name: str = ""
+        # 从 cfg/live.cfg [identification] our_player_name 预置，
+        # 避免首局因 fallback 启发式错误导致全局反转。
+        self._our_known_name: str = self._load_our_player_name_from_config()
 
         # 游戏生命周期状态（替代 _game_started_emitted 标志对）
         self._game_lifecycle = GameLifecycle.IDLE
@@ -296,6 +331,25 @@ class CoreLogMonitor:
     @log_path.setter
     def log_path(self, value: Optional[str | Path]):
         self._log_path = Path(value) if value else None
+
+    @staticmethod
+    def _load_our_player_name_from_config() -> str:
+        """从 cfg/live.cfg [identification] our_player_name 加载我方玩家名称。
+
+        通过 load_live_config() 统一配置加载路径，避免重复解析。
+        预置我方 BattleTag 后，_detect_my_idx 在首局即能正确识别我方玩家，
+        避免 fallback 启发式误判导致 PvP 双 BattleTag 场景下 50% 反转概率。
+        """
+        try:
+            from analysis.config import load_live_config
+            cfg = load_live_config()
+            name = cfg.get("our_player_name", "")
+            if name and "#" in name:
+                logger.info("从配置加载我方玩家名称: %s", name)
+                return name
+        except Exception:
+            pass
+        return ""
 
     def auto_detect_log_path(self) -> bool:
         """自动检测 Power.log 路径。"""
@@ -1060,6 +1114,37 @@ class CoreLogMonitor:
 
     # ── DeckPoolTracker 辅助 ──────────────────────────────────
 
+    def _get_bayesian_top_deck_cards(self) -> Optional[List[str]]:
+        """从 Bayesian 模型获取 top-1 卡组的 card_id 列表。
+        
+        每回合调用，确认当前最相似卡组，用其卡牌作采样池。
+        """
+        try:
+            bayesian = getattr(self.global_tracker, '_bayesian_model', None)
+            if bayesian is None:
+                return None
+            top = bayesian.get_top_decks(1)
+            if not top:
+                return None
+            aid, name, prob = top[0]
+            deck = bayesian._find_deck(aid)
+            if not deck:
+                return None
+            card_ids = []
+            for dbf in deck["cards"]:
+                info = bayesian.cards_by_dbf.get(dbf)
+                if info and info.get("cardId"):
+                    card_ids.append(info["cardId"])
+            if card_ids:
+                logger.info(
+                    "Bayesian top-1 deck [%s] (prob=%.0f%%): %d 张卡牌作为采样池",
+                    name, prob * 100, len(card_ids),
+                )
+            return card_ids
+        except Exception as e:
+            logger.debug("Bayesian top deck lookup failed: %s", e)
+            return None
+
     def _build_sampled_hand_cards(
         self, known_hand_ids: List[str], hand_count: int
     ) -> List[str]:
@@ -1084,7 +1169,13 @@ class CoreLogMonitor:
         try:
             from analysis.utils.deck_pool_tracker import DeckPoolTracker
 
-            tracker = DeckPoolTracker(player_class_en)
+            # 从 Bayesian 模型获取 top-1 卡组作为初始采样池
+            bayesian_pool = self._get_bayesian_top_deck_cards()
+            if bayesian_pool:
+                tracker = DeckPoolTracker(player_class_en,
+                                          initial_pool=set(bayesian_pool))
+            else:
+                tracker = DeckPoolTracker(player_class_en)
 
             # 1) 我方已打出的卡牌
             for cid in gt_state.player_cards_played_history:

@@ -107,13 +107,16 @@ def load_live_config(cfg_path: str | Path | None = None) -> dict:
         except Exception:
             pass
 
+    our_player_name = ""
     if cfg_loaded:
         LATEST_GAME_ONLY = cp.getboolean("watcher", "latest_game_only", fallback=False)
+        our_player_name = cp.get("identification", "our_player_name", fallback="").strip()
 
     return {
         "config_parser": cp,
         "cfg_loaded": cfg_loaded,
         "latest_game_only": LATEST_GAME_ONLY,
+        "our_player_name": our_player_name,
     }
 
 
