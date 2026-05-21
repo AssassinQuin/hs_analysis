@@ -188,6 +188,12 @@ class CompleteGameState:
     multi_deck_predictions: List[Dict] = field(default_factory=list)
     conditional_evidence: List[Dict] = field(default_factory=list)
 
+    # 衍生牌详细记录（含来源、回合、entity_id等）
+    generated_card_records: List[Dict] = field(default_factory=list)
+
+    # 逐位手牌预测
+    position_predictions: List[Dict] = field(default_factory=list)
+
     # MCTS状态
     mcts_applied: bool = False                    # Whether MCTS simulation was used
     mcts_top_predictions: list = field(default_factory=list)  # Top MCTS predictions [(card_id, prob)]
@@ -330,6 +336,16 @@ class GameStateManager:
                 }
                 for name, prob, cards in multi
             ]
+
+            # 衍生牌详细记录
+            gs.generated_card_records = list(
+                getattr(prediction_result, 'generated_card_records', [])
+            )
+
+            # 逐位手牌预测
+            gs.position_predictions = list(
+                getattr(prediction_result, 'position_predictions', [])
+            )
 
     def _update_opponent(self, gs: CompleteGameState, state_dict: dict,
                             prediction_result=None):

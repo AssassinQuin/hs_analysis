@@ -1242,6 +1242,25 @@ class CoreLogMonitor:
         secret_report = gt.get_secret_report()
         known_hand = gt.get_opp_known_hand()
         card_breakdown = gt.get_opp_card_breakdown()
+        opp_ctrl = gt.opp_controller
+
+        # ── 从 entity_cache 提取对手手牌实体的 ZONE_POSITION ──
+        # 用于逐位手牌预测：ZONE_POSITION 是 TAG_CHANGE 事件设置的，
+        # GlobalTracker 不直接处理此标签，改为每帧从 entity_cache 快照读取。
+        opp_hand_positions: Dict[int, int] = {}
+        try:
+            from hearthstone.enums import GameTag, Zone
+            ec = self.game_tracker.entity_cache if hasattr(self.game_tracker, 'entity_cache') else {}
+            for eid, edata in ec.items():
+                tags = edata.get("tags", {})
+                zone_str = tags.get(GameTag.ZONE, "")
+                ctrl = tags.get(GameTag.CONTROLLER, -1)
+                if zone_str == "HAND" and ctrl == opp_ctrl:
+                    pos = tags.get(GameTag.ZONE_POSITION, 0)
+                    if pos > 0:
+                        opp_hand_positions[eid] = pos
+        except Exception:
+            pass
 
         player_hand_cards = self._extract_player_hand_cards()
         sampled_hand_cards = self._build_sampled_hand_cards(
@@ -1290,6 +1309,7 @@ class CoreLogMonitor:
             "player_board_minions": list(gt_state.player_board_minions),
             "opp_board_minions": list(gt_state.opp_board_minions),
             "opp_shuffled_into_deck": list(gt_state.opp_shuffled_into_deck),
+            "opp_hand_positions": opp_hand_positions,
             "is_first_player": gt_state.is_first_player,
             "coin_used": gt_state.coin_used,
             "opp_hand_hold": dict(gt_state.opp_hand_hold_since),
@@ -1299,7 +1319,7 @@ class CoreLogMonitor:
             "available_mana": min(self.game_tracker.get_current_turn(), 10),
             # ── 对手本回合打出的卡牌（用于计算已花费法力） ──
             "opp_cards_played_this_turn": list(gt_state.cards_played_this_turn_opp),
-            "known_hand": [(eid, cid) for eid, cid in known_hand],
+            "known_hand": [(eid, cid, opp_hand_positions.get(eid, 0)) for eid, cid in known_hand],
             "known_cards": [
                 {
                     "card_id": kc.card_id,
@@ -1315,6 +1335,7 @@ class CoreLogMonitor:
                 for kc in self._dedup_known_cards(gt_state.opp_known_cards)
             ],
             "generated_cards": list(gt_state.opp_generated_seen),
+            "generated_card_records": list(gt_state.opp_generated_card_records),
             "graveyard": [
                 {
                     "card_id": cid,

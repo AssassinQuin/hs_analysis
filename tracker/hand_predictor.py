@@ -83,6 +83,11 @@ class PredictionResult:
     multi_deck_predictions: List[Tuple[str, float, List[DeckPrediction]]] = field(default_factory=list)
     mcts_applied: bool = False                    # Whether MCTS simulation was used
     mcts_top_predictions: List[Tuple[str, float]] = field(default_factory=list)  # Top MCTS predictions
+    generated_card_records: List[Dict] = field(default_factory=list)
+    """衍生牌详细记录列表，每项含 card_id, source_card_id, source_type, turn_created, entity_id, from_position"""
+
+    position_predictions: List[Dict] = field(default_factory=list)
+    """逐位手牌预测，每项含 position, card_id, name, probability, source, cost, entity_id, alternatives"""
 
 
 # ── 条件效果规则 ──────────────────────────────────────────────
@@ -286,6 +291,7 @@ class HandPredictor:
                 }
                 for src, dcs in derived_sources.items()
             ]
+            result.generated_card_records = state_dict.get("generated_card_records", [])
 
         # ── 卡组预测 ──
         result.deck_predictions = self._predict_deck(state_dict, bayesian)
@@ -329,6 +335,40 @@ class HandPredictor:
         self._filter_generated_and_wrong_class(
             result, state_dict.get("opp_class_en", "") or "",
         )
+
+        # ── 逐位手牌预测 ──
+        try:
+            known_hand_with_pos = state_dict.get("known_hand", [])
+            opp_hand_positions = state_dict.get("opp_hand_positions", {})
+            opp_hand_hold = state_dict.get("opp_hand_hold", {})
+            current_turn = state_dict.get("turn", 0)
+            pos_preds = self._probability_engine.compute_position_predictions(
+                hand_size=opp_hand_count,
+                deck_remaining=opp_deck_count,
+                opp_class=opp_class,
+                known_hand_with_pos=known_hand_with_pos,
+                opp_hand_positions=opp_hand_positions,
+                opp_hand_hold=opp_hand_hold,
+                current_turn=current_turn,
+            )
+            result.position_predictions = [
+                {
+                    "position": pp.position,
+                    "card_id": pp.card_id,
+                    "name": pp.name,
+                    "probability": pp.probability,
+                    "source": pp.source,
+                    "cost": pp.cost,
+                    "entity_id": pp.entity_id,
+                    "alternatives": [
+                        {"card_id": alt[0], "probability": alt[1]}
+                        for alt in pp.alternatives
+                    ],
+                }
+                for pp in pos_preds
+            ]
+        except Exception as e:
+            logger.warning("逐位手牌预测失败: %s", e)
 
         # ── 排序 ──
         result.hand_predictions.sort(

@@ -271,6 +271,13 @@ class GlobalGameState:
     active_enchantments: Dict[int, str] = field(default_factory=dict)
     """entity_id -> card_id of enchantment"""
 
+        # ---- 衍生牌详细追踪 ----
+    opp_generated_card_records: List[Dict] = field(default_factory=list)
+    """对手衍生牌的详细记录，每条含 card_id, source_card_id, source_type, turn_created, entity_id, from_position"""
+
+    opp_hand_positions: Dict[int, int] = field(default_factory=dict)
+    """对手手牌 entity_id → zone_position (1-based)，用于逐位手牌预测"""
+
     # ---- 洗入牌库追踪 ----
     opp_shuffled_into_deck: List[str] = field(default_factory=list)
     """对手洗入牌库的已知 card_id（如爆牌鱼、污染等效果）"""

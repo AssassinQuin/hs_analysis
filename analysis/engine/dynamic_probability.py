@@ -49,6 +49,27 @@ from analysis.engine.world_model import (
 logger = logging.getLogger(__name__)
 
 
+# ── 逐位手牌预测数据结构 ──────────────────────────────────────
+
+
+@dataclass
+class PositionPrediction:
+    """逐位手牌预测结果。
+
+    对手手牌中某一位（zone_position）的卡牌预测。
+    位置从 1 开始编号（最左边 = 1）。
+    """
+    position: int             # zone_position (1-based)
+    entity_id: int = 0        # 对应实体 ID (0=未知)
+    card_id: str = ""         # 确认的 card_id（source=revealed 时非空）
+    name: str = ""            # 卡牌名称
+    probability: float = 0.0  # 此卡牌在该位置的概率
+    source: str = "unknown"   # "revealed" | "predicted" | "unknown"
+    cost: int = 0             # 卡牌费用
+    alternatives: List[Tuple[str, float]] = field(default_factory=list)
+    """备选卡牌 (card_id, probability) 列表，source!=revealed 时使用"""
+
+
 # ── 超几何分布工具函数 ──────────────────────────────────────────
 
 def _comb(n: int, k: int) -> int:
@@ -518,10 +539,18 @@ class DynamicProbabilityEngine:
         if not top_decks:
             return []
 
-        # 从 top-N 卡组中按后验概率加权收集候选
-        candidates_set = set()
-        max_decks = min(5, len(top_decks))  # 最多取 top-5 卡组
+        # ── deck_codes 独占约束 ──
+        top_deck_sources = self._bayesian_state.get("top_deck_sources", {})
+        is_deck_codes_exclusive = False
+        if top_decks and top_decks[0][0] in top_deck_sources:
+            is_deck_codes_exclusive = top_deck_sources[top_decks[0][0]] == "deck_codes"
+        if is_deck_codes_exclusive:
+            # 独占：仅从 top-1 卡组收集候选
+            max_decks = 1
+        else:
+            max_decks = min(5, len(top_decks))  # 最多取 top-5 卡组
 
+        candidates_set = set()
         for deck_idx in range(max_decks):
             deck_id, deck_name, deck_prob = top_decks[deck_idx]
 
@@ -715,12 +744,23 @@ class DynamicProbabilityEngine:
         # 只取 top-3 卡组（用户需求：最多适配3套）
         top_decks = top_decks[:3]
 
+        # ── deck_codes 独占约束 ──
+        # 当 top-1 卡组来自 deck_codes.txt（完整已知卡组），
+        # 独占使用其卡牌列表，不与其他卡组交叉混合。
+        top_deck_sources = self._bayesian_state.get("top_deck_sources", {})
+        is_deck_codes_exclusive = False
+        if top_decks and top_decks[0][0] in top_deck_sources:
+            is_deck_codes_exclusive = top_deck_sources[top_decks[0][0]] == "deck_codes"
+        if is_deck_codes_exclusive:
+            # 仅使用 top-1 卡组，不跨卡组聚合
+            top_decks = top_decks[:1]
+
         card_weighted_probs: Dict[str, float] = {}
         card_info: Dict[str, Dict] = {}
         # 记录每张牌在哪些 top-3 卡组中出现过（用于区分度）
         card_deck_membership: Dict[str, List[Tuple[int, float]]] = {}  # card_id -> [(deck_idx, deck_prob)]
 
-        # 收集所有 top-3 卡组的卡牌集合（dbfId 维度）
+        # 收集所有 top-N 卡组的卡牌集合（dbfId 维度）
         all_deck_dbf_sets: List[set] = []
         for deck_id, deck_name, deck_prob in top_decks:
             deck_cards = self._get_deck_cards(deck_id)
@@ -1411,6 +1451,157 @@ class DynamicProbabilityEngine:
             evidence: 世界模型证据
         """
         self._last_world_evidence = evidence
+
+    def compute_position_predictions(
+        self,
+        hand_size: int,
+        deck_remaining: int,
+        opp_class: str = "",
+        known_hand_with_pos: Optional[List[Tuple[int, str, int]]] = None,
+        opp_hand_positions: Optional[Dict[int, int]] = None,
+        opp_hand_hold: Optional[Dict[int, int]] = None,
+        current_turn: int = 0,
+    ) -> List[PositionPrediction]:
+        """逐位手牌预测。
+
+        对手手牌按 zone_position (1-based) 逐位预测：
+        - source=revealed: 该位已揭示 → 100% 确认
+        - source=predicted: 持有回合长 → 用 cost_bias 缩小候选
+        - source=unknown: 无额外信息 → 用 flat 概率结果填充
+
+        Args:
+            hand_size: 对手手牌数
+            deck_remaining: 对手牌库剩余
+            opp_class: 对手职业
+            known_hand_with_pos: [(entity_id, card_id, zone_position), ...]
+            opp_hand_positions: entity_id → zone_position
+            opp_hand_hold: entity_id → turn_first_seen
+            current_turn: 当前回合
+
+        Returns:
+            List[PositionPrediction]: 逐位预测，按 position 排序
+        """
+        if hand_size <= 0:
+            return []
+
+        known_hand_with_pos = known_hand_with_pos or []
+        opp_hand_positions = opp_hand_positions or {}
+        opp_hand_hold = opp_hand_hold or {}
+
+        # 1. 先计算 flat 概率作为后备
+        report = self.compute_probabilities(hand_size, deck_remaining, opp_class)
+        flat_probs: Dict[str, float] = {}
+        flat_cards: Dict[str, Dict] = {}
+        for cp in report.card_probabilities:
+            flat_probs[cp.card_id] = cp.probability
+            flat_cards[cp.card_id] = {
+                "name": cp.name, "cost": cp.cost,
+                "source": cp.source, "card_type": cp.card_type,
+            }
+
+        # 2. 按 position 构建预测
+        predictions: List[PositionPrediction] = []
+
+        # 倒排：entity_id → card_id（从 known_hand_with_pos）
+        eid_to_card: Dict[int, str] = {}
+        eid_to_pos: Dict[int, int] = {}
+        pos_to_eid: Dict[int, int] = {}
+        pos_to_card: Dict[int, str] = {}
+        for eid, cid, pos in known_hand_with_pos:
+            if eid and cid:
+                eid_to_card[eid] = cid
+            if pos > 0:
+                eid_to_pos[eid] = pos
+                pos_to_eid[pos] = eid
+                if cid:
+                    pos_to_card[pos] = cid
+
+        # 对每个位置 1..hand_size
+        for pos in range(1, hand_size + 1):
+            eid = pos_to_eid.get(pos, 0)
+            card_id = pos_to_card.get(pos, "") or eid_to_card.get(eid, "")
+
+            if card_id and flat_cards.get(card_id, {}).get("source") == "revealed":
+                # 已揭示 → 100% 确认
+                info = flat_cards.get(card_id, {})
+                predictions.append(PositionPrediction(
+                    position=pos, entity_id=eid, card_id=card_id,
+                    name=info.get("name", card_id), probability=1.0,
+                    source="revealed", cost=info.get("cost", 0),
+                ))
+            else:
+                # 未揭示 → 用 flat 概率 + 持有推断
+                hold_turn = opp_hand_hold.get(eid, 0)
+                base_prob = flat_probs.get(card_id, 0.0) if card_id else 0.0
+
+                # 持有回合推断：长期未打 → 高费偏好
+                if hold_turn > 0 and current_turn > hold_turn:
+                    duration = current_turn - hold_turn
+                    if duration >= 2 and self._card_db:
+                        # 用费用偏差修正概率
+                        from analysis.utils.bayesian_opponent import BayesianOpponentModel
+                        bias_model = BayesianOpponentModel.__new__(BayesianOpponentModel)
+                        bias_model._hand_hold_since = opp_hand_hold
+                        # 用 get_cost_bias_for_hand 的简化版本
+                        bias_strength = min(1.0, duration / 5.0)
+                        cost_bias = {}
+                        for c in range(0, 11):
+                            if c <= 2:
+                                cost_bias[c] = 1.0 - 0.3 * bias_strength
+                            elif c <= 4:
+                                cost_bias[c] = 1.0
+                            elif c <= 6:
+                                cost_bias[c] = 1.0 + 0.5 * bias_strength
+                            else:
+                                cost_bias[c] = 1.0 + 1.0 * bias_strength
+
+                        # 对 flat 候选按费用加权
+                        weighted_candidates = []
+                        for cid, prob in flat_probs.items():
+                            info = flat_cards.get(cid, {})
+                            cost = info.get("cost", 5)
+                            bias = cost_bias.get(cost, 1.0)
+                            weighted_prob = prob * bias
+                            if weighted_prob > 0.01:
+                                weighted_candidates.append((cid, weighted_prob, cost))
+
+                        weighted_candidates.sort(key=lambda x: -x[1])
+
+                        if weighted_candidates:
+                            best_cid, best_prob, best_cost = weighted_candidates[0]
+                            alternatives = [(cid, p) for cid, p, _ in weighted_candidates[1:4]]
+                            predictions.append(PositionPrediction(
+                                position=pos, entity_id=eid,
+                                card_id=best_cid, name=flat_cards.get(best_cid, {}).get("name", best_cid),
+                                probability=min(1.0, best_prob),
+                                source="predicted", cost=best_cost,
+                                alternatives=alternatives,
+                            ))
+                            continue
+
+                # 默认：用 flat 概率中该位置对应的已知卡牌
+                if card_id and base_prob > 0:
+                    info = flat_cards.get(card_id, {})
+                    predictions.append(PositionPrediction(
+                        position=pos, entity_id=eid,
+                        card_id=card_id, name=info.get("name", card_id),
+                        probability=base_prob,
+                        source="predicted", cost=info.get("cost", 0),
+                    ))
+                else:
+                    # 完全未知位置 → 用 top-1 flat 卡牌填充
+                    top_cards = sorted(flat_probs.items(), key=lambda x: -x[1])
+                    best = top_cards[0] if top_cards else ("", 0.0)
+                    best_cid, best_prob = best
+                    info = flat_cards.get(best_cid, {})
+                    predictions.append(PositionPrediction(
+                        position=pos, entity_id=eid,
+                        card_id=best_cid, name=info.get("name", best_cid),
+                        probability=best_prob,
+                        source="unknown", cost=info.get("cost", 0),
+                    ))
+
+        return predictions
 
     def _card_id_to_probability(
         self, card_id: str, probability: float, source: str

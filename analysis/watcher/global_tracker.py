@@ -846,6 +846,15 @@ class GlobalTracker:
                 # Override source to GENERATED if over copy limit
                 if source != CardSource.GENERATED:
                     known.source = CardSource.GENERATED
+                # 记录衍生牌详情（source_card_id 可通过 CardEffectInferenceEngine 补充）
+                self.state.opp_generated_card_records.append({
+                    "card_id": card_id,
+                    "source_card_id": "",
+                    "source_type": "generate",
+                    "turn_created": self.state.current_turn,
+                    "entity_id": entity_id,
+                    "from_position": 0,
+                })
         else:
             self.state.cards_played_this_turn_player.append(card_id)
             self.state.player_cards_played_history.append(card_id)
@@ -1385,11 +1394,19 @@ class GlobalTracker:
         archetype_name = self._bayesian_model._deck_name(locked[0]) if locked else None
         playstyle = classify_playstyle(archetype_name) if archetype_name else "unknown"
 
+        # 收集 top-3 卡组来源（deck_codes / hsreplay）
+        top_deck_sources = {}
+        for aid, _, _ in top:
+            src = getattr(self._bayesian_model, '_deck_source', {}).get(aid, "")
+            if src:
+                top_deck_sources[aid] = src
+
         return {
             "archetype_name": archetype_name,
             "locked_deck_id": locked[0] if locked else None,
             "deck_confidence": locked[1] if locked else (top[0][2] if top else 0.0),
             "top_decks": [(aid, name, round(prob, 4)) for aid, name, prob in top],
+            "top_deck_sources": top_deck_sources,
             "predicted_next": preds,
             "playstyle": playstyle,
         }

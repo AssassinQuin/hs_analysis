@@ -974,6 +974,12 @@ class HandSampler:
                 bayesian_state, hand_size, seen_cards, generated_cards, num_worlds,
             )
 
+        # ── deck_codes 独占约束 ──
+        top_deck_sources = bayesian_state.get("top_deck_sources", {})
+        is_deck_codes_exclusive = False
+        if top_decks and top_decks[0][0] in top_deck_sources:
+            is_deck_codes_exclusive = top_deck_sources[top_decks[0][0]] == "deck_codes"
+
         worlds: List[HandWorld] = []
 
         deck_probs = []
@@ -994,9 +1000,11 @@ class HandSampler:
                 continue
 
             # v3新增：动态扩展卡组，包含对手已打出但不在卡组中的牌
-            deck_cards = self._extend_deck_with_observed_cards(
-                deck_cards, seen_cards, generated_cards,
-            )
+            # deck_codes 独占模式下不扩展——卡组列表是权威完整的
+            if not is_deck_codes_exclusive:
+                deck_cards = self._extend_deck_with_observed_cards(
+                    deck_cards, seen_cards, generated_cards,
+                )
 
             for _ in range(n_worlds):
                 hand = self._sample_hand_from_deck(
