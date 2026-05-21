@@ -144,6 +144,7 @@ class BayesianOpponentModel:
         self._seen_deck_cards = Counter()  # dbfId → count, DECK source only
         self._seen_cards_counter = Counter()  # dbfId → count, all sources (DECK+GENERATED)
         self._seen_cards = []               # kept for backward compat (append-only history)
+        self._deck_source: dict = {}       # archetype_id → "deck_codes" | "hsreplay"
 
         # Known hand cards (from reveal effects like Tracking, card text)
         self._known_hand_cards = []    # list of (dbfId, turn_seen) tuples
@@ -179,41 +180,62 @@ class BayesianOpponentModel:
     def _load_decks(self, player_class=None):
         """Load meta decks from SQLite cache, optionally filtering by class.
 
-        Loading order:
-        1. HSReplay cache DB (most accurate, from hsreplay.net data)
-        2. Deck codes fallback (from deck_codes.txt if HSReplay cache is empty or unavailable)
+        Loading strategy:
+        1. Load HSReplay cache DB (most accurate, from hsreplay.net data)
+        2. Always load deck_codes.txt decks (IDs 9000+) as first-class candidates
+        3. Merge with deduplication (>80% card overlap → keep HSReplay, boost usage)
+        4. Filter by class, validate card classes
 
-        If player_class is provided (e.g. 'MAGE'), only decks of that class are loaded.
-        After class filtering, deck card classes are validated to catch mis-tagged decks.
+        deck_codes.txt decks are no longer a fallback — they participate alongside
+        HSReplay decks in Bayesian inference with a prior boost.
         """
+        self._deck_source = {}
         loaded_decks = []
+        hsreplay_ids = set()
 
-        # 1. Try HSReplay cache DB
+        # 1. Load HSReplay cache DB
         try:
             conn = init_db(DB_PATH)
             try:
                 loaded_decks = get_meta_decks(conn)
                 if loaded_decks:
                     log.info("从 HSReplay 缓存加载了 %d 个卡组", len(loaded_decks))
+                    for d in loaded_decks:
+                        aid = d.get("archetype_id")
+                        # IDs >= 9000 are deck_codes.txt decks (from previous runs)
+                        source = "deck_codes" if aid is not None and aid >= 9000 else "hsreplay"
+                        self._deck_source[aid] = source
+                        if source == "hsreplay":
+                            hsreplay_ids.add(aid)
             finally:
                 conn.close()
         except Exception as e:
             log.debug("HSReplay 卡组加载失败: %s", e)
 
-        # 2. Fallback: build from deck_codes.txt
-        if not loaded_decks:
+        # 2. Always load deck_codes.txt decks as first-class candidates
+        try:
+            conn = init_db(DB_PATH)
             try:
-                conn = init_db(DB_PATH)
-                try:
-                    from analysis.data.fetch_hsreplay import build_archetype_db_from_deck_codes
-                    count = build_archetype_db_from_deck_codes(conn)
-                    if count > 0:
-                        loaded_decks = get_meta_decks(conn)
-                        log.info("从 deck_codes.txt 构建了 %d 个卡组 (共 %d 个)", count, len(loaded_decks))
-                finally:
-                    conn.close()
-            except Exception as e:
-                log.debug("deck_codes.txt 卡组加载失败: %s", e)
+                from analysis.data.fetch_hsreplay import build_archetype_db_from_deck_codes
+                count = build_archetype_db_from_deck_codes(conn)
+                if count > 0:
+                    dc_decks = get_meta_decks(conn)
+                    dc_new = []
+                    for d in dc_decks:
+                        aid = d.get("archetype_id")
+                        if aid not in hsreplay_ids:
+                            dc_new.append(d)
+                            self._deck_source[aid] = "deck_codes"
+                    if dc_new:
+                        # Deduplicate: merge deck_codes into HSReplay if >80% overlap
+                        merged = self._merge_deck_sources(loaded_decks, dc_new)
+                        loaded_decks = merged
+                        log.info("deck_codes.txt: %d 个新卡组合并 (共 %d 个卡组)",
+                                 len(dc_new), len(loaded_decks))
+            finally:
+                conn.close()
+        except Exception as e:
+            log.debug("deck_codes.txt 卡组加载失败: %s", e)
 
         # 3. Filter by class if specified
         if player_class and loaded_decks:
@@ -236,6 +258,55 @@ class BayesianOpponentModel:
             loaded_decks = validated
 
         self.decks = loaded_decks
+
+    def _merge_deck_sources(
+        self, hsreplay_decks: list, deck_codes_decks: list,
+    ) -> list:
+        """Merge deck_codes.txt decks into HSReplay decks with deduplication.
+
+        If a deck_codes deck shares >80% card overlap with an HSReplay deck,
+        merge them (keep HSReplay ID, boost usage_rate by 1.5x).
+        Otherwise, add the deck_codes deck as a new entry.
+        """
+        if not deck_codes_decks:
+            return hsreplay_decks
+
+        # Build card sets for HSReplay decks for overlap checking
+        hs_card_sets = {}
+        for d in hsreplay_decks:
+            hs_card_sets[d["archetype_id"]] = frozenset(d.get("cards", []))
+
+        result = list(hsreplay_decks)
+        for dc in deck_codes_decks:
+            dc_cards = frozenset(dc.get("cards", []))
+            if not dc_cards:
+                continue
+
+            # Check overlap with all HSReplay decks
+            merged_into = None
+            for aid, hs_cards in hs_card_sets.items():
+                if not hs_cards:
+                    continue
+                overlap = len(dc_cards & hs_cards)
+                max_size = max(len(dc_cards), len(hs_cards))
+                if max_size > 0 and overlap / max_size > 0.80:
+                    merged_into = aid
+                    break
+
+            if merged_into is not None:
+                # Boost usage_rate of the matched HSReplay deck
+                for d in result:
+                    if d["archetype_id"] == merged_into:
+                        old_rate = d.get("usage_rate", 0.0) or 0.0
+                        d["usage_rate"] = old_rate * 1.5
+                        log.debug("deck_codes '%s' 合并到 HSReplay #%d (usage: %.3f→%.3f)",
+                                  dc.get("name"), merged_into, old_rate, d["usage_rate"])
+                        break
+            else:
+                # No overlap — add as new deck
+                result.append(dc)
+
+        return result
 
     def _validate_deck_card_classes(self, deck: dict) -> bool:
         """Validate that a deck's cards match its declared class.
@@ -289,6 +360,10 @@ class BayesianOpponentModel:
 
         P(deck_i) = usage_rate_i / Σ(usage_rates)
 
+        deck_codes.txt decks get a 1.5x prior boost when the opponent class
+        matches — they represent user-curated meta decks and deserve higher
+        initial confidence than generic HSReplay archetypes.
+
         Falls back to uniform 1/N if no usage rates are available.
         If player_class is given, only archetypes of that class are considered.
 
@@ -304,23 +379,25 @@ class BayesianOpponentModel:
             decks = self.decks
 
         if not decks:
-            # No data at all — can't build a meaningful prior
             return {}
 
-        # Try usage-rate-weighted prior
+        # Apply deck_codes prior boost
+        DECK_CODES_BOOST = 1.5
         usage_rates = []
         for d in decks:
             rate = d.get("usage_rate") or 0.0
+            aid = d.get("archetype_id")
+            if self._deck_source.get(aid) == "deck_codes":
+                rate *= DECK_CODES_BOOST
             usage_rates.append(rate)
 
         total = sum(usage_rates)
         if total > 0:
             return {
-                d["archetype_id"]: (d.get("usage_rate") or 0.0) / total
-                for d in decks
+                d["archetype_id"]: rate / total
+                for d, rate in zip(decks, usage_rates)
             }
         else:
-            # Uniform prior
             n = len(decks)
             return {d["archetype_id"]: 1.0 / n for d in decks}
 
