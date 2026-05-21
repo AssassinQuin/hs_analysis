@@ -79,6 +79,10 @@ class SpellDesc:
 
         sc = data.get("class", data.get("spell_class", ""))
         if not sc:
+            # 容错: 遇到 {"name": "...", "spell": {"class": "..."}} 格式的包装条目
+            #（常见于 ChooseOneSpell 的 choices 数组或 generator 生成的旧格式数据）
+            if "spell" in data and isinstance(data["spell"], dict):
+                return cls.from_json(data["spell"])
             raise ValueError(f"SpellDesc 缺少 class 字段: {data}")
 
         # 标准字段

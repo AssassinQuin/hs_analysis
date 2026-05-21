@@ -53,6 +53,7 @@ class AbilityTrigger(Enum):
     CORPSE_SPEND = "CORPSE_SPEND"  # spend corpse resource for bonus
     CORPSE_GAIN = "CORPSE_GAIN"    # gain corpse resource
     DORMANT = "DORMANT"         # enter dormant for N turns
+    DISCOVER = "DISCOVER"       # discover a card from options
 
 
 # ──────────────────────────────────────────────────────────────

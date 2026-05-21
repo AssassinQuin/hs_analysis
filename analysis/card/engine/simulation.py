@@ -551,6 +551,7 @@ def _draw_card(state: "GameState") -> "GameState":
         if len(state.hand) >= 10:
             pass  # overdraw: card is burned
         else:
+            drawn.turn_drawn = state.turn_number
             state.hand.append(drawn)
             # Shatter mechanic
             try:

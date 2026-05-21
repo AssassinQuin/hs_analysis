@@ -228,6 +228,25 @@ class FriendlyDeathCountProvider(ValueProvider):
         return 0
 
 
+# ── 变量递增提供器（escalation / handbuff 等） ──
+
+@register_provider("variable")
+class VariableProvider(ValueProvider):
+    """变量值提供器 —— escalation/handbuff 类卡牌的值（如每回合递增）。
+
+    计算方式: base + max(0, turn_number - turn_drawn)
+    - turn_number 来自 GameState
+    - turn_drawn 来自 source 卡牌（由 _draw_card 在抽牌时设置）
+    """
+    def resolve(self, desc, state, source=None):
+        base = desc.get("base", 0)
+        if source is None or state is None:
+            return base
+        drawn_turn = getattr(source, 'turn_drawn', state.turn_number)
+        escalation = state.turn_number - drawn_turn
+        return base + max(0, escalation)
+
+
 # ── 常量提供器 ──
 
 @register_provider("constant")

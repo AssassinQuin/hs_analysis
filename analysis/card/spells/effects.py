@@ -379,6 +379,26 @@ class DiscoverSpell(Spell):
 
 
 # ═══════════════════════════════════════════════════════════════
+# AddToHand — 置入手牌
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class AddToHandSpell(Spell):
+    """将 card_id 卡牌置入手牌（若手牌未满）。"""
+    def execute(self, desc, state, source=None, target=None):
+        card_id = desc.card_id or ""
+        if not card_id:
+            return state
+        from analysis.card.data.card_data import get_db
+        db = get_db()
+        card_data = db.get_card(card_id)
+        if card_data and len(state.hand) < 10:
+            from analysis.card.models.card import Card
+            state.hand.append(Card(card_data))
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
 # Shuffle
 # ═══════════════════════════════════════════════════════════════
 

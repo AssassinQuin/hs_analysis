@@ -46,6 +46,8 @@ class Card:
     durability: int = 0
     spell_school: str = ""
     roles: frozenset = field(default_factory=frozenset)
+    # 模拟追踪字段: 此卡进入手牌的回合号，用于 escalation/handbuff 等计算
+    turn_drawn: int = 0
 
     def __post_init__(self):
         if self.mechanics is None:
