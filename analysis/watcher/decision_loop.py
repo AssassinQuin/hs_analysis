@@ -15,8 +15,9 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional, TextIO
+from typing import Callable, Dict, List, Optional, TextIO, Tuple
 
 from analysis.watcher.log_watcher import LogWatcher
 from analysis.watcher.game_tracker import GameTracker
@@ -24,18 +25,199 @@ from analysis.watcher.state_bridge import StateBridge
 from analysis.card.abilities.definition import Action
 from analysis.utils.bayesian_opponent import classify_card_playstyle
 
-try:
-    from analysis.search.engine_adapter import UnifiedSearchResult, GameEngine, create_engine
-    _HAS_SEARCH_ENGINE = True
-except ImportError:
-    UnifiedSearchResult = object  # type: ignore[misc]
-    GameEngine = object  # type: ignore[misc]
-    _HAS_SEARCH_ENGINE = False
-
-    def create_engine(*args, **kwargs):  # type: ignore[misc]
-        raise RuntimeError("v1 search engine removed (analysis.search deleted)")
+# ── 新引擎导入（替代已删除的 analysis.search.engine_adapter） ──
+from analysis.engine.mcts_uct import MCTSUCT, MCTSConfig, MCTSResult
+from analysis.engine.mcts_world_tracker import MCTSWorldTracker, TrackerConfig, TurnAnalysis
+from analysis.engine.opponent_hand_mcts import OpponentHandMCTS, ObservedBehavior
 
 log = logging.getLogger(__name__)
+
+
+# ── SearchResult 兼容层 ──────────────────────────────────────
+# TerminalDisplay / DecisionPresenter 期望的 SearchResult 接口，
+# 将 MCTSResult + TurnAnalysis 包装成兼容对象。
+
+@dataclass
+class _ActionStat:
+    """TerminalDisplay.present() 期望的动作统计条目。"""
+    action: Action
+    probability: float = 0.0
+    visit_probability: float = 0.0
+    win_rate: float = 0.0
+    visit_count: int = 0
+
+
+@dataclass
+class _MCTSStats:
+    """TerminalDisplay.present() 期望的 MCTS 统计信息。"""
+    iterations: int = 0
+    nodes_created: int = 0
+    evaluations_done: int = 0
+    world_count: int = 0
+    time_used_ms: float = 0.0
+
+
+@dataclass
+class _DetailedLogEntry:
+    """MCTS 详细日志条目。"""
+    iter: int = 0
+    nodes: int = 0
+    evals: int = 0
+    best_q: float = 0.0
+    depth: int = 0
+
+    def get(self, key: str, default=None):
+        return getattr(self, key, default)
+
+
+@dataclass
+class _DetailedLog:
+    """MCTS 详细日志容器。"""
+    entries: List[_DetailedLogEntry] = field(default_factory=list)
+
+
+@dataclass
+class SearchResult:
+    """兼容旧 SearchResult 接口的包装类。
+
+    TerminalDisplay.present() 读取的属性：
+      - best_fitness / fitness
+      - best_sequence / best_chromosome
+      - alternatives
+      - action_probs
+      - mcts_stats
+      - mcts_detailed_log / detailed_log
+    """
+
+    best_fitness: float = 0.0
+    fitness: float = 0.0
+    best_sequence: List[Action] = field(default_factory=list)
+    best_chromosome: List[Action] = field(default_factory=list)
+    alternatives: List[Tuple[List[Action], float]] = field(default_factory=list)
+    action_probs: List[_ActionStat] = field(default_factory=list)
+    mcts_stats: Optional[_MCTSStats] = None
+    mcts_detailed_log: Optional[_DetailedLog] = None
+    detailed_log: Optional[_DetailedLog] = None
+
+    # 对手手牌概率（新增）
+    opponent_hand_probs: Dict[str, float] = field(default_factory=dict)
+
+    @classmethod
+    def from_mcts_result(
+        cls,
+        mcts_result: MCTSResult,
+        turn_analysis: Optional[TurnAnalysis] = None,
+        opponent_hand_probs: Optional[Dict[str, float]] = None,
+    ) -> "SearchResult":
+        """从 MCTSResult + TurnAnalysis 构建 SearchResult。"""
+
+        # ── best_fitness / fitness ──
+        root_q = 0.0
+        root = mcts_result.root_node
+        if root.visit_count > 0:
+            root_q = root.total_reward / root.visit_count
+        best_fitness = root_q
+        if mcts_result.best_node and mcts_result.best_node.visit_count > 0:
+            best_fitness = mcts_result.best_node.total_reward / mcts_result.best_node.visit_count
+
+        # ── best_sequence / best_chromosome ──
+        best_sequence = mcts_result.best_sequence
+        if not best_sequence and mcts_result.best_action:
+            best_sequence = [mcts_result.best_action]
+
+        # ── alternatives ──
+        alternatives: List[Tuple[List[Action], float]] = []
+        if root.children:
+            sorted_children = sorted(
+                root.children,
+                key=lambda c: c.visit_count,
+                reverse=True,
+            )
+            for child in sorted_children[1:4]:  # 跳过第一名，取2-4名
+                if child.action is not None and child.visit_count > 0:
+                    child_fitness = child.total_reward / child.visit_count
+                    child_seq = [child.action]
+                    # 继续沿最高访问子节点提取动作
+                    cur = child
+                    for _ in range(4):
+                        if not cur.children:
+                            break
+                        best_sub = max(cur.children, key=lambda c: c.visit_count)
+                        if best_sub.action is not None:
+                            child_seq.append(best_sub.action)
+                        cur = best_sub
+                    alternatives.append((child_seq, child_fitness))
+
+        # ── action_probs ──
+        action_probs: List[_ActionStat] = []
+        if root.children:
+            total_visits = sum(c.visit_count for c in root.children) or 1
+            sorted_by_visits = sorted(
+                root.children,
+                key=lambda c: c.visit_count,
+                reverse=True,
+            )
+            for child in sorted_by_visits[:10]:
+                if child.action is None:
+                    continue
+                prob = child.visit_count / total_visits
+                win_rate = (child.total_reward / child.visit_count) if child.visit_count > 0 else 0.0
+                action_probs.append(_ActionStat(
+                    action=child.action,
+                    probability=prob,
+                    visit_probability=prob,
+                    win_rate=win_rate,
+                    visit_count=child.visit_count,
+                ))
+
+        # ── mcts_stats ──
+        stats = mcts_result.search_stats
+        iterations = stats.get("iterations", 0) if isinstance(stats, dict) else 0
+        nodes_created = mcts_result.num_nodes
+        world_count = 0
+        time_used_ms = 0.0
+        if turn_analysis is not None:
+            world_count = getattr(turn_analysis, "worlds_after_resample", 0) or len(
+                getattr(getattr(turn_analysis, "snapshot", None), "worlds", [])
+            )
+            time_used_ms = turn_analysis.elapsed_s * 1000.0
+        if isinstance(stats, dict):
+            time_s = stats.get("time_s", 0.0)
+            if time_s > 0:
+                time_used_ms = time_s * 1000.0
+
+        mcts_stats = _MCTSStats(
+            iterations=iterations,
+            nodes_created=nodes_created,
+            evaluations_done=iterations,
+            world_count=world_count,
+            time_used_ms=time_used_ms,
+        )
+
+        # ── detailed_log ──
+        detailed_log = None
+        if isinstance(stats, dict) and stats.get("iterations", 0) > 0:
+            entry = _DetailedLogEntry(
+                iter=stats.get("iterations", 0),
+                nodes=nodes_created,
+                evals=stats.get("iterations", 0),
+                best_q=best_fitness,
+                depth=mcts_result.tree_depth,
+            )
+            detailed_log = _DetailedLog(entries=[entry])
+
+        return cls(
+            best_fitness=best_fitness,
+            fitness=best_fitness,
+            best_sequence=best_sequence,
+            best_chromosome=best_sequence,
+            alternatives=alternatives,
+            action_probs=action_probs,
+            mcts_stats=mcts_stats,
+            mcts_detailed_log=detailed_log,
+            detailed_log=detailed_log,
+            opponent_hand_probs=opponent_hand_probs or {},
+        )
 
 
 def _infer_opp_playstyle(state) -> str:
@@ -207,6 +389,11 @@ class TerminalDisplay:
                         f"depth={entry.get('depth', '?')}"
                     )
 
+        # ── 对手手牌概率展示（新增） ──
+        opp_probs = getattr(result, 'opponent_hand_probs', None)
+        if opp_probs:
+            self._display_opponent_hand_probs(opp_probs, term_lines, file_lines)
+
         file_lines.append("└──────────────────────────────────────")
 
         self._clear_previous()
@@ -279,6 +466,44 @@ class TerminalDisplay:
         file_lines.append(f"│ {'  '.join(opp_parts)}")
         term_lines.append("  ".join(opp_parts))
 
+    def _display_opponent_hand_probs(
+        self,
+        probs: Dict[str, float],
+        term_lines: list[str],
+        file_lines: list[str],
+    ) -> None:
+        """显示对手手牌概率预测结果。"""
+        if not probs:
+            return
+
+        sorted_probs = sorted(probs.items(), key=lambda x: -x[1])[:8]
+
+        file_lines.append("│")
+        file_lines.append("│ [对手手牌推断]")
+
+        # 尝试获取卡牌名
+        card_names: Dict[str, str] = {}
+        try:
+            from analysis.card.data.card_data import get_db
+            db = get_db()
+            if db:
+                for cid, _ in sorted_probs:
+                    data = db.get_card(cid)
+                    if data:
+                        card_names[cid] = data.get("name", cid)
+        except Exception:
+            pass
+
+        top_term_parts = []
+        for cid, prob in sorted_probs[:5]:
+            name = card_names.get(cid, cid[:12])
+            bar = self._progress_bar(prob, 10)
+            file_lines.append(f"│   {name:<16s} {bar} {prob * 100:5.1f}%")
+            top_term_parts.append(f"{name}:{prob * 100:.0f}%")
+
+        if top_term_parts:
+            term_lines.append(f"[对手手牌] {' | '.join(top_term_parts)}")
+
     @staticmethod
     def _card_display(card) -> str:
         name = card.name or getattr(card, "card_id", None) or "未知"
@@ -334,7 +559,8 @@ class DecisionLoop:
         2. GameTracker parses lines incrementally
         3. On turn start (MAIN_READY/MAIN_ACTION):
            a. StateBridge converts to GameState
-            b. MCTSEngine.search() finds best action sequence
+           b. MCTSUCT.search() finds best action sequence
+           c. OpponentHandMCTS infers opponent hand probabilities
            d. DecisionPresenter outputs the recommendation
     """
 
@@ -362,7 +588,34 @@ class DecisionLoop:
             "time_decay_gamma": 0.6,
             "max_actions_per_turn": 10,
         }
-        self._game_engine: GameEngine = create_engine("mcts", self.engine_params)()
+
+        # ── MCTSUCT 搜索引擎（替代 GameEngine） ──
+        mcts_config = MCTSConfig(
+            exploration_constant=self.engine_params.get("uct_constant", 1.414),
+            iterations=self.engine_params.get("iterations", 800),
+            time_budget_ms=int(self.engine_params.get("time_budget_ms", 8000.0)),
+            rollout_depth=self.engine_params.get("rollout_depth", 15),
+            use_heuristic_rollout=True,
+            verbose=verbose,
+        )
+        self._mcts = MCTSUCT(mcts_config)
+
+        # ── MCTSWorldTracker（世界粒子滤波器） ──
+        tracker_config = TrackerConfig(
+            num_worlds=self.engine_params.get("num_worlds", 7),
+            mcts_iterations=self.engine_params.get("iterations", 500),
+            mcts_time_budget_ms=int(self.engine_params.get("time_budget_ms", 8000.0)),
+            uct_exploration=self.engine_params.get("uct_constant", 1.414),
+        )
+        self._world_tracker = MCTSWorldTracker(tracker_config)
+
+        # ── OpponentHandMCTS（对手手牌概率推断） ──
+        opp_hand_budget = min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+        self._opp_hand_mcts = OpponentHandMCTS(time_budget_ms=opp_hand_budget)
+
+        # 对手手牌推断结果缓存
+        self._last_opp_hand_probs: Dict[str, float] = {}
+
         self.poll_interval = poll_interval
         self.on_decision = on_decision
         self.presenter = DecisionPresenter(
@@ -485,8 +738,12 @@ class DecisionLoop:
             self._last_turn = 0
             self._last_mcts_turn = None
             self._last_decision_signature = None
-            # 通知 GameEngine 单例游戏开始
-            self._game_engine.on_game_start()
+            self._last_opp_hand_probs = {}
+            # 重置 MCTSUCT（无状态，无需操作）和 WorldTracker + OpponentHandMCTS
+            self._world_tracker.reset()
+            self._opp_hand_mcts = OpponentHandMCTS(
+                time_budget_ms=min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+            )
             # Auto-reset GlobalTracker when latest_game_only=True
             if self._global_tracker is not None:
                 self._global_tracker.on_game_start()
@@ -497,8 +754,12 @@ class DecisionLoop:
             self._last_turn = 0
             self._last_mcts_turn = None
             self._last_decision_signature = None
-            # 通知 GameEngine 单例游戏结束
-            self._game_engine.on_game_end()
+            self._last_opp_hand_probs = {}
+            # 重置状态
+            self._world_tracker.reset()
+            self._opp_hand_mcts = OpponentHandMCTS(
+                time_budget_ms=min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+            )
             self._display.present_status("游戏结束")
         elif event == "turn_start":
             current_turn = self._tracker.get_current_turn()
@@ -643,22 +904,141 @@ class DecisionLoop:
         opp_playstyle = _infer_opp_playstyle(state)
         state.opp_playstyle = opp_playstyle
 
-        # 使用 GameEngine 单例（MCTS + Bayesian 只有一份）
+        # ── 1. MCTSUCT 搜索 ──
         start_time = time.perf_counter()
-        result = self._game_engine.search(state, opp_playstyle=opp_playstyle)
-        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        mcts_result = self._mcts.search(state)
+        mcts_elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
-        self.presenter.present(result, state, elapsed_ms)
+        # ── 2. MCTSWorldTracker 回合分析（可选，增强世界多样性） ──
+        turn_analysis: Optional[TurnAnalysis] = None
+        try:
+            turn_analysis = self._world_tracker.on_turn_start(state, state.turn_number)
+        except Exception as e:
+            log.debug(f"WorldTracker on_turn_start failed: {e}")
+
+        # ── 3. OpponentHandMCTS 对手手牌推断 ──
+        opp_hand_probs: Dict[str, float] = {}
+        try:
+            opp_hand_probs = self._run_opponent_hand_inference(state)
+        except Exception as e:
+            log.debug(f"Opponent hand inference failed: {e}")
+
+        # ── 4. 组装 SearchResult 并展示 ──
+        total_elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        result = SearchResult.from_mcts_result(
+            mcts_result,
+            turn_analysis=turn_analysis,
+            opponent_hand_probs=opp_hand_probs if opp_hand_probs else None,
+        )
+
+        self.presenter.present(result, state, total_elapsed_ms)
         if signature is not None:
             self._last_decision_signature = signature
 
-        self._log_evaluation_detail(result, state, elapsed_ms)
+        self._log_evaluation_detail(result, state, total_elapsed_ms)
 
         if self.on_decision:
             try:
                 self.on_decision(result, state)
             except Exception as e:
                 log.error(f"Error in decision callback: {e}", exc_info=True)
+
+    def _run_opponent_hand_inference(self, state) -> Dict[str, float]:
+        """运行对手手牌概率推断（每回合执行一次）。
+
+        策略：
+        1. 从 state 中提取对手已知信息（手牌数、已打出卡牌等）
+        2. 构建 ObservedBehavior
+        3. 调用 OpponentHandMCTS.infer_hand_probabilities()
+        4. 返回 {card_id: probability}
+        """
+        opp = state.opponent
+        hand_size = opp.hand_count
+        if hand_size <= 0:
+            return {}
+
+        # 构建贝叶斯状态（从 GlobalTracker 或简化推断获取）
+        bayesian_state = self._get_bayesian_state(state)
+
+        # 构建对手观测行为
+        # 在回合开始时，我们还没有看到对手的出牌行为
+        # 使用上一回合的信息作为参考
+        observed = ObservedBehavior(
+            played_cards=[],
+            mana_spent=0,
+            available_mana=getattr(state, 'mana', None) and getattr(state.mana, 'max_mana', 0) or 0,
+            passed=False,
+            turn=state.turn_number,
+        )
+
+        # 已打出的卡牌
+        seen_cards: Dict[str, int] = {}
+        known = getattr(opp, 'opp_known_cards', None) or []
+        for card in known:
+            c = card if isinstance(card, dict) else {"card_id": str(card)}
+            cid = c.get("card_id", "")
+            if cid:
+                seen_cards[cid] = seen_cards.get(cid, 0) + 1
+
+        # 衍生牌
+        generated_cards: set = set()
+        try:
+            if self._global_tracker is not None:
+                generated_cards = getattr(self._global_tracker, 'generated_cards', set()) or set()
+        except Exception:
+            pass
+
+        deck_remaining = getattr(state, 'deck_remaining', 0)
+        if deck_remaining == 0:
+            # 估计：标准卡组30张，粗略估计对手剩余牌库
+            deck_remaining = max(0, 30 - hand_size - sum(seen_cards.values()))
+
+        # 时间预算：取总预算的一小部分，避免影响主搜索
+        opp_hand_budget = min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+
+        try:
+            probs = self._opp_hand_mcts.infer_hand_probabilities(
+                bayesian_state=bayesian_state,
+                observed=observed,
+                opponent_state=opp,
+                our_board=state.board,
+                our_hero=state.hero,
+                seen_cards=seen_cards,
+                generated_cards=generated_cards,
+                hand_size=hand_size,
+                time_budget_ms=opp_hand_budget,
+            )
+            self._last_opp_hand_probs = probs
+            return probs
+        except Exception as e:
+            log.debug(f"OpponentHandMCTS inference failed: {e}")
+            return self._last_opp_hand_probs
+
+    def _get_bayesian_state(self, state) -> dict:
+        """从当前状态获取贝叶斯卡组推断状态。
+
+        优先使用 GlobalTracker 的数据，回退到简化推断。
+        """
+        if self._global_tracker is not None:
+            try:
+                bayesian = getattr(self._global_tracker, 'bayesian_state', None)
+                if bayesian and isinstance(bayesian, dict) and bayesian.get("top_decks"):
+                    return bayesian
+            except Exception:
+                pass
+
+        # 简化回退：使用对手职业信息构建基本贝叶斯状态
+        opp_class = ""
+        try:
+            opp_class = getattr(state.opponent.hero, 'hero_class', '') or ''
+        except Exception:
+            pass
+
+        return {
+            "top_decks": [],
+            "opp_class": opp_class,
+            "playstyle": getattr(state, 'opp_playstyle', 'unknown') or 'unknown',
+        }
 
     def _log_evaluation_detail(self, result, state, elapsed_ms: float) -> None:
         """Log structured evaluation details to file_log for research."""
@@ -708,8 +1088,26 @@ class DecisionLoop:
 
         tracker = GameTracker()
         bridge = StateBridge()
-        # 使用 GameEngine 单例
-        game_engine: GameEngine = create_engine(engine, engine_kwargs or None)()
+
+        # 使用 MCTSUCT 替代 GameEngine
+        mcts_config = MCTSConfig(
+            exploration_constant=engine_kwargs.get("uct_constant", 1.414),
+            iterations=engine_kwargs.get("iterations", 800),
+            time_budget_ms=int(time_budget_ms),
+            rollout_depth=engine_kwargs.get("rollout_depth", 15),
+            use_heuristic_rollout=True,
+        )
+        mcts_engine = MCTSUCT(mcts_config)
+
+        # 对手手牌推断引擎
+        opp_hand_mcts = OpponentHandMCTS(time_budget_ms=min(500.0, time_budget_ms * 0.15))
+
+        # 世界追踪器
+        tracker_config = TrackerConfig(
+            num_worlds=num_worlds,
+            mcts_time_budget_ms=int(time_budget_ms),
+        )
+        world_tracker = MCTSWorldTracker(tracker_config)
 
         events = tracker.load_file(log_path)
         log.info(f"Parsed {len(events)} events")
@@ -718,9 +1116,10 @@ class DecisionLoop:
         for event in events:
             if event == "game_start":
                 last_turn = 0
-                game_engine.on_game_start()
+                world_tracker.reset()
+                opp_hand_mcts = OpponentHandMCTS(time_budget_ms=min(500.0, time_budget_ms * 0.15))
             elif event == "game_end":
-                game_engine.on_game_end()
+                world_tracker.reset()
                 break
             elif event == "turn_start":
                 current_turn = tracker.get_current_turn()
@@ -735,9 +1134,52 @@ class DecisionLoop:
                         last_turn = current_turn
                         continue
 
+                    # MCTS 搜索
                     start_time = time.perf_counter()
-                    result = game_engine.search(state)
+                    mcts_result = mcts_engine.search(state)
+
+                    # World tracker
+                    turn_analysis = None
+                    try:
+                        turn_analysis = world_tracker.on_turn_start(state, state.turn_number)
+                    except Exception:
+                        pass
+
+                    # 对手手牌推断
+                    opp_hand_probs = {}
+                    try:
+                        bayesian_state = {"top_decks": [], "opp_class": ""}
+                        seen_cards: Dict[str, int] = {}
+                        opp = state.opponent
+                        known = getattr(opp, 'opp_known_cards', None) or []
+                        for card in known:
+                            c = card if isinstance(card, dict) else {"card_id": str(card)}
+                            cid = c.get("card_id", "")
+                            if cid:
+                                seen_cards[cid] = seen_cards.get(cid, 0) + 1
+
+                        opp_hand_probs = opp_hand_mcts.infer_hand_probabilities(
+                            bayesian_state=bayesian_state,
+                            observed=ObservedBehavior(
+                                turn=state.turn_number,
+                                available_mana=getattr(state, 'mana', None) and getattr(state.mana, 'max_mana', 0) or 0,
+                            ),
+                            opponent_state=opp,
+                            our_board=state.board,
+                            our_hero=state.hero,
+                            seen_cards=seen_cards,
+                            hand_size=opp.hand_count,
+                            time_budget_ms=min(500.0, time_budget_ms * 0.15),
+                        )
+                    except Exception:
+                        pass
+
                     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+                    result = SearchResult.from_mcts_result(
+                        mcts_result,
+                        turn_analysis=turn_analysis,
+                        opponent_hand_probs=opp_hand_probs if opp_hand_probs else None,
+                    )
                     presenter = DecisionPresenter(output=output)
                     presenter.present(result, state, elapsed_ms)
 

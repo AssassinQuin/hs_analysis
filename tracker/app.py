@@ -424,8 +424,51 @@ class TrackerApp:
         self._overlay.update_state(self._game_state_manager.state)
 
     def _on_turn_changed(self, turn: int):
-        """回合切换。"""
-        logger.info("回合 %d", turn)
+        """回合切换 — 触发MCTS对手手牌推断。
+
+        MCTS每回合开始时执行一次：
+        1. 从本地卡牌库构建贝叶斯后验的对手最可能卡组
+        2. 计算最大概率卡组中的非衍生牌
+        3. 从这些非衍生牌中代入对手手牌进行MCTS世界节点模拟
+        4. 聚合多回合信息输出对手手牌最大概率卡牌
+
+        使用后台线程执行MCTS推断，避免阻塞UI线程。
+        """
+        logger.info("回合 %d — 触发MCTS手牌推断", turn)
+        try:
+            if self._log_monitor is not None and self._hand_predictor is not None:
+                # 构建当前状态字典（包含贝叶斯推断和已知卡牌信息）
+                state_dict = self._log_monitor.build_state_dict()
+                if state_dict.get("in_game", False):
+                    # 在后台线程中执行MCTS推断，避免阻塞UI
+                    import threading
+                    def _do_mcts_inference():
+                        try:
+                            # 通知 HandPredictor 执行 per-turn MCTS 推断
+                            self._hand_predictor.on_turn_changed(turn, state_dict)
+                            # MCTS完成后，更新预测结果到UI（通过Qt信号）
+                            if _HAS_PYQT5 and self._qt_app:
+                                # 使用 QTimer 在主线程中更新UI
+                                QTimer.singleShot(0, self._update_prediction_after_mcts)
+                        except Exception as e:
+                            logger.debug("后台MCTS推断失败: %s", e)
+
+                    t = threading.Thread(target=_do_mcts_inference, daemon=True)
+                    t.start()
+        except Exception as e:
+            logger.debug("回合MCTS推断启动失败: %s", e)
+
+    def _update_prediction_after_mcts(self):
+        """MCTS推断完成后，在主线程中更新UI。"""
+        try:
+            if self._log_monitor is not None and self._hand_predictor is not None:
+                state_dict = self._log_monitor.build_state_dict()
+                if state_dict.get("in_game", False):
+                    prediction = self._hand_predictor.predict(state_dict)
+                    self._game_state_manager.update(state_dict, prediction)
+                    self._overlay.update_state(self._game_state_manager.state)
+        except Exception as e:
+            logger.debug("MCTS后UI更新失败: %s", e)
 
     def _on_state_updated(self, state_dict: dict):
         """游戏状态更新。"""

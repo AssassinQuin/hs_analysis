@@ -464,6 +464,24 @@ class HandPredictor:
                 log_monitor, our_controller, opp_controller,
             )
 
+    def on_turn_changed(self, turn: int, state_dict: dict):
+        """回合切换时触发MCTS对手手牌推断。
+
+        MCTS每回合开始执行一次：
+        1. 从本地卡牌库构建贝叶斯后验的对手最可能卡组
+        2. 计算最大概率卡组中的非衍生牌（原始卡组牌-已使用的非衍生牌）
+        3. 从这些非衍生牌中代入对手手牌进行MCTS世界节点模拟
+        4. 聚合多回合信息更新对手手牌最大概率卡牌
+
+        Args:
+            turn: 当前回合数
+            state_dict: 当前游戏状态字典
+        """
+        self._ensure_engines()
+        if self._probability_engine is not None:
+            # 通知概率引擎回合变更，触发MCTS推断
+            self._probability_engine.on_turn_changed(turn, state_dict)
+
     def close(self):
         """关闭缓存的数据库连接。"""
         if self._db_conn is not None:

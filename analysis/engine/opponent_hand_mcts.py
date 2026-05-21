@@ -108,6 +108,91 @@ class TurnRecord:
     passed: bool = False
 
 
+class MultiTurnProbabilityTracker:
+    """跨回合累积概率追踪器。
+
+    聚合多回合MCTS推断结果，计算对手手牌中每张卡牌的累积概率。
+
+    核心思想：
+    - 每回合MCTS推断的结果是一组 {card_id: probability} 
+    - 跨回合聚合时，近期回合的权重更高（指数衰减）
+    - 最终输出每张牌在对手手牌中的累积最大概率
+
+    用法::
+
+        tracker = MultiTurnProbabilityTracker(decay=0.85)
+        tracker.update(turn=3, probs={'CS1_042': 0.7, 'EX1_001': 0.4})
+        tracker.update(turn=4, probs={'CS1_042': 0.8, 'EX1_002': 0.5})
+        result = tracker.get_aggregated_probabilities()
+        # {'CS1_042': 0.78, 'EX1_001': 0.17, 'EX1_002': 0.25}
+    """
+
+    def __init__(self, decay: float = 0.85, max_turns: int = 30):
+        self._decay = decay
+        self._max_turns = max_turns
+        self._turn_data: Dict[int, Dict[str, float]] = {}  # turn → {card_id: prob}
+
+    def update(self, turn: int, probs: Dict[str, float]):
+        """记录某一回合的MCTS推断结果。"""
+        self._turn_data[turn] = dict(probs)
+        # 清理过旧的回合数据
+        if len(self._turn_data) > self._max_turns:
+            oldest = min(self._turn_data.keys())
+            del self._turn_data[oldest]
+
+    def get_aggregated_probabilities(self, current_turn: int = 0) -> Dict[str, float]:
+        """获取跨回合累积概率。
+
+        近期回合权重更高（指数衰减），最终概率为加权平均。
+
+        Args:
+            current_turn: 当前回合（用于计算衰减权重）
+                如果为0，使用最新记录的回合
+
+        Returns:
+            {card_id: aggregated_probability}
+        """
+        if not self._turn_data:
+            return {}
+
+        if current_turn <= 0:
+            current_turn = max(self._turn_data.keys())
+
+        aggregated: Dict[str, float] = {}
+        total_weight: Dict[str, float] = {}
+
+        for turn, probs in self._turn_data.items():
+            distance = max(0, current_turn - turn)
+            weight = self._decay ** distance
+
+            for card_id, prob in probs.items():
+                if card_id not in aggregated:
+                    aggregated[card_id] = 0.0
+                    total_weight[card_id] = 0.0
+                aggregated[card_id] += prob * weight
+                total_weight[card_id] += weight
+
+        # 归一化
+        result = {}
+        for card_id in aggregated:
+            if total_weight[card_id] > 0:
+                result[card_id] = aggregated[card_id] / total_weight[card_id]
+            else:
+                result[card_id] = 0.0
+
+        return result
+
+    def get_top_predictions(self, k: int = 5, current_turn: int = 0) -> List[Tuple[str, float]]:
+        """获取Top-K最大概率卡牌。"""
+        probs = self.get_aggregated_probabilities(current_turn)
+        sorted_probs = sorted(probs.items(), key=lambda x: -x[1])
+        return sorted_probs[:k]
+
+    def reset(self):
+        """重置追踪器。"""
+        self._turn_data.clear()
+
+
 class TurnHistoryTracker:
     """追踪对手历史回合行为，计算费用偏向权重。
 
@@ -526,14 +611,244 @@ class OpponentTurnSimulator:
         opp_game_state,
         max_steps: int = 8,
     ) -> SimulatedBehavior:
-        """使用贪心策略模拟对手出牌序列。
+        """使用 UCT 搜索模拟对手出牌序列（替代贪心策略）。
 
-        核心模拟循环：
-        1. 枚举合法动作
-        2. 评估每个动作的价值
-        3. 选择最优动作
-        4. 应用动作，更新状态
-        5. 重复直到 END_TURN 或无合法动作
+        核心改进：使用 MCTS UCT 搜索替代贪心策略选择动作。
+        UCT 搜索提供更好的探索-利用平衡，使模拟出的对手行为
+        更加多样化和真实，从而提高手牌推断的区分度。
+
+        流程：
+        1. 使用 MCTSUCT 引擎对对手回合做 UCT 搜索
+        2. 从搜索结果中提取最优动作序列
+        3. 沿最优路径逐步应用动作，记录打出卡牌
+        4. 如果 UCT 不可用，回退到贪心策略
+
+        Args:
+            opp_game_state: 对手视角的 GameState
+            max_steps: 最大模拟步数
+
+        Returns:
+            SimulatedBehavior 模拟的对手行为
+        """
+        # 尝试使用 UCT 搜索
+        uct_result = self._run_uct_simulation(opp_game_state)
+        if uct_result is not None:
+            return uct_result
+
+        # 回退到贪心策略
+        return self._run_greedy_simulation_fallback(opp_game_state, max_steps)
+
+    def _run_uct_simulation(
+        self,
+        opp_game_state,
+    ) -> Optional[SimulatedBehavior]:
+        """使用 MCTS UCT 搜索模拟对手回合。
+
+        核心思想：
+        对于对手的回合，使用 UCT 搜索（从对手视角）来预测
+        对手最可能的出牌序列。UCT 搜索提供了比贪心更好的
+        探索-利用平衡：
+        - 探索：UCT 会尝试不同出牌组合，发现贪心可能忽略的好选择
+        - 利用：UCT 聚焦在最有希望的分支，避免完全随机
+
+        这使得不同手牌假设下模拟出的行为更加多样化，
+        提高了 BehaviorMatcher 区分不同手牌世界的能力。
+
+        模拟结果提取：
+        从 UCT 搜索树的根节点开始，沿 visit_count 最高
+        的子节点路径（greedy path）提取动作序列，
+        这代表 UCT 认为对手最可能的打法。
+
+        Returns:
+            SimulatedBehavior 或 None（如果 UCT 搜索失败）
+        """
+        try:
+            from analysis.engine.mcts_uct import MCTSUCT, MCTSConfig
+            from analysis.card.engine.rules import check_game_over
+            from analysis.card.engine.simulation import apply_action
+            from analysis.card.abilities.definition import ActionKind as ActionType
+        except ImportError:
+            logger.debug("UCT 引擎导入失败，将回退到贪心策略")
+            return None
+
+        # 确保是对手回合
+        if not getattr(opp_game_state, 'is_opponent_turn', True):
+            opp_game_state.is_opponent_turn = True
+
+        try:
+            # 对手视角的 reward（取反，因为默认reward是我方视角）
+            def opponent_reward(s):
+                if s is None:
+                    return 1.0
+                game_over = check_game_over(s)
+                if game_over == 1:  # 对手赢了
+                    return 1.0
+                if game_over == 0:  # 我方赢了
+                    return -1.0
+                # 非终局：基于场面评估
+                our_hp = s.hero.hp + s.hero.armor if s.hero else 1
+                opp_hp = s.opponent.hero.hp + s.opponent.hero.armor if s.opponent and s.opponent.hero else 1
+                hp_ratio = opp_hp / max(our_hp, 1)
+                hp_score = math.tanh(hp_ratio - 1.0) * 0.5
+
+                our_board = sum(m.attack + m.health for m in (s.opponent.board if s.opponent else []))
+                opp_board = sum(m.attack + m.health for m in s.board)
+                board_score = math.tanh(
+                    (opp_board - our_board) / max(opp_board + our_board, 1)
+                ) * 0.3
+
+                hand_score = math.tanh(
+                    (s.opponent.hand_count - len(s.hand)) / 10.0
+                ) * 0.2
+                return hp_score + board_score + hand_score
+
+            # 配置 UCT 搜索：专注于对手当前回合
+            config = MCTSConfig(
+                exploration_constant=1.414,
+                iterations=200,           # 适中的迭代次数，平衡精度和速度
+                time_budget_ms=100,       # 每个世界100ms的UCT预算
+                rollout_depth=10,
+                use_heuristic_rollout=True,
+                max_turns_ahead=1,        # 只搜索对手当前回合
+                max_opponent_tree_actions=8,
+                expand_all_children=True,
+                verbose=False,
+            )
+
+            engine = MCTSUCT(config, opponent_reward)
+            result = engine.search(opp_game_state)
+
+            # 从搜索树中提取最优动作序列
+            if result.best_sequence:
+                return self._extract_behavior_from_sequence(
+                    opp_game_state, result.best_sequence,
+                )
+
+            # 如果没有序列，从 best_action 推导
+            if result.best_action:
+                return self._extract_behavior_from_single_action(
+                    opp_game_state, result.best_action,
+                )
+
+            # UCT 无有效结果
+            return None
+
+        except Exception as e:
+            logger.debug("UCT 搜索失败: %s，回退到贪心策略", e)
+            return None
+
+    def _extract_behavior_from_sequence(
+        self,
+        initial_state,
+        action_sequence,
+    ) -> SimulatedBehavior:
+        """从 UCT 搜索的最优动作序列中提取模拟行为。
+
+        沿动作序列逐步应用动作，记录打出卡牌、法力消耗等。
+
+        Args:
+            initial_state: 对手视角的初始 GameState
+            action_sequence: UCT 搜索树的最优动作序列
+
+        Returns:
+            SimulatedBehavior
+        """
+        from analysis.card.engine.simulation import apply_action
+        from analysis.card.abilities.definition import ActionKind as ActionType
+
+        played_cards = []
+        total_mana_spent = 0
+        hero_power_used = False
+        step_count = 0
+
+        state = initial_state
+        for action in action_sequence:
+            if action.action_type == ActionType.END_TURN:
+                break
+
+            # 记录打出的卡牌
+            if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
+                card_idx = action.card_index
+                if 0 <= card_idx < len(state.hand):
+                    card = state.hand[card_idx]
+                    card_id = getattr(card, 'card_id', '') or getattr(card, 'name', '')
+                    played_cards.append(card_id)
+                    card_cost = getattr(card, 'cost', 0) or 0
+                    total_mana_spent += card_cost
+
+            if action.action_type == ActionType.HERO_POWER:
+                hero_power_used = True
+
+            try:
+                state = apply_action(state, action)
+            except Exception:
+                break
+            step_count += 1
+
+        is_pass = len(played_cards) == 0 and not hero_power_used
+
+        return SimulatedBehavior(
+            played_cards=played_cards,
+            mana_spent=total_mana_spent,
+            hero_power_used=hero_power_used,
+            attacked=step_count > 0,
+            passed=is_pass,
+        )
+
+    def _extract_behavior_from_single_action(
+        self,
+        initial_state,
+        best_action,
+    ) -> SimulatedBehavior:
+        """从单个最优动作推导模拟行为。
+
+        当 UCT 搜索只给出 best_action 而无完整序列时，
+        执行该动作并根据结果推断行为。
+
+        Args:
+            initial_state: 对手视角的初始 GameState
+            best_action: UCT 搜索的最优动作
+
+        Returns:
+            SimulatedBehavior
+        """
+        from analysis.card.abilities.definition import ActionKind as ActionType
+
+        played_cards = []
+        total_mana_spent = 0
+        hero_power_used = False
+
+        if best_action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
+            card_idx = best_action.card_index
+            if 0 <= card_idx < len(initial_state.hand):
+                card = initial_state.hand[card_idx]
+                card_id = getattr(card, 'card_id', '') or getattr(card, 'name', '')
+                played_cards.append(card_id)
+                card_cost = getattr(card, 'cost', 0) or 0
+                total_mana_spent += card_cost
+
+        if best_action.action_type == ActionType.HERO_POWER:
+            hero_power_used = True
+
+        is_pass = len(played_cards) == 0 and not hero_power_used
+
+        return SimulatedBehavior(
+            played_cards=played_cards,
+            mana_spent=total_mana_spent,
+            hero_power_used=hero_power_used,
+            attacked=best_action.action_type == ActionType.ATTACK,
+            passed=is_pass,
+        )
+
+    def _run_greedy_simulation_fallback(
+        self,
+        opp_game_state,
+        max_steps: int = 8,
+    ) -> SimulatedBehavior:
+        """贪心策略模拟对手出牌序列（回退方案）。
+
+        当 UCT 搜索不可用或失败时使用此方法。
+        优先使用 CompositeEvaluator，回退到简单启发式。
 
         Args:
             opp_game_state: 对手视角的 GameState
@@ -707,9 +1022,10 @@ class HandSampler:
         hand_size: int,
         seen_cards: Dict[str, int],
         generated_cards: Set[str],
-        num_worlds: int = 30,
+        num_worlds: int = 100,
         constraints: Optional[List] = None,
         cost_bias: Optional[Dict[int, float]] = None,
+        non_derived_candidates: Optional[List[str]] = None,
     ) -> List[HandWorld]:
         """采样候选手牌世界。
 
@@ -717,6 +1033,9 @@ class HandSampler:
             cost_bias: {cost: weight} 费用偏向权重，
                 来自 TurnHistoryTracker.compute_cost_bias()。
                 用于引导采样偏向历史行为暗示的高/低费方向。
+            non_derived_candidates: 非衍生候选卡牌列表，
+                来自最大概率卡组减去已使用的非衍生卡牌。
+                如果提供，这些卡牌在采样中权重更高。
         """
         self._ensure_card_db()
 
@@ -757,6 +1076,7 @@ class HandSampler:
                 hand = self._sample_hand_from_deck(
                     deck_cards, hand_size, seen_cards, generated_cards,
                     constraints, cost_bias=cost_bias,
+                    non_derived_candidates=non_derived_candidates,
                 )
                 if hand:
                     worlds.append(HandWorld(
@@ -910,12 +1230,14 @@ class HandSampler:
         generated_cards: Set[str],
         constraints: Optional[List],
         cost_bias: Optional[Dict[int, float]] = None,
+        non_derived_candidates: Optional[List[str]] = None,
     ) -> List:
         """从卡组剩余牌 + 衍生牌候选池中采样一手手牌。
 
         改进（v4）：
         1. 衍生牌不再被排除，而是加入候选池填充剩余手牌位置
         2. 支持 cost_bias 加权采样，使采样偏向历史行为暗示的费用方向
+        3. 支持 non_derived_candidates 加权，使来自最大概率卡组的非衍生牌权重更高
         """
         card_counts = Counter(deck_cards)
 
@@ -954,8 +1276,11 @@ class HandSampler:
 
         sample_size = min(hand_size, len(all_candidates))
 
-        if cost_bias and sample_size > 0:
-            sampled_dbfs = self._weighted_sample_by_cost(all_candidates, cost_bias, sample_size)
+        # 构建权重：合并 cost_bias 和 non_derived_candidates 的影响
+        if (cost_bias or non_derived_candidates) and sample_size > 0:
+            sampled_dbfs = self._weighted_sample_combined(
+                all_candidates, cost_bias, non_derived_candidates, sample_size,
+            )
         else:
             sampled_dbfs = random.sample(all_candidates, sample_size)
 
@@ -966,6 +1291,56 @@ class HandSampler:
                 hand.append(card)
 
         return hand
+
+    def _weighted_sample_combined(
+        self,
+        candidates: List[int],
+        cost_bias: Optional[Dict[int, float]],
+        non_derived_candidates: Optional[List[str]],
+        k: int,
+    ) -> List[int]:
+        """按费用偏向+非衍生候选权重做无放回加权采样。"""
+        if len(candidates) <= k:
+            return list(candidates)
+
+        non_derived_set = set(non_derived_candidates) if non_derived_candidates else set()
+
+        # 预计算每个候选的权重
+        weights = []
+        for dbf_id in candidates:
+            card = self._dbf_to_card(dbf_id)
+            cost = card.cost if card else 3
+            w = 1.0
+            if cost_bias:
+                w *= cost_bias.get(cost, 1.0)
+            # 非衍生候选卡牌权重提升2倍
+            card_id = self._dbf_to_card_id(dbf_id) if dbf_id else ""
+            if card_id and card_id in non_derived_set:
+                w *= 2.0
+            weights.append(max(0.01, w))
+
+        # 无放回加权采样
+        pool_indices = list(range(len(candidates)))
+        result = []
+        for _ in range(k):
+            if not pool_indices:
+                break
+            total = sum(weights[i] for i in pool_indices)
+            if total <= 0:
+                idx = random.choice(pool_indices)
+            else:
+                r = random.random() * total
+                cumsum = 0.0
+                idx = pool_indices[0]
+                for i in pool_indices:
+                    cumsum += weights[i]
+                    if cumsum >= r:
+                        idx = i
+                        break
+            result.append(candidates[idx])
+            pool_indices.remove(idx)
+
+        return result
 
     def _weighted_sample_by_cost(
         self,
@@ -1080,7 +1455,7 @@ class OpponentHandMCTS:
     - 可配置，适应不同性能需求
     """
 
-    def __init__(self, time_budget_ms: float = 500.0, num_threads: int = 4):
+    def __init__(self, time_budget_ms: float = 2000.0, num_threads: int = 4):
         self.time_budget_ms = time_budget_ms
         self.num_threads = num_threads
         self._sampler = HandSampler()
@@ -1088,6 +1463,8 @@ class OpponentHandMCTS:
         self._matcher = BehaviorMatcher()
         # 历史回合追踪（跨 MCTS 调用累积）
         self._turn_history = TurnHistoryTracker()
+        # 跨回合概率追踪（聚合多回合MCTS结果）
+        self._multi_turn_tracker = MultiTurnProbabilityTracker(decay=0.85)
         # 缓存
         self._last_result: Optional[Dict[str, float]] = None
         self._last_state_hash: int = 0
@@ -1103,6 +1480,7 @@ class OpponentHandMCTS:
         generated_cards: Optional[Set[str]] = None,
         hand_size: int = 0,
         constraints: Optional[List] = None,
+        non_derived_candidates: Optional[List[str]] = None,
         time_budget_ms: Optional[float] = None,
     ) -> Dict[str, float]:
         """从 Power.log + Tracker 推断对手手牌概率（v2 核心入口）。
@@ -1150,6 +1528,7 @@ class OpponentHandMCTS:
             num_worlds=num_worlds,
             constraints=constraints,
             cost_bias=cost_bias,
+            non_derived_candidates=non_derived_candidates,
         )
 
         if not worlds:
@@ -1191,14 +1570,25 @@ class OpponentHandMCTS:
             world.weight = world.archetype_weight * max(0.01, world.behavior_match)
 
         # Step 5: 聚合概率（v3: 传入seen_cards过滤已打出卡牌）
-        probabilities = self._aggregate_probabilities(worlds, seen_cards=seen_cards)
+        single_turn_probs = self._aggregate_probabilities(worlds, seen_cards=seen_cards)
+
+        # 记录本回合行为到历史追踪（供后续回合的 cost_bias 使用）（v4）
+        self._turn_history.record_turn(observed)
+
+        # 记录到跨回合概率追踪器
+        if single_turn_probs:
+            self._multi_turn_tracker.update(observed.turn, single_turn_probs)
+
+        # Step 6: 融合跨回合累积概率（关键修复）
+        # 将当前单回合MCTS结果与历史多回合结果做贝叶斯加权融合
+        # 近期回合权重更高（指数衰减），同时确保已打出的牌概率受控
+        probabilities = self._fuse_multi_turn_probabilities(
+            single_turn_probs, seen_cards, observed.turn,
+        )
 
         # 缓存结果
         self._last_result = probabilities
         self._last_state_hash = state_hash
-
-        # 记录本回合行为到历史追踪（供后续回合的 cost_bias 使用）（v4）
-        self._turn_history.record_turn(observed)
 
         return probabilities
 
@@ -1213,6 +1603,7 @@ class OpponentHandMCTS:
         generated_cards: Optional[Set[str]] = None,
         hand_size: int = 0,
         constraints: Optional[List] = None,
+        non_derived_candidates: Optional[List[str]] = None,
         time_budget_ms: Optional[float] = None,
     ) -> Dict[str, float]:
         """推断对手手牌中每张卡牌的概率（兼容旧接口）。
@@ -1257,6 +1648,7 @@ class OpponentHandMCTS:
             num_worlds=num_worlds,
             constraints=constraints,
             cost_bias=cost_bias,
+            non_derived_candidates=non_derived_candidates,
         )
 
         if not worlds:
@@ -1303,6 +1695,16 @@ class OpponentHandMCTS:
 
         # v4: 记录本回合行为到历史追踪（供后续回合的 cost_bias 使用）
         self._turn_history.record_turn(observed)
+
+        # 记录到跨回合概率追踪器
+        if probabilities:
+            self._multi_turn_tracker.update(observed.turn, probabilities)
+
+        # 融合跨回合累积概率（与 infer_from_tracker 一致）
+        probabilities = self._fuse_multi_turn_probabilities(
+            probabilities, seen_cards, observed.turn,
+        )
+        self._last_result = probabilities
 
         return probabilities
 
@@ -1414,16 +1816,94 @@ class OpponentHandMCTS:
 
         return probabilities
 
+    def _fuse_multi_turn_probabilities(
+        self,
+        single_turn_probs: Dict[str, float],
+        seen_cards: Dict[str, int],
+        current_turn: int,
+    ) -> Dict[str, float]:
+        """融合单回合MCTS推断与跨回合累积概率。
+
+        核心思想（贝叶斯加权融合）：
+        1. 当前回合的MCTS推断是最可靠的（反映最新信息）
+        2. 历史回合的累积概率提供先验知识（跨回合一致性验证）
+        3. 如果某张牌在多个回合中都保持高概率，说明推断更可靠
+        4. 如果某张牌在历史回合高概率但当前回合低概率，可能已被打出或使用
+
+        融合公式：
+        P_final(card) = α × P_current(card) + (1-α) × P_historical(card)
+
+        其中 α = 0.6（当前回合权重更高），
+        P_historical 来自 MultiTurnProbabilityTracker 的指数衰减加权平均。
+
+        额外约束：
+        - 已打出的全部张数的牌，概率强制为0
+        - 已揭示在手中的牌，概率强制为1.0
+        - 跨回合一致性加成：如果某牌在当前和历史都高概率，额外提升
+
+        Args:
+            single_turn_probs: 当前回合MCTS推断的概率
+            seen_cards: 已打出的卡牌 {card_id: count}
+            current_turn: 当前回合数
+
+        Returns:
+            融合后的 {card_id: probability}
+        """
+        # 获取跨回合累积概率
+        historical_probs = self._multi_turn_tracker.get_aggregated_probabilities(
+            current_turn=current_turn,
+        )
+
+        if not historical_probs:
+            # 没有历史数据时，直接使用当前回合结果
+            return single_turn_probs
+
+        if not single_turn_probs:
+            # 当前回合没有结果时，使用历史概率（但要排除已打出的牌）
+            result = {}
+            for card_id, prob in historical_probs.items():
+                if card_id not in seen_cards:
+                    result[card_id] = prob
+            return result
+
+        # 融合参数
+        alpha = 0.6  # 当前回合权重
+        consistency_bonus = 0.1  # 一致性加成
+
+        # 收集所有卡牌ID
+        all_cards = set(single_turn_probs.keys()) | set(historical_probs.keys())
+
+        result = {}
+        for card_id in all_cards:
+            # 跳过已打出全部张数的牌
+            if card_id in seen_cards:
+                continue
+
+            p_current = single_turn_probs.get(card_id, 0.0)
+            p_historical = historical_probs.get(card_id, 0.0)
+
+            # 基础融合：加权平均
+            p_fused = alpha * p_current + (1 - alpha) * p_historical
+
+            # 一致性加成：如果当前和历史都高概率，说明推断可靠
+            if p_current >= 0.3 and p_historical >= 0.3:
+                consistency = min(p_current, p_historical) * consistency_bonus
+                p_fused = min(1.0, p_fused + consistency)
+
+            result[card_id] = min(1.0, max(0.0, p_fused))
+
+        return result
+
     def _compute_num_worlds(self, budget_ms: float) -> int:
         """根据时间预算 + 并行线程数计算采样世界数。
 
-        v4 并行版本：世界模拟可在多线程中同时运行，
-        同时间预算下可支持更多世界数。
-        400ms + 4线程 → ~128 世界（vs 之前 40）。
+        v5 版本：大幅增加世界数量以提升手牌空间覆盖度。
+        用户要求"模拟时间可以长"，因此使用更多世界数。
+        2000ms + 4线程 → ~640 世界（vs v4 的 128）。
         """
-        base = max(10, min(80, int(budget_ms / 10)))
+        base = max(20, min(200, int(budget_ms / 10)))
         if self.num_threads > 1:
-            return max(10, min(200, int(base * self.num_threads * 0.8)))
+            return max(20, min(500, int(base * self.num_threads * 0.8)))
         return base
 
     def _run_parallel_simulation(

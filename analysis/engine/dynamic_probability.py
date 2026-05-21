@@ -412,6 +412,170 @@ class DynamicProbabilityEngine:
         self._our_controller = our_controller
         self._opp_controller = opp_controller
 
+    def on_turn_changed(self, turn: int, state_dict: dict):
+        """回合切换时触发MCTS对手手牌推断。
+
+        核心逻辑：
+        1. 从最大概率卡组中提取非衍生牌列表
+        2. 减去已使用的非衍生卡牌
+        3. 将剩余的非衍生卡牌作为对手手牌候选传入MCTS模拟
+        4. 聚合多回合信息更新概率
+
+        Args:
+            turn: 当前回合数
+            state_dict: 当前游戏状态字典
+        """
+        # 更新内部状态
+        self.update_from_state_dict(state_dict)
+
+        # 提取最大概率卡组的非衍生卡牌
+        non_derived_candidates = self._compute_non_derived_hand_candidates(state_dict)
+
+        if non_derived_candidates and self._mcts_engine is None:
+            try:
+                from analysis.engine.opponent_hand_mcts import OpponentHandMCTS
+                self._mcts_engine = OpponentHandMCTS(time_budget_ms=2000.0)
+            except Exception as e:
+                logger.debug("MCTS引擎初始化失败: %s", e)
+                return
+
+        # 将非衍生候选注入MCTS推断
+        if non_derived_candidates and self._mcts_engine is not None:
+            try:
+                from analysis.engine.opponent_hand_mcts import ObservedBehavior
+
+                opp_cards_this_turn = self._opp_cards_played_this_turn
+                mana_spent = 0
+                for kc in self._known_cards_with_info:
+                    if kc.get("turn_seen", 0) == turn:
+                        cost = kc.get("cost", 0)
+                        if isinstance(cost, (int, float)):
+                            mana_spent += int(cost)
+
+                is_pass = len(opp_cards_this_turn) == 0 and mana_spent == 0 and turn > 1
+
+                observed = ObservedBehavior(
+                    played_cards=list(opp_cards_this_turn),
+                    mana_spent=mana_spent,
+                    available_mana=self._available_mana,
+                    passed=is_pass,
+                    turn=turn,
+                )
+
+                hand_size = state_dict.get("opp_hand_count", 0)
+                if turn <= 1 and not observed.played_cards:
+                    return
+
+                # 执行MCTS推断（优先使用tracker模式）
+                if self._log_monitor is not None and self._our_controller and self._opp_controller:
+                    mcts_probs = self._mcts_engine.infer_from_tracker(
+                        log_monitor=self._log_monitor,
+                        our_controller=self._our_controller,
+                        opp_controller=self._opp_controller,
+                        observed=observed,
+                        bayesian_state=self._bayesian_state,
+                        seen_cards=self._seen_cards,
+                        generated_cards=self._generated_cards,
+                        hand_size=hand_size,
+                        non_derived_candidates=non_derived_candidates,
+                        time_budget_ms=2000.0,
+                    )
+                else:
+                    mcts_probs = self._mcts_engine.infer_hand_probabilities(
+                        bayesian_state=self._bayesian_state,
+                        observed=observed,
+                        seen_cards=self._seen_cards,
+                        generated_cards=self._generated_cards,
+                        hand_size=hand_size,
+                        non_derived_candidates=non_derived_candidates,
+                        time_budget_ms=2000.0,
+                    )
+
+                if mcts_probs:
+                    self._last_mcts_result = mcts_probs
+                    logger.debug("回合%d MCTS推断完成: %d张牌有概率", turn, len(mcts_probs))
+            except Exception as e:
+                logger.debug("回合%d MCTS推断失败: %s", turn, e)
+
+    def _compute_non_derived_hand_candidates(self, state_dict: dict) -> List[str]:
+        """计算对手手牌的非衍生候选卡牌。
+
+        核心逻辑：
+        top-N 卡组加权候选池 - 已使用的非衍生卡 = 对手手牌非衍生候选
+
+        改进：不再仅取 top-1 卡组，而是从 top-N 卡组中按后验概率
+        加权收集候选卡牌。这增加了手牌假设的覆盖度，特别是当
+        对手实际使用的卡组与 top-1 卡组不完全匹配时。
+
+        Args:
+            state_dict: 当前游戏状态字典
+
+        Returns:
+            非衍生候选卡牌的card_id列表
+        """
+        self._ensure_card_db()
+        top_decks = self._bayesian_state.get("top_decks", [])
+        if not top_decks:
+            return []
+
+        # 从 top-N 卡组中按后验概率加权收集候选
+        candidates_set = set()
+        max_decks = min(5, len(top_decks))  # 最多取 top-5 卡组
+
+        for deck_idx in range(max_decks):
+            deck_id, deck_name, deck_prob = top_decks[deck_idx]
+
+            # 如果卡组概率太低，跳过
+            if deck_prob < 0.01:
+                continue
+
+            # 获取卡组卡牌列表
+            deck_cards = self._get_deck_cards_cached(deck_id)
+            if not deck_cards:
+                continue
+
+            card_counts = Counter(deck_cards)
+            for dbf_id, total_copies in card_counts.items():
+                card_id = self._dbf_to_card_id(dbf_id)
+                if not card_id:
+                    continue
+                if card_id in self._generated_cards:
+                    continue  # 排除衍生牌
+                # 卡牌类型检查
+                if self._card_db:
+                    card_data = self._card_db.get_card(card_id)
+                    if card_data and card_data.get("type", "").upper() == "HERO_POWER":
+                        continue
+                # 计算剩余非衍生张数
+                played = self._seen_cards.get(card_id, 0)
+                remaining = total_copies - played
+                if remaining > 0:
+                    candidates_set.add(card_id)
+
+        return list(candidates_set)
+
+    def _get_deck_cards_cached(self, archetype_id: int) -> List[int]:
+        """获取卡组的dbfId列表（带缓存）。"""
+        if archetype_id in self._deck_cards_cache:
+            return self._deck_cards_cache[archetype_id]
+
+        try:
+            from analysis.data.fetch_hsreplay import init_db, get_meta_decks
+            from analysis.config import HSREPLAY_CACHE_DB
+            conn = init_db(str(HSREPLAY_CACHE_DB))
+            if conn is None:
+                return []
+            meta_decks = get_meta_decks(conn)
+            deck_map = {d["archetype_id"]: d for d in meta_decks}
+            target = deck_map.get(archetype_id)
+            if target and target.get("cards"):
+                cards = target["cards"]
+                self._deck_cards_cache[archetype_id] = cards
+                return cards
+        except Exception:
+            pass
+        return []
+
     def compute_probabilities(
         self,
         hand_size: int,
@@ -862,14 +1026,16 @@ class DynamicProbabilityEngine:
         """通过MCTS世界节点模拟推断修正手牌概率。
 
         核心思路：
-        1. 从贝叶斯卡组中采样候选手牌世界
-        2. 对每个世界，调用卡牌效果引擎模拟对手决策
-        3. 比较模拟行为与实际观测行为
-        4. 匹配度高的世界中包含的卡牌概率提升
+        1. 优先使用 on_turn_changed() 中已缓存的MCTS结果（避免重复计算）
+        2. 如果没有缓存结果，则重新执行MCTS推断
+        3. 将MCTS概率与超几何分布基础概率做贝叶斯融合
 
-        这完全替代了硬编码的似然比方法。
-        如果对手pass了，模拟引擎会发现在手牌假设中
-        没有可出的牌时也会pass——这自然产生正确的概率调整。
+        融合策略：
+        MCTS给出的概率被视为"似然比"(likelihood ratio)，
+        通过贝叶斯公式修正超几何分布的先验概率：
+        P(card_in_hand | mcts_evidence) = LR × P_prior / (1 + LR × P_prior - P_prior)
+
+        其中 LR = P_mcts_odds / P_prior_odds
 
         Args:
             report: 手牌概率报告（会被就地修改）
@@ -878,107 +1044,127 @@ class DynamicProbabilityEngine:
         Returns:
             True 如果MCTS成功应用，False 如果需要回退
         """
-        # 延迟初始化MCTS引擎
-        if self._mcts_engine is None:
+        # 优先使用 on_turn_changed() 中缓存的MCTS结果
+        mcts_probs = self._last_mcts_result
+
+        if mcts_probs is None:
+            # 没有缓存结果，尝试在此处执行MCTS推断
+            # 延迟初始化MCTS引擎
+            if self._mcts_engine is None:
+                try:
+                    from analysis.engine.opponent_hand_mcts import OpponentHandMCTS
+                    self._mcts_engine = OpponentHandMCTS(time_budget_ms=2000.0)
+                except Exception as e:
+                    logger.debug("MCTS引擎初始化失败: %s", e)
+                    return False
+
+            # 构建MCTS所需的输入
             try:
-                from analysis.engine.opponent_hand_mcts import OpponentHandMCTS
-                self._mcts_engine = OpponentHandMCTS(time_budget_ms=400.0)
+                from analysis.engine.opponent_hand_mcts import ObservedBehavior
+
+                # 构建观测行为
+                opp_cards_this_turn = self._opp_cards_played_this_turn
+                mana_spent = 0
+                for kc in self._known_cards_with_info:
+                    if kc.get("turn_seen", 0) == self._current_turn:
+                        cost = kc.get("cost", 0)
+                        if isinstance(cost, (int, float)):
+                            mana_spent += int(cost)
+
+                is_pass = len(opp_cards_this_turn) == 0 and mana_spent == 0 and self._current_turn > 1
+
+                observed = ObservedBehavior(
+                    played_cards=list(opp_cards_this_turn),
+                    mana_spent=mana_spent,
+                    available_mana=self._available_mana,
+                    passed=is_pass,
+                    turn=self._current_turn,
+                )
+
+                # 如果没有足够信息（回合太早或没有观测行为），跳过MCTS
+                if self._current_turn <= 1 and not observed.played_cards:
+                    return False
+
+                # 执行MCTS推断
+                # 优先使用 Power.log + Tracker 实时数据（v2）
+                if self._log_monitor is not None and self._our_controller and self._opp_controller:
+                    mcts_probs = self._mcts_engine.infer_from_tracker(
+                        log_monitor=self._log_monitor,
+                        our_controller=self._our_controller,
+                        opp_controller=self._opp_controller,
+                        observed=observed,
+                        bayesian_state=self._bayesian_state,
+                        seen_cards=self._seen_cards,
+                        generated_cards=self._generated_cards,
+                        hand_size=hand_size,
+                        time_budget_ms=400.0,
+                    )
+                else:
+                    # 回退到简化模式（兼容旧接口）
+                    mcts_probs = self._mcts_engine.infer_hand_probabilities(
+                        bayesian_state=self._bayesian_state,
+                        observed=observed,
+                        seen_cards=self._seen_cards,
+                        generated_cards=self._generated_cards,
+                        hand_size=hand_size,
+                        time_budget_ms=400.0,
+                    )
+
+                if not mcts_probs:
+                    return False
+
+                # 缓存结果供后续帧使用
+                self._last_mcts_result = mcts_probs
+
             except Exception as e:
-                logger.debug("MCTS引擎初始化失败: %s", e)
+                logger.debug("MCTS推断执行失败: %s", e)
                 return False
 
-        # 构建MCTS所需的输入
-        try:
-            from analysis.engine.opponent_hand_mcts import ObservedBehavior
-
-            # 构建观测行为
-            opp_cards_this_turn = self._opp_cards_played_this_turn
-            mana_spent = 0
-            for kc in self._known_cards_with_info:
-                if kc.get("turn_seen", 0) == self._current_turn:
-                    cost = kc.get("cost", 0)
-                    if isinstance(cost, (int, float)):
-                        mana_spent += int(cost)
-
-            is_pass = len(opp_cards_this_turn) == 0 and mana_spent == 0 and self._current_turn > 1
-
-            observed = ObservedBehavior(
-                played_cards=list(opp_cards_this_turn),
-                mana_spent=mana_spent,
-                available_mana=self._available_mana,
-                passed=is_pass,
-                turn=self._current_turn,
-            )
-
-            # 如果没有足够信息（回合太早或没有观测行为），跳过MCTS
-            if self._current_turn <= 1 and not observed.played_cards:
-                return False
-
-            # 执行MCTS推断
-            # 优先使用 Power.log + Tracker 实时数据（v2）
-            if self._log_monitor is not None and self._our_controller and self._opp_controller:
-                mcts_probs = self._mcts_engine.infer_from_tracker(
-                    log_monitor=self._log_monitor,
-                    our_controller=self._our_controller,
-                    opp_controller=self._opp_controller,
-                    observed=observed,
-                    bayesian_state=self._bayesian_state,
-                    seen_cards=self._seen_cards,
-                    generated_cards=self._generated_cards,
-                    hand_size=hand_size,
-                    time_budget_ms=400.0,
-                )
-            else:
-                # 回退到简化模式（兼容旧接口）
-                mcts_probs = self._mcts_engine.infer_hand_probabilities(
-                    bayesian_state=self._bayesian_state,
-                    observed=observed,
-                    seen_cards=self._seen_cards,
-                    generated_cards=self._generated_cards,
-                    hand_size=hand_size,
-                    time_budget_ms=400.0,
-                )
-
-            if not mcts_probs:
-                return False
-
-            # 将MCTS推断结果应用到报告
-            # 策略：MCTS给出了每张牌在手牌中的概率
-            # 我们用它作为似然比来修正超几何分布的基础概率
-            for cp in report.card_probabilities:
-                if cp.source == "revealed":
-                    continue
-
-                mcts_prob = mcts_probs.get(cp.card_id, 0.0)
-                if mcts_prob <= 0.0:
-                    continue
-
-                # 将MCTS概率转化为似然比
-                # 如果MCTS认为牌在手牌中的概率高于超几何基础概率 → 提升
-                # 如果MCTS认为概率低于基础概率 → 降低
-                if cp.probability > 0.0 and cp.probability < 1.0:
-                    # LR = P(mcts|card_in_hand) / P(mcts|card_not_in_hand)
-                    # 近似：LR = mcts_prob / (1 - mcts_prob) / (prior_prob / (1 - prior_prob))
-                    prior_odds = cp.probability / (1.0 - cp.probability)
-                    mcts_odds = mcts_prob / max(0.001, 1.0 - mcts_prob)
-                    if prior_odds > 0:
-                        lr = mcts_odds / prior_odds
-                        # 限制似然比范围，避免过度调整
-                        lr = max(0.1, min(10.0, lr))
-                        cp.probability = apply_likelihood_to_probability(cp.probability, lr)
-                        if abs(lr - 1.0) > 0.1 and cp.source not in ("revealed", "inferred"):
-                            cp.source = "inferred"
-                elif cp.probability == 0.0 and mcts_prob > 0.0:
-                    # 基础概率为0但MCTS认为有可能
-                    cp.probability = mcts_prob * 0.5  # 保守提升
-                    cp.source = "inferred"
-
-            self._last_mcts_result = mcts_probs
-            return True
-
-        except Exception as e:
-            logger.debug("MCTS推断失败，回退到似然比方法: %s", e)
+        if not mcts_probs:
             return False
+
+        # 将MCTS推断结果应用到报告
+        # 策略：MCTS给出了每张牌在手牌中的概率
+        # 我们用它作为似然比来修正超几何分布的基础概率
+        for cp in report.card_probabilities:
+            if cp.source == "revealed":
+                continue
+
+            mcts_prob = mcts_probs.get(cp.card_id, 0.0)
+            if mcts_prob <= 0.0:
+                continue
+
+            # 将MCTS概率转化为似然比
+            # 如果MCTS认为牌在手牌中的概率高于超几何基础概率 → 提升
+            # 如果MCTS认为概率低于基础概率 → 降低
+            if cp.probability > 0.0 and cp.probability < 1.0:
+                # LR = P(mcts|card_in_hand) / P(mcts|card_not_in_hand)
+                # 近似：LR = mcts_prob / (1 - mcts_prob) / (prior_prob / (1 - prior_prob))
+                prior_odds = cp.probability / (1.0 - cp.probability)
+                mcts_odds = mcts_prob / max(0.001, 1.0 - mcts_prob)
+                if prior_odds > 0:
+                    lr = mcts_odds / prior_odds
+                    # 限制似然比范围，避免过度调整
+                    lr = max(0.1, min(10.0, lr))
+                    cp.probability = apply_likelihood_to_probability(cp.probability, lr)
+                    if abs(lr - 1.0) > 0.1 and cp.source not in ("revealed", "inferred"):
+                        cp.source = "inferred"
+            elif cp.probability == 0.0 and mcts_prob > 0.0:
+                # 基础概率为0但MCTS认为有可能
+                cp.probability = mcts_prob * 0.5  # 保守提升
+                cp.source = "inferred"
+
+        # 为不在超几何报告中但MCTS给出概率的卡牌添加新条目
+        existing_ids = {cp.card_id for cp in report.card_probabilities}
+        for card_id, mcts_prob in mcts_probs.items():
+            if card_id not in existing_ids and mcts_prob >= 0.1:
+                # MCTS发现了新候选牌（可能不在top-3卡组中）
+                cp = self._card_id_to_probability(card_id, mcts_prob, "inferred")
+                if cp:
+                    report.card_probabilities.append(cp)
+                    existing_ids.add(card_id)
+
+        return True
 
     def _build_world_evidence(self, hand_size: int = 0) -> Optional[WorldModelEvidence]:
         """从当前引擎状态构建世界模型证据。
