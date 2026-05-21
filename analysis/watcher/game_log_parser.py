@@ -19,11 +19,7 @@ from analysis.utils.hero_class import hero_card_to_class, class_to_cn
 log = logging.getLogger(__name__)
 
 
-class _SafeEntityTreeExporter(EntityTreeExporter):
-    def handle_full_entity(self, packet):
-        if packet.entity is None:
-            return None
-        return super().handle_full_entity(packet)
+from analysis.watcher.game_tracker import SafeEntityTreeExporter
 
 
 _HERO_SKILL_SUFFIXES = ("hp", "bp", "dbp", "ebp")
@@ -213,7 +209,7 @@ def parse_games(log_path: str, latest_game_only: bool = False) -> List[GameRecor
     games = []
     for gi, packet_tree in enumerate(parser.games):
         try:
-            exporter = _SafeEntityTreeExporter(packet_tree)
+            exporter = SafeEntityTreeExporter(packet_tree)
             exporter.export()
             game = exporter.game
         except Exception:

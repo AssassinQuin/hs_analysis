@@ -64,6 +64,8 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
+from analysis.engine.opponent_scoring import GreedyActionScorer
+
 logger = logging.getLogger(__name__)
 
 
@@ -426,6 +428,7 @@ class OpponentTurnSimulator:
     def __init__(self):
         self._card_db = None
         self._state_builder = None  # PowerLogGameStateBuilder 延迟初始化
+        self._action_scorer = GreedyActionScorer()
 
     def _ensure_card_db(self):
         if self._card_db is None:
@@ -879,7 +882,7 @@ class OpponentTurnSimulator:
             if not actions:
                 break
 
-            best_action = self._select_best_action(state, actions)
+            best_action = self._action_scorer.select(state, actions)
 
             if best_action is None:
                 break
@@ -913,83 +916,6 @@ class OpponentTurnSimulator:
             passed=is_pass,
         )
 
-    def _select_best_action(self, state, actions):
-        """贪心选择最优动作。
-
-        使用轻量级评估，避免全量MCTS搜索（太慢）。
-        优先使用 CompositeEvaluator，回退到简单启发式。
-        评估维度：
-        1. 法力效率（用了更多法力的动作更好）
-        2. 场面价值（随从总属性更高的更好）
-        3. 伤害效率（打脸伤害更高的更好）
-        """
-        try:
-            from analysis.card.abilities.definition import ActionKind as ActionType
-            from analysis.card.engine.simulation import apply_action
-        except ImportError:
-            raise RuntimeError(
-                "v1 effects engine removed. opponent_hand_mcts.py "
-                "needs migration to v2 (analysis.card.engine)."
-            )
-
-        if not actions:
-            return None
-
-        # 如果只有END_TURN，直接返回
-        non_end = [a for a in actions if a.action_type != ActionType.END_TURN]
-        if not non_end:
-            return actions[0]
-
-        best_action = None
-        best_score = float('-inf')
-
-        # 尝试使用 CompositeEvaluator（更精确）
-        use_evaluator = False
-        try:
-            from analysis.evaluators.composite import evaluate_delta
-            use_evaluator = True
-        except ImportError:
-            pass
-
-        for action in non_end[:15]:  # 限制评估数量
-            try:
-                new_state = apply_action(state, action)
-                if use_evaluator:
-                    score = evaluate_delta(state, new_state)
-                else:
-                    score = self._evaluate_state(new_state, state)
-                if score > best_score:
-                    best_score = score
-                    best_action = action
-            except Exception:
-                continue
-
-        # 如果所有动作评分都很低，选择END_TURN
-        if best_action is None or best_score < 0:
-            end_turns = [a for a in actions if a.action_type == ActionType.END_TURN]
-            if end_turns:
-                return end_turns[0]
-
-        return best_action or non_end[0]
-
-    @staticmethod
-    def _evaluate_state(new_state, old_state):
-        """评估一个动作后的状态价值（简单启发式）。"""
-        score = 0.0
-
-        our_board_value = sum(m.attack + m.health for m in new_state.board)
-        old_board_value = sum(m.attack + m.health for m in old_state.board)
-        score += (our_board_value - old_board_value) * 0.5
-
-        opp_hp_change = new_state.opponent.hero.hp - old_state.opponent.hero.hp
-        score += max(0, -opp_hp_change) * 1.0
-
-        mana_used = old_state.mana.available - new_state.mana.available
-        score += mana_used * 0.3
-
-        score += len(new_state.board) * 0.5
-
-        return score
 
 
 # ── 候选手牌采样 ──────────────────────────────────────────────

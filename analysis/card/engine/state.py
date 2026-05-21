@@ -454,8 +454,10 @@ class ManaState:
                 mod.used = True
                 return
             if mod.scope == "this_turn":
-                mod.used = True
-                return
+                # this_turn modifiers persist for the entire turn
+                # (cleared at end-of-turn). Don't consume them here —
+                # they apply to all cards played this turn.
+                continue
             if mod.scope == "first_dragon" and race == "DRAGON":
                 mod.used = True
                 return

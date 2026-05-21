@@ -18,7 +18,7 @@ from hslog.export import EntityTreeExporter
 from hearthstone.enums import GameTag, Zone, CardType, Step, State
 
 
-class _SafeEntityTreeExporter(EntityTreeExporter):
+class SafeEntityTreeExporter(EntityTreeExporter):
     """安全的实体树导出器，跳过entity为None的包"""
 
     def handle_full_entity(self, packet):
@@ -402,7 +402,7 @@ class GameTracker:
             return None
 
         packet_tree = self._parser.games[-1]
-        exporter = _SafeEntityTreeExporter(packet_tree)
+        exporter = SafeEntityTreeExporter(packet_tree)
         exporter.export()
         self._current_game_entities = exporter.game
 

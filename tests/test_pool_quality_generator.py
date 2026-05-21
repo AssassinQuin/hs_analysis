@@ -1,12 +1,14 @@
 ﻿#!/usr/bin/env python3
 """Tests for pool_quality_generator.py
 
-Run: python -m pytest scripts/test_pool_quality_generator.py -v
+Run: python -m pytest tests/test_pool_quality_generator.py -v
 """
 
 import json, math, os, sys, tempfile
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add scripts/ directory to path so we can import sibling modules
+_SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts')
+sys.path.insert(0, os.path.abspath(_SCRIPT_DIR))
 
 from pool_quality_generator import (
     load_cards, load_scores, build_pools, compute_pool_metrics,

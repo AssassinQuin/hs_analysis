@@ -312,14 +312,14 @@ class TestNewActionTypes:
 
     def test_action_describe_new_types(self):
         a1 = Action(action_type=ActionType.HERO_REPLACE, card_index=0)
-        assert "替换英雄" in a1.describe()
+        assert "replace hero" in a1.describe()
 
         a2 = Action(action_type=ActionType.TRANSFORM, target_index=1)
-        assert "变形" in a2.describe()
+        assert "transform" in a2.describe()
 
         a3 = Action(
             action_type=ActionType.PLAY_WITH_TARGET,
             card_index=0,
             target_index=1,
         )
-        assert "定向打出" in a3.describe()
+        assert "directed play" in a3.describe()

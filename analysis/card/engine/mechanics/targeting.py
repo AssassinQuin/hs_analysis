@@ -16,10 +16,10 @@ from typing import Callable, List, Optional
 try:
     from analysis.card.data.card_effects import _DAMAGE_CN, _DAMAGE_EN, _AOE_CN, _AOE_EN
 except ImportError:
-    _DAMAGE_CN = re.compile(r"[Dd]eal\s+(\d+)\s*damage")
-    _DAMAGE_EN = _DAMAGE_CN
-    _AOE_CN = re.compile(r"[Aa]ll")
-    _AOE_EN = _AOE_CN
+    _DAMAGE_EN = re.compile(r"[Dd]eal\s+(\d+)\s*damage")
+    _DAMAGE_CN = re.compile(r"造成\s*(\d+)\s*点伤害")
+    _AOE_EN = re.compile(r"[Aa]ll")
+    _AOE_CN = re.compile(r"(?:所有|全部)")
 
 from analysis.card.engine.state import GameState, Minion
 
@@ -229,6 +229,15 @@ _TARGETING_KEYWORDS = [
     r"an?\s+character",
     r"enemy\s+hero",
     r"friendly\s+hero",
+    # Chinese targeting keywords
+    "敌方",
+    "敌方随从",
+    "敌方英雄",
+    "友方",
+    "友方随从",
+    "友方角色",
+    "一个随从",
+    "一个角色",
 ]
 
 

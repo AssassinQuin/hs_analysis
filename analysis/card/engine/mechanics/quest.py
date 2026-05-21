@@ -13,6 +13,7 @@ from typing import Optional
 from analysis.card.abilities.definition import ActionKind as ActionType
 
 _QUEST_THRESHOLD_EN = re.compile(r"(\d+)\s*(?:cards?|spells?|minions?)")
+_QUEST_THRESHOLD_CN = re.compile(r"(\d+)\s*(?:个|张)")
 _QUEST_REWARD_EN = re.compile(
     r"Reward[：:]\s*</?b?>\s*(.+?)(?:<|$)", re.IGNORECASE
 )
@@ -77,6 +78,8 @@ def _parse_threshold(
     if structured_value is not None:
         return structured_value
     m = _QUEST_THRESHOLD_EN.search(text)
+    if not m:
+        m = _QUEST_THRESHOLD_CN.search(text)
     if m:
         return int(m.group(1))
     return 3

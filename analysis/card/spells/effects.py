@@ -153,12 +153,15 @@ class ArmorSpell(Spell):
 
 @register_spell
 class ManaSpell(Spell):
-    """获得/锁定法力水晶。"""
+    """获得/锁定法力水晶 / 减费效果。"""
     def execute(self, desc, state, source=None, target=None):
         amount = resolve_value(desc.value, state, source)
-        # 临时法力
+        # 过载
         if desc.target == "OVERLOAD":
             state.mana.overload_next += amount
+        # 减费效果：添加修饰器而非直接修改可用法力
+        elif desc.target in ("NEXT_COMBO_CARD", "NEXT_SPELL", "NEXT_MINION") and amount < 0:
+            state.mana.add_modifier("cost_reduction", abs(amount), desc.target.lower())
         else:
             state.mana.available += amount
         return state

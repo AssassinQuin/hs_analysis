@@ -309,8 +309,10 @@ def _validate_and_pay_cost(s, card, card_idx: int):
 
     # Mana cost
     eff_cost = s.mana.effective_cost(card)
+    print(f"  _validate: card={getattr(card,'name','?')} base={card.cost} eff={eff_cost} avail_before={s.mana.available}")
     s.mana.available -= eff_cost
     s.mana.consume_modifiers(card)
+    print(f"  _validate: after deduct avail={s.mana.available}")
 
     # Overload
     overload_val = getattr(card, "overload", 0) or 0

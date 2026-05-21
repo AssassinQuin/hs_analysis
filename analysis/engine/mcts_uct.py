@@ -23,6 +23,7 @@ from analysis.card.engine.rules import (
     enumerate_opponent_legal,
 )
 from analysis.card.engine.simulation import apply_action
+from analysis.engine.opponent_scoring import HeuristicRolloutScorer
 from analysis.card.engine.state import GameState
 
 log = logging.getLogger(__name__)
@@ -228,92 +229,8 @@ def _random_rollout(state: GameState, depth: int,
     return reward_fn(s)
 
 
-def _score_opponent_action(state: GameState, action: Action) -> float:
-    """Heuristic score for an opponent action during rollout.
-
-    Higher score = more likely to be selected. Used for weighted
-    random sampling instead of pure uniform random.
-
-    Scoring logic:
-    - Favorable trades: killing our minions efficiently
-    - Go face when ahead (aggro) or no taunts
-    - Play cards: prefer lower-cost first (curve efficiency)
-    - Hero power: moderate priority
-    - End turn: lowest priority
-    """
-    if action.action_type == ActionKind.END_TURN:
-        return 0.1  # always possible but deprioritized
-
-    if action.action_type == ActionKind.HERO_POWER:
-        return 25.0  # moderate priority
-
-    if action.action_type == ActionKind.ATTACK:
-        src_idx = action.source_index
-        if src_idx < 0 or src_idx >= len(state.opponent.board):
-            return 5.0
-        source = state.opponent.board[src_idx]
-        score = 10.0
-
-        tgt_idx = action.target_index
-        if tgt_idx == 0:
-            # Attacking our hero — prefer when no taunts and strong board
-            our_taunts = [m for m in state.board if m.has_taunt]
-            if our_taunts:
-                # Can't go face through taunts — but this action shouldn't
-                # be legal if there are taunts, so score it low
-                score = 1.0
-            else:
-                # Prefer going face with strong attackers
-                score = 15.0 + source.attack
-        elif tgt_idx > 0:
-            # Attacking our minion — score by trade efficiency
-            our_idx = tgt_idx - 1
-            if our_idx < len(state.board):
-                target = state.board[our_idx]
-                # Favorable trade: source survives or kills for less cost
-                if target.attack >= source.health:
-                    score = 30.0  # unfavorable trade
-                elif source.attack >= target.health:
-                    if source.health > target.attack:
-                        score = 35.0  # clean favorable trade
-                    else:
-                        score = 25.0  # even trade
-                else:
-                    score = 20.0  # chip damage
-                # Prioritize killing divine shield targets
-                if target.has_divine_shield:
-                    score += 10.0
-                # Prioritize killing high-threat minions
-                score += target.attack * 0.5
-        return max(0.1, score)
-
-    if action.action_type in (ActionKind.PLAY, ActionKind.PLAY_WITH_TARGET):
-        card_idx = action.card_index
-        if card_idx < 0 or card_idx >= len(state.opponent.hand):
-            return 5.0
-        card = state.opponent.hand[card_idx]
-        cost = getattr(card, 'cost', 0)
-        card_type = (getattr(card, 'card_type', '') or '').upper()
-
-        # Prefer playing lower-cost cards first (better curve utilization)
-        score = 20.0 - cost * 0.5
-
-        if card_type == 'MINION':
-            # Bonus for board presence
-            atk = getattr(card, 'attack', 0)
-            hp = getattr(card, 'health', 0)
-            score += (atk + hp) * 0.3
-            # Bonus for rush/charge (immediate impact)
-            mechanics = set(getattr(card, 'mechanics', []) or [])
-            if 'RUSH' in mechanics or 'CHARGE' in mechanics:
-                score += 8.0
-        elif card_type == 'SPELL':
-            # Bonus for spell that might do something impactful
-            score += 5.0
-
-        return max(0.1, score)
-
-    return 10.0
+# 全局单例：启发式 Rollout 评分器
+_ROLLOUT_SCORER = HeuristicRolloutScorer()
 
 
 def _heuristic_rollout(state: GameState, depth: int,
@@ -322,7 +239,7 @@ def _heuristic_rollout(state: GameState, depth: int,
     Rollout with heuristic opponent policy.
 
     Our actions: still random (exploration).
-    Opponent actions: weighted random based on _score_opponent_action.
+    Opponent actions: weighted random based on HeuristicRolloutScorer.
 
     This gives more realistic opponent behavior in rollouts while
     maintaining the stochastic diversity that MCTS needs.
@@ -341,14 +258,7 @@ def _heuristic_rollout(state: GameState, depth: int,
             break
 
         if s.is_opponent_turn and len(legal) > 1:
-            # Use weighted selection for opponent actions
-            scores = [_score_opponent_action(s, a) for a in legal]
-            total = sum(scores)
-            if total > 0:
-                weights = [sc / total for sc in scores]
-                action = random.choices(legal, weights=weights)[0]
-            else:
-                action = random.choice(legal)
+            action = _ROLLOUT_SCORER.select(s, legal)
         else:
             action = random.choice(legal)
         s = apply_action(s, action)

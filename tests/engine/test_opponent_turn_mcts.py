@@ -16,9 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import pytest
 from analysis.engine.mcts_uct import (
     MCTSUCT, MCTSConfig, MCTSNode, MCTSResult,
-    _score_opponent_action, _heuristic_rollout, _random_rollout,
+    _heuristic_rollout, _random_rollout,
     _default_reward,
 )
+from analysis.engine.opponent_scoring import HeuristicRolloutScorer
 from analysis.card.abilities.definition import Action, ActionKind
 from analysis.card.engine.state import (
     GameState, HeroState, ManaState, OpponentState, Minion, Weapon,
@@ -58,13 +59,15 @@ def _make_state(*, is_opponent=False, hero_class="MAGE", opp_class="WARLOCK",
 # ===========================================================================
 
 class TestOpponentActionScoring:
-    """Test _score_opponent_action heuristic."""
+    """Test HeuristicRolloutScorer."""
+
+    _scorer = HeuristicRolloutScorer()
 
     def test_end_turn_lowest_priority(self):
         state = _make_state(is_opponent=True)
         et = Action(action_type=ActionKind.END_TURN)
         hp = Action(action_type=ActionKind.HERO_POWER)
-        assert _score_opponent_action(state, hp) > _score_opponent_action(state, et)
+        assert self._scorer.score(state, hp) > self._scorer.score(state, et)
 
     def test_attack_favorable_trade_higher_score(self):
         state = _make_state(
@@ -74,7 +77,7 @@ class TestOpponentActionScoring:
         )
         attack = Action(action_type=ActionKind.ATTACK, source_index=0, target_index=1)
         et = Action(action_type=ActionKind.END_TURN)
-        assert _score_opponent_action(state, attack) > _score_opponent_action(state, et)
+        assert self._scorer.score(state, attack) > self._scorer.score(state, et)
 
     def test_play_low_cost_higher_score(self):
         state = _make_state(
@@ -86,7 +89,7 @@ class TestOpponentActionScoring:
         )
         cheap = Action(action_type=ActionKind.PLAY, card_index=0)
         expensive = Action(action_type=ActionKind.PLAY, card_index=1)
-        assert _score_opponent_action(state, cheap) > _score_opponent_action(state, expensive)
+        assert self._scorer.score(state, cheap) > self._scorer.score(state, expensive)
 
     def test_rush_minion_bonus(self):
         state = _make_state(
@@ -99,7 +102,7 @@ class TestOpponentActionScoring:
         )
         normal = Action(action_type=ActionKind.PLAY, card_index=0)
         rush = Action(action_type=ActionKind.PLAY, card_index=1)
-        assert _score_opponent_action(state, rush) > _score_opponent_action(state, normal)
+        assert self._scorer.score(state, rush) > self._scorer.score(state, normal)
 
 
 class TestHeuristicRollout:
