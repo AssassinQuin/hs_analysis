@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import List, Tuple
 
-from analysis.card.engine.state import GameState, Minion
+from analysis.card.engine.state import GameState, Minion, Weapon
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +261,49 @@ def _apply_deathrattle_effect(
             hero.armor = getattr(hero, 'armor', 0) + n
 
         logger.debug("Deathrattle armor %d", n)
+
+    elif parts[0] == 'equip' and len(parts) >= 2:
+        # equip:dbfId — 装备武器（如死亡之咬、真银圣剑）
+        try:
+            weapon_dbf = int(parts[1])
+            from analysis.card.data.card_data import get_db
+            db = get_db()
+            if db:
+                wdata = db.get_by_dbf(weapon_dbf)
+                if wdata:
+                    atk = wdata.get("attack", 0) or 0
+                    dur = wdata.get("health", 0) or wdata.get("durability", 0) or 0
+                    w_name = wdata.get("name", "")
+                    if board_type == 'friendly':
+                        s.hero.weapon = Weapon(attack=atk, health=dur, name=w_name)
+                    else:
+                        if s.opponent and s.opponent.hero:
+                            s.opponent.hero.weapon = Weapon(attack=atk, health=dur, name=w_name)
+                    logger.debug("Deathrattle equip weapon %s (%d/%d)", w_name, atk, dur)
+        except (ValueError, ImportError, AttributeError):
+            logger.warning("Invalid equip effect: %s", effect)
+
+    elif parts[0] == 'shuffle' and len(parts) >= 2:
+        # shuffle:card_id — 洗入牌库（如爆牌鱼、污染）
+        card_id = parts[1]
+        if board_type == 'friendly':
+            if hasattr(s, 'shuffled_into_deck'):
+                s.shuffled_into_deck.append(card_id)
+        else:
+            if hasattr(s.opponent, 'shuffled_into_deck'):
+                s.opponent.shuffled_into_deck.append(card_id)
+        logger.debug("Deathrattle shuffle into deck: %s (%s)", card_id, board_type)
+
+    elif parts[0] == 'secret':
+        # secret — 挂载奥秘到敌方英雄
+        # 简化实现：标记一个奥秘被挂载，不模拟具体奥秘效果
+        if board_type == 'friendly':
+            if hasattr(s, 'add_secret'):
+                s.add_secret()
+        else:
+            if hasattr(s.opponent, 'add_secret'):
+                s.opponent.add_secret()
+        logger.debug("Deathrattle add secret (%s)", board_type)
 
     else:
         logger.debug("Unparseable deathrattle effect: %s", effect)

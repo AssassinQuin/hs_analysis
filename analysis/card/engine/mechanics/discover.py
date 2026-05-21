@@ -10,13 +10,12 @@ effects by selecting the best card and adding it to hand.
 from __future__ import annotations
 
 import logging
-import random
 import re
 from dataclasses import dataclass
 from typing import List, Optional
 
 from analysis.card.data.card_data import get_index
-from analysis.card.engine.deterministic import det_top_k
+from analysis.card.engine.deterministic import DeterministicRNG, det_top_k
 from analysis.card.models.card import Card
 from analysis.card.constants.hs_enums import RACE_ZH_MAP as _RACE_MAP, RACE_EN_NORMALIZE as _RACE_EN_MAP
 
@@ -291,8 +290,11 @@ DARK_GIFT_ENCHANTMENTS: list[DarkGiftEnchantment] = [
 ]
 
 
-def apply_dark_gift(card: dict) -> dict:
+def apply_dark_gift(card: dict, rng: Optional[DeterministicRNG] = None) -> dict:
     """Apply a random Dark Gift enchantment to a card dict.
+
+    Uses DeterministicRNG for MCTS-compatible deterministic simulation.
+    If no rng is provided, creates one with default seed 0 (deterministic).
 
     Modifies attack/health or adds keyword/effect in-place.
     Returns the modified card.
@@ -300,7 +302,9 @@ def apply_dark_gift(card: dict) -> dict:
     if not DARK_GIFT_ENCHANTMENTS:
         return card
 
-    gift = random.choice(DARK_GIFT_ENCHANTMENTS)
+    if rng is None:
+        rng = DeterministicRNG(0)
+    gift = rng.choice(DARK_GIFT_ENCHANTMENTS)
 
     # Apply stat bonuses
     if gift.attack_bonus:
@@ -430,7 +434,8 @@ def resolve_discover(state, card_text: str, hero_class: str = '', english_text: 
         else:
             sample = det_top_k(pool, min(3, len(pool)), score_fn=_card_score)
             if dark_gift_active:
-                sample = [apply_dark_gift(c.copy()) for c in sample]
+                discover_rng = DeterministicRNG.from_state(state)
+                sample = [apply_dark_gift(c.copy(), rng=discover_rng) for c in sample]
             chosen_raw = max(sample, key=lambda c: _card_score(c))
 
         chosen_card = Card.from_hsdb_dict(chosen_raw)

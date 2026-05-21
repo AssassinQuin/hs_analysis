@@ -929,7 +929,7 @@ def _hero_weapon_attack(s: "GameState", action: Action) -> "GameState":
         else:
             target.health -= weapon.attack
         _apply_damage_to_hero(s.hero, target.attack)
-        s.opponent.board = [m for m in s.opponent.board if m.health > 0]
+        # 不立即移除 — _attack() 末尾统一 _resolve_deaths()
 
     weapon.health -= 1
     if weapon.health <= 0:
@@ -999,8 +999,8 @@ def _minion_attack(s: "GameState", action: Action) -> "GameState":
             m.has_stealth = False
             break
 
-    # Remove obviously dead minions immediately (pre-death-phase cleanup)
-    s.opponent.board = [m for m in s.opponent.board if m.health > 0]
+    # 不立即移除死亡随从 — _attack() 会在最后统一调用 _resolve_deaths()
+    # 批处理确保亡语正确触发（修复 Phase 4 评审发现）
 
     # Windfury tracking
     if src_idx < len(s.board):
