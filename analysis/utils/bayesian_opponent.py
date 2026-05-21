@@ -169,9 +169,11 @@ class BayesianOpponentModel:
     def _load_card_data(self):
         """Load card data from CardDB for dbfId lookups."""
         try:
+            from analysis.card.data.card_data import get_db
             db = get_db()
             self.cards_by_dbf = dict(db.dbf_lookup)
-        except Exception:
+        except Exception as e:
+            log.warning("Failed to load card data for Bayesian model: %s", e)
             self.cards_by_dbf = {}
 
     def _load_decks(self, player_class=None):
@@ -182,6 +184,7 @@ class BayesianOpponentModel:
         2. Deck codes fallback (from deck_codes.txt if HSReplay cache is empty or unavailable)
 
         If player_class is provided (e.g. 'MAGE'), only decks of that class are loaded.
+        After class filtering, deck card classes are validated to catch mis-tagged decks.
         """
         loaded_decks = []
 
@@ -217,7 +220,69 @@ class BayesianOpponentModel:
             loaded_decks = [d for d in loaded_decks if d.get("class", "").upper() == player_class.upper()]
             log.info("过滤后 %s 职业有 %d 个卡组", player_class, len(loaded_decks))
 
+        # 4. Validate deck card classes to catch mis-tagged decks
+        #    (e.g. "Zoo Warlock" tagged as MAGE in the cache)
+        if loaded_decks:
+            validated = []
+            for d in loaded_decks:
+                if self._validate_deck_card_classes(d):
+                    validated.append(d)
+                else:
+                    log.info("  卡组 '%s' (id=%s) 因职业标签错误被过滤",
+                             d.get("name"), d.get("archetype_id"))
+            rejected = len(loaded_decks) - len(validated)
+            if rejected:
+                log.info("卡组职业验证: %d 个被过滤, %d 个保留", rejected, len(validated))
+            loaded_decks = validated
+
         self.decks = loaded_decks
+
+    def _validate_deck_card_classes(self, deck: dict) -> bool:
+        """Validate that a deck's cards match its declared class.
+
+        If >50% of the deck's cards (by unique dbfId) belong to a class
+        other than the deck's declared class or NEUTRAL, the deck is likely
+        mis-tagged (e.g. "Zoo Warlock" stored as class=MAGE) and should be skipped.
+
+        Args:
+            deck: Archetype dict with 'class' and 'cards' keys.
+
+        Returns:
+            True if the deck passes validation, False if it should be rejected.
+        """
+        if not deck.get("cards"):
+            return True
+
+        declared_class = deck.get("class", "").upper()
+        if not declared_class:
+            return True
+
+        unique_dbfs = set(deck["cards"])
+        off_class_count = 0
+        total_checked = 0
+
+        for dbf in unique_dbfs:
+            card_data = self.cards_by_dbf.get(dbf)
+            if not card_data:
+                continue
+            card_class = card_data.get("cardClass", "").upper()
+            if card_class and card_class not in ("NEUTRAL", declared_class):
+                off_class_count += 1
+            total_checked += 1
+
+        if total_checked == 0:
+            return True
+
+        off_class_ratio = off_class_count / total_checked
+        if off_class_ratio > 0.50:
+            log.warning(
+                "卡组 '%s' (id=%s, declared=%s): %.0f%% of cards are off-class — rejecting",
+                deck.get("name", "?"), deck.get("archetype_id"), declared_class,
+                off_class_ratio * 100
+            )
+            return False
+
+        return True
 
     def build_prior(self, player_class=None):
         """Build prior probability distribution over archetypes.

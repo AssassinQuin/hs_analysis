@@ -317,6 +317,19 @@ class HandPredictor:
                 if dp.card_id in transformed_ids:
                     dp.source = "generated"
 
+        # ── 后过滤：去除衍生牌、非收集卡牌、非本职业卡牌 ──
+        # 必须放在 predict() 末尾（所有添加路径之后），包括：
+        #   - 概率引擎的输出 (lines 216-230)
+        #   - CardEffectInferenceEngine 推断 (lines ~298-299)
+        #   - 已揭示手牌补充 (lines 303-310)
+        # 问题: opp_generated_seen 只追踪到部分衍生牌（15/30+），且贝叶斯
+        # 卡组池可能加载错误职业的卡组（如 Zoo Warlock），导致 Warlock/DK/Druid
+        # 卡牌概率异常膨胀。此过滤器作为安全网，利用卡牌数据库捕获遗漏的衍生
+        # 牌和非本职业卡牌。
+        self._filter_generated_and_wrong_class(
+            result, state_dict.get("opp_class_en", "") or "",
+        )
+
         # ── 排序 ──
         result.hand_predictions.sort(
             key=lambda hp: (
@@ -327,6 +340,93 @@ class HandPredictor:
         )
 
         return result
+
+    def _filter_generated_and_wrong_class(
+        self, result: PredictionResult, opp_class: str,
+    ) -> None:
+        """后过滤：去除衍生牌、非收集卡牌、非本职业卡牌。
+
+        问题背景:
+          - opp_generated_seen 只追踪到部分衍生牌，遗漏率达 50%+
+          - 贝叶斯卡组池可能加载错误职业的卡组（如 Zoo Warlock）
+            导致 Warlock/DK/Druid 卡牌概率异常膨胀
+          - 概率引擎内部过滤依赖 card_data 非空，但 token 卡牌常无 DB 记录
+
+        此过滤器作为安全网，利用卡牌数据库完整捕获遗留的衍生牌和
+        非本职业卡牌。使用保守策略：仅剔除明确有问题的卡牌。
+
+        Args:
+            result: 预测结果（被就地修改）
+            opp_class: 对手职业英文名（如 "MAGE"）
+        """
+        if not opp_class or not self._card_db:
+            return
+
+        opp_class = opp_class.upper()
+        generated = getattr(self._probability_engine, '_generated_cards', set()) if self._probability_engine else set()
+
+        before_count = len(result.hand_predictions)
+        filtered: List[HandPrediction] = []
+
+        # 已知可玩职业列表（排除 NEUTRAL 和非职业分类）
+        PLAYABLE_CLASSES = frozenset({
+            "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVILCLASS", "HUNTER",
+            "MAGE", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
+        })
+
+        for hp in result.hand_predictions:
+            # 概率为 0 的占位符无需过滤
+            if hp.probability <= 0.0:
+                filtered.append(hp)
+                continue
+
+            card_data = self._card_db.get_card(hp.card_id) if hp.card_id else None
+
+            if card_data is not None:
+                card_class = (card_data.get("cardClass", "") or "").upper()
+                collectible = card_data.get("collectible", True)
+
+                # 过滤 1: 非收集卡牌且非本职业 → 衍生牌
+                # 标准构筑中，非收集卡牌不可能在初始卡组中
+                if not collectible and card_class not in ("", opp_class):
+                    logger.debug("  过滤衍生牌(非收集): %s (%s) class=%s collectible=%s",
+                                 hp.name, hp.card_id, card_class, collectible)
+                    continue
+
+                # 过滤 2: 明确的非本职业卡牌 → 贝叶斯卡组池错配
+                # 适用于所有 source（包括 revealed），因为即使被"揭示"过的卡牌，
+                # 如果属于其他职业，它也是衍生牌而非卡组牌
+                if card_class in PLAYABLE_CLASSES and card_class not in ("NEUTRAL", opp_class):
+                    logger.debug("  过滤非本职业: %s (%s) class=%s, opp=%s source=%s",
+                                 hp.name, hp.card_id, card_class, opp_class, hp.source)
+                    continue
+            else:
+                # card_data 为 None → 未知卡牌 ID
+                # 策略: 检查是否是明显的 token ID 模式
+                cid = hp.card_id or ""
+                is_token_id = (
+                    cid.endswith("t")       # 标准衍生牌后缀 (如 NEW1_008t)
+                    or "_t" in cid.lower()  # 其他衍生牌模式
+                    or cid.startswith("TB_")  # 乱斗/特殊模式卡牌
+                )
+                if is_token_id:
+                    logger.debug("  过滤 token ID 模式: %s (%s)", hp.name, cid)
+                    continue
+                # 不在 generated 集中且 ID 看起来正常 → 保守保留
+                if cid and cid in generated:
+                    logger.debug("  过滤未知衍生牌: %s (%s)", hp.name, cid)
+                    continue
+                # 否则保留（可能只是 DB 暂缺的合法卡牌）
+
+            filtered.append(hp)
+
+        after_count = len(filtered)
+        removed = before_count - after_count
+        if removed > 0:
+            logger.info("后过滤: 移除了 %d/%d 张预测 (剩余 %d)",
+                        removed, before_count, after_count)
+
+        result.hand_predictions = filtered
 
     def _apply_tutor_constraints(self, result: PredictionResult,
                                  known_hand_types: List[Dict]) -> None:
