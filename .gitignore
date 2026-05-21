@@ -35,6 +35,7 @@ upload/
 logs/full_flow_*.txt
 download/mcts_*.json
 download/mcts_*.pdf
+gt.json
 
 # Game log directories (user-specific, large)
 Hearthstone_*/
