@@ -532,16 +532,24 @@ class CoreLogMonitor:
         n0 = getattr(players[0], 'name', '') or ''
         n1 = getattr(players[1], 'name', '') or ''
 
+        # 诊断：打印所有输入信息
+        _names = self._player_names
+        _pid0 = players[0].tags.get(GameTag.PLAYER_ID, 0) if hasattr(players[0], 'tags') else 0
+        _pid1 = players[1].tags.get(GameTag.PLAYER_ID, 0) if hasattr(players[1], 'tags') else 0
+        logger.info("玩家检测诊断: n0=%r n1=%r _player_names=%r pid0=%d pid1=%d known_name=%r saved_ctrl=%d",
+                    n0, n1, _names, _pid0, _pid1,
+                    self._our_known_name, saved_our_controller)
+
         # 最高优先级: 已知我方名称匹配（跨游戏持久化）
         # 一旦从任何方式正确识别过，后续游戏直接用名称匹配
         # 使用 name_matches 而非 ==，以处理 BattleTag 含 #XXXX 后缀的匹配
         # 配置为 "湫然#51704" 时，hslog player.name 可能是 "湫然"（无后缀）
         if self._our_known_name:
             if n0 and name_matches(n0, self._our_known_name):
-                logger.debug("玩家检测(KNOWN_NAME): 我方=players[0] (name=%s)", n0)
+                logger.info("玩家检测(KNOWN_NAME): 我方=players[0] (name=%s)", n0)
                 return 0
             if n1 and name_matches(n1, self._our_known_name):
-                logger.debug("玩家检测(KNOWN_NAME): 我方=players[1] (name=%s)", n1)
+                logger.info("玩家检测(KNOWN_NAME): 我方=players[1] (name=%s)", n1)
                 return 1
 
         # 优先级次高: AI_MAKES_DECISIONS_FOR_PLAYER 标签
@@ -1066,6 +1074,15 @@ class CoreLogMonitor:
         # 桥接实体事件到 GlobalTracker（在 controller 确定之后）
         self._bridge_entities_to_global_tracker()
         self._bridge_new_entities()
+
+        # 诊断：最终状态摘要
+        gt_state = self.global_tracker.state
+        logger.info("玩家检测最终: our_ctrl=%d opp_ctrl=%d player_hero=%s opp_hero=%s player_name=%s",
+                    self.global_tracker.our_controller,
+                    self.global_tracker.opp_controller,
+                    gt_state.player_hero_class or "(空)",
+                    gt_state.opp_hero_class or "(空)",
+                    self._our_known_name)
 
         # 不在此处设置 _game_lifecycle = READY，
         # 让 _try_enrich_player_info 处理完整的生命周期转换。
