@@ -1267,6 +1267,8 @@ class DynamicProbabilityEngine:
 
         # 2. 按 position 构建预测
         predictions: List[PositionPrediction] = []
+        # 已分配到某位置的卡牌，后续未知位置不再重复分配（v6）
+        used_card_ids: Set[str] = set()
 
         # 倒排：entity_id → card_id（从 known_hand_with_pos）
         eid_to_card: Dict[int, str] = {}
@@ -1282,6 +1284,10 @@ class DynamicProbabilityEngine:
                 if cid:
                     pos_to_card[pos] = cid
 
+        # 预排序 flat 候选，供未知位置逐位取用
+        sorted_flat = sorted(flat_probs.items(), key=lambda x: -x[1])
+        sorted_flat_idx = 0
+
         # 对每个位置 1..hand_size
         for pos in range(1, hand_size + 1):
             eid = pos_to_eid.get(pos, 0)
@@ -1290,6 +1296,7 @@ class DynamicProbabilityEngine:
             if card_id and flat_cards.get(card_id, {}).get("source") == "revealed":
                 # 已揭示 → 100% 确认
                 info = flat_cards.get(card_id, {})
+                used_card_ids.add(card_id)
                 predictions.append(PositionPrediction(
                     position=pos, entity_id=eid, card_id=card_id,
                     name=info.get("name", card_id), probability=1.0,
@@ -1335,6 +1342,7 @@ class DynamicProbabilityEngine:
 
                         if weighted_candidates:
                             best_cid, best_prob, best_cost = weighted_candidates[0]
+                            used_card_ids.add(best_cid)
                             alternatives = [(cid, p) for cid, p, _ in weighted_candidates[1:4]]
                             predictions.append(PositionPrediction(
                                 position=pos, entity_id=eid,
@@ -1347,6 +1355,7 @@ class DynamicProbabilityEngine:
 
                 # 默认：用 flat 概率中该位置对应的已知卡牌
                 if card_id and base_prob > 0:
+                    used_card_ids.add(card_id)
                     info = flat_cards.get(card_id, {})
                     predictions.append(PositionPrediction(
                         position=pos, entity_id=eid,
@@ -1355,17 +1364,31 @@ class DynamicProbabilityEngine:
                         source="predicted", cost=info.get("cost", 0),
                     ))
                 else:
-                    # 完全未知位置 → 用 top-1 flat 卡牌填充
-                    top_cards = sorted(flat_probs.items(), key=lambda x: -x[1])
-                    best = top_cards[0] if top_cards else ("", 0.0)
-                    best_cid, best_prob = best
-                    info = flat_cards.get(best_cid, {})
-                    predictions.append(PositionPrediction(
-                        position=pos, entity_id=eid,
-                        card_id=best_cid, name=info.get("name", best_cid),
-                        probability=best_prob,
-                        source="unknown", cost=info.get("cost", 0),
-                    ))
+                    # 完全未知位置 → 用下一个未使用的 flat 卡牌填充
+                    while sorted_flat_idx < len(sorted_flat):
+                        best_cid, best_prob = sorted_flat[sorted_flat_idx]
+                        sorted_flat_idx += 1
+                        if best_cid not in used_card_ids:
+                            used_card_ids.add(best_cid)
+                            info = flat_cards.get(best_cid, {})
+                            predictions.append(PositionPrediction(
+                                position=pos, entity_id=eid,
+                                card_id=best_cid, name=info.get("name", best_cid),
+                                probability=best_prob,
+                                source="unknown", cost=info.get("cost", 0),
+                            ))
+                            break
+                    else:
+                        # 所有候选都用完了，用概率最低的牌兜底
+                        fallback = sorted_flat[-1] if sorted_flat else ("", 0.0)
+                        fallback_cid, fallback_prob = fallback
+                        info = flat_cards.get(fallback_cid, {})
+                        predictions.append(PositionPrediction(
+                            position=pos, entity_id=eid,
+                            card_id=fallback_cid, name=info.get("name", fallback_cid),
+                            probability=fallback_prob,
+                            source="unknown", cost=info.get("cost", 0),
+                        ))
 
         return predictions
 

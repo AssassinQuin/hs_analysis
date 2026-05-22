@@ -1022,7 +1022,20 @@ class HandSampler:
                     ))
                     world_id += 1
 
-        return worlds[:num_worlds]
+        # ── 去重：手牌组合完全相同的世界只保留第一个 ──
+        seen_hands: Set[Tuple[str, ...]] = set()
+        deduped: List[HandWorld] = []
+        for w in worlds:
+            hand_key = tuple(sorted(c.card_id for c in w.hand_cards if hasattr(c, 'card_id')))
+            if hand_key and hand_key not in seen_hands:
+                seen_hands.add(hand_key)
+                deduped.append(w)
+
+        logger.debug("world去重: %d → %d (%.0f%%)",
+                     len(worlds), len(deduped),
+                     (1 - len(deduped) / max(1, len(worlds))) * 100)
+
+        return deduped[:num_worlds]
 
     def _extend_deck_with_observed_cards(
         self,
@@ -1829,16 +1842,15 @@ class OpponentHandMCTS:
         return result
 
     def _compute_num_worlds(self, budget_ms: float) -> int:
-        """根据时间预算 + 并行线程数计算采样世界数。
+        """根据时间预算 + 并行线程数计算采样世界数，上限5000。
 
-        v5 版本：大幅增加世界数量以提升手牌空间覆盖度。
-        用户要求"模拟时间可以长"，因此使用更多世界数。
-        2000ms + 4线程 → ~640 世界（vs v4 的 128）。
+        用户要求 5000 世界，实际并行模拟受时间预算约束。
+        2000ms + 4线程 → ~5000 世界候选（实际完成数取决于模拟耗时）。
         """
-        base = max(20, min(200, int(budget_ms / 10)))
+        base = max(20, int(budget_ms / 1))  # 2000ms → 2000 base
         if self.num_threads > 1:
-            return max(20, min(500, int(base * self.num_threads * 0.8)))
-        return base
+            return max(20, min(5000, int(base * self.num_threads * 0.6)))  # 2000*4*0.6=4800
+        return max(20, min(5000, base))
 
     def _run_parallel_simulation(
         self,
