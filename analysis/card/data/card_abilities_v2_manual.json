@@ -1154,7 +1154,19 @@
         "note": "Get a random 1-cost spell"
       }
     },
-    "EDR_001": {
+    "EDR_470": {
+    "TRIGGERS": [
+      {
+        "event": "AFTER_HERO_POWER",
+        "spell": {
+          "class": "BuffSpell",
+          "target": "SELF",
+          "health_bonus": 2
+        }
+      }
+    ]
+  },
+  "EDR_001": {
       "ON_PLAY": {
         "class": "AddToHandSpell",
         "pool": "DREAM"
@@ -2861,6 +2873,34 @@
         "target": "ENEMY_SPELLS",
         "duration": 2,
         "note": "Opponent spells cost (1) more for 2 enemy turns"
+      }
+    },
+    "END_000": {
+      "ON_PLAY": {
+        "class": "MetaSpell",
+        "spells": [
+          {
+            "class": "DamageSpell",
+            "target": "ALL_ENEMY_CHARACTERS",
+            "value": {
+              "base": 2,
+              "provider": "spell_damage"
+            }
+          },
+          {
+            "class": "SetHeroPowerSpell",
+            "card_id": "END_000p"
+          }
+        ]
+      }
+    },
+    "END_000p": {
+      "ON_PLAY": {
+        "class": "CustomHeroPowerDamageSpell",
+        "value": {
+          "base": 2,
+          "provider": "spell_damage"
+        }
       }
     }
   }

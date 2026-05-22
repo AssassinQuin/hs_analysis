@@ -370,6 +370,7 @@ class HeroState:
     hero_power_cost: int = 2
     hero_power_damage: int = 0
     is_hero_card: bool = False  # 是否已替换为英雄牌
+    hero_power_card_id: str = ""  # 替换后的英雄技能卡牌ID（如"END_000p"），空=使用默认英雄技能
 
     def copy(self) -> "HeroState":
         """拷贝英雄状态，含武器深拷贝"""

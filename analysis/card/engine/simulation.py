@@ -188,7 +188,31 @@ _IMBUE_HERO_POWERS = {
 
 
 def _apply_hero_power(state: "GameState") -> "GameState":
-    """Apply the hero power effect based on class and imbue_level."""
+    """Apply the hero power effect based on class and imbue_level.
+
+    If hero.hero_power_card_id is set, dispatches through the v2 abilities
+    system (SpellExecutor) instead of the hardcoded _IMBUE_HERO_POWERS table.
+    """
+    # ── 替换英雄技能：通过 v2 abilities 系统调度 ──
+    hero_power_card_id = getattr(state.hero, "hero_power_card_id", "")
+    if hero_power_card_id:
+        try:
+            from analysis.card.abilities.loader_v2 import get_loader_v2
+            from analysis.card.abilities.executor import SpellExecutor
+            from analysis.card.abilities.model import CardAbility
+            loader = get_loader_v2()
+            ability = loader.get(hero_power_card_id)
+            if ability and ability.has_any:
+                state = SpellExecutor._execute_desc(
+                    ability.on_play or ability.deathrattle,
+                    state, source=state.hero,
+                )
+                return state
+        except (ImportError, AttributeError, TypeError) as e:
+            log.warning("替换英雄技能 %s 执行失败: %s", hero_power_card_id, e)
+        # fall through if v2 execution fails
+
+    # ── 默认英雄技能：基于职业和灌注等级的硬编码表 ──
     raw_class = getattr(state.hero, "hero_class", "")
     if hasattr(raw_class, "name"):
         hero_class = str(getattr(raw_class, "name")).upper()
@@ -1106,6 +1130,13 @@ def _hero_power(s: "GameState", action: Action) -> "GameState":
     except (AttributeError, TypeError):
         pass
 
+    # Fire AFTER_HERO_POWER triggers (for minions like EDR_470 Barkshield Sentinel)
+    try:
+        from analysis.card.abilities.executor import SpellExecutor
+        s = SpellExecutor.fire_event("AFTER_HERO_POWER", s, event_source=s.hero)
+    except (ImportError, AttributeError):
+        pass
+
     return s
 
 
@@ -1275,8 +1306,19 @@ def _opponent_play_card(s: "GameState", action: Action) -> "GameState":
                 new_minion.has_divine_shield = True
 
             s.opponent.board.insert(pos, new_minion)
+
+            # ── 战吼执行 (v2 SpellDesc 能力系统) ──
+            # 使用 card_abilities_v2.json 中的 ON_PLAY 效果，
+            # 将效果应用于对手上下文（friendly=对手, enemy=我方）
+            try:
+                ability = getattr(card, 'ability', None)
+                if ability is not None and ability.has_any and ability.on_play is not None:
+                    _opponent_execute_spell_desc(ability.on_play, s, source=new_minion)
+            except Exception as e:
+                log.debug("Opponent battlecry failed for %s: %s", card, e)
+
     elif ctype == 'SPELL':
-        _opponent_play_spell(s, card)
+        _opponent_play_spell_v2(s, card)
     elif ctype == 'WEAPON':
         s.opponent.hero.weapon = Weapon(
             attack=getattr(card, 'attack', 0),
@@ -1298,8 +1340,18 @@ def _opponent_play_card(s: "GameState", action: Action) -> "GameState":
     return s
 
 
-def _opponent_play_spell(s: "GameState", card) -> None:
-    """Opponent spell effects with basic diversity (AOE, heal, buff, damage)."""
+def _opponent_play_spell_v2(s: "GameState", card) -> None:
+    """Opponent spell effects — 优先使用 v2 CardAbility, 回退到文本启发式。"""
+    # 优先使用 v2 SpellDesc 能力数据（结构化、精确）
+    try:
+        ability = getattr(card, 'ability', None)
+        if ability is not None and ability.has_any and ability.on_play is not None:
+            _opponent_execute_spell_desc(ability.on_play, s, source=card)
+            return
+    except Exception as e:
+        log.debug("Opponent v2 spell failed for %s: %s", card, e)
+
+    # ── Fallback: 文本启发式（原始逻辑） ──
     try:
         from analysis.card.data.card_effects import get_effects
         eff = get_effects(card)
@@ -1364,6 +1416,225 @@ def _opponent_play_spell(s: "GameState", card) -> None:
             draw_count = int(m.group(1))
         for _ in range(draw_count):
             s = _opponent_draw_card(s)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# v2 SpellDesc 对手能力执行器
+# ═══════════════════════════════════════════════════════════════════
+# 将 card_abilities_v2.json 的 SpellDesc 递归树
+# 应用于对手上下文（friendly=对手侧, enemy=我方侧）。
+# 替代 / 补充基于文本启发式的 _opponent_play_spell_v2 回退路径。
+# ═══════════════════════════════════════════════════════════════════
+
+import random as _random
+
+
+def _opponent_resolve_value(desc) -> int:
+    """从 SpellDesc 解析数值（支持 int / {"base": N, ...} 格式）。"""
+    v = desc.value
+    if v is None:
+        return 0
+    if isinstance(v, dict):
+        return int(v.get('base', 0))
+    return int(v)
+
+
+def _opponent_get_targets(target_str: str, s: "GameState", source=None):
+    """根据目标选择器返回 (targets_list, is_enemy_side)。
+
+    opponent 上下文映射:
+      friendly = 对手侧 (s.opponent.hero / s.opponent.board)
+      enemy    = 我方侧 (s.hero / s.board)
+    """
+    t = (target_str or '').upper()
+
+    # ── 敌方（=我们） ──
+    if t in ('ALL_ENEMY_CHARACTERS', 'ENEMY_CHARACTERS', 'ALL_ENEMY'):
+        targets = []
+        if s.hero.hp > 0:
+            targets.append(s.hero)
+        targets.extend(s.board[:])
+        return targets, True
+    if t in ('ALL_ENEMY_MINIONS', 'ENEMY_MINIONS'):
+        return list(s.board), True
+    if t == 'RANDOM_ENEMY_MINION':
+        if s.board:
+            return [_random.choice(s.board)], True
+        return [], True
+    if t in ('RANDOM_ENEMY_CHARACTER', 'RANDOM_ENEMY'):
+        pool = []
+        if s.hero.hp > 0:
+            pool.append(('hero', s.hero))
+        for i, m in enumerate(s.board):
+            pool.append((f'minion_{i}', m))
+        if pool:
+            _, chosen = _random.choice(pool)
+            return [chosen], True
+        return [], True
+
+    # ── 友方（=对手） ──
+    if t in ('ALL_FRIENDLY_CHARACTERS', 'FRIENDLY_CHARACTERS', 'ALL_FRIENDLY'):
+        targets = []
+        if s.opponent.hero.hp > 0:
+            targets.append(s.opponent.hero)
+        targets.extend(s.opponent.board[:])
+        return targets, False
+    if t in ('ALL_FRIENDLY_MINIONS', 'FRIENDLY_MINIONS'):
+        return list(s.opponent.board), False
+    if t == 'SELF':
+        if source is not None:
+            return [source], False
+        return [], False
+
+    # ── 全体 ──
+    if t in ('ALL_CHARACTERS', 'ALL'):
+        targets = []
+        if s.hero.hp > 0:
+            targets.append(s.hero)
+        targets.extend(s.board[:])
+        if s.opponent.hero.hp > 0:
+            targets.append(s.opponent.hero)
+        targets.extend(s.opponent.board[:])
+        return targets, True  # mixed, pass True (both sides affected)
+    if t in ('ALL_MINIONS',):
+        return list(s.board) + list(s.opponent.board), True
+
+    # ── TARGET（已选目标）/ 默认 → 启发式选最佳 ──
+    # 回退: 对我方英雄造成伤害
+    return [s.hero], True
+
+
+def _opponent_apply_damage(target, damage: int) -> None:
+    """对 hero(的dict-like) 或 Minion 施加伤害。"""
+    if hasattr(target, 'hp'):  # HeroState
+        if getattr(target, 'armor', 0) > 0:
+            absorbed = min(target.armor, damage)
+            target.armor -= absorbed
+            damage -= absorbed
+        target.hp -= damage
+    elif hasattr(target, 'health'):  # Minion
+        target.health -= damage
+
+
+def _opponent_execute_spell_desc(
+    desc, s: "GameState", source=None
+) -> None:
+    """递归执行 SpellDesc，效果应用于对手上下文。
+
+    修改 s 就地，不返回新状态（兼容原始 _opponent_play_spell 模式）。
+    """
+    if desc is None:
+        return
+
+    sc = desc.spell_class
+
+    # ── MetaSpell: 递归执行子法术 ──
+    if sc == 'MetaSpell':
+        for sub in (desc.spells or []):
+            _opponent_execute_spell_desc(sub, s, source)
+        return
+
+    # ── DamageSpell ──
+    if sc == 'DamageSpell':
+        dmg = _opponent_resolve_value(desc)
+        if dmg <= 0:
+            return
+        targets, _ = _opponent_get_targets(desc.target or '', s, source)
+        for t in targets:
+            _opponent_apply_damage(t, dmg)
+        return
+
+    # ── BuffSpell ──
+    if sc == 'BuffSpell':
+        atk = desc.attack_bonus or 0
+        hp = desc.health_bonus or 0
+        if atk == 0 and hp == 0:
+            return
+        targets, _ = _opponent_get_targets(desc.target or 'SELF', s, source)
+        for t in targets:
+            if hasattr(t, 'attack') and hasattr(t, 'health') and hasattr(t, 'max_health'):
+                t.attack += atk
+                t.health += hp
+                t.max_health += hp
+        return
+
+    # ── SummonSpell ──
+    if sc == 'SummonSpell':
+        if len(s.opponent.board) >= 7:
+            return
+        token_atk = 1
+        token_hp = 1
+        if desc.attack_bonus is not None:
+            token_atk = desc.attack_bonus
+        if desc.health_bonus is not None:
+            token_hp = desc.health_bonus
+        tokens = ("", "Token", "Summoned")
+        new_m = Minion(
+            name=getattr(desc, 'name', _random.choice(tokens)),
+            attack=token_atk,
+            health=token_hp,
+            max_health=token_hp,
+            owner="enemy",
+            can_attack=False,
+        )
+        s.opponent.board.append(new_m)
+        return
+
+    # ── DiscoverSpell ──
+    if sc == 'DiscoverSpell':
+        # 生成一张随机低费卡牌加入对手手牌
+        if len(s.opponent.hand) < 10:
+            discovered = Card(
+                dbf_id=-_random.randint(10000, 99999),
+                name="Discovered",
+                cost=_random.randint(0, 3),
+                card_type="MINION",
+                attack=_random.randint(1, 3),
+                health=_random.randint(1, 3),
+            )
+            s.opponent.hand.append(discovered)
+        return
+
+    # ── TakeControlSpell ──
+    if sc == 'TakeControlSpell':
+        if not s.board:
+            return
+        # 偷取我方攻击力最高的随从
+        best = max(s.board, key=lambda m: m.attack)
+        s.board.remove(best)
+        best.owner = "enemy"
+        best.can_attack = False  # 刚过来，有召唤疲劳
+        if len(s.opponent.board) < 7:
+            s.opponent.board.append(best)
+        return
+
+    # ── AddToHandSpell ──
+    if sc == 'AddToHandSpell':
+        if len(s.opponent.hand) >= 10:
+            return
+        # 添加一张来源卡牌的复制
+        if source is not None and hasattr(source, 'copy'):
+            src_copy = source.copy()
+            if hasattr(src_copy, 'cost') and hasattr(src_copy, 'name'):
+                s.opponent.hand.append(src_copy)
+                return
+        # fallback: 添加一个占位
+        s.opponent.hand.append(Card(
+            dbf_id=-_random.randint(10000, 99999),
+            name="Copy",
+            cost=0,
+            card_type="SPELL",
+        ))
+        return
+
+    # ── DrawSpell ──
+    if sc in ('DrawSpell',):
+        count = desc.count or _opponent_resolve_value(desc)
+        if count <= 0:
+            count = 1
+        for _ in range(count):
+            s = _opponent_draw_card(s)
+        return
 
 
 def _opponent_attack(s: "GameState", action: Action) -> "GameState":
@@ -1536,6 +1807,13 @@ def _opponent_hero_power(s: "GameState") -> "GameState":
         s.opponent.hero.hp -= dmg
         for _ in range(draw_count):
             s = _opponent_draw_card(s)
+
+    # Fire AFTER_HERO_POWER triggers (for opponent minions like EDR_470 Barkshield Sentinel)
+    try:
+        from analysis.card.abilities.executor import SpellExecutor
+        s = SpellExecutor.fire_event("AFTER_HERO_POWER", s, event_source=s.opponent.hero)
+    except (ImportError, AttributeError):
+        pass
 
     return s
 

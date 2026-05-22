@@ -142,20 +142,54 @@ class RepeatSpell(Spell):
 
 @register_spell
 class RandomSpell(Spell):
-    """随机选取一个子 Spell 执行。
+    """随机效果 — 支持多种模式。
 
-    JSON:
+    模式 1 — 从列表随机选择:
       {"class": "RandomSpell",
        "spells": [
          {"class": "DamageSpell", "value": 3, "target": "ENEMY_HERO"},
          {"class": "HealSpell", "value": 3, "target": "FRIENDLY_HERO"}
        ]}
+
+    模式 2 — 随机添加卡牌到手牌:
+      {"class": "RandomSpell", "value": 2, "target": "FRIENDLY_HAND",
+       "card_type": "SPELL"}
+
+    模式 3 — 随机对目标应用子 Spell（如随机分流伤害）:
+      {"class": "RandomSpell",
+       "spell": {"class": "DamageSpell", "target": "ALL_ENEMY_CHARACTERS", ...}}
     """
     def execute(self, desc, state, source=None, target=None):
-        if not desc.spells:
+        # 模式 1: 从 spells 列表随机选一个
+        if desc.spells:
+            chosen = random.choice(desc.spells)
+            return _execute_desc(chosen, state, source, target)
+
+        # 模式 2: 随机添加卡牌到手牌 (target="FRIENDLY_HAND" + card_type/card_id)
+        if desc.target in ("FRIENDLY_HAND", "FRIENDLY_DECK"):
+            from analysis.card.value.providers import resolve_value
+            count = resolve_value(desc.value or desc.count or 1, state, source)
+            card_type = getattr(desc, 'card_type', None) or desc.extra_params.get('card_type')
+            pool = getattr(desc, 'pool', None) or desc.extra_params.get('pool')
+            keyword = getattr(desc, 'keyword', None) or desc.extra_params.get('keyword')
+            # Fallback to existing AddToHandSpell logic for card addition
+            from analysis.card.spells.effects import AddToHandSpell
+            for _ in range(count):
+                state = AddToHandSpell().execute(desc, state, source, target)
             return state
-        chosen = random.choice(desc.spells)
-        return _execute_desc(chosen, state, source, target)
+
+        # 模式 3: 对随机目标执行子 Spell（spell 字段 + 随机目标）
+        if desc.spell:
+            # 将子 Spell 的 target 替换为随机版本
+            from copy import deepcopy
+            sub_desc = deepcopy(desc.spell)
+            if sub_desc.target and "ALL_" in sub_desc.target:
+                sub_desc.target = sub_desc.target.replace("ALL_", "RANDOM_", 1)
+            elif sub_desc.target and sub_desc.target != "TARGET":
+                sub_desc.target = "RANDOM_" + sub_desc.target
+            return _execute_desc(sub_desc, state, source, target)
+
+        return state
 
 
 # ═══════════════════════════════════════════════════════════════

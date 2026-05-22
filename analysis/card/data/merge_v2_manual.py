@@ -10,10 +10,20 @@ V2_PATH = Path(__file__).parent / "card_abilities_v2.json"
 MANUAL_PATH = Path(__file__).parent / "card_abilities_v2_manual.json"
 
 def merge_deep(base, override):
-    """深度合并 override 到 base (dict 递归合并)。"""
+    """深度合并 override 到 base (dict 递归合并)。
+
+    注意: 对于手动覆盖，如果 override 在某个 key 下的 'class' 字段与 base 不同，
+    则直接替换整个 key 的内容而非递归合并，避免遗留旧字段。
+    """
     for key, val in override.items():
         if key in base and isinstance(base[key], dict) and isinstance(val, dict):
-            merge_deep(base[key], val)
+            # 如果 class 不同，说明是完整替换而非增量修正
+            base_cls = base[key].get("class") if isinstance(base[key], dict) else None
+            override_cls = val.get("class") if isinstance(val, dict) else None
+            if base_cls is not None and override_cls is not None and base_cls != override_cls:
+                base[key] = val
+            else:
+                merge_deep(base[key], val)
         else:
             base[key] = val
     return base

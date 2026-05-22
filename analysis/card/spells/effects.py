@@ -433,3 +433,86 @@ class CounterSpell(Spell):
     def execute(self, desc, state, source=None, target=None):
         state._last_spell_countered = True
         return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# ImbueSpell — 英雄技能灌注
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class ImbueSpell(Spell):
+    """英雄技能灌注：增加 imbue_level 1 级。
+
+    JSON 格式:
+      {"class": "ImbueSpell"}
+    或:
+      {"class": "ImbueSpell", "value": 2}  # 灌注 N 级
+    """
+    def execute(self, desc, state, source=None, target=None):
+        from analysis.card.value.providers import resolve_value
+        amount = resolve_value(desc.value, state, source) if desc.value is not None else 1
+        state.hero.imbue_level += amount
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# TriggerHeroPowerSpell — 触发英雄技能
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class TriggerHeroPowerSpell(Spell):
+    """触发英雄技能（不消耗法力水晶，不需要目标，不消耗英雄攻击机会）。
+
+    JSON 格式:
+      {"class": "TriggerHeroPowerSpell"}
+    """
+    def execute(self, desc, state, source=None, target=None):
+        from analysis.card.engine.simulation import _apply_hero_power
+        try:
+            state = _apply_hero_power(state)
+        except (AttributeError, TypeError) as e:
+            log.warning("TriggerHeroPowerSpell 执行失败: %s", e)
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# SetHeroPowerSpell — 替换英雄技能
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class SetHeroPowerSpell(Spell):
+    """将英雄技能替换为指定卡牌。
+
+    JSON 格式:
+      {"class": "SetHeroPowerSpell", "card_id": "END_000p"}
+    """
+    def execute(self, desc, state, source=None, target=None):
+        card_id = desc.card_id or ""
+        if card_id:
+            state.hero.hero_power_card_id = card_id
+            state.hero.hero_power_used = False
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# CustomHeroPowerDamageSpell — 英雄技能造成的伤害
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class CustomHeroPowerDamageSpell(Spell):
+    """被替换后的英雄技能造成的伤害，默认打英雄。
+
+    JSON 格式:
+      {"class": "CustomHeroPowerDamageSpell", "value": 2}
+    """
+    def execute(self, desc, state, source=None, target=None):
+        from analysis.card.value.providers import resolve_value
+        from analysis.card.engine.executor import damage
+        amount = resolve_value(desc.value, state, source)
+        # 优先打对面随从，否则打英雄
+        if state.opponent.board:
+            t = state.opponent.board[0]
+        else:
+            t = state.opponent.hero
+        state = damage(state, amount, t)
+        return state

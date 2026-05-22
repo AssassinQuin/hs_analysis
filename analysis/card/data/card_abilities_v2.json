@@ -22157,7 +22157,9 @@
       {
         "event": "AFTER_HERO_POWER",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell",
+          "target": "SELF",
+          "health_bonus": 2
         }
       }
     ]
@@ -23199,12 +23201,21 @@
   },
   "END_000": {
     "ON_PLAY": {
-      "class": "DamageSpell",
-      "target": "ALL_FRIENDLY_CHARACTERS",
-      "value": {
-        "provider": "spell_damage",
-        "base": 2
-      }
+      "class": "MetaSpell",
+      "spells": [
+        {
+          "class": "DamageSpell",
+          "target": "ALL_ENEMY_CHARACTERS",
+          "value": {
+            "base": 2,
+            "provider": "spell_damage"
+          }
+        },
+        {
+          "class": "SetHeroPowerSpell",
+          "card_id": "END_000p"
+        }
+      ]
     }
   },
   "END_001": {
@@ -61072,6 +61083,15 @@
   "YOP_035": {
     "ON_PLAY": {
       "class": "TODO"
+    }
+  },
+  "END_000p": {
+    "ON_PLAY": {
+      "class": "CustomHeroPowerDamageSpell",
+      "value": {
+        "base": 2,
+        "provider": "spell_damage"
+      }
     }
   }
 }
