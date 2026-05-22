@@ -1267,18 +1267,11 @@ class CoreLogMonitor:
             player_hand_cards, gt_state.player_hand_count,
         )
 
-        # 对手初始牌库回退: 如果追踪到的值为0（桥接时机问题），默认30
+        # 对手初始牌库: 构造模式固定30张
+        # 注意: opp_graveyard_seen 包含衍生牌，不能用来推算初始牌库大小
         opp_initial_deck_size = gt_state.opp_initial_deck_size
         if opp_initial_deck_size <= 0 and gt_state.opp_hero_class:
             opp_initial_deck_size = 30
-            if gt_state.opp_deck_remaining > 0:
-                # 如果有已追踪的牌库剩余，推算初始大小
-                opp_initial_deck_size = max(
-                    30,
-                    gt_state.opp_deck_remaining
-                    + gt_state.opp_hand_count
-                    + len(gt_state.opp_graveyard_seen),
-                )
 
         return {
             "in_game": self.game_tracker.in_game,

@@ -70,8 +70,8 @@ Power.log → LogMonitor (QThread)
 - **PowerLogGameStateBuilder** (`analysis/engine/powerlog_game_state_builder.py`) — Reconstructs GameState from hslog EntityCache + GlobalTracker. Two entry points: `build_from_tracker()` (own view) and `build_opponent_game_state()` (opponent view)
 - **OpponentHandMCTS** (`analysis/engine/opponent_hand_mcts.py`) — Misnamed; actually Bayesian hand inference via opponent turn simulation, not tree search. Contains 5 classes including `HandWorld`, `BehaviorMatcher`, `MultiTurnProbabilityTracker`
 - **DynamicProbabilityEngine** (`analysis/engine/dynamic_probability.py`) — Hypergeometric distribution P(card in hand | observed), integrates WorldModelEvidence to replace hardcoded biases
-- **WorldModelEvidence** (`analysis/engine/world_model.py`) — Evidence accumulator that drives probability adjustments (replaces hardcoded hold-duration / mulligan / co-occurrence heuristics)
 - **CardEffectInferenceEngine** (`analysis/engine/card_effect_inference.py`) — Parses card text to infer conditional holdings (e.g. "if you're holding a Dragon" → infer dragon)
+- **DynamicProbabilityEngine** (`analysis/engine/dynamic_probability.py`) — MCTS/UCT-only hand probability engine. Particle filter sampling + UCT opponent behavior simulation replaces all heuristic evidence. No hardcoded probability adjustments.
 - **BayesianOpponent** (`analysis/utils/bayesian_opponent.py`) — Sequential Bayesian updates on deck archetype priors using HSReplay signature data
 - **DeckPoolTracker** (`analysis/utils/deck_pool_tracker.py`) — Sliding-window pool of possible cards in hand when zone reveals are absent
 

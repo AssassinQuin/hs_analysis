@@ -13,21 +13,8 @@
     remaining = 卡组 j 中 c 的原始张数 - 已打出/揭示的张数
     hand_size = 对手当前手牌数
 
-优势：
-- 完全基于已有信息动态计算，无写死概率
-- 每当新牌打出/揭示时自动更新
-- 支持条件证据修正（如"如果你手持龙牌"效果触发）
-- 支持多卡组假设加权（未锁定卡组时考虑 top-N 卡组的概率加权）
-- 世界推断驱动：用贝叶斯似然比替代硬编码概率调整
-
-概率调整方法（v2 — 世界推断驱动）：
-    原有三个硬编码方法已被世界模型证据替代：
-    - _apply_hold_duration_bias      → analyze_unplayed_cards (贝叶斯似然比)
-    - _apply_mulligan_keep_bias      → analyze_mana_curve_gap (法力曲线空隙 + mulligan)
-    - _apply_generated_cooccurrence_boost → integrate() 中的衍生牌推断
-
-    所有调整现在基于贝叶斯似然比 LR = P(E|H) / P(E|¬H)，
-    通过 apply_likelihood_to_probability() 修正先验概率。
+概率调整方法（MCTS/UCT 驱动）：
+    粒子滤波采样 + UCT 对手行为模拟修正，无启发式回退。
 """
 
 from __future__ import annotations
@@ -37,14 +24,6 @@ import math
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
-
-# 世界模型证据导入 — 用贝叶斯似然比替代硬编码概率调整
-from analysis.engine.world_model import (
-    WorldModelEvidence,
-    WorldModelIntegrator,
-    BehaviorEvidence,
-    apply_likelihood_to_probability,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +130,44 @@ def _log_comb(n: int, k: int) -> float:
     return result
 
 
-# ── 手牌概率数据结构 ──────────────────────────────────────────
+def apply_likelihood_to_probability(prior: float, likelihood_ratio: float) -> float:
+    """用似然比修正先验概率。
+
+    数学推导：
+    后验几率 = 先验几率 × 似然比
+    odds = p / (1 - p)
+    posterior_odds = odds × LR
+    p_posterior = posterior_odds / (1 + posterior_odds)
+
+    特殊情况：
+    - LR = 0 → p_posterior = 0（确定性排除）
+    - LR = float('inf') → p_posterior = 1.0（确定性确认）
+    - LR = 1 → p_posterior = p（无信息）
+
+    Args:
+        prior: 先验概率 [0, 1]
+        likelihood_ratio: 似然比 [0, ∞)
+
+    Returns:
+        后验概率 [0, 1]
+    """
+    if prior <= 0.0:
+        return 0.0
+    if prior >= 1.0:
+        return 1.0
+
+    if likelihood_ratio <= 0.0:
+        return 0.0
+    if math.isinf(likelihood_ratio):
+        return 1.0
+    if likelihood_ratio == 1.0:
+        return prior
+
+    prior_odds = prior / (1.0 - prior)
+    posterior_odds = prior_odds * likelihood_ratio
+    posterior = posterior_odds / (1.0 + posterior_odds)
+    return max(0.0, min(1.0, posterior))
+
 
 @dataclass
 class CardProbability:
@@ -265,21 +281,7 @@ class DynamicProbabilityEngine:
         self._coin_used: bool = False
         self._current_turn: int = 0
         self._opp_hand_hold: Dict[int, int] = {}  # entity_id → turn_first_seen_in_hand
-        # ── 世界模型所需的额外场景信息 ──
-        # 这些字段由 update_from_state_dict() 填充，供 WorldModelIntegrator 使用
-        self._available_mana: int = 0           # 对手当前可用法力
-        self._opp_board_minions: List[Dict] = [] # 对手场面随从
-        self._playstyle: str = "unknown"         # 对手打法风格
-        self._known_cards_with_info: List[Dict] = []  # 带有 turn_seen/cost 的已知卡牌
-        self._opp_cards_played_this_turn: List[str] = []  # 对手本回合打出的卡牌
-        # 世界模型整合器（延迟初始化）—— 作为回退方案
-        self._world_model_integrator: Optional[WorldModelIntegrator] = None
-        # 上一次的世界模型证据（缓存，避免重复计算）
-        self._last_world_evidence: Optional[WorldModelEvidence] = None
-        # 卡牌效果推断引擎（延迟初始化）
-        self._effect_inferences: Optional[List] = None
-        # ── MCTS世界节点模拟引擎 ──
-        # 替代硬编码似然比，通过模拟对手决策来推断手牌概率
+        # ── MCTS 对手行为模拟引擎 ──
         self._mcts_engine: Optional[object] = None  # OpponentHandMCTS 延迟初始化
         self._last_mcts_result: Optional[Dict[str, float]] = None  # MCTS推断结果缓存
         # MCTS模拟状态缓存哈希
@@ -299,19 +301,11 @@ class DynamicProbabilityEngine:
                 logger.warning("无法加载卡牌数据库: %s", e)
 
     def update_from_state_dict(self, state_dict: dict):
-        """从 LogMonitor 的状态字典更新引擎状态。
-
-        扩展字段（供世界模型使用）：
-        - available_mana: 对手当前可用法力（从打出记录推断）
-        - opp_board_minions: 对手场面随从列表
-        - playstyle: 对手打法风格 (aggro/tempo/control/midrange/unknown)
-        - known_cards: 现在需要包含 turn_seen 和 cost 信息
-        """
+        """从 LogMonitor 的状态字典更新引擎状态。"""
         self._ensure_card_db()
         self._bayesian_state = state_dict.get("bayesian", {})
 
         self._seen_cards = {}
-        # 保存带有完整信息的已知卡牌列表（供世界模型使用）
         self._known_cards_with_info = list(state_dict.get("known_cards", []))
         for kc in state_dict.get("known_cards", []):
             cid = kc.get("card_id", "")
@@ -328,10 +322,7 @@ class DynamicProbabilityEngine:
         self._current_turn = state_dict.get("turn", 0)
         self._opp_hand_hold = dict(state_dict.get("opp_hand_hold", {}))
 
-        # ── 世界模型所需的额外场景信息 ──
         self._available_mana = state_dict.get("available_mana", 0)
-        self._opp_board_minions = list(state_dict.get("opp_board_minions", []))
-        self._playstyle = self._bayesian_state.get("playstyle", "unknown") or "unknown"
         self._opp_cards_played_this_turn = list(state_dict.get("opp_cards_played_this_turn", []))
 
         # Track discarded cards for probability exclusion
@@ -684,10 +675,8 @@ class DynamicProbabilityEngine:
         # 3. 条件证据修正
         self._apply_conditional_modifiers(report)
 
-        # 4. 世界模型证据修正（替代原有的三个硬编码方法）
-        #    原 _apply_hold_duration_bias  → analyze_unplayed_cards
-        #    原 _apply_mulligan_keep_bias  → analyze_mana_curve_gap
-        #    原 _apply_generated_cooccurrence_boost → integrate() 中的综合证据
+        # 4. MCTS/UCT 世界节点模拟推断
+        #    (粒子滤波采样 → UCT搜索模拟 → 行为匹配 → 概率融合)
         self._apply_world_model_evidence(report, hand_size=hand_size)
 
         # 5. 应用确认手牌先验提升（在条件修正之后，确保不被覆盖）
@@ -1000,77 +989,23 @@ class DynamicProbabilityEngine:
     def _apply_world_model_evidence(
         self,
         report: HandProbabilityReport,
-        evidence: Optional[WorldModelEvidence] = None,
         hand_size: int = 0,
     ):
-        """应用世界模型证据修正概率。
+        """仅使用MCTS世界节点模拟推断修正手牌概率（去除所有启发式回退）。
 
-        v3 优先使用MCTS模拟推断：
-        1. 首先尝试通过MCTS世界节点模拟推断手牌概率
-           - 采样候选手牌世界
-           - 调用卡牌效果引擎模拟对手决策
-           - 比较模拟行为与观测行为的匹配度
-           - 完全不硬编码概率值，通过模拟得出
-        2. 如果MCTS不可用（时间不足等），回退到贝叶斯似然比方法
-           - 使用 WorldModelIntegrator 生成的似然比
-           - 仍然比硬编码好，但不如MCTS精确
+        核心逻辑通过 _apply_mcts_simulation_evidence 实现：
+        - 采样候选手牌世界（粒子滤波）
+        - UCT搜索模拟对手决策
+        - 比较模拟行为与观测行为的匹配度
+        - 完全不硬编码概率值，通过模拟得出
 
         Args:
             report: 手牌概率报告（会被就地修改）
-            evidence: 可选的 WorldModelEvidence
             hand_size: 对手手牌数量
         """
-        # ── 优先：MCTS世界节点模拟推断 ──
         mcts_applied = self._apply_mcts_simulation_evidence(report, hand_size=hand_size)
-
         if mcts_applied:
-            # MCTS成功应用，不需要回退到似然比方法
             logger.debug("MCTS模拟推断成功应用于手牌概率")
-            return
-
-        # ── 回退：贝叶斯似然比方法 ──
-        logger.debug("MCTS不可用，回退到贝叶斯似然比方法")
-
-        # 如果没有提供证据，自动生成
-        if evidence is None:
-            evidence = self._build_world_evidence(hand_size=hand_size)
-
-        # 如果证据为空或没有行为证据，保持基础概率不变
-        if evidence is None or not evidence.behavior_evidence:
-            return
-
-        # ── 证据时效衰减 ──
-        # 旧回合的证据影响力应随时间衰减：每回合衰减 30%
-        # 避免多回合 unplayed_affordable 证据累积导致概率归零
-        # 0.7 是手动调参值，经验规则：回合数 * 0.3 = 影响力损失百分比
-        # TODO: 用 validate_hand_predictions.py 的 F1 值校准衰减率
-        EVIDENCE_DECAY = 0.7
-
-        # ── 按卡牌逐一应用似然比 ──
-        for cp in report.card_probabilities:
-            if cp.source == "revealed":
-                continue
-
-            relevant_evidence = self._collect_relevant_evidence(cp, evidence)
-
-            if not relevant_evidence:
-                continue
-
-            combined_lr = 1.0
-            for ev in relevant_evidence:
-                turns_ago = (self._current_turn or 0) - ev.turn
-                if turns_ago > 0 and ev.evidence_type in ("unplayed_affordable", "play_timing"):
-                    # 旧证据衰减：LR 向 1.0 靠拢
-                    decay = EVIDENCE_DECAY ** turns_ago
-                    effective_lr = 1.0 + (ev.likelihood - 1.0) * decay
-                else:
-                    effective_lr = ev.likelihood
-                combined_lr *= effective_lr
-
-            cp.probability = apply_likelihood_to_probability(cp.probability, combined_lr)
-
-            if abs(combined_lr - 1.0) > 0.05 and cp.source not in ("revealed", "inferred"):
-                cp.source = "inferred"
 
     def _apply_mcts_simulation_evidence(
         self,
@@ -1151,7 +1086,7 @@ class DynamicProbabilityEngine:
                         seen_cards=self._seen_cards,
                         generated_cards=self._generated_cards,
                         hand_size=hand_size,
-                        time_budget_ms=400.0,
+                        time_budget_ms=1000.0,
                     )
                 else:
                     # 回退到简化模式（兼容旧接口）
@@ -1161,7 +1096,7 @@ class DynamicProbabilityEngine:
                         seen_cards=self._seen_cards,
                         generated_cards=self._generated_cards,
                         hand_size=hand_size,
-                        time_budget_ms=400.0,
+                        time_budget_ms=1000.0,
                     )
 
                 if not mcts_probs:
@@ -1220,179 +1155,7 @@ class DynamicProbabilityEngine:
 
         return True
 
-    def _build_world_evidence(self, hand_size: int = 0) -> Optional[WorldModelEvidence]:
-        """从当前引擎状态构建世界模型证据。
 
-        将引擎内部的场景信息打包为 state_dict 格式，
-        传给 WorldModelIntegrator 进行分析。
-
-        Args:
-            hand_size: 对手手牌数量，由 compute_probabilities 传入
-
-        Returns:
-            WorldModelEvidence 或 None（如果信息不足）
-        """
-        # 如果已经有缓存且状态没变，返回缓存
-        if self._last_world_evidence is not None:
-            return self._last_world_evidence
-
-        # 延迟初始化世界模型整合器
-        if self._world_model_integrator is None:
-            self._world_model_integrator = WorldModelIntegrator()
-
-        # 构建状态字典（从引擎内部状态）
-        state_dict = {
-            "turn": self._current_turn,
-            "available_mana": self._available_mana,
-            "opp_hand_count": hand_size,
-            "opp_hand_hold": self._opp_hand_hold,
-            "opp_board_minions": self._opp_board_minions,
-            "playstyle": self._playstyle,
-            "known_cards": self._known_cards_with_info,
-            "generated_cards": self._generated_cards,
-            "opp_cards_played_this_turn": self._opp_cards_played_this_turn,
-        }
-
-        try:
-            evidence = self._world_model_integrator.integrate(
-                state_dict,
-                effect_inferences=self._effect_inferences,
-            )
-            self._last_world_evidence = evidence
-            return evidence
-        except Exception as e:
-            logger.debug("世界模型证据构建失败: %s", e)
-            return None
-
-    @staticmethod
-    def _collect_relevant_evidence(
-        cp: CardProbability,
-        evidence: WorldModelEvidence,
-    ) -> List[BehaviorEvidence]:
-        """收集与特定卡牌相关的所有行为证据。
-
-        证据匹配规则：
-        1. conditional_triggered: 匹配种族(race)或法术学派(spell_school)
-        2. unplayed_affordable: 匹配费用(cost)
-        3. play_timing: 匹配卡牌ID(card_id)或间接影响费用推断
-        4. mana_curve_gap: 匹配费用(cost)或费用范围(cost_min/cost_max)
-        5. derived_source: 匹配卡牌ID(card_id)
-
-        对于费用相关的证据，需要将 inferred_tags 中的 cost/cost_min/cost_max
-        与卡牌的 cost 进行比较。
-
-        Args:
-            cp: 待评估的卡牌概率
-            evidence: 世界模型证据
-
-        Returns:
-            相关证据列表
-        """
-        relevant: List[BehaviorEvidence] = []
-
-        for ev in evidence.behavior_evidence:
-            is_relevant = False
-
-            if ev.evidence_type == "conditional_triggered":
-                # 条件效果触发——匹配种族或学派
-                ev_race = ev.inferred_tags.get("race", "")
-                ev_school = ev.inferred_tags.get("spell_school", "")
-                if ev_race and cp.race.upper() == ev_race.upper():
-                    is_relevant = True
-                elif ev_school and cp.spell_school.upper() == ev_school.upper():
-                    is_relevant = True
-
-            elif ev.evidence_type == "unplayed_affordable":
-                # 未出可出牌——匹配费用
-                ev_cost = ev.inferred_tags.get("cost", "")
-                if ev_cost:
-                    try:
-                        if cp.cost == int(ev_cost):
-                            is_relevant = True
-                    except (ValueError, TypeError):
-                        pass
-
-            elif ev.evidence_type == "play_timing":
-                # 打出时机推断——间接影响：迟延出牌提升高费牌概率
-                ev_cost = ev.inferred_tags.get("cost", "")
-                if ev_cost:
-                    try:
-                        played_cost = int(ev_cost)
-                        # 迟延出低费牌 → 提升高费牌概率、降低低费牌概率
-                        # 只对费用高于被打出牌的牌应用正似然比
-                        # 只对费用等于被打出牌的牌应用负似然比
-                        if cp.cost > played_cost:
-                            is_relevant = True  # 正 LR（提升概率）
-                        elif cp.cost == played_cost:
-                            is_relevant = True  # 使用逆 LR（降低概率）
-                    except (ValueError, TypeError):
-                        pass
-
-            elif ev.evidence_type == "mana_curve_gap":
-                # 法力曲线空隙——匹配费用或费用范围
-                ev_cost = ev.inferred_tags.get("cost", "")
-                ev_cost_max = ev.inferred_tags.get("cost_max", "")
-                ev_cost_min = ev.inferred_tags.get("cost_min", "")
-
-                if ev_cost:
-                    try:
-                        if cp.cost == int(ev_cost):
-                            is_relevant = True
-                    except (ValueError, TypeError):
-                        pass
-                elif ev_cost_max:
-                    try:
-                        if cp.cost <= int(ev_cost_max):
-                            is_relevant = True
-                    except (ValueError, TypeError):
-                        pass
-                elif ev_cost_min:
-                    try:
-                        if cp.cost >= int(ev_cost_min):
-                            is_relevant = True
-                    except (ValueError, TypeError):
-                        pass
-
-            elif ev.evidence_type == "derived_source":
-                # 衍生牌源牌——匹配卡牌ID
-                if ev.card_id and cp.card_id == ev.card_id:
-                    is_relevant = True
-
-            elif ev.evidence_type == "playstyle_prior":
-                # 打法风格推断——匹配费用范围
-                ev_cost_max = ev.inferred_tags.get("cost_max", "")
-                ev_cost_min = ev.inferred_tags.get("cost_min", "")
-                ev_style = ev.inferred_tags.get("style", "")
-
-                if ev_cost_max and not ev_cost_min:
-                    try:
-                        if cp.cost <= int(ev_cost_max):
-                            is_relevant = True
-                    except (ValueError, TypeError):
-                        pass
-                elif ev_cost_min and not ev_cost_max:
-                    try:
-                        if cp.cost >= int(ev_cost_min):
-                            is_relevant = True
-                    except (ValueError, TypeError):
-                        pass
-                elif ev_cost_min and ev_cost_max:
-                    try:
-                        if int(ev_cost_min) <= cp.cost <= int(ev_cost_max):
-                            is_relevant = True
-                    except (ValueError, TypeError):
-                        pass
-
-            elif ev.evidence_type == "board_state":
-                # 场面状态推断——匹配卡牌类型
-                ev_card_type = ev.inferred_tags.get("card_type", "")
-                if ev_card_type and cp.card_type.upper() == ev_card_type.upper():
-                    is_relevant = True
-
-            if is_relevant:
-                relevant.append(ev)
-
-        return relevant
 
     def _get_deck_cards(self, archetype_id: int) -> List[int]:
         """获取指定卡组原型包含的卡牌 dbfId 列表。
@@ -1454,17 +1217,6 @@ class DynamicProbabilityEngine:
             if card:
                 return card.get("cardId", card.get("id", ""))
         return ""
-
-    def set_world_evidence(self, evidence: WorldModelEvidence):
-        """直接设置世界模型证据（供外部调用者使用）。
-
-        如果调用者已经通过 WorldModelIntegrator 计算了证据，
-        可以直接传入，避免重复计算。
-
-        Args:
-            evidence: 世界模型证据
-        """
-        self._last_world_evidence = evidence
 
     def compute_position_predictions(
         self,

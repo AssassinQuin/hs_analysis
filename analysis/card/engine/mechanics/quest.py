@@ -232,9 +232,10 @@ def track_quest_progress(state, action_type, card=None):
         if quest.progress >= quest.threshold and not quest.completed:
             quest.completed = True
             if len(state.hand) < 10:
-                from types import SimpleNamespace
+                from analysis.card.models.card import Card
 
-                reward = SimpleNamespace(
+                reward = Card(
+                    card_id="",  # 任务奖励无实体卡牌 ID
                     name=quest.reward_name or "Quest Reward",
                     cost=0,
                     card_type="SPELL",

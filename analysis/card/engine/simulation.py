@@ -1654,7 +1654,8 @@ def _discover_pick(s: "GameState", action: Action) -> "GameState":
     if discover_options and 0 <= choice_idx < len(discover_options):
         chosen = discover_options[choice_idx]
         if len(s.hand) < 10:
-            s.hand.append(chosen)
+            from analysis.card.models.card import Card
+            s.hand.append(Card.from_hsdb_dict(chosen) if isinstance(chosen, dict) else chosen)
 
     return s
 

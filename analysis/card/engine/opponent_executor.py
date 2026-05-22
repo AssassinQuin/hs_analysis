@@ -210,7 +210,7 @@ def opponent_execute_spell_desc(
                 if candidates:
                     card_data = random.choice(candidates)
             if card_data:
-                s.opponent.hand.append(Card(card_data))
+                s.opponent.hand.append(Card.from_hsdb_dict(card_data))
             else:
                 # 保底：1费中立白板
                 s.opponent.hand.append(Card(

@@ -156,31 +156,32 @@ def verify(log_path: str | None = None):
 
     # ── 5. 手牌预测 ─────────────────────────────────────────
     print("\n🔮 对手手牌预测…")
+    prediction_result = None
     try:
         from tracker.hand_predictor import HandPredictor
         predictor = HandPredictor()
-        result = predictor.predict(state_dict)
+        prediction_result = predictor.predict(state_dict)
 
-        print(f"   原型: {result.archetype_name or '未知'} ({result.archetype_confidence:.1%})")
-        print(f"   打法: {result.playstyle}")
+        print(f"   原型: {prediction_result.archetype_name or '未知'} ({prediction_result.archetype_confidence:.1%})")
+        print(f"   打法: {prediction_result.playstyle}")
 
-        if result.top_archetypes:
+        if prediction_result.top_archetypes:
             print(f"   Top 3 原型:")
-            for name, prob in result.top_archetypes[:3]:
+            for name, prob in prediction_result.top_archetypes[:3]:
                 print(f"      {name}: {prob:.1%}")
 
-        print(f"   手牌预测 ({len(result.hand_predictions)} 项):")
-        for hp in result.hand_predictions[:8]:
+        print(f"   手牌预测 ({len(prediction_result.hand_predictions)} 项):")
+        for hp in prediction_result.hand_predictions[:8]:
             src = hp.source
             prob_str = f"{hp.probability:.0%}" if hp.probability >= 0.5 else "?"
             print(f"      {hp.name} (费{hp.cost}, {prob_str}, {src})")
 
-        print(f"   卡组预测 ({len(result.deck_predictions)} 项):")
-        for dp in result.deck_predictions[:10]:
+        print(f"   卡组预测 ({len(prediction_result.deck_predictions)} 项):")
+        for dp in prediction_result.deck_predictions[:10]:
             status = "已打" if dp.played else ("手牌" if dp.in_hand else "牌库")
             print(f"      {dp.name} (费{dp.cost}, ×{dp.quantity}, {status})")
 
-        if result.hand_predictions:
+        if prediction_result.hand_predictions:
             print(f"   ✅ 手牌预测生成正常")
         else:
             print(f"   ⚠️ 未生成手牌预测（可能缺少 HSReplay 数据）")
@@ -195,7 +196,7 @@ def verify(log_path: str | None = None):
     try:
         from tracker.game_state import GameStateManager
         manager = GameStateManager()
-        manager.update(state_dict, result)
+        manager.update(state_dict, prediction_result or {})
 
         gs = manager.state
         print(f"   对手英雄: {gs.opponent.hero.hero_class_cn} ({gs.opponent.hero.hero_class})")

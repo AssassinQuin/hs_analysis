@@ -417,7 +417,7 @@ class OpponentTurnSimulator:
     构建对手视角的完整 GameState，然后调用真实的卡牌效果引擎
     （enumerate_legal_actions + apply_action）模拟对手决策。
 
-    这替代了 world_model.py 中硬编码的概率推断。
+    这是唯一的手牌概率调整方法（world_model.py 启发式回退已移除）。
     通过实际模拟对手决策来判断"对手若有这张牌会怎样打"。
 
     两种模式：

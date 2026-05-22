@@ -344,7 +344,7 @@ def extract_opponent_turns_v2(log_path: str) -> List[Dict]:
 # MCTS 推断测试
 # ═══════════════════════════════════════════════════════════════════
 
-def test_mcts_on_snapshots(snapshots: List[Dict], game_name: str) -> Dict:
+def run_mcts_on_snapshots(snapshots: List[Dict], game_name: str) -> Dict:
     """对每个对手回合快照运行 MCTS 推断，对比实际打出卡牌。"""
     from analysis.engine.opponent_hand_mcts import (
         OpponentHandMCTS, ObservedBehavior,
@@ -567,7 +567,7 @@ def main():
             logger.info("提取到 %d 个对手回合快照", len(snapshots))
 
             # 运行 MCTS 推断
-            results = test_mcts_on_snapshots(snapshots, game_name)
+            results = run_mcts_on_snapshots(snapshots, game_name)
 
             # 打印报告
             print_report(results)

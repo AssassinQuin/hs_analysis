@@ -95,7 +95,13 @@ AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwn3nwT3gQeQgweMrQfHrgfZ
 # cards: CORE_EX1_145 CORE_SW_072 EDR_852 EDR_528 EDR_856 DINO_407 TLC_522 TIME_875 TIME_875t TIME_875t1 CORE_DMF_511 TIME_039 TIME_711 END_000 CATA_497 CATA_200 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567
 AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB8euB9C/B4rUB5vUB4jZBwn3nwT3gQeQgweMrQfZrweaswe0wQedxQfVxQcAAA==
 
-# name: Zoo Warlock | arch: aggro
+# name: Quest Mage | arch: combo
+# class: MAGE | class_cn: 法师
+# retain_cards: 操控时间(4费,留存37), 米罗克(4费,留存25), 梦魇之王萨维斯(4费,留存25), 拾荒清道夫(1费,留存17), 生命火花(1费,留存17), 石丘防御者(3费,留存15), 亢祖(3费,留存15), 符文宝珠(2费,留存12), 迅猛龙先锋(3费,留存10), 焚火林地(2费,留存7)
+# cards: Core_UNG_072 EDR_517 EDR_856 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
+AAECAf0EBu/8BsODB7OHB6ebB/KyB5PaBwyb8gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
+
+# name: Aggro Mage | arch: aggro
 # class: MAGE | class_cn: 法师
 # retain_cards: 科技恐龙(7费,留存50), 操控时间(4费,留存37), 乱翻库存(3费,留存27), 米罗克(4费,留存25), 亢祖(3费,留存20), 焚火林地(2费,留存17), 禁忌序列(1费,留存17), 符文宝珠(2费,留存12), 迅猛龙先锋(3费,留存10), 初始之火(1费,留存7)
 # cards: Core_UNG_072 EDR_517 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
@@ -111,7 +117,7 @@ AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwTBlweMrQfZrwe0wQfA
 # cards: CORE_EX1_145 CORE_SW_072 CORE_SW_066 CORE_UNG_205 EDR_860 EDR_852 TIME_875 TIME_875t TIME_875t1 CORE_DMF_511 TIME_711 END_000 END_001 CATA_497 CATA_200 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567
 AAECAaIHCs2eBs6eBoaoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwr3nwTTngac+wb3gQeMrQfZrweaswe6swedxQfVxQcAAA==
 
-# name: Zoo Warlock V2 | arch: aggro
+# name: Aggro Mage V2 | arch: aggro
 # class: MAGE | class_cn: 法师
 # retain_cards: 科技恐龙(7费,留存50), 操控时间(4费,留存37), 乱翻库存(3费,留存27), 梦魇之王萨维斯(4费,留存25), 米罗克(4费,留存25), 焚火林地(2费,留存17), 禁忌序列(1费,留存17), 符文宝珠(2费,留存12), 迅猛龙先锋(3费,留存10), 初始之火(1费,留存7)
 # cards: Core_UNG_072 EDR_856 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
@@ -146,7 +152,7 @@ AAECAfHhBAqH9gTDgweCmAfSrgeosQfisQfQvwfqyQeb1AfO6gcK2OUGgf0Gl4IHupUH0JsHn54HkasH
 # cards: CORE_EX1_197 CORE_AT_055 EDR_449 EDR_476 EDR_856 EDR_970 CORE_REV_023 TLC_816 TLC_817 TIME_890 TIME_890t TIME_890t2 TIME_432 END_025 CATA_300 CATA_301 CATA_303 CATA_302 CATA_216 CATA_308 CORE_BAR_311
 AAECAa0GDPCfBMP/BsODB4OKB8WUB6iWB/ypB4CqB4SqB+SyB4O/B5a/BwnLoASg+waFhgedrQeFvwebvweixAeyxQeW/AcAAA==
 
-# name: Zoo Warlock V3 | arch: aggro
+# name: Aggro Mage V3 | arch: aggro
 # class: MAGE | class_cn: 法师
 # retain_cards: 科技恐龙(7费,留存50), 操控时间(4费,留存37), 乱翻库存(3费,留存27), 梦魇之王萨维斯(4费,留存25), 米罗克(4费,留存25), 亢祖(3费,留存20), 焚火林地(2费,留存17), 禁忌序列(1费,留存17), 符文宝珠(2费,留存12), 初始之火(1费,留存7)
 # cards: Core_UNG_072 EDR_517 EDR_856 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541

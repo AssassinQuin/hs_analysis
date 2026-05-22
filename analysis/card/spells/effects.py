@@ -491,7 +491,7 @@ class AddToHandSpell(Spell):
 
         if card_data and len(state.hand) < 10:
             from analysis.card.models.card import Card
-            state.hand.append(Card(card_data))
+            state.hand.append(Card.from_hsdb_dict(card_data))
         return state
 
     @staticmethod

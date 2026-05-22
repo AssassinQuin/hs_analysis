@@ -710,7 +710,7 @@ class HandPredictor:
             if source == "generated":
                 continue
             played_count[cid] += 1
-        known_hand_ids = {cid for _, cid in state_dict.get("known_hand", [])}
+        known_hand_ids = {cid for _, cid, *_ in state_dict.get("known_hand", [])}
         opp_hand_count = state_dict.get("opp_hand_count", 0)
         opp_deck_count = state_dict.get("opp_deck_count", 0)
         pool = opp_hand_count + opp_deck_count

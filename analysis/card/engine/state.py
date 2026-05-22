@@ -410,7 +410,12 @@ class ManaState:
         """计算卡牌经过修正器后的实际费用"""
         from analysis.card.models.card import Card
 
-        base = card.cost if isinstance(card, Card) else int(card)
+        if isinstance(card, Card):
+            base = card.cost
+        elif isinstance(card, dict):
+            base = card.get("cost", 0)
+        else:
+            base = int(card)  # legacy: int 直接作为费用
         card_type = (
             getattr(card, "card_type", "").upper() if isinstance(card, Card) else ""
         )

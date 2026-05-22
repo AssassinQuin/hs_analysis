@@ -703,8 +703,10 @@ class GameStateManager:
                 on_board_ids.add(loc)
 
         # 来源1: opp_graveyard_seen（区域变化 PLAY/HAND/SECRET→GRAVEYARD）
+        # graveyard 可以是 List[str]（旧格式）或 List[Dict]（新格式，含 card_id+source）
         raw_graveyard = state_dict.get("graveyard", [])
-        for card_id in raw_graveyard:
+        for entry in raw_graveyard:
+            card_id = entry.get("card_id", "") if isinstance(entry, dict) else entry
             if not card_id or card_id in seen_ids:
                 continue
             seen_ids.add(card_id)
