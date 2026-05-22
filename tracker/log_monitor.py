@@ -71,7 +71,7 @@ from analysis.card.constants.hs_enums import (
     ZONE_NAME_MAP, CARDTYPE_NAME_MAP,
 )
 from analysis.utils.hero_class import class_to_cn
-from analysis.utils.player_name import normalize_player_name
+from analysis.utils.player_name import normalize_player_name, name_matches
 from hearthstone.enums import GameTag, Zone, CardType
 
 logger = logging.getLogger(__name__)
@@ -534,14 +534,13 @@ class CoreLogMonitor:
 
         # 最高优先级: 已知我方名称匹配（跨游戏持久化）
         # 一旦从任何方式正确识别过，后续游戏直接用名称匹配
+        # 使用 name_matches 而非 ==，以处理 BattleTag 含 #XXXX 后缀的匹配
+        # 配置为 "湫然#51704" 时，hslog player.name 可能是 "湫然"（无后缀）
         if self._our_known_name:
-            norm_known = normalize_player_name(self._our_known_name)
-            norm_n0 = normalize_player_name(n0)
-            norm_n1 = normalize_player_name(n1)
-            if norm_known and norm_n0 and norm_known == norm_n0:
+            if n0 and name_matches(n0, self._our_known_name):
                 logger.debug("玩家检测(KNOWN_NAME): 我方=players[0] (name=%s)", n0)
                 return 0
-            if norm_known and norm_n1 and norm_known == norm_n1:
+            if n1 and name_matches(n1, self._our_known_name):
                 logger.debug("玩家检测(KNOWN_NAME): 我方=players[1] (name=%s)", n1)
                 return 1
 
