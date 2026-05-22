@@ -113,6 +113,11 @@ class PowerLogGameStateBuilder:
 
     def __init__(self):
         self._card_db = None
+        # v5优化：缓存对手 GameState 的基础组件（除手牌外）
+        # MCTS 为每个世界调用 build_opponent_game_state，但只有手牌不同
+        # 缓存 key = (entity_cache_version, our_ctrl, opp_ctrl)
+        self._opp_base_cache_key = None
+        self._opp_base_cache = None  # 缓存的 GameState 基础组件
 
     # ── 延迟加载卡牌数据库 ────────────────────────────────────
 
@@ -257,6 +262,28 @@ class PowerLogGameStateBuilder:
         global_tracker = log_monitor.global_tracker
         gt_state = global_tracker.state
 
+        # v5优化：缓存基础组件（所有世界共享除手牌外的状态）
+        cache_key = (id(entity_cache), our_controller, opp_controller)
+        if self._opp_base_cache_key == cache_key and self._opp_base_cache is not None:
+            # 从缓存快速重建——只需替换手牌
+            base = self._opp_base_cache
+            game_state = GameState(
+                hero=base['hero'],        # 共享引用（不修改）
+                mana=base['mana'],
+                board=base['board'],
+                locations=base['locations'],
+                hand=list(opp_hand_cards),  # 每个世界独立的副本
+                deck_remaining=base['deck_remaining'],
+                opponent=base['opponent'],
+                turn_number=base['turn_number'],
+                corpses=base['corpses'],
+                herald_count=base['herald_count'],
+                active_quests=list(base['active_quests']) if base['active_quests'] else [],
+                fatigue_damage=base['fatigue_damage'],
+            )
+            return game_state
+
+        # ── 首次构建（缓存未命中）：完整提取所有组件 ──
         # 1. 对手视角：对手是"玩家"
         opp_hero = self._extract_hero_state(entity_cache, opp_controller)
         our_hero_as_opp = self._extract_hero_state(entity_cache, our_controller)
@@ -328,6 +355,22 @@ class PowerLogGameStateBuilder:
             active_quests=list(gt_state.opp_quests) if gt_state.opp_quests else [],
             fatigue_damage=gt_state.opp_stats.fatigue_damage,
         )
+
+        # v5优化：缓存基础组件供后续世界复用（只替换 hand）
+        self._opp_base_cache_key = cache_key
+        self._opp_base_cache = {
+            'hero': opp_hero,
+            'mana': opp_mana,
+            'board': opp_board,
+            'locations': opp_locations,
+            'deck_remaining': gt_state.opp_deck_remaining,
+            'opponent': our_as_opponent,
+            'turn_number': turn_number,
+            'corpses': gt_state.opp_corpses,
+            'herald_count': gt_state.opp_herald_count,
+            'active_quests': list(gt_state.opp_quests) if gt_state.opp_quests else [],
+            'fatigue_damage': gt_state.opp_stats.fatigue_damage,
+        }
 
         return game_state
 

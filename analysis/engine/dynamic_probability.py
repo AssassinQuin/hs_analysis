@@ -23,6 +23,7 @@ import logging
 import math
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -51,8 +52,13 @@ class PositionPrediction:
 
 # ── 超几何分布工具函数 ──────────────────────────────────────────
 
+@lru_cache(maxsize=1024)
 def _comb(n: int, k: int) -> int:
-    """计算组合数 C(n, k)。"""
+    """计算组合数 C(n, k)。带 LRU 缓存，避免重复计算。
+
+    每回合调用 200-500 次，大量 (n,k) 重复（如 hand_size=5, pool=25）。
+    缓存后首次计算 O(k)，后续 O(1)。
+    """
     if k < 0 or k > n:
         return 0
     if k == 0 or k == n:
@@ -80,6 +86,7 @@ def hypergeometric_pmf(k: int, K: int, n: int, N: int) -> float:
     return num / den
 
 
+@lru_cache(maxsize=512)
 def hypergeometric_at_least_one(K: int, n: int, N: int) -> float:
     """超几何分布中至少抽到1个目标物品的概率。
 
@@ -648,8 +655,11 @@ class DynamicProbabilityEngine:
         confirmed_boost = {}  # card_id → boosted probability
         for card_id in self._confirmed_hand_cards:
             if card_id and card_id not in revealed_set:
-                # 对手持有过的牌，给予 0.15 的基础概率作为先验
-                confirmed_boost[card_id] = 0.15
+                # 对手持有过的牌：基于手牌数的智能先验
+                # 手牌越少，确认牌在手牌中的概率越高（1/hand_size 为均匀分布基线）
+                # 最小值 0.20（比纯随机高，因为曾是确认手牌）
+                base_prior = max(0.20, 1.0 / max(hand_size, 1))
+                confirmed_boost[card_id] = base_prior
 
         # 1c. 手牌变形 — 被变形的原始牌不应出现在概率中
         # 收集所有被变形走的 old_card_id

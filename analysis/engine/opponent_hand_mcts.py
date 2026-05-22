@@ -130,17 +130,53 @@ class MultiTurnProbabilityTracker:
     """
 
     def __init__(self, decay: float = 0.85, max_turns: int = 30):
+        self._base_decay = decay
         self._decay = decay
         self._max_turns = max_turns
         self._turn_data: Dict[int, Dict[str, float]] = {}  # turn → {card_id: prob}
+        self._stability_scores: Dict[int, float] = {}  # turn → probability stability
 
     def update(self, turn: int, probs: Dict[str, float]):
-        """记录某一回合的MCTS推断结果。"""
+        """记录某一回合的MCTS推断结果。
+
+        v5优化：根据概率稳定性自适应调整衰减率。
+        如果连续两回合的top预测高度一致（稳定），提高衰减率（更多信任历史）。
+        如果波动大，降低衰减率（更多信任最新）。
+        """
         self._turn_data[turn] = dict(probs)
+
+        # 自适应衰减：计算与上一回合的稳定性
+        if len(self._turn_data) >= 2:
+            sorted_turns = sorted(self._turn_data.keys())
+            prev_turn = sorted_turns[-2]
+            prev_probs = self._turn_data[prev_turn]
+            stability = self._compute_stability(prev_probs, probs)
+            self._stability_scores[turn] = stability
+
+            # 高稳定性(>0.7) → decay=0.90（信任历史）
+            # 低稳定性(<0.3) → decay=0.70（信任最新）
+            self._decay = 0.70 + 0.20 * stability
+        else:
+            self._decay = self._base_decay
+
         # 清理过旧的回合数据
         if len(self._turn_data) > self._max_turns:
             oldest = min(self._turn_data.keys())
             del self._turn_data[oldest]
+            self._stability_scores.pop(oldest, None)
+
+    @staticmethod
+    def _compute_stability(prev: Dict[str, float], curr: Dict[str, float]) -> float:
+        """计算两回合间概率分布的稳定性（余弦相似度）。"""
+        all_cards = set(prev.keys()) | set(curr.keys())
+        if not all_cards:
+            return 0.5
+        dot = sum(prev.get(c, 0.0) * curr.get(c, 0.0) for c in all_cards)
+        norm_p = sum(v * v for v in prev.values()) ** 0.5
+        norm_c = sum(v * v for v in curr.values()) ** 0.5
+        if norm_p < 1e-9 or norm_c < 1e-9:
+            return 0.0
+        return min(1.0, dot / (norm_p * norm_c))
 
     def get_aggregated_probabilities(self, current_turn: int = 0) -> Dict[str, float]:
         """获取跨回合累积概率。
@@ -301,6 +337,7 @@ class BehaviorMatcher:
         - 如果对手pass，pass匹配权重高
         - 法力消耗总是有信息量的
         - v3新增：如果世界手牌中包含对手实际打出的牌，说明该假设更合理
+        - v5优化：权重随回合数和信息丰富度自适应调整
 
         Args:
             observed: 对手实际观测行为
@@ -313,15 +350,26 @@ class BehaviorMatcher:
         hp_match = BehaviorMatcher._hero_power_match(observed, simulated)
         # v3: 手牌覆盖匹配——如果世界手牌包含对手实际打出的牌，加分
         coverage_match = BehaviorMatcher._hand_coverage_match(observed, world_hand_card_ids)
+        # v5: 序列匹配——对手出牌顺序是否接近
+        sequence_match = BehaviorMatcher._sequence_match(observed, simulated)
 
         if observed.passed:
-            w1, w2, w3, w4, w5 = 0.05, 0.15, 0.60, 0.10, 0.10
+            # 对手 pass：pass 匹配最重要，mana 和 hp 为辅助
+            w1, w2, w3, w4, w5, w6 = 0.05, 0.15, 0.60, 0.10, 0.05, 0.05
         elif observed.played_cards:
-            w1, w2, w3, w4, w5 = 0.30, 0.15, 0.05, 0.10, 0.40
+            # 对手出了牌：手牌覆盖和卡牌匹配最关键
+            n_cards = len(observed.played_cards)
+            # 出的牌越多，手牌覆盖权重越高（v5 自适应）
+            coverage_w = min(0.50, 0.30 + 0.05 * n_cards)
+            card_w = max(0.15, 0.35 - 0.04 * n_cards)
+            remaining = 1.0 - coverage_w - card_w - 0.15 - 0.10 - 0.03
+            mana_w = max(0.05, remaining)
+            w1, w2, w3, w4, w5, w6 = card_w, mana_w, 0.03, 0.10, coverage_w, 0.03
         else:
-            w1, w2, w3, w4, w5 = 0.20, 0.20, 0.20, 0.20, 0.20
+            w1, w2, w3, w4, w5, w6 = 0.15, 0.20, 0.15, 0.20, 0.15, 0.15
 
-        return w1 * card_match + w2 * mana_match + w3 * pass_match + w4 * hp_match + w5 * coverage_match
+        return (w1 * card_match + w2 * mana_match + w3 * pass_match
+                + w4 * hp_match + w5 * coverage_match + w6 * sequence_match)
 
     @staticmethod
     def _hand_coverage_match(
@@ -406,6 +454,48 @@ class BehaviorMatcher:
         if observed.hero_power_used == simulated.hero_power_used:
             return 1.0
         return 0.2
+
+    @staticmethod
+    def _sequence_match(observed: ObservedBehavior, simulated: SimulatedBehavior) -> float:
+        """出牌序列匹配度（v5新增）。
+
+        核心思想：不仅看"出了什么牌"，还看"出的顺序是否接近"。
+        如果对手先出A再出B，模拟也是先A后B，说明手牌假设更合理。
+        使用最长公共子序列（LCS）比率衡量顺序相似度。
+
+        Returns:
+            匹配度 [0, 1]，0.5 为中性值（无信息）
+        """
+        if not observed.played_cards or not simulated.played_cards:
+            return 0.5  # 无信息
+
+        obs_list = list(observed.played_cards)
+        sim_list = list(simulated.played_cards)
+
+        # 计算 LCS 长度
+        lcs_len = BehaviorMatcher._lcs_length(obs_list, sim_list)
+        max_len = max(len(obs_list), len(sim_list))
+
+        if max_len == 0:
+            return 0.5
+
+        return lcs_len / max_len
+
+    @staticmethod
+    def _lcs_length(a: list, b: list) -> int:
+        """计算两个序列的最长公共子序列长度（O(n*m) DP）。"""
+        n, m = len(a), len(b)
+        # 优化：使用滚动数组减少空间
+        prev = [0] * (m + 1)
+        curr = [0] * (m + 1)
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                if a[i - 1] == b[j - 1]:
+                    curr[j] = prev[j - 1] + 1
+                else:
+                    curr[j] = max(prev[j], curr[j - 1])
+            prev, curr = curr, [0] * (m + 1)
+        return prev[m]
 
 
 # ── 对手回合模拟器（v2：使用真实 GameState + 搜索引擎）────────────
@@ -984,9 +1074,25 @@ class HandSampler:
 
         deck_probs = []
         total_prob = 0.0
-        for deck_id, deck_name, prob in top_decks[:3]:
+        # v5优化：扩展到 top-5 牌组 + 10% 随机探索池
+        # 之前只取 top-3，如果正确牌组排在第4-5位会被完全忽略
+        n_top = min(5, len(top_decks))
+        for deck_id, deck_name, prob in top_decks[:n_top]:
             deck_probs.append((deck_id, deck_name, prob))
             total_prob += prob
+
+        # 随机探索：从第6名之后的牌组中随机选1-2个，分配10%总权重
+        remaining_decks = top_decks[n_top:]
+        if remaining_decks and total_prob > 0:
+            import random
+            exploration_count = min(2, len(remaining_decks))
+            exploration_weight = total_prob * 0.10  # 10% 给探索
+            for _ in range(exploration_count):
+                idx = random.randint(0, len(remaining_decks) - 1)
+                deck_id, deck_name, prob = remaining_decks.pop(idx)
+                deck_probs.append((deck_id, deck_name, exploration_weight / exploration_count))
+                if not remaining_decks:
+                    break
 
         if total_prob <= 0:
             return []
@@ -1463,10 +1569,25 @@ class OpponentHandMCTS:
         if state_hash == self._last_state_hash and self._last_result is not None:
             return self._last_result
 
+        # v5优化：早停检查 — 如果历史概率高度稳定，减少模拟量
+        # 避免在概率已收敛时浪费完整预算
+        early_stop_threshold = 0.0  # 0 = 不启用早停
+        if observed.turn > 2 and self._multi_turn_tracker._turn_data:
+            stability_scores = list(self._multi_turn_tracker._stability_scores.values())
+            if len(stability_scores) >= 2:
+                avg_stability = sum(stability_scores[-2:]) / 2
+                if avg_stability > 0.85:
+                    # 概率已高度稳定，可以减少世界数量
+                    early_stop_threshold = avg_stability
+
         # Step 1: 从历史回合计算费用偏向，引导采样（v4）
         cost_bias = self._turn_history.compute_cost_bias(observed.turn)
 
         num_worlds = self._compute_num_worlds(budget)
+        # v5优化：概率已稳定时减少采样量（早停）
+        if early_stop_threshold > 0.85:
+            num_worlds = max(15, num_worlds // 3)
+            logger.debug("早停：概率稳定性=%.2f, 世界数=%d", early_stop_threshold, num_worlds)
         worlds = self._sampler.sample_worlds(
             bayesian_state=bayesian_state,
             hand_size=hand_size,
