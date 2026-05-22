@@ -311,7 +311,8 @@ class Minion:
             enchantments=list(self.enchantments),
         )
         # 保留动态属性 (trigger_type, trigger_effect, english_text 等)
-        for attr in ('trigger_type', 'trigger_effect', 'english_text', 'abilities'):
+        for attr in ('trigger_type', 'trigger_effect', 'english_text', 'abilities',
+                      'spellburst_triggered', 'frenzy_triggered'):
             val = getattr(self, attr, None)
             if val is not None:
                 setattr(new, attr, val)

@@ -587,7 +587,9 @@ def apply_action(state: "GameState", action: Action) -> "GameState":
 
     # ── Opponent turn dispatch ──
     if s.is_opponent_turn:
-        return _apply_opponent_action(s, action)
+        s = _apply_opponent_action(s, action)
+        s = _resolve_deaths(s)
+        return s
 
     if action.action_type in (ActionType.PLAY, ActionType.PLAY_WITH_TARGET):
         s = _play_card(s, action)
@@ -607,6 +609,10 @@ def apply_action(state: "GameState", action: Action) -> "GameState":
         s = _discover_pick(s, action)
     elif action.action_type == ActionType.CHOOSE_ONE:
         s = _choose_one(s, action)
+
+    # Resolve any deaths from spell/battlecry/hero_power/location effects
+    # (_attack and _end_turn resolve deaths internally; _resolve_deaths is safe to call multiple times)
+    s = _resolve_deaths(s)
 
     return s
 
@@ -703,10 +709,10 @@ def _play_minion(s: "GameState", card, action: Action, card_idx: int) -> "GameSt
     except (ImportError, AttributeError):
         pass
 
-    # Trigger system
+    # Trigger system (uses singleton dispatcher for consistent event routing)
     try:
-        from analysis.card.engine.trigger import TriggerDispatcher
-        s = TriggerDispatcher().on_minion_played(s, new_minion, card)
+        from analysis.card.engine.trigger import get_dispatcher
+        s = get_dispatcher().on_minion_played(s, new_minion, card)
     except (ImportError, AttributeError):
         pass
 
@@ -772,7 +778,14 @@ def _play_spell(s: "GameState", card, action: Action) -> "GameState":
                 for em in s.opponent.board:
                     em.frozen_until_next_turn = True
 
-    # Spell cast triggers on friendly minions
+    # Trigger system: on_spell_cast
+    try:
+        from analysis.card.engine.trigger import get_dispatcher
+        s = get_dispatcher().on_spell_cast(s, card=card)
+    except (ImportError, AttributeError):
+        pass
+
+    # Spell cast triggers on friendly minions (+ spellburst)
     s = _trigger_minion_on_spell_cast(s, card=card)
 
     # Location cooldown refresh on spell cast (e.g. Nespirah reopens after Fel spell)
@@ -924,16 +937,50 @@ def _hero_weapon_attack(s: "GameState", action: Action) -> "GameState":
         if enemy_idx < 0 or enemy_idx >= len(s.opponent.board):
             return s
         target = s.opponent.board[enemy_idx]
+        target_took_damage = not target.has_divine_shield
         if target.has_divine_shield:
             target.has_divine_shield = False
         else:
             target.health -= weapon.attack
+        # Frenzy: trigger when target takes damage and survives
+        if target_took_damage:
+            s = _trigger_frenzy(s, target)
         _apply_damage_to_hero(s.hero, target.attack)
         # 不立即移除 — _attack() 末尾统一 _resolve_deaths()
 
     weapon.health -= 1
     if weapon.health <= 0:
         s.hero.weapon = None
+    return s
+
+
+def _trigger_frenzy(s: "GameState", minion) -> "GameState":
+    """Trigger Frenzy on a minion that just took damage and survived.
+
+    Frenzy fires once per minion: the first time it takes damage while alive.
+    Returns (possibly modified) GameState.
+    """
+    if minion.health <= 0:
+        return s
+    if not getattr(minion, 'has_frenzy', False):
+        return s
+    if getattr(minion, 'frenzy_triggered', False):
+        return s
+
+    minion.frenzy_triggered = True  # type: ignore[attr-defined]
+    card_ref = getattr(minion, 'card_ref', None)
+    if card_ref is None:
+        return s
+    power = getattr(card_ref, 'power', None)
+    if power is None or not power.has_frenzy:
+        return s
+
+    for spell in power.frenzy:
+        try:
+            s = spell.execute(s, source=minion)
+        except Exception as exc:
+            log.warning("Frenzy execution failed for %s: %s",
+                         getattr(minion, 'name', '?'), exc)
     return s
 
 
@@ -968,24 +1015,36 @@ def _minion_attack(s: "GameState", action: Action) -> "GameState":
         target_had_divine_shield = target.has_divine_shield
 
         # Target takes damage
+        target_took_damage = False
         if target.has_divine_shield:
             target.has_divine_shield = False
         elif target.has_immune:
             pass
         else:
             target.health -= source.attack
+            target_took_damage = True
 
         # Poisonous: instant kill
         if source.has_poisonous and not target_had_divine_shield and not target.has_immune:
             target.health = 0
 
+        # Frenzy: trigger when target takes non-lethal damage
+        if target_took_damage:
+            s = _trigger_frenzy(s, target)
+
         # Counter-attack from target
+        source_took_damage = False
         if source.has_divine_shield:
             source.has_divine_shield = False
         elif source.has_immune:
             pass
         else:
             source.health -= target.attack
+            source_took_damage = True
+
+        # Frenzy: trigger when source takes non-lethal damage
+        if source_took_damage:
+            s = _trigger_frenzy(s, source)
 
         # Lifesteal
         if source.has_lifesteal:
@@ -1062,6 +1121,13 @@ def _end_turn(s: "GameState", action: Action) -> "GameState":
     estimated from current turn_number. The turn counter and card draw
     are deferred to _opponent_end_turn.
     """
+    # Trigger system: on_turn_end
+    try:
+        from analysis.card.engine.trigger import get_dispatcher
+        s = get_dispatcher().on_turn_end(s)
+    except (ImportError, AttributeError):
+        pass
+
     # Apply overload (affects OUR next turn, not opponent's)
     s.mana.overloaded = s.mana.overload_next
     s.mana.overload_next = 0
@@ -1483,6 +1549,13 @@ def _opponent_end_turn(s: "GameState", action: Action) -> "GameState":
     """
     s.is_opponent_turn = False
 
+    # Trigger system: on_turn_start (our turn begins)
+    try:
+        from analysis.card.engine.trigger import get_dispatcher
+        s = get_dispatcher().on_turn_start(s)
+    except (ImportError, AttributeError):
+        pass
+
     # Increment turn (deferred from _end_turn)
     s.turn_number += 1
 
@@ -1694,6 +1767,20 @@ def _trigger_minion_on_spell_cast(s: "GameState", card=None) -> "GameState":
     for m in s.board:
         if m.health <= 0:
             continue
+
+        # ── Spellburst: trigger once when a spell is cast ──
+        if getattr(m, 'has_spellburst', False) and not getattr(m, 'spellburst_triggered', False):
+            card_ref = getattr(m, 'card_ref', None)
+            if card_ref is not None:
+                power = getattr(card_ref, 'power', None)
+                if power and power.has_spellburst:
+                    for spell in power.spellburst:
+                        try:
+                            s = spell.execute(s, source=m)
+                        except Exception as exc:
+                            log.warning("Spellburst failed for %s: %s",
+                                         getattr(m, 'name', '?'), exc)
+                    m.spellburst_triggered = True  # type: ignore[attr-defined]
 
         trigger_type = getattr(m, "trigger_type", "")
         trigger_effect = getattr(m, "trigger_effect", "")

@@ -121,7 +121,7 @@ def _execute_abilities_deathrattle(
         try:
             state = ability.execute(state, minion)
         except Exception as exc:
-            logger.debug("Abilities deathrattle failed: %s — %s", ability, exc)
+            logger.warning("Abilities deathrattle failed: %s — %s", ability, exc)
 
     return state
 

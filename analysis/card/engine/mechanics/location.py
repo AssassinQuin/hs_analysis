@@ -12,8 +12,11 @@ Location lifecycle:
   5. End of turn: tick cooldowns
 """
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from analysis.card.engine.state import GameState
@@ -63,8 +66,9 @@ def activate_location(state: "GameState", location_index: int) -> "GameState":
 
     try:
         s = _resolve_location_effect(s, loc)
-    except Exception:
-        pass
+    except Exception as exc:
+        msg = getattr(loc, 'name', '?')
+        logger.warning("Location activate effect failed for %s: %s", msg, exc)
 
     loc.durability -= 1
     loc.cooldown_current = loc.cooldown_max
