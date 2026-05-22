@@ -223,7 +223,8 @@ def _compute_unplayed_pass_lr(
         # P(pass | 手牌有低费牌) ≈ 0.1
         # P(pass | 手牌无低费牌) ≈ 0.8
         # LR = 0.1 / 0.8 = 0.125
-        lr = max(0.1, 0.3 - card_cost * 0.03)
+        # 下限 0.2：避免多回合累积归零（与 evidence decay 配合）
+        lr = max(0.2, 0.4 - card_cost * 0.025)
         return lr
 
 
@@ -631,8 +632,11 @@ class WorldModelIntegrator:
                     # 可出但没出——降低概率
                     lr = 1.0 - 0.3 * hold_bias
                 else:
-                    # 不可出——概率不变或轻微提升
-                    lr = 1.0 + 0.2 * hold_bias
+                    # 不可出——概率提升（费用差越大，提升越显著）
+                    # 对手有剩余法力但不出高费牌，说明尚未抽到/持有高费牌
+                    # 但也可能是在保留高费牌等待时机
+                    excess = cost - available_mana  # 费用差额
+                    lr = 1.0 + min(2.5, 0.2 * hold_bias + excess * 0.15)
 
                 if abs(lr - 1.0) > 0.01:
                     evidence_list.append(BehaviorEvidence(

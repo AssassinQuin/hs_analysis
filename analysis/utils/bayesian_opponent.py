@@ -1063,9 +1063,25 @@ class BayesianOpponentModel:
         return None
 
     def card_name(self, dbfId: int) -> str:
-        """Look up card name by dbfId."""
+        """Look up card name by dbfId.
+
+        Falls back to direct CardDB lookup when cards_by_dbf misses
+        (e.g. non-collectible cards not indexed in dbf_lookup).
+        """
         info = self.cards_by_dbf.get(dbfId)
-        return info["name"] if info else f"dbfId={dbfId}"
+        if info:
+            return info["name"]
+        # Fallback: try direct CardDB lookup by dbfId
+        try:
+            from analysis.card.data.card_data import get_db
+            db = get_db()
+            card = db.get_by_dbf(dbfId)
+            if card and card.get("name"):
+                return card["name"]
+        except Exception:
+            pass
+        log.warning("dbfId=%d 无法解析为卡牌名 — 请检查卡牌数据是否完整", dbfId)
+        return f"dbfId={dbfId}"
 
     # ── Conditional Evidence (Phase 3) ────────────────
 

@@ -21,7 +21,32 @@ from analysis.card.models.card import Card
 
 from analysis.card.engine.deterministic import DeterministicRNG
 
+# Opponent v2 SpellDesc executor (extracted module)
+from analysis.card.engine import opponent_executor
+
 log = logging.getLogger(__name__)
+
+
+def _fire_event(event_name: str, state, **kwargs):
+    """统一事件触发：同时通知 SpellExecutor 事件总线和 TriggerDispatcher。"""
+    try:
+        from analysis.card.abilities.executor import SpellExecutor
+        state = SpellExecutor.fire_event(event_name, state, **kwargs)
+    except (ImportError, AttributeError):
+        pass
+    return state
+
+
+def _dispatch_trigger(method_name: str, state, **kwargs):
+    """统一 TriggerDispatcher 调用。method_name 如 'on_minion_played'。"""
+    try:
+        from analysis.card.engine.trigger import get_dispatcher
+        handler = getattr(get_dispatcher(), method_name, None)
+        if handler:
+            state = handler(state, **kwargs)
+    except (ImportError, AttributeError):
+        pass
+    return state
 
 
 # ──────────────────────────────────────────────────────────────
@@ -127,6 +152,8 @@ def _check_corrupt_upgrade(state: "GameState", played_card) -> "GameState":
 # Inlined from analysis/search/imbue.py — Imbue hero power system
 # ──────────────────────────────────────────────────────────────
 
+# TODO: 当 v2 card_abilities_v2.json 补全 11 职业基础英雄技能后，
+# 删除此表，_apply_hero_power() 全部走 v2 SpellExecutor 路径。
 _IMBUE_HERO_POWERS = {
     "DRUID": {
         "effect": "summon",
@@ -333,10 +360,8 @@ def _validate_and_pay_cost(s, card, card_idx: int):
 
     # Mana cost
     eff_cost = s.mana.effective_cost(card)
-    print(f"  _validate: card={getattr(card,'name','?')} base={card.cost} eff={eff_cost} avail_before={s.mana.available}")
     s.mana.available -= eff_cost
     s.mana.consume_modifiers(card)
-    print(f"  _validate: after deduct avail={s.mana.available}")
 
     # Overload
     overload_val = getattr(card, "overload", 0) or 0
@@ -502,7 +527,7 @@ def _execute_deathrattles(state: "GameState", dead_queue: list) -> "GameState":
                         exc,
                     )
 
-        # CardPower data-driven deathrattle
+        # CardPower data-driven deathrattle (old v1 system)
         card_ref = getattr(minion, "card_ref", None)
         power = None
         if card_ref is not None:
@@ -517,6 +542,29 @@ def _execute_deathrattles(state: "GameState", dead_queue: list) -> "GameState":
                 except Exception as exc:
                     log.debug("CardPower deathrattle failed %s: %s",
                               getattr(minion, "name", "?"), exc)
+
+        # v2 CardAbility deathrattle (from card_abilities_v2.json DEATHRATTLE)
+        if card_ref is not None:
+            try:
+                card_ability = getattr(card_ref, 'ability', None)
+                if card_ability is not None and card_ability.deathrattle is not None:
+                    if minion.owner == "friendly":
+                        # 友方死亡 → player-context executor
+                        from analysis.card.abilities.executor import SpellExecutor as FriendlyExecutor
+                        s = FriendlyExecutor._execute_desc(
+                            card_ability.deathrattle, s, source=minion,
+                        )
+                    else:
+                        # 敌方死亡 → opponent-context executor (friendly=对手, enemy=我方)
+                        from analysis.card.engine.opponent_executor import (
+                            opponent_execute_spell_desc,
+                        )
+                        s = opponent_execute_spell_desc(
+                            card_ability.deathrattle, s, source=minion,
+                        )
+            except Exception as exc:
+                log.debug("v2 deathrattle failed for %s: %s",
+                          getattr(minion, "name", "?"), exc)
 
     return s
 
@@ -634,8 +682,7 @@ def apply_action(state: "GameState", action: Action) -> "GameState":
     elif action.action_type == ActionType.CHOOSE_ONE:
         s = _choose_one(s, action)
 
-    # Resolve any deaths from spell/battlecry/hero_power/location effects
-    # (_attack and _end_turn resolve deaths internally; _resolve_deaths is safe to call multiple times)
+    # Single death phase: all action types resolve deaths here
     s = _resolve_deaths(s)
 
     return s
@@ -734,11 +781,7 @@ def _play_minion(s: "GameState", card, action: Action, card_idx: int) -> "GameSt
         pass
 
     # Trigger system (uses singleton dispatcher for consistent event routing)
-    try:
-        from analysis.card.engine.trigger import get_dispatcher
-        s = get_dispatcher().on_minion_played(s, new_minion, card)
-    except (ImportError, AttributeError):
-        pass
+    s = _dispatch_trigger('on_minion_played', s, minion=new_minion, card=card)
 
     # Recompute auras
     try:
@@ -803,11 +846,7 @@ def _play_spell(s: "GameState", card, action: Action) -> "GameState":
                     em.frozen_until_next_turn = True
 
     # Trigger system: on_spell_cast
-    try:
-        from analysis.card.engine.trigger import get_dispatcher
-        s = get_dispatcher().on_spell_cast(s, card=card)
-    except (ImportError, AttributeError):
-        pass
+    s = _dispatch_trigger('on_spell_cast', s, card=card)
 
     # Spell cast triggers on friendly minions (+ spellburst)
     s = _trigger_minion_on_spell_cast(s, card=card)
@@ -912,8 +951,8 @@ def _attack(s: "GameState", action: Action) -> "GameState":
     else:
         s = _minion_attack(s, action)
 
-    # Corrected death phase
-    s = _resolve_deaths(s)
+    # Corrected death phase — deferred to apply_action() single _resolve_deaths() call
+    # 不立即移除死亡随从 — apply_action() 末尾统一 _resolve_deaths()
 
     # Corpse generation
     try:
@@ -968,43 +1007,13 @@ def _hero_weapon_attack(s: "GameState", action: Action) -> "GameState":
             target.health -= weapon.attack
         # Frenzy: trigger when target takes damage and survives
         if target_took_damage:
-            s = _trigger_frenzy(s, target)
+            s = _dispatch_trigger('on_damage_dealt', s, target=target)
         _apply_damage_to_hero(s.hero, target.attack)
-        # 不立即移除 — _attack() 末尾统一 _resolve_deaths()
+        # 不立即移除 — apply_action() 末尾统一 _resolve_deaths()
 
     weapon.health -= 1
     if weapon.health <= 0:
         s.hero.weapon = None
-    return s
-
-
-def _trigger_frenzy(s: "GameState", minion) -> "GameState":
-    """Trigger Frenzy on a minion that just took damage and survived.
-
-    Frenzy fires once per minion: the first time it takes damage while alive.
-    Returns (possibly modified) GameState.
-    """
-    if minion.health <= 0:
-        return s
-    if not getattr(minion, 'has_frenzy', False):
-        return s
-    if getattr(minion, 'frenzy_triggered', False):
-        return s
-
-    minion.frenzy_triggered = True  # type: ignore[attr-defined]
-    card_ref = getattr(minion, 'card_ref', None)
-    if card_ref is None:
-        return s
-    power = getattr(card_ref, 'power', None)
-    if power is None or not power.has_frenzy:
-        return s
-
-    for spell in power.frenzy:
-        try:
-            s = spell.execute(s, source=minion)
-        except Exception as exc:
-            log.warning("Frenzy execution failed for %s: %s",
-                         getattr(minion, 'name', '?'), exc)
     return s
 
 
@@ -1054,7 +1063,7 @@ def _minion_attack(s: "GameState", action: Action) -> "GameState":
 
         # Frenzy: trigger when target takes non-lethal damage
         if target_took_damage:
-            s = _trigger_frenzy(s, target)
+            s = _dispatch_trigger('on_damage_dealt', s, target=target)
 
         # Counter-attack from target
         source_took_damage = False
@@ -1068,7 +1077,7 @@ def _minion_attack(s: "GameState", action: Action) -> "GameState":
 
         # Frenzy: trigger when source takes non-lethal damage
         if source_took_damage:
-            s = _trigger_frenzy(s, source)
+            s = _dispatch_trigger('on_damage_dealt', s, target=source)
 
         # Lifesteal
         if source.has_lifesteal:
@@ -1082,8 +1091,8 @@ def _minion_attack(s: "GameState", action: Action) -> "GameState":
             m.has_stealth = False
             break
 
-    # 不立即移除死亡随从 — _attack() 会在最后统一调用 _resolve_deaths()
-    # 批处理确保亡语正确触发（修复 Phase 4 评审发现）
+    # 不立即移除死亡随从 — apply_action() 末尾统一 _resolve_deaths()
+    # 批处理确保亡语正确触发
 
     # Windfury tracking
     if src_idx < len(s.board):
@@ -1130,12 +1139,8 @@ def _hero_power(s: "GameState", action: Action) -> "GameState":
     except (AttributeError, TypeError):
         pass
 
-    # Fire AFTER_HERO_POWER triggers (for minions like EDR_470 Barkshield Sentinel)
-    try:
-        from analysis.card.abilities.executor import SpellExecutor
-        s = SpellExecutor.fire_event("AFTER_HERO_POWER", s, event_source=s.hero)
-    except (ImportError, AttributeError):
-        pass
+    # Fire AFTER_HERO_POWER triggers
+    s = _fire_event("AFTER_HERO_POWER", s, event_source=s.hero)
 
     return s
 
@@ -1153,11 +1158,7 @@ def _end_turn(s: "GameState", action: Action) -> "GameState":
     are deferred to _opponent_end_turn.
     """
     # Trigger system: on_turn_end
-    try:
-        from analysis.card.engine.trigger import get_dispatcher
-        s = get_dispatcher().on_turn_end(s)
-    except (ImportError, AttributeError):
-        pass
+    s = _dispatch_trigger('on_turn_end', s)
 
     # Apply overload (affects OUR next turn, not opponent's)
     s.mana.overloaded = s.mana.overload_next
@@ -1214,8 +1215,8 @@ def _end_turn(s: "GameState", action: Action) -> "GameState":
     except (ImportError, AttributeError):
         pass
 
-    # Resolve any deaths from end-of-turn effects
-    s = _resolve_deaths(s)
+    # Resolve deaths — deferred to apply_action() single _resolve_deaths() call
+    # 不立即移除 — apply_action() 末尾统一处理
 
     # ── Switch to opponent turn ──
     # Turn counter, card draw, and our mana are handled in
@@ -1313,7 +1314,7 @@ def _opponent_play_card(s: "GameState", action: Action) -> "GameState":
             try:
                 ability = getattr(card, 'ability', None)
                 if ability is not None and ability.has_any and ability.on_play is not None:
-                    _opponent_execute_spell_desc(ability.on_play, s, source=new_minion)
+                    opponent_executor.opponent_execute_spell_desc(ability.on_play, s, source=new_minion)
             except Exception as e:
                 log.debug("Opponent battlecry failed for %s: %s", card, e)
 
@@ -1346,7 +1347,7 @@ def _opponent_play_spell_v2(s: "GameState", card) -> None:
     try:
         ability = getattr(card, 'ability', None)
         if ability is not None and ability.has_any and ability.on_play is not None:
-            _opponent_execute_spell_desc(ability.on_play, s, source=card)
+            opponent_executor.opponent_execute_spell_desc(ability.on_play, s, source=card)
             return
     except Exception as e:
         log.debug("Opponent v2 spell failed for %s: %s", card, e)
@@ -1410,231 +1411,11 @@ def _opponent_play_spell_v2(s: "GameState", card) -> None:
     # 5. Draw detection
     if 'draw' in card_text:
         draw_count = 1
-        import re as _re
-        m = _re.search(r'draw\s+(\d+)', card_text)
+        m = re.search(r'draw\s+(\d+)', card_text)
         if m:
             draw_count = int(m.group(1))
         for _ in range(draw_count):
-            s = _opponent_draw_card(s)
-
-
-# ═══════════════════════════════════════════════════════════════════
-# v2 SpellDesc 对手能力执行器
-# ═══════════════════════════════════════════════════════════════════
-# 将 card_abilities_v2.json 的 SpellDesc 递归树
-# 应用于对手上下文（friendly=对手侧, enemy=我方侧）。
-# 替代 / 补充基于文本启发式的 _opponent_play_spell_v2 回退路径。
-# ═══════════════════════════════════════════════════════════════════
-
-import random as _random
-
-
-def _opponent_resolve_value(desc) -> int:
-    """从 SpellDesc 解析数值（支持 int / {"base": N, ...} 格式）。"""
-    v = desc.value
-    if v is None:
-        return 0
-    if isinstance(v, dict):
-        return int(v.get('base', 0))
-    return int(v)
-
-
-def _opponent_get_targets(target_str: str, s: "GameState", source=None):
-    """根据目标选择器返回 (targets_list, is_enemy_side)。
-
-    opponent 上下文映射:
-      friendly = 对手侧 (s.opponent.hero / s.opponent.board)
-      enemy    = 我方侧 (s.hero / s.board)
-    """
-    t = (target_str or '').upper()
-
-    # ── 敌方（=我们） ──
-    if t in ('ALL_ENEMY_CHARACTERS', 'ENEMY_CHARACTERS', 'ALL_ENEMY'):
-        targets = []
-        if s.hero.hp > 0:
-            targets.append(s.hero)
-        targets.extend(s.board[:])
-        return targets, True
-    if t in ('ALL_ENEMY_MINIONS', 'ENEMY_MINIONS'):
-        return list(s.board), True
-    if t == 'RANDOM_ENEMY_MINION':
-        if s.board:
-            return [_random.choice(s.board)], True
-        return [], True
-    if t in ('RANDOM_ENEMY_CHARACTER', 'RANDOM_ENEMY'):
-        pool = []
-        if s.hero.hp > 0:
-            pool.append(('hero', s.hero))
-        for i, m in enumerate(s.board):
-            pool.append((f'minion_{i}', m))
-        if pool:
-            _, chosen = _random.choice(pool)
-            return [chosen], True
-        return [], True
-
-    # ── 友方（=对手） ──
-    if t in ('ALL_FRIENDLY_CHARACTERS', 'FRIENDLY_CHARACTERS', 'ALL_FRIENDLY'):
-        targets = []
-        if s.opponent.hero.hp > 0:
-            targets.append(s.opponent.hero)
-        targets.extend(s.opponent.board[:])
-        return targets, False
-    if t in ('ALL_FRIENDLY_MINIONS', 'FRIENDLY_MINIONS'):
-        return list(s.opponent.board), False
-    if t == 'SELF':
-        if source is not None:
-            return [source], False
-        return [], False
-
-    # ── 全体 ──
-    if t in ('ALL_CHARACTERS', 'ALL'):
-        targets = []
-        if s.hero.hp > 0:
-            targets.append(s.hero)
-        targets.extend(s.board[:])
-        if s.opponent.hero.hp > 0:
-            targets.append(s.opponent.hero)
-        targets.extend(s.opponent.board[:])
-        return targets, True  # mixed, pass True (both sides affected)
-    if t in ('ALL_MINIONS',):
-        return list(s.board) + list(s.opponent.board), True
-
-    # ── TARGET（已选目标）/ 默认 → 启发式选最佳 ──
-    # 回退: 对我方英雄造成伤害
-    return [s.hero], True
-
-
-def _opponent_apply_damage(target, damage: int) -> None:
-    """对 hero(的dict-like) 或 Minion 施加伤害。"""
-    if hasattr(target, 'hp'):  # HeroState
-        if getattr(target, 'armor', 0) > 0:
-            absorbed = min(target.armor, damage)
-            target.armor -= absorbed
-            damage -= absorbed
-        target.hp -= damage
-    elif hasattr(target, 'health'):  # Minion
-        target.health -= damage
-
-
-def _opponent_execute_spell_desc(
-    desc, s: "GameState", source=None
-) -> None:
-    """递归执行 SpellDesc，效果应用于对手上下文。
-
-    修改 s 就地，不返回新状态（兼容原始 _opponent_play_spell 模式）。
-    """
-    if desc is None:
-        return
-
-    sc = desc.spell_class
-
-    # ── MetaSpell: 递归执行子法术 ──
-    if sc == 'MetaSpell':
-        for sub in (desc.spells or []):
-            _opponent_execute_spell_desc(sub, s, source)
-        return
-
-    # ── DamageSpell ──
-    if sc == 'DamageSpell':
-        dmg = _opponent_resolve_value(desc)
-        if dmg <= 0:
-            return
-        targets, _ = _opponent_get_targets(desc.target or '', s, source)
-        for t in targets:
-            _opponent_apply_damage(t, dmg)
-        return
-
-    # ── BuffSpell ──
-    if sc == 'BuffSpell':
-        atk = desc.attack_bonus or 0
-        hp = desc.health_bonus or 0
-        if atk == 0 and hp == 0:
-            return
-        targets, _ = _opponent_get_targets(desc.target or 'SELF', s, source)
-        for t in targets:
-            if hasattr(t, 'attack') and hasattr(t, 'health') and hasattr(t, 'max_health'):
-                t.attack += atk
-                t.health += hp
-                t.max_health += hp
-        return
-
-    # ── SummonSpell ──
-    if sc == 'SummonSpell':
-        if len(s.opponent.board) >= 7:
-            return
-        token_atk = 1
-        token_hp = 1
-        if desc.attack_bonus is not None:
-            token_atk = desc.attack_bonus
-        if desc.health_bonus is not None:
-            token_hp = desc.health_bonus
-        tokens = ("", "Token", "Summoned")
-        new_m = Minion(
-            name=getattr(desc, 'name', _random.choice(tokens)),
-            attack=token_atk,
-            health=token_hp,
-            max_health=token_hp,
-            owner="enemy",
-            can_attack=False,
-        )
-        s.opponent.board.append(new_m)
-        return
-
-    # ── DiscoverSpell ──
-    if sc == 'DiscoverSpell':
-        # 生成一张随机低费卡牌加入对手手牌
-        if len(s.opponent.hand) < 10:
-            discovered = Card(
-                dbf_id=-_random.randint(10000, 99999),
-                name="Discovered",
-                cost=_random.randint(0, 3),
-                card_type="MINION",
-                attack=_random.randint(1, 3),
-                health=_random.randint(1, 3),
-            )
-            s.opponent.hand.append(discovered)
-        return
-
-    # ── TakeControlSpell ──
-    if sc == 'TakeControlSpell':
-        if not s.board:
-            return
-        # 偷取我方攻击力最高的随从
-        best = max(s.board, key=lambda m: m.attack)
-        s.board.remove(best)
-        best.owner = "enemy"
-        best.can_attack = False  # 刚过来，有召唤疲劳
-        if len(s.opponent.board) < 7:
-            s.opponent.board.append(best)
-        return
-
-    # ── AddToHandSpell ──
-    if sc == 'AddToHandSpell':
-        if len(s.opponent.hand) >= 10:
-            return
-        # 添加一张来源卡牌的复制
-        if source is not None and hasattr(source, 'copy'):
-            src_copy = source.copy()
-            if hasattr(src_copy, 'cost') and hasattr(src_copy, 'name'):
-                s.opponent.hand.append(src_copy)
-                return
-        # fallback: 添加一个占位
-        s.opponent.hand.append(Card(
-            dbf_id=-_random.randint(10000, 99999),
-            name="Copy",
-            cost=0,
-            card_type="SPELL",
-        ))
-        return
-
-    # ── DrawSpell ──
-    if sc in ('DrawSpell',):
-        count = desc.count or _opponent_resolve_value(desc)
-        if count <= 0:
-            count = 1
-        for _ in range(count):
-            s = _opponent_draw_card(s)
-        return
+            s = opponent_executor.opponent_draw_card(s)
 
 
 def _opponent_attack(s: "GameState", action: Action) -> "GameState":
@@ -1691,24 +1472,6 @@ def _opponent_attack(s: "GameState", action: Action) -> "GameState":
     s.board = [m for m in s.board if m.health > 0]
 
     return s
-
-
-def _opponent_draw_card(state: "GameState") -> "GameState":
-    """Draw a card for the opponent during their turn simulation."""
-    if state.opponent.deck_remaining <= 0:
-        # Simplified fatigue: 1 damage per draw when deck is empty
-        state.opponent.hero.hp -= max(1, state.turn_number // 5)
-    else:
-        state.opponent.deck_remaining -= 1
-        if len(state.opponent.hand) < 10:
-            # Add unknown placeholder card
-            state.opponent.hand.append(Card(
-                dbf_id=-1,
-                name="Opponent Draw",
-                cost=0,
-                card_type="SPELL",
-            ))
-    return state
 
 
 def _opponent_hero_power(s: "GameState") -> "GameState":
@@ -1806,14 +1569,10 @@ def _opponent_hero_power(s: "GameState") -> "GameState":
         # Opponent takes self-damage and draws
         s.opponent.hero.hp -= dmg
         for _ in range(draw_count):
-            s = _opponent_draw_card(s)
+            s = opponent_executor.opponent_draw_card(s)
 
-    # Fire AFTER_HERO_POWER triggers (for opponent minions like EDR_470 Barkshield Sentinel)
-    try:
-        from analysis.card.abilities.executor import SpellExecutor
-        s = SpellExecutor.fire_event("AFTER_HERO_POWER", s, event_source=s.opponent.hero)
-    except (ImportError, AttributeError):
-        pass
+    # Fire AFTER_HERO_POWER triggers
+    s = _fire_event("AFTER_HERO_POWER", s, event_source=s.opponent.hero)
 
     return s
 
@@ -1828,11 +1587,7 @@ def _opponent_end_turn(s: "GameState", action: Action) -> "GameState":
     s.is_opponent_turn = False
 
     # Trigger system: on_turn_start (our turn begins)
-    try:
-        from analysis.card.engine.trigger import get_dispatcher
-        s = get_dispatcher().on_turn_start(s)
-    except (ImportError, AttributeError):
-        pass
+    s = _dispatch_trigger('on_turn_start', s)
 
     # Increment turn (deferred from _end_turn)
     s.turn_number += 1
@@ -1841,7 +1596,7 @@ def _opponent_end_turn(s: "GameState", action: Action) -> "GameState":
     s = _draw_card(s)
 
     # Draw a card for opponent (simulates opponent drawing on their turn)
-    s = _opponent_draw_card(s)
+    s = opponent_executor.opponent_draw_card(s)
 
     # Set up our mana for new turn
     if s.mana.max_mana < s.mana.max_mana_cap:
@@ -2045,20 +1800,6 @@ def _trigger_minion_on_spell_cast(s: "GameState", card=None) -> "GameState":
     for m in s.board:
         if m.health <= 0:
             continue
-
-        # ── Spellburst: trigger once when a spell is cast ──
-        if getattr(m, 'has_spellburst', False) and not getattr(m, 'spellburst_triggered', False):
-            card_ref = getattr(m, 'card_ref', None)
-            if card_ref is not None:
-                power = getattr(card_ref, 'power', None)
-                if power and power.has_spellburst:
-                    for spell in power.spellburst:
-                        try:
-                            s = spell.execute(s, source=m)
-                        except Exception as exc:
-                            log.warning("Spellburst failed for %s: %s",
-                                         getattr(m, 'name', '?'), exc)
-                    m.spellburst_triggered = True  # type: ignore[attr-defined]
 
         trigger_type = getattr(m, "trigger_type", "")
         trigger_effect = getattr(m, "trigger_effect", "")

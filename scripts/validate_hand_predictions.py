@@ -107,6 +107,9 @@ class GroundTruth:
             hand_state: Dict[int, List[str]] = {}
             cards_list = data["cards"]
 
+            # 使用 meta.total_turns 限制 turn range，避免膨胀到 999
+            max_turn = data.get("meta", {}).get("total_turns", 30) if "meta" in data else 30
+
             for c in cards_list:
                 name = c["name"]
                 dt = c.get("drawn_turn")
@@ -114,8 +117,8 @@ class GroundTruth:
 
                 # 抽到那张牌时加入手牌
                 if dt is not None:
-                    # 这张牌从 drawn_turn 开始在手牌
-                    for t in range(dt, pt if pt is not None else 999):
+                    end = pt if pt is not None else max_turn + 1
+                    for t in range(dt, end):
                         hand_state.setdefault(t, []).append(name)
 
             self.turn_hand = dict(sorted(hand_state.items()))
@@ -309,19 +312,27 @@ class ValidationEngine:
         predictor = HandPredictor()
         monitor = CoreLogMonitor()
         snapshots = []
+        processed_turns: set = set()
 
         def _on_turn(mon, turn: int, predictor_obj):
+            # LogMonitor 可能在 hslog 子步骤重复触发同一回合
+            if turn in processed_turns or turn <= 0:
+                return
+            processed_turns.add(turn)
             try:
                 state = mon.build_state_dict()
                 _buf = io.StringIO()
                 with redirect_stdout(_buf):
                     result = predictor_obj.predict(state)
 
-                # 提取按概率排序的手牌预测
+                # 提取按概率排序的手牌预测（截断到 opp_hand_count 张）
+                opp_hand_count = state.get("opp_hand_count", 0)
                 preds = sorted(
                     [p for p in result.hand_predictions if p.probability > 0.01],
                     key=lambda p: (-p.probability, p.cost),
                 )
+                if opp_hand_count > 0:
+                    preds = preds[:opp_hand_count]
                 pred_list = [(p.name, p.probability) for p in preds]
                 snapshots.append({"turn": turn, "predictions": pred_list})
             except Exception as e:

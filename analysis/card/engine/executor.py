@@ -204,6 +204,10 @@ def summon_minion(
     """
     from analysis.card.engine.state import Minion as _Minion
 
+    # 防御: position 可能为 None（由 SpellDesc.__getattr__ 返回）
+    if position is None:
+        position = -1
+
     if len(state.board) >= 7:
         return state
 
@@ -226,6 +230,34 @@ def summon_minion(
         state.board.insert(position, minion)
 
     return state
+
+
+def summon_minion_by_id(
+    state: "GameState",
+    card_id: str = "",
+    position: int = -1,
+) -> "GameState":
+    """通过 card_id 从卡牌数据库加载并召唤随从到 friendly board。
+
+    供 v2 SpellDesc SummonSpell 系统使用（friendly 上下文）。
+    由 spells.py 和 effects.py 中的 SummonSpell.execute() 调用。
+
+    Args:
+        state: GameState to mutate.
+        card_id: 卡牌 ID（如 "TLC_249"），为空则召唤 1/1 token。
+        position: Board position (-1 = append at end).
+
+    Returns:
+        The mutated GameState (same object).
+    """
+    if card_id:
+        from analysis.card.data.card_data import get_db
+        db = get_db()
+        card_data = db.get_card(card_id)
+        if card_data:
+            return summon_minion(state, card_data, position)
+    # fallback: 无 card_id 或未找到 → 默认 1/1 token
+    return summon_minion(state, position=position)
 
 
 def draw_cards(state: "GameState", count: int) -> "GameState":

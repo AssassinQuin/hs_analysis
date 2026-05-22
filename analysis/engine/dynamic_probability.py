@@ -250,7 +250,7 @@ class DynamicProbabilityEngine:
         self._constraints: List[HandConstraint] = []
         self._seen_cards: Dict[str, int] = {}
         self._generated_cards: Set[str] = set()
-        self._revealed_hand: List[Tuple[int, str]] = []
+        self._revealed_hand: List[Tuple] = []
         self._discarded_cards: set = set()
         self._known_deck_cards: list = []
         self._hand_transforms: list = []
@@ -632,7 +632,7 @@ class DynamicProbabilityEngine:
 
         # 1. 已确认手牌 (100%)
         revealed_set = set()
-        for eid, card_id in self._revealed_hand:
+        for eid, card_id, *_ in self._revealed_hand:
             if card_id and card_id not in revealed_set:
                 cp = self._card_id_to_probability(card_id, 1.0, "revealed")
                 report.card_probabilities.append(cp)
@@ -1039,6 +1039,13 @@ class DynamicProbabilityEngine:
         if evidence is None or not evidence.behavior_evidence:
             return
 
+        # ── 证据时效衰减 ──
+        # 旧回合的证据影响力应随时间衰减：每回合衰减 30%
+        # 避免多回合 unplayed_affordable 证据累积导致概率归零
+        # 0.7 是手动调参值，经验规则：回合数 * 0.3 = 影响力损失百分比
+        # TODO: 用 validate_hand_predictions.py 的 F1 值校准衰减率
+        EVIDENCE_DECAY = 0.7
+
         # ── 按卡牌逐一应用似然比 ──
         for cp in report.card_probabilities:
             if cp.source == "revealed":
@@ -1051,7 +1058,14 @@ class DynamicProbabilityEngine:
 
             combined_lr = 1.0
             for ev in relevant_evidence:
-                combined_lr *= ev.likelihood
+                turns_ago = (self._current_turn or 0) - ev.turn
+                if turns_ago > 0 and ev.evidence_type in ("unplayed_affordable", "play_timing"):
+                    # 旧证据衰减：LR 向 1.0 靠拢
+                    decay = EVIDENCE_DECAY ** turns_ago
+                    effective_lr = 1.0 + (ev.likelihood - 1.0) * decay
+                else:
+                    effective_lr = ev.likelihood
+                combined_lr *= effective_lr
 
             cp.probability = apply_likelihood_to_probability(cp.probability, combined_lr)
 

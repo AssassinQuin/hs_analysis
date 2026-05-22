@@ -38,9 +38,12 @@ def main():
     overrides = manual.get("manual_overrides", manual)
     
     merged_count = 0
+    inserted_count = 0
     for cid, override_data in overrides.items():
         if cid not in v2:
-            print(f"  [WARN] 卡牌 {cid} 不在 v2 JSON 中，跳过")
+            # 新卡牌：直接插入而非跳过
+            v2[cid] = override_data
+            inserted_count += 1
             continue
         merge_deep(v2[cid], override_data)
         merged_count += 1
@@ -49,7 +52,7 @@ def main():
     with open(V2_PATH, 'w', encoding='utf-8') as f:
         json.dump(v2, f, ensure_ascii=False, indent=2)
     
-    print(f"合并完成: {merged_count} 张卡牌已覆盖")
+    print(f"合并完成: {merged_count} 张卡牌已覆盖, {inserted_count} 张卡牌已插入")
 
 if __name__ == "__main__":
     main()

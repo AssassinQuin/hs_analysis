@@ -569,7 +569,9 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
     if len(name_deduped) < len(code_deduped):
         log.info(f"Name dedup: {len(code_deduped)} → {len(name_deduped)} decks")
 
-    # 按内容相似度去重：卡牌重叠度 > 80% 的只保留一个
+    # 按内容相似度去重：卡牌重叠度 > 95% 的只保留一个
+    # 80% 阈值过于激进（30张卡中差6张即被合并），导致 MAGE 等热门职业的
+    # 合理变体被错误去重。95% 阈值允许 1-2 张差异，保留有意义的 archetype 变体。
     # 先解析所有卡组，然后两两比较
     parsed_decks = []  # [(code, name_hint, arch_hint, cards_frozenset)]
     for code, name_hint, arch_hint in name_deduped:
@@ -590,7 +592,7 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
             overlap = len(ex_cards & cards_set)
             max_size = max(len(ex_cards), len(cards_set))
             similarity = overlap / max_size if max_size > 0 else 0
-            if similarity > 0.80:
+            if similarity > 0.95:
                 is_duplicate = True
                 break
         if not is_duplicate:

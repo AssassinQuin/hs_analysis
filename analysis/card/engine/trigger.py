@@ -30,6 +30,7 @@ class EventType(str, Enum):
     ON_DRAW = "on_draw"
     ON_HEAL = "on_heal"
     ON_DISCARD = "on_discard"
+    AFTER_DISCOVER = "after_discover"
     # Aliases matching old trigger_system names
     DEATHRATTLE = "deathrattle"
     START_OF_TURN = "start_of_turn"
@@ -167,17 +168,27 @@ class TriggerDispatcher:
         """Fire at end of turn.
 
         Dispatches ON_TURN_END event and ticks enchantment durations.
+        Supports end_of_turn_double flag for CATA_480 style effects.
         """
         from analysis.card.engine.enchantment import _tick_entity_enchantments
 
         s = state
-        s = self.emit(s, EventType.ON_TURN_END)
-
-        for m in s.board:
-            s = self._dispatch_enchantment_triggers(s, m, "end_of_turn")
-            _tick_entity_enchantments(m)
-        for m in s.opponent.board:
-            _tick_entity_enchantments(m)
+        double = getattr(s, 'end_of_turn_double', False)
+        try:
+            s = self.emit(s, EventType.ON_TURN_END)
+            if double:
+                s = self.emit(s, EventType.ON_TURN_END)
+            for m in s.board:
+                s = self._dispatch_enchantment_triggers(s, m, "end_of_turn")
+                if double:
+                    s = self._dispatch_enchantment_triggers(s, m, "end_of_turn")
+                _tick_entity_enchantments(m)
+            for m in s.opponent.board:
+                _tick_entity_enchantments(m)
+        finally:
+            # 确保 flag 始终重置，避免异常后后续回合误触发
+            if hasattr(s, 'end_of_turn_double'):
+                s.end_of_turn_double = False
         return s
 
     def on_turn_start(self, state: GameState) -> GameState:
@@ -233,6 +244,26 @@ class TriggerDispatcher:
     def on_discard(self, state: GameState, card=None) -> GameState:
         """Fire after a card is discarded."""
         return self.emit(state, EventType.ON_DISCARD, card=card)
+
+    def after_discover(self, state: GameState, card=None) -> GameState:
+        """Fire after a discover choice is made.
+
+        Triggers AFTER_DISCOVER event and scans for after_discover enchantment triggers.
+        Updates quest discover progress tracking.
+        """
+        s = state
+        s = self.emit(s, EventType.AFTER_DISCOVER, card=card)
+
+        for m in s.board:
+            s = self._dispatch_enchantment_triggers(s, m, "after_discover")
+
+        # Quest discover tracking
+        if hasattr(s, 'quest_discover_count'):
+            s.quest_discover_count += 1
+        for quest in getattr(s, 'active_quests', []):
+            if getattr(quest, 'quest_type', '') == "discover_cards" and not getattr(quest, 'completed', False):
+                quest.progress = getattr(quest, 'progress', 0) + 1
+        return s
 
     # ---------------------------------------------------------------
     # Death processing
@@ -387,10 +418,65 @@ class TriggerDispatcher:
 
 
 # ---------------------------------------------------------------------------
+# Built-in listeners: Frenzy & Spellburst
+# ---------------------------------------------------------------------------
+
+
+def _handle_frenzy(state: GameState, target=None, **kwargs) -> GameState:
+    """ON_DAMAGE listener: trigger Frenzy on minion that took damage and survived."""
+    if target is None or not isinstance(target, Minion):
+        return state
+    if target.health <= 0:
+        return state
+    if not getattr(target, 'has_frenzy', False):
+        return state
+    if getattr(target, 'frenzy_triggered', False):
+        return state
+
+    target.frenzy_triggered = True  # type: ignore[attr-defined]
+    card_ref = getattr(target, 'card_ref', None)
+    if card_ref is None:
+        return state
+    power = getattr(card_ref, 'power', None)
+    if power is None or not power.has_frenzy:
+        return state
+
+    for spell in power.frenzy:
+        try:
+            state = spell.execute(state, source=target)
+        except Exception as exc:
+            logger.warning("Frenzy execution failed for %s: %s",
+                           getattr(target, 'name', '?'), exc)
+    return state
+
+
+def _handle_spellburst(state: GameState, card=None, **kwargs) -> GameState:
+    """ON_SPELL_CAST listener: trigger Spellburst on friendly minions."""
+    for m in state.board:
+        if m.health <= 0:
+            continue
+        if getattr(m, 'has_spellburst', False) and not getattr(m, 'spellburst_triggered', False):
+            card_ref = getattr(m, 'card_ref', None)
+            if card_ref is not None:
+                power = getattr(card_ref, 'power', None)
+                if power and power.has_spellburst:
+                    for spell in power.spellburst:
+                        try:
+                            state = spell.execute(state, source=m)
+                        except Exception as exc:
+                            logger.warning("Spellburst failed for %s: %s",
+                                           getattr(m, 'name', '?'), exc)
+                    m.spellburst_triggered = True  # type: ignore[attr-defined]
+    return state
+
+
+# ---------------------------------------------------------------------------
 # Module-level singleton
 # ---------------------------------------------------------------------------
 
 _default_dispatcher = TriggerDispatcher()
+_default_dispatcher.register_listener(EventType.ON_DAMAGE, _handle_frenzy)
+_default_dispatcher.register_listener(EventType.ON_SPELL_CAST, _handle_spellburst)
 
 
 def get_dispatcher() -> TriggerDispatcher:

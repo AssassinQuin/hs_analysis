@@ -272,7 +272,7 @@ class HandPredictor:
                         )
 
                 # 记录已知手牌
-                for eid, card_id in state_dict.get("known_hand", []):
+                for eid, card_id, *_ in state_dict.get("known_hand", []):
                     self._effect_engine.record_revealed_card(card_id, eid, 0)
 
             # 获取衍生卡牌推断 (from cached or freshly built state)
@@ -314,6 +314,23 @@ class HandPredictor:
                         hp.source = "inferred"
                         result.hand_predictions.append(hp)
                         existing_ids.add(rec["card_id"])
+
+        # ── 衍生牌（Discover/生成）补充 ──
+        # 将 GlobalTracker 追踪到的 SETASIDE→HAND 衍生牌加入预测列表
+        # 这些卡牌不在对手原始牌库中，必是 Discover 或生成效果所得
+        generated_records = state_dict.get("generated_card_records", [])
+        if generated_records:
+            existing_ids = {hp.card_id for hp in result.hand_predictions if hp.card_id}
+            for rec in generated_records:
+                cid = rec.get("card_id", "")
+                if cid and cid not in existing_ids:
+                    # Discover/生成卡以高概率进入预测（它们确实在对手手中）
+                    prob = 0.6 if rec.get("source_type") == "discover" else 0.4
+                    hp = self._card_id_to_hand_prediction(cid, prob, "inferred")
+                    if hp:
+                        hp.source = "generated"
+                        result.hand_predictions.append(hp)
+                        existing_ids.add(cid)
 
         # ── 信息揭示追踪增强：变形事件修正 ──
         # 变形产物不在原始卡组中，标记为 generated
@@ -379,6 +396,14 @@ class HandPredictor:
             )
         )
 
+        # ── 预测数截断：只保留概率最高的 N 张，N = opp_hand_count ──
+        # precision 优化：对手实际手牌只有 3-10 张，输出 29 张预测导致大量误报
+        if opp_hand_count > 0 and len(result.hand_predictions) > opp_hand_count:
+            revealed_cards = [hp for hp in result.hand_predictions if hp.source == "revealed"]
+            prob_cards = [hp for hp in result.hand_predictions if hp.source != "revealed"]
+            remaining_slots = max(0, opp_hand_count - len(revealed_cards))
+            result.hand_predictions = revealed_cards + prob_cards[:remaining_slots]
+
         return result
 
     def _filter_generated_and_wrong_class(
@@ -436,7 +461,8 @@ class HandPredictor:
                 # 过滤 2: 明确的非本职业卡牌 → 贝叶斯卡组池错配
                 # 适用于所有 source（包括 revealed），因为即使被"揭示"过的卡牌，
                 # 如果属于其他职业，它也是衍生牌而非卡组牌
-                if card_class in PLAYABLE_CLASSES and card_class not in ("NEUTRAL", opp_class):
+                # 例外：source="generated" 的牌（Discover/生成）可以合法地跨职业
+                if hp.source != "generated" and card_class in PLAYABLE_CLASSES and card_class not in ("NEUTRAL", opp_class):
                     logger.debug("  过滤非本职业: %s (%s) class=%s, opp=%s source=%s",
                                  hp.name, hp.card_id, card_class, opp_class, hp.source)
                     continue
@@ -529,7 +555,7 @@ class HandPredictor:
     ):
         """回退预测：当概率引擎不可用时使用基础逻辑。"""
         # 已确认手牌
-        for eid, card_id in state_dict.get("known_hand", []):
+        for eid, card_id, *_ in state_dict.get("known_hand", []):
             hp = self._card_id_to_hand_prediction(card_id, 1.0, "revealed")
             if hp:
                 result.revealed_cards.append(hp)

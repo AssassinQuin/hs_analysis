@@ -702,8 +702,36 @@ class GlobalTracker:
         stats.cards_drawn += 1  # 算作一次抽牌
 
     def _on_zone_setaside_to_hand(self, entity_id, controller, card_id, card_type, is_opp):
-        """衍生牌进入手牌: SETASIDE -> HAND"""
-        pass  # 实体出生记录已标记为衍生
+        """衍生牌进入手牌: SETASIDE -> HAND
+
+        这是 Discover 选择、Lackey 生成等衍生牌的最常见路径。
+        实体出生记录已标记为衍生，但此处需补充：
+        1. 记录卡牌 ID（zone_change 本身不携带 card_id）
+        2. 加入 opp_generated_seen 确保不被贝叶斯卡组匹配误判
+        """
+        if not is_opp:
+            return
+        # 从多源查找 card_id
+        # zone_change 事件本身不携带 card_id（hslog 限制）
+        # 尝试从: (1) SHOW_ENTITY 快照 (2) FULL_ENTITY 出生记录
+        if not card_id:
+            card_id = self._last_known_card_ids.get(entity_id, "")
+        if not card_id:
+            birth = self._entity_birth.get(entity_id)
+            if birth and birth.card_id:
+                card_id = birth.card_id
+        if card_id:
+            self.state.opp_generated_seen.add(card_id)
+            # 这条记录会通过 build_state_dict 传递给 HandPredictor
+            # 然后通过 CardEffectInferenceEngine 追踪为 derived card
+            self.state.opp_generated_card_records.append({
+                "card_id": card_id,
+                "source_card_id": "",
+                "source_type": "discover",
+                "turn_created": self.state.current_turn,
+                "entity_id": entity_id,
+                "from_position": 0,
+            })
 
     def _on_zone_setaside_to_play(self, entity_id, controller, card_id, card_type, is_opp):
         """衍生随从登场: SETASIDE -> PLAY"""

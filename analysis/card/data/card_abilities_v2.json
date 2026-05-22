@@ -2349,11 +2349,14 @@
         {
           "class": "BuffSpell",
           "target": "SELF",
-          "attack_bonus": 2,
+          "attack_bonus": 1,
           "health_bonus": 1
         },
         {
-          "class": "ShuffleSpell"
+          "class": "SummonSpell"
+        },
+        {
+          "class": "SummonSpell"
         }
       ]
     }
@@ -6341,15 +6344,21 @@
       "class": "MetaSpell",
       "spells": [
         {
-          "class": "BuffSpell",
-          "target": "SELF",
-          "attack_bonus": 1,
-          "health_bonus": 1
+          "class": "SummonSpell",
+          "card_id": "CATA_135t"
         },
         {
-          "class": "SummonSpell"
+          "class": "SummonSpell",
+          "card_id": "CATA_135t"
+        },
+        {
+          "class": "SpendManaBuffSpell",
+          "count": 2,
+          "attack_bonus": 1,
+          "health_bonus": 1
         }
-      ]
+      ],
+      "note": "Spend all mana, summon 2x 1/2 golems, each gets +1/+1 per mana spent"
     }
   },
   "CATA_136": {
@@ -6401,8 +6410,19 @@
   },
   "CATA_154": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
+      "class": "MetaSpell",
+      "spells": [
+        {
+          "class": "SummonSpell",
+          "card_id": "CATA_154t1"
+        },
+        {
+          "class": "SummonSpell",
+          "card_id": "CATA_154t1"
+        }
+      ]
+    },
+    "note": "COLOSSAL+2: summon 2 appendages. AURA 'spells cast twice' handled by aura system."
   },
   "CATA_155": {
     "ON_PLAY": {
@@ -6953,12 +6973,23 @@
   },
   "CATA_485": {
     "ON_PLAY": {
-      "class": "DamageSpell",
-      "target": "RANDOM_ENEMY_MINION",
-      "value": {
-        "provider": "spell_damage",
-        "base": 2
-      }
+      "class": "MetaSpell",
+      "spells": [
+        {
+          "class": "DamageSpell",
+          "target": "TARGET",
+          "value": {
+            "provider": "spell_damage",
+            "base": 2
+          }
+        },
+        {
+          "class": "DamageSpell",
+          "target": "RANDOM_ENEMY_MINION",
+          "value": 1
+        }
+      ],
+      "note": "Deal 2 damage to target. Deal 1 damage to a random enemy minion."
     }
   },
   "CATA_487": {
@@ -7050,8 +7081,24 @@
   },
   "CATA_496": {
     "ON_PLAY": {
-      "class": "TakeControlSpell",
-      "target": "TARGET"
+      "class": "MetaSpell",
+      "spells": [
+        {
+          "class": "TakeControlSpell",
+          "target": "TARGET"
+        },
+        {
+          "class": "AddKeywordSpell",
+          "target": "TARGET",
+          "keyword": "CANT_ATTACK"
+        },
+        {
+          "class": "EnchantSpell",
+          "target": "TARGET",
+          "duration": 1
+        }
+      ],
+      "note": "Temporary control until end of opponent turn + can't attack. Return mechanic needs TempControlSpell."
     }
   },
   "CATA_497": {
@@ -10462,8 +10509,20 @@
   },
   "CORE_EDR_004_2026": {
     "ON_PLAY": {
-      "class": "DiscoverSpell"
-    }
+      "class": "MetaSpell",
+      "spells": [
+        {
+          "class": "DiscoverSpell",
+          "pool": "BEAST"
+        },
+        {
+          "class": "ManaDiscountSpell",
+          "value": 1,
+          "scope": "this_turn"
+        }
+      ]
+    },
+    "note": "迅猛龙先锋: Rewind + Discover beast with Dark Gift + Lineage cost-1. Dark Gift pool and Rewind pending."
   },
   "CORE_ETC_111": {
     "TRIGGERS": [
@@ -15370,7 +15429,7 @@
       "spells": [
         {
           "class": "DamageSpell",
-          "target": "ALL_FRIENDLY_CHARACTERS",
+          "target": "RANDOM_ENEMY_MINION",
           "value": {
             "provider": "spell_damage",
             "base": 2
@@ -22386,8 +22445,10 @@
   },
   "EDR_517": {
     "ON_PLAY": {
-      "class": "DiscoverSpell"
-    }
+      "class": "DiscoverSpell",
+      "pool": "SPELL"
+    },
+    "note": "亢祖: Discover a spell, option to keep or shuffle to opponent deck top. ShuffleToOpponent not implemented. Buff effects in Power.log are from Rewind/Lineage, not this card."
   },
   "EDR_518": {
     "ON_PLAY": {
@@ -22667,8 +22728,19 @@
   },
   "EDR_811": {
     "ON_PLAY": {
-      "class": "DiscoverSpell"
-    }
+      "class": "MetaSpell",
+      "spells": [
+        {
+          "class": "DiscoverSpell",
+          "pool": "UNDEAD"
+        },
+        {
+          "class": "CorpseSpendSpell",
+          "value": 2
+        }
+      ]
+    },
+    "note": "暴行祭礼: Discover undead + spend 2 corpses for Dark Gift. Dark Gift enchantment pending."
   },
   "EDR_812": {
     "ON_PLAY": {
@@ -23020,7 +23092,18 @@
   },
   "EDR_872": {
     "ON_PLAY": {
-      "class": "DiscoverSpell"
+      "class": "RandomSpell",
+      "spells": [
+        {
+          "class": "DiscoverSpell",
+          "pool": "MAGE_SPELL"
+        },
+        {
+          "class": "DiscoverSpell",
+          "pool": "DRUID_SPELL"
+        }
+      ],
+      "note": "Choose One: Discover a Mage spell OR Discover a Druid spell. Simulated as random pick."
     }
   },
   "EDR_873": {
@@ -25271,8 +25354,11 @@
   },
   "EX1_145": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
+      "class": "ManaDiscountSpell",
+      "value": 2,
+      "scope": "next_spell"
+    },
+    "note": "伺机待发: next spell costs 2 less. Uses ManaState.modifiers system."
   },
   "EX1_154": {
     "ON_PLAY": {
@@ -43329,12 +43415,21 @@
   },
   "TIME_004": {
     "ON_PLAY": {
-      "class": "DamageSpell",
-      "target": "RANDOM_ENEMY_CHARACTER",
-      "value": {
-        "provider": "spell_damage",
-        "base": 7
-      }
+      "class": "MetaSpell",
+      "spells": [
+        {
+          "class": "DamageSpell",
+          "target": "RANDOM_ENEMY_CHARACTER",
+          "value": {
+            "provider": "spell_damage",
+            "base": 7
+          }
+        },
+        {
+          "class": "ArmorSpell",
+          "value": 6
+        }
+      ]
     }
   },
   "TIME_005": {
@@ -43498,15 +43593,21 @@
       "spells": [
         {
           "class": "BuffSpell",
-          "target": "SELF",
+          "target": "FRIENDLY_MINIONS",
           "attack_bonus": 1,
           "health_bonus": 1
         },
         {
-          "class": "ShuffleSpell"
+          "class": "RepeatSpell",
+          "count": 2,
+          "spell": {
+            "class": "ShuffleSpell",
+            "card_id": "TIME_026t"
+          }
         }
       ]
-    }
+    },
+    "note": "Power.log: L40809 — buffs ALL friendly minions +1/+1, shuffles 2 TIME_026t into deck. Old BuffSpell(SELF) was wrong."
   },
   "TIME_027": {
     "ON_PLAY": {
@@ -43731,8 +43832,9 @@
   },
   "TIME_047": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
+      "class": "NoOpSpell"
+    },
+    "note": "狡诈的郊狼: cost reduction is aura/trigger based, not ON_PLAY. Power.log shows only enchantment creation."
   },
   "TIME_048": {
     "ON_PLAY": {
@@ -45221,8 +45323,12 @@
   },
   "TLC_334": {
     "ON_PLAY": {
-      "class": "DiscoverSpell"
-    }
+      "class": "DiscoverSpell",
+      "pool": "SPELL",
+      "min_cost": 8,
+      "cost_override": 1
+    },
+    "note": "列王遗宝: Discover ≥8-cost spell, set cost to 1. Cost filtering handled by discover pool."
   },
   "TLC_364": {
     "ON_PLAY": {
@@ -45442,12 +45548,17 @@
   },
   "TLC_460": {
     "ON_PLAY": {
-      "class": "DiscoverSpell"
+      "class": "NoOpSpell",
+      "note": "Quest card: Discover 7 cards. Progress tracked by quest.py. DiscoverSpell was wrong — it immediately adds a card."
     }
   },
   "TLC_461": {
     "ON_PLAY": {
       "class": "DiscoverSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell",
+      "card_id": "TLC_249"
     }
   },
   "TLC_462": {
@@ -45689,8 +45800,9 @@
   },
   "TLC_605": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
+      "class": "NoOpSpell"
+    },
+    "note": "焦油暴君: opponent-turn ATK+6 handled by enchantment trigger system."
   },
   "TLC_606": {
     "ON_PLAY": {
@@ -61087,11 +61199,52 @@
   },
   "END_000p": {
     "ON_PLAY": {
-      "class": "CustomHeroPowerDamageSpell",
-      "value": {
-        "base": 2,
-        "provider": "spell_damage"
-      }
+      "class": "NoOpSpell",
+      "note": "Rewind hero power — actual effect is dual-choice Rewind, pending engine support"
     }
+  },
+  "CS2_034_H2": {
+    "ON_PLAY": {
+      "class": "DamageSpell",
+      "target": "TARGET",
+      "value": 1
+    },
+    "note": "Mage hero power: Fireblast — deal 1 damage"
+  },
+  "CATA_190p": {
+    "ON_PLAY": {
+      "class": "HeroBuffSpell",
+      "attack_bonus": 5,
+      "duration": 1
+    },
+    "note": "DK hero power: +5 Attack this turn"
+  },
+  "TIME_000ta": {
+    "ON_PLAY": {
+      "class": "NoOpSpell"
+    },
+    "note": "Rewind choice: Maintain timeline — do nothing"
+  },
+  "TIME_000tb": {
+    "ON_PLAY": {
+      "class": "NoOpSpell",
+      "note": "Rewind: re-execute the triggering card's effect. Pending RewindSpell engine support."
+    },
+    "note": "Rewind choice: Rewind Timeline"
+  },
+  "TLC_460t": {
+    "ON_PLAY": {
+      "class": "WeaponEquipSpell",
+      "card_id": "TLC_460t"
+    },
+    "note": "Quest reward weapon. After-discover trigger (play other options, lose durability) pending AFTER_DISCOVER event."
+  },
+  "SW_108t": {
+    "ON_PLAY": {
+      "class": "DamageSpell",
+      "target": "TARGET",
+      "value": 2
+    },
+    "note": "Power.log: L24012, DAMAGE=2 (spell_damage affected). 1-cost spell: deal 2 to a minion."
   }
 }

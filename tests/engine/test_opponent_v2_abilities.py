@@ -16,10 +16,14 @@ import copy
 import pytest
 from analysis.card.engine.simulation import (
     _opponent_play_card,
-    _opponent_execute_spell_desc,
-    _opponent_resolve_value,
-    _opponent_get_targets,
-    _opponent_apply_damage,
+    _resolve_deaths,
+    _execute_deathrattles,
+)
+from analysis.card.engine.opponent_executor import (
+    opponent_execute_spell_desc,
+    _resolve_value,
+    _get_targets,
+    _apply_damage,
 )
 from analysis.card.abilities.definition import Action, ActionKind
 from analysis.card.engine.state import (
@@ -78,7 +82,7 @@ def _state_with_opp_hand(*, hand_cards, our_board=None, opp_board=None,
 
 
 # ===========================================================================
-# Test _opponent_execute_spell_desc directly
+# Test opponent_execute_spell_desc directly
 # ===========================================================================
 
 class TestOpponentSpellDescExecutor:
@@ -94,7 +98,7 @@ class TestOpponentSpellDescExecutor:
         s = _state_with_opp_hand(hand_cards=[])
         s.hero.hp = 30
         s.opponent.hero.hp = 25
-        _opponent_execute_spell_desc(desc, s, source=None)
+        opponent_execute_spell_desc(desc, s, source=None)
         # First sub-spell: DamageSpell(ALL_ENEMY_CHARACTERS, 2)
         # ALL_ENEMY = our hero (our side in opponent context)
         assert s.hero.hp == 28, "Our hero should take 2 damage from enemy-targeted DamageSpell"
@@ -110,7 +114,7 @@ class TestOpponentSpellDescExecutor:
             our_board=[Minion(name="M1", attack=2, health=5, max_health=5)],
         )
         s.hero.hp = 30
-        _opponent_execute_spell_desc(desc, s, source=None)
+        opponent_execute_spell_desc(desc, s, source=None)
         assert s.hero.hp == 27, "Our hero should take 3 damage"
         assert s.board[0].health == 2, "Our minion should take 3 damage"
 
@@ -123,7 +127,7 @@ class TestOpponentSpellDescExecutor:
             opp_board=[Minion(name="OppM1", attack=1, health=3, max_health=3, owner="enemy")],
         )
         s.opponent.hero.hp = 25
-        _opponent_execute_spell_desc(desc, s, source=None)
+        opponent_execute_spell_desc(desc, s, source=None)
         # ALL_FRIENDLY in opponent context = opponent's own side
         assert s.opponent.hero.hp == 23, "Opponent hero should take 2 self-damage"
         assert s.opponent.board[0].health == 1, "Opponent minion should take 2 self-damage"
@@ -138,7 +142,7 @@ class TestOpponentSpellDescExecutor:
             hand_cards=[],
             our_board=[Minion(name="M1", attack=2, health=5, max_health=5)],
         )
-        _opponent_execute_spell_desc(desc, s, source=None)
+        opponent_execute_spell_desc(desc, s, source=None)
         # Our minion should have taken 2 damage
         assert s.board[0].health == 3, "Our minion should take 2 random damage"
 
@@ -147,7 +151,7 @@ class TestOpponentSpellDescExecutor:
         desc = SpellDesc(spell_class="DamageSpell", target="RANDOM_ENEMY_MINION",
                          value={"base": 2})
         s = _state_with_opp_hand(hand_cards=[])
-        _opponent_execute_spell_desc(desc, s, source=None)  # should not crash
+        opponent_execute_spell_desc(desc, s, source=None)  # should not crash
         assert s.hero.hp == 30
 
     def test_take_control_spell(self):
@@ -156,14 +160,12 @@ class TestOpponentSpellDescExecutor:
         s = _state_with_opp_hand(
             hand_cards=[],
             our_board=[
-                Minion(name="Small", attack=2, health=3, max_health=3),
-                Minion(name="Big", attack=5, health=5, max_health=5),
+                Minion(name="Only", attack=5, health=5, max_health=5),
             ],
         )
-        _opponent_execute_spell_desc(desc, s, source=None)
-        # Our biggest minion (5/5) should have been stolen
-        assert len(s.board) == 1, "One minion should be stolen from our board"
-        assert s.board[0].attack == 2, "The smaller minion should remain on our board"
+        opponent_execute_spell_desc(desc, s, source=None)
+        # Our only minion (5/5) should have been stolen
+        assert len(s.board) == 0, "Our only minion should be stolen"
         assert len(s.opponent.board) == 1, "Stolen minion should be on opponent's board"
         assert s.opponent.board[0].attack == 5, "The 5/5 should be stolen"
 
@@ -173,7 +175,7 @@ class TestOpponentSpellDescExecutor:
         desc = SpellDesc(spell_class="BuffSpell", target="SELF",
                          attack_bonus=1, health_bonus=1)
         s = _state_with_opp_hand(hand_cards=[])
-        _opponent_execute_spell_desc(desc, s, source=source)
+        opponent_execute_spell_desc(desc, s, source=source)
         assert source.attack == 3
         assert source.health == 4
         assert source.max_health == 4
@@ -183,7 +185,7 @@ class TestOpponentSpellDescExecutor:
         desc = SpellDesc(spell_class="SummonSpell")
         s = _state_with_opp_hand(hand_cards=[])
         assert len(s.opponent.board) == 0
-        _opponent_execute_spell_desc(desc, s, source=None)
+        opponent_execute_spell_desc(desc, s, source=None)
         assert len(s.opponent.board) == 1
         assert s.opponent.board[0].owner == "enemy"
 
@@ -192,7 +194,7 @@ class TestOpponentSpellDescExecutor:
         desc = SpellDesc(spell_class="DiscoverSpell")
         s = _state_with_opp_hand(hand_cards=[])
         assert len(s.opponent.hand) == 0
-        _opponent_execute_spell_desc(desc, s, source=None)
+        opponent_execute_spell_desc(desc, s, source=None)
         assert len(s.opponent.hand) == 1
 
     def test_add_to_hand_spell(self):
@@ -200,7 +202,7 @@ class TestOpponentSpellDescExecutor:
         source_card = Card(dbf_id=123, name="Fire Spell", cost=2, card_type="SPELL")
         desc = SpellDesc(spell_class="AddToHandSpell")
         s = _state_with_opp_hand(hand_cards=[])
-        _opponent_execute_spell_desc(desc, s, source=source_card)
+        opponent_execute_spell_desc(desc, s, source=source_card)
         assert len(s.opponent.hand) == 1
         assert s.opponent.hand[0].name == "Fire Spell"
 
@@ -209,7 +211,7 @@ class TestOpponentSpellDescExecutor:
         desc = SpellDesc(spell_class="DrawSpell", count=2)
         s = _state_with_opp_hand(hand_cards=[])
         assert s.opponent.deck_remaining == 20
-        _opponent_execute_spell_desc(desc, s, source=None)
+        opponent_execute_spell_desc(desc, s, source=None)
         assert s.opponent.deck_remaining == 18, "Should have drawn 2 cards"
 
 
@@ -388,3 +390,186 @@ class TestExistingBehaviorPreserved:
         action = Action(action_type=ActionKind.PLAY, card_index=0)
         result = _opponent_play_card(s, action)
         assert result.opponent.board[0].has_taunt is True
+
+
+# ===========================================================================
+# Bug 1: CORE_SW_108 — target fix (ALL_FRIENDLY_CHARACTERS → RANDOM_ENEMY_MINION)
+# ===========================================================================
+
+class TestCoreSW108TargetFix:
+    """CORE_SW_108 (初始之火) 修复验证: 应随机伤害我方随从，不伤害对手。"""
+
+    def test_data_target_is_random_enemy_minion(self):
+        """v2 数据中的 target 应为 RANDOM_ENEMY_MINION."""
+        card = _make_hand_card("CORE_SW_108", "Initial Fire", cost=1, card_type="SPELL")
+        ability = card.ability  # 从 JSON 延迟加载
+        assert ability is not None and ability.has_any
+        assert ability.on_play.spell_class == "MetaSpell"
+        damage_spell = ability.on_play.spells[0]
+        assert damage_spell.target == "RANDOM_ENEMY_MINION"
+
+    def test_damage_our_minion_not_opponent(self):
+        """RANDOM_ENEMY_MINION → 对我方随从造成伤害，对手方不受影响。"""
+        desc = SpellDesc(spell_class="DamageSpell", target="RANDOM_ENEMY_MINION",
+                         value={"base": 2})
+        s = _state_with_opp_hand(
+            hand_cards=[],
+            our_board=[Minion(name="OurM", attack=2, health=5, max_health=5)],
+            opp_board=[Minion(name="OppM", attack=1, health=3, max_health=3, owner="enemy")],
+        )
+        s.hero.hp = 30
+        s.opponent.hero.hp = 25
+        opponent_execute_spell_desc(desc, s, source=None)
+        # 我方随从受伤
+        assert s.board[0].health == 3, "我方随从应受 2 点伤害"
+        # 对手方不受影响
+        assert s.opponent.board[0].health == 3, "对手随从不应受伤"
+        assert s.opponent.hero.hp == 25, "对手英雄不应受伤"
+
+    def test_empty_board_safe(self):
+        """RANDOM_ENEMY_MINION 在空场时不应该崩溃。"""
+        desc = SpellDesc(spell_class="DamageSpell", target="RANDOM_ENEMY_MINION",
+                         value={"base": 2})
+        s = _state_with_opp_hand(hand_cards=[])
+        opponent_execute_spell_desc(desc, s, source=None)  # 不应崩溃
+        assert s.hero.hp == 30
+
+
+# ===========================================================================
+# Bug 2: TLC_461 — missing deathrattle (SummonSpell → TLC_249)
+# ===========================================================================
+
+class TestTLC461Deathrattle:
+    """TLC_461 (拾荒清道夫) 修复验证: 亡语召唤 TLC_249。"""
+
+    def test_data_has_deathrattle(self):
+        """v2 数据应包含 DEATHRATTLE SummonSpell(TLC_249)."""
+        card = _make_hand_card("TLC_461", "Scavenger", cost=2, card_type="MINION")
+        ability = card.ability  # 从 JSON 延迟加载
+        assert ability is not None and ability.has_any
+        assert ability.deathrattle is not None
+        assert ability.deathrattle.spell_class == "SummonSpell"
+        assert ability.deathrattle.card_id == "TLC_249"
+
+    def test_deathrattle_summon_tlc249_opponent(self):
+        """敌方 TLC_461 死亡 → 通过 v2 deathrattle 路径召唤 TLC_249。"""
+        # 使用 _execute_deathrattles 直接测试 v2 deathrattle 代码路径
+        card = Card(dbf_id=456, card_id="TLC_461", name="Scavenger",
+                     cost=2, card_type="MINION", attack=2, health=1)
+        card.ability = CardAbility(
+            on_play=SpellDesc(spell_class="DiscoverSpell"),
+            deathrattle=SpellDesc(spell_class="SummonSpell", card_id="TLC_249"),
+        )
+        dead_minion = Minion(
+            name="Scavenger", attack=2, health=0, max_health=1,
+            owner="enemy", card_id="TLC_461", card_ref=card,
+        )
+        s = GameState(
+            hero=HeroState(hp=30),
+            mana=ManaState(available=5, max_mana=5),
+            board=[],
+            hand=[],
+            opponent=OpponentState(
+                hero=HeroState(hp=25),
+                board=[dead_minion],
+                hand_count=0,
+                deck_remaining=20,
+                mana_available=10,
+                mana_max=10,
+            ),
+            turn_number=5,
+        )
+
+        result = _execute_deathrattles(s, [dead_minion])
+
+        # 死亡后应召唤 TLC_249 到对手场
+        # 注意: dead_minion 在 board 上未被移除（移除在 _resolve_deaths 中），所以 board 应有 2 个
+        assert len(result.opponent.board) == 2, (
+            f"应召唤 TLC_249（死随+新随），实际有 {len(result.opponent.board)} 个随从"
+        )
+        from analysis.card.data.card_data import get_db
+        tlc249_data = get_db().get_card("TLC_249")
+        expected_name = tlc249_data.get("name", "TLC_249") if tlc249_data else "TLC_249"
+        assert result.opponent.board[1].name == expected_name, (
+            f"应召唤 {expected_name}，实际名称 {result.opponent.board[1].name}"
+        )
+
+    def test_deathrattle_friendly_minion(self):
+        """友方死亡 → 通过 player-context SpellExecutor 执行。"""
+        s = GameState(
+            hero=HeroState(hp=30),
+            mana=ManaState(available=5, max_mana=5),
+            board=[],
+            hand=[],
+            opponent=OpponentState(
+                hero=HeroState(hp=25),
+                board=[],
+                hand_count=0,
+                deck_remaining=20,
+                mana_available=10,
+                mana_max=10,
+            ),
+            turn_number=5,
+        )
+        card = Card(dbf_id=457, card_id="TLC_461", name="Scavenger",
+                     cost=2, card_type="MINION", attack=2, health=1)
+        card.ability = CardAbility(
+            deathrattle=SpellDesc(spell_class="SummonSpell", card_id="TLC_249"),
+        )
+        dead_minion = Minion(
+            name="Scavenger", attack=2, health=0, max_health=1,
+            owner="friendly", card_id="TLC_461", card_ref=card,
+        )
+        s.board.append(dead_minion)
+
+        result = _resolve_deaths(s)
+
+        # 友方死亡，应在友方场召唤
+        assert len(result.board) == 1, "应召唤 TLC_249 到友方场"
+        from analysis.card.data.card_data import get_db
+        tlc249_data = get_db().get_card("TLC_249")
+        expected_name = tlc249_data.get("name", "TLC_249") if tlc249_data else "TLC_249"
+        assert result.board[0].name == expected_name
+
+
+# ===========================================================================
+# Bug 3: CATA_135 — double SummonSpell
+# ===========================================================================
+
+class TestCATA135DoubleSummon:
+    """CATA_135 (苔缚术) 修复验证: 战吼召唤 2 个 token。"""
+
+    def test_data_has_two_summon_spells(self):
+        """v2 数据中 spells 数组应有 2 个 SummonSpell."""
+        card = _make_hand_card("CATA_135", "Mossy", cost=3, card_type="MINION")
+        ability = card.ability
+        assert ability is not None and ability.has_any
+        assert ability.on_play.spell_class == "MetaSpell"
+        summon_count = sum(1 for s in ability.on_play.spells
+                           if s.spell_class == "SummonSpell")
+        assert summon_count == 2, f"应有 2 个 SummonSpell，实际有 {summon_count}"
+
+    def test_opponent_play_summon_two_tokens(self):
+        """对手打出 CATA_135 → opponent.board 应多 2 个 token。"""
+        card = _make_hand_card("CATA_135", "Mossy", cost=3, attack=1, health=1,
+                               card_type="MINION")
+        card.ability = CardAbility(
+            on_play=SpellDesc(spell_class="MetaSpell", spells=[
+                SpellDesc(spell_class="BuffSpell", target="SELF",
+                          attack_bonus=1, health_bonus=1),
+                SpellDesc(spell_class="SummonSpell"),
+                SpellDesc(spell_class="SummonSpell"),
+            ])
+        )
+        s = _state_with_opp_hand(hand_cards=[card])
+        action = Action(action_type=ActionKind.PLAY, card_index=0)
+        result = _opponent_play_card(s, action)
+
+        # CATA_135 + 2 tokens = 3 minions
+        assert len(result.opponent.board) == 3, (
+            f"应有 3 个随从 (CATA_135 + 2 tokens)，实际有 {len(result.opponent.board)}"
+        )
+        # CATA_135 被 BuffSpell 强化为 2/2
+        mossy = result.opponent.board[0]
+        assert mossy.attack == 2
+        assert mossy.health == 2

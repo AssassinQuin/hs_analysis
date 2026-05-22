@@ -211,3 +211,23 @@ class EnqueueSpell(Spell):
             "trigger": desc.target or "NEXT_TURN_END",
         })
         return state
+
+
+@register_spell
+class RewindChoiceSpell(Spell):
+    """Rewind 机制：提供两个时间线选项，模拟确定性选第一个。
+
+    MCTS 搜索时会分支探索两个时间线；单步模拟直接执行第一个 spell。
+    """
+    def execute(self, desc, state, source=None, target=None):
+        from analysis.card.abilities.executor import SpellExecutor
+        spells = desc.spells or []
+        # 记录 rewind 上下文
+        state.rewind_stack.append({
+            "source": source,
+            "spells": spells,
+        })
+        # 确定性模拟: 执行第一个 spell (维护时间线)
+        if spells:
+            state = SpellExecutor._execute_desc(spells[0], state, source=source, target=target)
+        return state

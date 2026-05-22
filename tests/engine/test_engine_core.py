@@ -271,3 +271,66 @@ class TestDrawWithDeckList:
         s2 = apply_draw(s, 1)
         assert len(s2.hand) == 1
         assert s2.hand[0].name == "Drawn Card"
+
+
+# ==================================================================
+# 10. summon_minion_by_id tests (Bug 4 fix)
+# ==================================================================
+
+class TestSummonMinionById:
+    """summon_minion_by_id() — 通过 card_id 从 DB 加载并召唤随从。"""
+
+    def test_summon_default_token(self):
+        """无 card_id → 默认 1/1 Token。"""
+        from analysis.card.engine.executor import summon_minion_by_id
+        s = GameState()
+        s.board = []
+        s2 = summon_minion_by_id(s, "", 0)
+        assert len(s2.board) == 1
+        assert s2.board[0].name == "Token"
+        assert s2.board[0].attack == 1
+        assert s2.board[0].health == 1
+
+    def test_summon_with_known_card_id(self):
+        """有已知 card_id → 从 DB 加载 stat。"""
+        from analysis.card.engine.executor import summon_minion_by_id
+        s = GameState()
+        s.board = []
+        result = summon_minion_by_id(s, "TLC_249", 0)
+        assert len(result.board) == 1
+        assert result.board[0].name != ""  # loaded from DB
+
+    def test_summon_full_board_no_op(self):
+        """满场 (7) 拒绝召唤。"""
+        from analysis.card.engine.executor import summon_minion_by_id
+        s = GameState()
+        s.board = [Minion(attack=1, health=1, max_health=1) for _ in range(7)]
+        s2 = summon_minion_by_id(s, "TLC_249", 0)
+        assert len(s2.board) == 7
+
+    def test_summon_appends_at_end(self):
+        """position=-1 追加到末尾。"""
+        from analysis.card.engine.executor import summon_minion_by_id
+        s = GameState()
+        s.board = [Minion(attack=2, health=2, max_health=2, name="Existing")]
+        s2 = summon_minion_by_id(s, "", -1)
+        assert len(s2.board) == 2
+        assert s2.board[1].name == "Token"
+
+    def test_summon_inserts_at_position(self):
+        """position=0 插入到开头。"""
+        from analysis.card.engine.executor import summon_minion_by_id
+        s = GameState()
+        s.board = [Minion(attack=2, health=2, max_health=2, name="Existing")]
+        s2 = summon_minion_by_id(s, "", 0)
+        assert len(s2.board) == 2
+        assert s2.board[0].name == "Token"
+
+    def test_summon_nonexistent_card_fallback_token(self):
+        """不存在的 card_id → fallback 1/1 Token。"""
+        from analysis.card.engine.executor import summon_minion_by_id
+        s = GameState()
+        s.board = []
+        s2 = summon_minion_by_id(s, "NONEXISTENT_CARD_XYZ", 0)
+        assert len(s2.board) == 1
+        assert s2.board[0].name == "Token"

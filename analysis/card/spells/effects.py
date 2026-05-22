@@ -255,7 +255,7 @@ class AddKeywordSpell(Spell):
             "REBORN": GameTag.REBORN, "IMMUNE": GameTag.IMMUNE,
             "SPELL_BURST": GameTag.SPELL_BURST, "FRENZY": GameTag.FRENZY,
             "MAGNETIC": GameTag.MAGNETIC, "ELUSIVE": GameTag.ELUSIVE,
-            "WARD": GameTag.WARD,
+            "WARD": GameTag.WARD, "CANT_ATTACK": GameTag.CANT_ATTACK,
         }
         keyword = (desc.keyword or "").upper()
         tag = tag_map.get(keyword)
@@ -372,10 +372,91 @@ class TakeControlSpell(Spell):
 class DiscoverSpell(Spell):
     """发现机制。"""
     def execute(self, desc, state, source=None, target=None):
-        from analysis.card.engine.executor import discover
+        from analysis.card.engine.executor import discover_card
         pool = desc.pool or ""
         count = desc.count or 3
-        return discover(state, pool=pool, count=count)
+        if isinstance(pool, str):
+            pool = self._resolve_pool(pool, state)
+        if not pool:
+            return state
+        return discover_card(state, pool=pool, count=count)
+
+    @staticmethod
+    def _resolve_pool(pool_name: str, state) -> list:
+        """Resolve a string pool name to a list of cards.
+
+        Supports:
+          - Card types: "SPELL", "MINION", "WEAPON"
+          - Races: "BEAST", "DRAGON", "DEMON", "MECHANICAL", etc.
+          - Class+type: "MAGE_SPELL", "DRUID_SPELL" → class-specific discover pool
+          - School+type: "NATURE_SPELL" → spell school filter
+          - Special: "DREAM", "MULTI_TYPE_MINION", "BONUS_EFFECTS"
+        """
+        from analysis.card.data.card_data import get_db
+        db = get_db()
+        pool_name_upper = pool_name.upper()
+
+        # ── Card type pools ──
+        card_type_map = {"SPELL": "SPELL", "MINION": "MINION", "WEAPON": "WEAPON"}
+        if pool_name_upper in card_type_map:
+            try:
+                return db.discover_pool("NEUTRAL", card_type=card_type_map[pool_name_upper])[:20]
+            except Exception:
+                return []
+
+        # ── Race pools ──
+        race_map = {
+            "BEAST": "BEAST", "UNDEAD": "UNDEAD", "DRAGON": "DRAGON",
+            "DEMON": "DEMON", "MECHANICAL": "MECHANICAL", "ELEMENTAL": "ELEMENTAL",
+            "MURLOC": "MURLOC", "PIRATE": "PIRATE", "TOTEM": "TOTEM",
+        }
+        if pool_name_upper in race_map:
+            try:
+                cards = db.get_pool(format="standard")
+                return [c for c in cards if c.get("race", "").upper() == pool_name_upper][:20]
+            except Exception:
+                return []
+
+        # ── Class + Spell type: "MAGE_SPELL", "DRUID_SPELL" ──
+        if pool_name_upper.endswith("_SPELL"):
+            class_part = pool_name_upper[:-6]  # strip "_SPELL"
+            # Map known class prefixes
+            _class_map = {
+                "MAGE": "MAGE", "DRUID": "DRUID", "HUNTER": "HUNTER",
+                "WARRIOR": "WARRIOR", "PALADIN": "PALADIN", "PRIEST": "PRIEST",
+                "SHAMAN": "SHAMAN", "WARLOCK": "WARLOCK", "ROGUE": "ROGUE",
+                "DEMON": "DEMONHUNTER", "DEATHKNIGHT": "DEATHKNIGHT",
+                "NATURE": None,  # Nature is a spell school, not a class
+            }
+            mapped_class = _class_map.get(class_part)
+            if mapped_class:
+                try:
+                    return db.discover_pool(mapped_class, card_type="SPELL")[:20]
+                except Exception:
+                    return []
+            if class_part == "NATURE":
+                try:
+                    return db.get_pool(card_type="SPELL", school="NATURE", format="standard")[:20]
+                except Exception:
+                    return []
+
+        # ── Special pools ──
+        _special_pools = {
+            "DREAM": ["DREAM_01", "DREAM_02", "DREAM_03", "DREAM_04", "DREAM_05"],
+            "BONUS_EFFECTS": [],
+        }
+        if pool_name_upper in _special_pools:
+            cids = _special_pools[pool_name_upper]
+            if not cids:
+                return []
+            results = []
+            for cid in cids:
+                c = db.get_card(cid)
+                if c:
+                    results.append(c)
+            return results[:20]
+
+        return []
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -384,18 +465,59 @@ class DiscoverSpell(Spell):
 
 @register_spell
 class AddToHandSpell(Spell):
-    """将 card_id 卡牌置入手牌（若手牌未满）。"""
+    """将 card_id 卡牌置入手牌（若手牌未满）。
+
+    也支持 pool 参数：当 pool 指定时，从池中随机选一张。
+    池类型：DREAM, MULTI_TYPE_MINION, NATURE_SPELL 等。
+    """
     def execute(self, desc, state, source=None, target=None):
-        card_id = desc.card_id or ""
-        if not card_id:
-            return state
         from analysis.card.data.card_data import get_db
         db = get_db()
-        card_data = db.get_card(card_id)
+        card_id = desc.card_id or ""
+        pool = desc.pool or ""
+
+        # ── pool 模式：从池中随机选一张 ──
+        if not card_id and pool:
+            candidates = self._resolve_add_pool(pool, db)
+            if not candidates:
+                return state
+            import random
+            card_data = random.choice(candidates)
+        # ── card_id 模式：直接添加 ──
+        elif card_id:
+            card_data = db.get_card(card_id)
+        else:
+            return state
+
         if card_data and len(state.hand) < 10:
             from analysis.card.models.card import Card
             state.hand.append(Card(card_data))
         return state
+
+    @staticmethod
+    def _resolve_add_pool(pool_name: str, db) -> list:
+        """Resolve pool names specific to AddToHandSpell."""
+        p = pool_name.upper()
+
+        if p == "DREAM":
+            cids = ["DREAM_01", "DREAM_02", "DREAM_03", "DREAM_04", "DREAM_05"]
+            return [db.get_card(cid) for cid in cids if db.get_card(cid)]
+
+        if p == "MULTI_TYPE_MINION":
+            try:
+                cards = db.get_pool(card_type="MINION", format="standard")
+                return [c for c in cards if len(c.get("races", [])) > 1][:20]
+            except Exception:
+                return []
+
+        if p == "NATURE_SPELL":
+            try:
+                return db.get_pool(card_type="SPELL", school="NATURE", format="standard")[:20]
+            except Exception:
+                return []
+
+        # Fallback: use generic pool resolver from this module
+        return DiscoverSpell._resolve_pool(pool_name, None) if DiscoverSpell else []
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -495,24 +617,108 @@ class SetHeroPowerSpell(Spell):
 
 
 # ═══════════════════════════════════════════════════════════════
-# CustomHeroPowerDamageSpell — 英雄技能造成的伤害
+# TempControlSpell — 临时控制（到回合结束归还）
 # ═══════════════════════════════════════════════════════════════
 
 @register_spell
-class CustomHeroPowerDamageSpell(Spell):
-    """被替换后的英雄技能造成的伤害，默认打英雄。
-
-    JSON 格式:
-      {"class": "CustomHeroPowerDamageSpell", "value": 2}
-    """
+class TempControlSpell(Spell):
+    """夺取敌方随从控制权直到回合结束，被控制的随从不能攻击。"""
     def execute(self, desc, state, source=None, target=None):
-        from analysis.card.value.providers import resolve_value
-        from analysis.card.engine.executor import damage
-        amount = resolve_value(desc.value, state, source)
-        # 优先打对面随从，否则打英雄
-        if state.opponent.board:
-            t = state.opponent.board[0]
+        from analysis.card.engine.executor import take_control
+        from analysis.card.engine.tags import GameTag, set_tag
+        targets = _get_targets(desc, state, source, target)
+        duration = getattr(desc, 'duration', 1) or 1
+        for t in targets:
+            state = take_control(state, t)
+            set_tag(t.tags, GameTag.CANT_ATTACK, 1)
+            t.enchantments.append({
+                "type": "temp_control", "duration": duration,
+                "turns_left": duration, "original_owner": "enemy",
+            })
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# HeroBuffSpell — 英雄临时攻击力增益
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class HeroBuffSpell(Spell):
+    """给予英雄临时攻击力加成（回合结束清零）。"""
+    def execute(self, desc, state, source=None, target=None):
+        atk = resolve_value(getattr(desc, 'attack_bonus', 0) or desc.value or 0, state, source)
+        if hasattr(state.hero, 'temporary_attack'):
+            state.hero.temporary_attack += atk
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# SpendManaBuffSpell — 消耗所有法力值增益随从
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class SpendManaBuffSpell(Spell):
+    """消耗所有剩余法力值，每点提供 attack_bonus/health_bonus 给最近召唤的随从。"""
+    def execute(self, desc, state, source=None, target=None):
+        spent = state.mana.available
+        if spent <= 0:
+            return state
+        atk_per = getattr(desc, 'attack_bonus', 1) or 1
+        hp_per = getattr(desc, 'health_bonus', 1) or 1
+        count = getattr(desc, 'count', 2) or 2
+        state.mana.available = 0
+        recent = state.board[-count:] if len(state.board) >= count else list(state.board)
+        for m in recent:
+            m.attack += spent * atk_per
+            m.health += spent * hp_per
+            m.max_health += spent * hp_per
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# EscalationDrawSpell — 递增抽牌
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class EscalationDrawSpell(Spell):
+    """抽牌数随递增计数器增长。每次施放计数+1。"""
+    def execute(self, desc, state, source=None, target=None):
+        from analysis.card.engine.executor import draw_cards
+        card_id = getattr(source, 'card_id', '') or ''
+        counter = state.escalation_counters.get(card_id, 0)
+        base = resolve_value(desc.value if desc.value is not None else 1, state, source)
+        count = base + counter
+        state = draw_cards(state, max(1, count))
+        state.escalation_counters[card_id] = counter + 1
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# ManaDiscountSpell — 法力费用折扣
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class ManaDiscountSpell(Spell):
+    """下张法术/随从费用减少。利用 ManaState.modifiers 系统。"""
+    def execute(self, desc, state, source=None, target=None):
+        value = getattr(desc, 'value', 0) or 0
+        scope = getattr(desc, 'scope', 'next_spell') or 'next_spell'
+        if value != 0:
+            state.mana.add_modifier("discount", abs(value), scope)
+        return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# CorpseSpendSpell — 尸体消耗
+# ═══════════════════════════════════════════════════════════════
+
+@register_spell
+class CorpseSpendSpell(Spell):
+    """消耗 N 份残骸。DK 机制。"""
+    def execute(self, desc, state, source=None, target=None):
+        cost = getattr(desc, 'value', 0) or getattr(desc, 'count', 0) or 0
+        if state.corpses >= cost:
+            state.corpses -= cost
         else:
-            t = state.opponent.hero
-        state = damage(state, amount, t)
+            state.corpses = 0
         return state

@@ -539,7 +539,7 @@ class GameStateManager:
         hand = []
         known_hand = state_dict.get("known_hand", [])
 
-        for eid, card_id in known_hand:
+        for eid, card_id, *_ in known_hand:
             # 只有有真实 card_id 的牌才是「已确认」的
             # card_id 为空意味着我们知道该实体在手牌区域，但不知道具体是什么牌
             if not card_id:

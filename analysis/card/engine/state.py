@@ -371,6 +371,7 @@ class HeroState:
     hero_power_damage: int = 0
     is_hero_card: bool = False  # 是否已替换为英雄牌
     hero_power_card_id: str = ""  # 替换后的英雄技能卡牌ID（如"END_000p"），空=使用默认英雄技能
+    temporary_attack: int = 0  # 临时攻击力加成（回合结束清零，用于英雄技能增益等）
 
     def copy(self) -> "HeroState":
         """拷贝英雄状态，含武器深拷贝"""
@@ -592,6 +593,12 @@ class GameState:
     graveyard: List = field(default_factory=list)                    # 已死亡随从（复活用）
     cards_drawn_this_turn: int = 0          # 本回合抽牌数
     spells_cast_this_turn: int = 0          # 本回合施法数
+
+    # ── Phase 3 新增字段：Rewind / Quest / Escalation / Aura ──
+    rewind_stack: list = field(default_factory=list)        # Rewind 效果栈
+    escalation_counters: dict = field(default_factory=dict) # card_id → 递增计数器
+    end_of_turn_double: bool = False                        # CATA_480: EOT触发两次
+    quest_discover_count: int = 0                           # 任务发现计数
 
     # ------------------------------------------------------------------
     # 工具方法
