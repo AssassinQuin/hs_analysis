@@ -1047,12 +1047,13 @@ class OverlayWindow(QWidget):
         """刷新卡组区 — 显示预测卡组，标记已打出/已打完。"""
         opp = gs.opponent
 
-        # 选择卡组数据源：优先使用预测卡组（完整30张），回退到已知卡牌
-        deck_cards = gs.deck_predictions  # HandPredictor 的完整预测
-        if not deck_cards and gs.multi_deck_predictions:
+        # 选择卡组数据源：根据用户选择的卡组标签索引
+        deck_cards = []
+        if gs.multi_deck_predictions and self._sel_arch > 0:
             idx = min(self._sel_arch, len(gs.multi_deck_predictions) - 1)
-            if idx >= 0:
-                deck_cards = gs.multi_deck_predictions[idx].get("cards", [])
+            deck_cards = gs.multi_deck_predictions[idx].get("cards", [])
+        if not deck_cards:
+            deck_cards = gs.deck_predictions
         
         # 回退到已知打出卡牌
         if not deck_cards:
@@ -1110,6 +1111,7 @@ class OverlayWindow(QWidget):
             })
         if tabs:
             self._deck_tab.set_tabs(tabs)
+            self._deck_tab.set_active(self._sel_arch)
             self._deck_tab.setVisible(self._deck_expanded)
         else:
             self._deck_tab.setVisible(False)

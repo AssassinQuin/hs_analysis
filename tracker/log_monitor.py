@@ -544,11 +544,9 @@ class CoreLogMonitor:
 
         判定规则（按优先级）:
           0. 已知我方名称匹配：_our_known_name 与玩家名精确匹配
-          1. AI_MAKES_DECISIONS_FOR_PLAYER 标签：AI 玩家标签=1，我方=0
-          2. 从 _player_names 匹配：名字含 '#' 的 BattleTag 用户是本地玩家
-             当双方都有 '#' 时，用 saved_our_controller（上局 controller）匹配
-          3. 从 hslog player.name 匹配：名字含 '#' 的是本地玩家
-          4. 都不含 '#' 时默认 players[0] 为我方
+             （仅当 _our_known_name 来自配置或手牌可见性验证时可信）
+          1. 手牌可见性检测：我方手牌有 card_id，对手手牌没有
+             这是最可靠的判定方式，因为 Power.log 中我方手牌始终可见
 
         Args:
             players: hslog 导出的玩家实体列表（按 EntityID 排序）
@@ -564,18 +562,10 @@ class CoreLogMonitor:
         n0 = getattr(players[0], 'name', '') or ''
         n1 = getattr(players[1], 'name', '') or ''
 
-        # 诊断：打印所有输入信息
-        _names = self._player_names
-        _pid0 = players[0].tags.get(GameTag.PLAYER_ID, 0) if hasattr(players[0], 'tags') else 0
-        _pid1 = players[1].tags.get(GameTag.PLAYER_ID, 0) if hasattr(players[1], 'tags') else 0
-        logger.debug("玩家检测诊断: n0=%r n1=%r _player_names=%r pid0=%d pid1=%d known_name=%r saved_ctrl=%d",
-                    n0, n1, _names, _pid0, _pid1,
-                    self._our_known_name, saved_our_controller)
+        logger.debug("玩家检测诊断: n0=%r n1=%r known_name=%r saved_ctrl=%d",
+                    n0, n1, self._our_known_name, saved_our_controller)
 
-        # 最高优先级: 已知我方名称匹配（跨游戏持久化）
-        # 一旦从任何方式正确识别过，后续游戏直接用名称匹配
-        # 使用 name_matches 而非 ==，以处理 BattleTag 含 #XXXX 后缀的匹配
-        # 配置为 "湫然#51704" 时，hslog player.name 可能是 "湫然"（无后缀）
+        # 优先级0: 已知我方名称匹配（跨游戏持久化）
         if self._our_known_name:
             if n0 and name_matches(n0, self._our_known_name):
                 logger.info("玩家检测(KNOWN_NAME): 我方=players[0] (name=%s)", n0)
@@ -584,114 +574,98 @@ class CoreLogMonitor:
                 logger.info("玩家检测(KNOWN_NAME): 我方=players[1] (name=%s)", n1)
                 return 1
 
-        # 优先级次高: AI_MAKES_DECISIONS_FOR_PLAYER 标签
-        # AI 玩家此标签=1，我方(人类)此标签=0或不存在
-        try:
-            ai0 = players[0].tags.get(GameTag.AI_MAKES_DECISIONS_FOR_PLAYER, 0)
-            ai1 = players[1].tags.get(GameTag.AI_MAKES_DECISIONS_FOR_PLAYER, 0)
-            if ai0 and not ai1:
-                # players[0] 是 AI → 我方是 players[1]
-                my_idx = 1
-                logger.debug("玩家检测(AI_TAG): 我方=players[%d] (name=%s), AI=players[%d] (name=%s)",
-                             my_idx, n1, 1 - my_idx, n0)
-                return my_idx
-            elif ai1 and not ai0:
-                # players[1] 是 AI → 我方是 players[0]
-                my_idx = 0
-                logger.debug("玩家检测(AI_TAG): 我方=players[%d] (name=%s), AI=players[%d] (name=%s)",
-                             my_idx, n0, 1 - my_idx, n1)
-                return my_idx
-            # 两个都是 AI 或都不是 → 继续后续判断
-        except (AttributeError, TypeError):
-            pass
-
-        # 第二优先: 从 _player_names 匹配（从 DebugPrintGame() 解析的玩家名）
-        if self._player_names:
-            pid0 = 0
-            pid1 = 0
-            try:
-                pid0 = players[0].tags.get(GameTag.PLAYER_ID, 0)
-                pid1 = players[1].tags.get(GameTag.PLAYER_ID, 0)
-            except (AttributeError, TypeError):
-                pass
-            name0 = self._player_names.get(pid0, '')
-            name1 = self._player_names.get(pid1, '')
-
-            has_tag0 = bool(name0 and '#' in name0 and name0 != 'UNKNOWN HUMAN PLAYER')
-            has_tag1 = bool(name1 and '#' in name1 and name1 != 'UNKNOWN HUMAN PLAYER')
-
-            if has_tag0 and has_tag1:
-                # 双方都有 BattleTag：用上局 controller 匹配
-                # saved_our_controller 是 on_game_start 之前保存的值，
-                # 不受 global_tracker.on_game_start() 重置为 0 的影响
-                try:
-                    c0 = players[0].tags.get(GameTag.CONTROLLER, 0)
-                    c1 = players[1].tags.get(GameTag.CONTROLLER, 0)
-                    if saved_our_controller and c0 == saved_our_controller:
-                        my_idx = 0
-                        self._our_known_name = name0
-                    elif saved_our_controller and c1 == saved_our_controller:
-                        my_idx = 1
-                        self._our_known_name = name1
-                    else:
-                        # 首次游戏 / 无法匹配：用 FIRST_PLAYER 验证
-                        # 检测 entity_cache 中的 FIRST_PLAYER 标签
-                        first_pid = self._detect_first_player_pid()
-                        if first_pid:
-                            # FIRST_PLAYER 的 PlayerID 对应的玩家 → 先手
-                            # 在炉石中，先手玩家拿到先手优势但后手拿硬币
-                            # 先手玩家的 PlayerID 可能是 1 或 2（不固定）
-                            # 这里仅做日志记录，不改变 my_idx（需要更多信息）
-                            logger.debug("玩家检测(FIRST_PLAYER辅助): first_player PID=%d, 默认 my_idx=0",
-                                         first_pid)
-                        my_idx = 0
-                except Exception:
-                    my_idx = 0
-                logger.debug("玩家检测(_player_names, dual BattleTag): 我方=players[%d] name=%s, saved_ctrl=%d",
-                             my_idx, [name0, name1][my_idx], saved_our_controller)
-                return my_idx
-
-            if has_tag1 and not has_tag0:
-                # 仅 players[1] 有 '#' 且非 UNKNOWN HUMAN PLAYER
-                # 修复: DebugPrintGame 中，本地玩家名字总是 BattleTag，
-                # UNKNOWN HUMAN PLAYER 是对手（名字尚未揭示）。
-                # 所以有 BattleTag 的玩家是本地玩家。
-                if name0 == 'UNKNOWN HUMAN PLAYER':
-                    # name1 有 '#' 是本地玩家，name0 是对手
-                    my_idx = 1
-                    self._our_known_name = name1
-                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[1](name=%s), 对手=players[0](name=%s)",
-                                 name1, name0)
-                else:
-                    my_idx = 1
-                    self._our_known_name = name1
-                    logger.debug("玩家检测(_player_names): 我方=players[1](name=%s), 对手=players[0](name=%s)",
-                                 name1, name0)
-                return my_idx
-            if has_tag0 and not has_tag1:
-                # 仅 players[0] 有 '#'
-                # 同上: 有 BattleTag 的是本地玩家
-                if name1 == 'UNKNOWN HUMAN PLAYER':
-                    # name0 有 '#' 是本地玩家，name1 是对手
-                    my_idx = 0
-                    self._our_known_name = name0
-                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[0](name=%s), 对手=players[1](name=%s)",
-                                 name0, name1)
-                else:
-                    my_idx = 0
-                    self._our_known_name = name0
-                    logger.debug("玩家检测(_player_names): 我方=players[0](name=%s), 对手=players[1](name=%s)",
-                                 name0, name1)
-                return my_idx
-
-        # 第三优先: 使用 hslog player.name
-        has_tag0 = '#' in n0 and n0 != 'UNKNOWN HUMAN PLAYER'
-        has_tag1 = '#' in n1 and n1 != 'UNKNOWN HUMAN PLAYER'
-        if has_tag1 and not has_tag0:
-            my_idx = 1
+        # 优先级1: 手牌可见性检测
+        # Power.log 中我方手牌有 card_id（可见），对手手牌没有 card_id（隐藏）
+        hand_vis = self._detect_hand_visibility(players)
+        if hand_vis is not None:
+            my_idx = hand_vis
+            logger.info("玩家检测(HAND_VISIBILITY): 我方=players[%d] (name=%s)",
+                        my_idx, [n0, n1][my_idx])
+            return my_idx
 
         logger.debug("玩家检测(fallback): 我方=players[%d], n0=%r, n1=%r", my_idx, n0, n1)
         return my_idx
+
+    def _detect_hand_visibility(self, players) -> Optional[int]:
+        """通过手牌可见性判断哪个玩家是本地玩家。
+
+        在 Power.log 中：
+        - 我方手牌实体有 card_id（FULL_ENTITY 时就可见）
+        - 对手手牌实体没有 card_id（直到 SHOW_ENTITY 才揭示）
+
+        因此，统计每个 controller 在 HAND 区域中有 card_id 的实体数量，
+        有更多可见手牌的一方就是本地玩家。
+
+        Returns:
+            我方在 players 列表中的索引 (0 或 1)，或 None（无法判断）
+        """
+        try:
+            ec = self.game_tracker.entity_cache
+            if not ec:
+                return None
+
+            c0 = players[0].tags.get(GameTag.CONTROLLER, 0)
+            c1 = players[1].tags.get(GameTag.CONTROLLER, 0)
+            if not c0 or not c1:
+                return None
+
+            visible0 = 0
+            visible1 = 0
+            for entity_id, ent_data in ec.items():
+                tags = ent_data.get("tags", {})
+                zone = _zone_to_int(tags.get(GameTag.ZONE, 0))
+                if zone != ZONE_HAND:
+                    continue
+                controller = _safe_int(tags.get(GameTag.CONTROLLER, 0))
+                card_id = ent_data.get("card_id", "")
+                if controller == c0 and card_id:
+                    visible0 += 1
+                elif controller == c1 and card_id:
+                    visible1 += 1
+
+            if visible0 > visible1 and visible0 >= 1:
+                logger.debug("手牌可见性: players[0](ctrl=%d)有%d张可见手牌, players[1](ctrl=%d)有%d张 → 我方=players[0]",
+                             c0, visible0, c1, visible1)
+                return 0
+            elif visible1 > visible0 and visible1 >= 1:
+                logger.debug("手牌可见性: players[0](ctrl=%d)有%d张可见手牌, players[1](ctrl=%d)有%d张 → 我方=players[1]",
+                             c0, visible0, c1, visible1)
+                return 1
+
+            return None
+        except Exception as e:
+            logger.debug("手牌可见性检测失败: %s", e)
+            return None
+
+    def _resolve_my_idx(self, players, saved_our_controller: int = 0) -> int:
+        """确定我方玩家索引，手牌可见性优先于名称启发式。
+
+        统一入口，避免 _enrich_player_info_core 和 _on_game_start 各自
+        重复手牌可见性 + _detect_my_idx 的判断逻辑。
+
+        Returns:
+            我方在 players 列表中的索引 (0 或 1)
+        """
+        hand_vis = self._detect_hand_visibility(players)
+        if hand_vis is not None:
+            return hand_vis
+        return self._detect_my_idx(players, saved_our_controller=saved_our_controller)
+
+    def _save_known_name_if_valid(self, players, my_idx: int):
+        """通过手牌可见性验证后保存我方名称到 _our_known_name。
+
+        仅当手牌可见性确认 my_idx 正确时才保存，防止对手名字污染。
+        如果手牌可见性与 my_idx 冲突，说明 my_idx 有误，不保存。
+        """
+        hand_vis = self._detect_hand_visibility(players)
+        if hand_vis is not None and hand_vis != my_idx:
+            logger.debug("跳过保存我方名称: 手牌可见性=%d 与 my_idx=%d 冲突",
+                         hand_vis, my_idx)
+            return
+        our_name = getattr(players[my_idx], 'name', '') or ''
+        if our_name and '#' in our_name and our_name != 'UNKNOWN HUMAN PLAYER':
+            self._our_known_name = our_name
+            logger.debug("保存我方名称: %s", our_name)
 
     def _detect_first_player_pid(self) -> Optional[int]:
         """从 entity_cache 检测先手玩家的 PlayerID。
@@ -832,9 +806,7 @@ class CoreLogMonitor:
                 return None
 
             players = list(game.players)
-            # 传入当前 global_tracker 的 our_controller 作为 saved 值，
-            # 与 _on_game_start 中的逻辑一致
-            my_idx = self._detect_my_idx(
+            my_idx = self._resolve_my_idx(
                 players,
                 saved_our_controller=self.global_tracker.our_controller,
             )
@@ -920,12 +892,21 @@ class CoreLogMonitor:
 
     def _handle_controller_correction(self, old_our, new_our, old_opp, new_opp,
                                        re_bridge: bool = True):
-        """处理 controller 修正（提取自多处重复逻辑）。
+        """处理 controller 修正。
 
         当检测到 controller 值变化时，重置 GlobalTracker 状态并重新桥接实体。
+        同时通过手牌可见性重新验证 _our_known_name，防止被错误名称持续污染。
         """
         logger.info("Controller 修正: our %d→%d, opp %d→%d",
                     old_our, new_our, old_opp, new_opp)
+        try:
+            game = self.game_tracker.export_entities()
+            if game is not None and hasattr(game, 'players') and len(game.players) >= 2:
+                players = list(game.players)
+                my_idx = self._resolve_my_idx(players)
+                self._save_known_name_if_valid(players, my_idx)
+        except Exception:
+            pass
         if re_bridge:
             self.global_tracker.on_game_start()
             self.global_tracker.set_controllers(new_our, new_opp)
@@ -1006,8 +987,9 @@ class CoreLogMonitor:
         遍历 entity_cache 查找 zone=HAND 且 controller=我方 的实体，
         提取其 card_id。用于 MCTS 诊断管线构建真实手牌。
 
-        注意: entity_cache 中 ZONE 标签存储为字符串 (如 'HAND'),
+        注意: entity_cache 中 ZONE 标签存储为整数 (如 ZONE_HAND=3),
         CONTROLLER 标签存储为 int (如 1)。
+        必须使用 _zone_to_int / _safe_int 辅助函数进行比较。
         如果 entity_cache 中 card_id 为空，则回退查
         _build_player_hand_card_map() 的全局映射。
         """
@@ -1020,10 +1002,10 @@ class CoreLogMonitor:
         hand_cards = []
         for eid, edata in self.game_tracker.entity_cache.items():
             tags = edata.get("tags", {})
-            zone_str = tags.get(GameTag.ZONE, "")
-            controller = tags.get(GameTag.CONTROLLER, -1)
+            zone_val = _zone_to_int(tags.get(GameTag.ZONE, 0))
+            controller = _safe_int(tags.get(GameTag.CONTROLLER, 0))
             card_id = edata.get("card_id", "")
-            if zone_str == "HAND" and controller == our_ctrl:
+            if zone_val == ZONE_HAND and controller == our_ctrl:
                 if card_id:
                     hand_cards.append(card_id)
                 elif eid in global_map:
@@ -1081,18 +1063,13 @@ class CoreLogMonitor:
             exporter = self.game_tracker.export_entities()
             if exporter is not None and hasattr(exporter, 'players') and len(exporter.players) >= 2:
                 players = list(exporter.players)
-                # 传入上局 controller 用于匹配（解决 PvP 双 BattleTag 识别问题）
-                my_idx = self._detect_my_idx(players, saved_our_controller=saved_our_controller)
+                my_idx = self._resolve_my_idx(players, saved_our_controller=saved_our_controller)
                 our_controller = players[my_idx].tags.get(GameTag.CONTROLLER, my_idx + 1)
                 opp_controller = players[1 - my_idx].tags.get(GameTag.CONTROLLER, 2 - my_idx)
                 logger.info("玩家检测: 我方=players[%d](controller=%d), 对手=players[%d](controller=%d), saved_ctrl=(%d,%d)",
                             my_idx, our_controller, 1 - my_idx, opp_controller,
                             saved_our_controller, saved_opp_controller)
-                # 保存我方名称用于后续游戏识别（跨游戏持久化）
-                our_name = getattr(players[my_idx], 'name', '') or ''
-                if our_name and '#' in our_name and our_name != 'UNKNOWN HUMAN PLAYER':
-                    self._our_known_name = our_name
-                    logger.debug("保存我方名称: %s (从 hslog player.name)", our_name)
+                self._save_known_name_if_valid(players, my_idx)
         except Exception as e:
             logger.debug("检测玩家 controller 失败: %s", e)
 
@@ -1321,14 +1298,13 @@ class CoreLogMonitor:
         # GlobalTracker 不直接处理此标签，改为每帧从 entity_cache 快照读取。
         opp_hand_positions: Dict[int, int] = {}
         try:
-            from hearthstone.enums import GameTag, Zone
             ec = self.game_tracker.entity_cache if hasattr(self.game_tracker, 'entity_cache') else {}
             for eid, edata in ec.items():
                 tags = edata.get("tags", {})
-                zone_str = tags.get(GameTag.ZONE, "")
-                ctrl = tags.get(GameTag.CONTROLLER, -1)
-                if zone_str == "HAND" and ctrl == opp_ctrl:
-                    pos = tags.get(GameTag.ZONE_POSITION, 0)
+                zone_val = _zone_to_int(tags.get(GameTag.ZONE, 0))
+                ctrl = _safe_int(tags.get(GameTag.CONTROLLER, 0))
+                if zone_val == ZONE_HAND and ctrl == opp_ctrl:
+                    pos = _safe_int(tags.get(GameTag.ZONE_POSITION, 0))
                     if pos > 0:
                         opp_hand_positions[eid] = pos
         except Exception:
