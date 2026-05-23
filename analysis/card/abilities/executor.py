@@ -99,7 +99,8 @@ class SpellExecutor:
         from analysis.card.spells import get_spell_class
         spell_cls = get_spell_class(desc.spell_class)
         if spell_cls is None:
-            log.warning("executor: 未找到 Spell 类 %r", desc.spell_class)
+            if desc.spell_class != "TODO":
+                log.warning("executor: 未找到 Spell 类 %r", desc.spell_class)
             return state
         return spell_cls().execute(desc, state, source, target)
 

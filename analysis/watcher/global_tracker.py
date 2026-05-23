@@ -45,6 +45,7 @@ from analysis.watcher.tracker_rules import (
     ShuffleTrackerRule, CorruptTrackerRule, RevealTrackerRule,
     TransformTrackerRule, DeckPeekTrackerRule,
     DiscardTrackerRule, TutorConstraintTrackerRule,
+    ShatterTrackerRule,
 )
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,7 @@ class GlobalTracker:
         self._rule_dispatcher.register(DeckPeekTrackerRule())
         self._rule_dispatcher.register(DiscardTrackerRule())
         self._rule_dispatcher.register(TutorConstraintTrackerRule())
+        self._rule_dispatcher.register(ShatterTrackerRule())
         # GallywixTrackerRule is a structural placeholder — not yet implemented.
         # Kept in tracker_rules.py for future activation.
 
@@ -391,6 +393,9 @@ class GlobalTracker:
                         (card_id, 'generated' if is_generated else 'hand'))
                 # 记录已知手牌（无论来源，用于 Determinizer 采样）
                 self._record_known_hand_card(card_id)
+                # 对手揭示到HAND的卡牌是确认手牌（亡语/法术置入、发现、Tracking等）
+                if card_id not in self.state.opp_confirmed_hand_cards:
+                    self.state.opp_confirmed_hand_cards.append(card_id)
 
         # 我方卡牌追踪
         if controller == self.our_controller and card_id:
@@ -767,16 +772,18 @@ class GlobalTracker:
         """打出的卡牌回手（弹回/召回）: PLAY/SECRET -> HAND"""
         if is_opp and card_id:
             self.state.opp_returned_to_hand_seen.append(card_id)
-            # Remove from opp board minions (card returned to hand)
+            if card_id not in self.state.opp_confirmed_hand_cards:
+                self.state.opp_confirmed_hand_cards.append(card_id)
             self.state.opp_board_minions = [
                 m for m in self.state.opp_board_minions
                 if m.get("entity_id") != entity_id
             ]
         elif is_opp and not card_id:
-            # PLAY→HAND 时 card_id 不应为空（之前已揭示），回退查 opp_hand_card_ids
             entry = self.state.opp_hand_card_ids.get(entity_id)
             if entry and entry[0]:
                 self.state.opp_returned_to_hand_seen.append(entry[0])
+                if entry[0] not in self.state.opp_confirmed_hand_cards:
+                    self.state.opp_confirmed_hand_cards.append(entry[0])
 
     def _on_zone_hand_to_secret(self, entity_id, controller, card_id, card_type, is_opp):
         """打出奥秘: HAND -> SECRET (§7)

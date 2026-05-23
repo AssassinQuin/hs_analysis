@@ -312,7 +312,8 @@ class CoreLogMonitor:
         # 已知我方玩家名称（跨游戏持久化）
         # 从 cfg/live.cfg [identification] our_player_name 预置，
         # 避免首局因 fallback 启发式错误导致全局反转。
-        self._our_known_name: str = self._load_our_player_name_from_config()
+        # 通过 property setter 保护，防止被 UNKNOWN HUMAN PLAYER 等占位符污染
+        self._our_known_name_internal: str = self._load_our_player_name_from_config()
 
         # 游戏生命周期状态（替代 _game_started_emitted 标志对）
         self._game_lifecycle = GameLifecycle.IDLE
@@ -321,8 +322,31 @@ class CoreLogMonitor:
         # 避免「读到旧日志的 game_start + game_end → UI 闪烁」问题
         self._catching_up: bool = False
 
+        # DeckHotReloader: 监控 deck_codes.txt 变更，自动格式化并刷新贝叶斯模型
+        self._deck_reloader = None
+        try:
+            from analysis.watcher.deck_hot_reloader import DeckHotReloader
+            deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
+            if deck_codes_path.exists():
+                self._deck_reloader = DeckHotReloader(deck_codes_path)
+                logger.info("DeckHotReloader 已初始化: %s", deck_codes_path)
+        except Exception as e:
+            logger.debug("DeckHotReloader 初始化失败: %s", e)
+
         # 延迟初始桥接标记：已移除（zone change 追踪需要即时桥接）。
         # 此字段在 2026-05 重构中删除，保留声明仅用于旧状态兼容。
+
+    @property
+    def _our_known_name(self) -> str:
+        """我方已知名称（跨游戏持久化），受保护防止被占位符污染。"""
+        return getattr(self, '_our_known_name_internal', '')
+
+    @_our_known_name.setter
+    def _our_known_name(self, value: str):
+        """设置我方已知名称。拒绝 'UNKNOWN HUMAN PLAYER' 等占位符。"""
+        _INVALID_NAMES = {'UNKNOWN HUMAN PLAYER', '', 'UNKNOWN'}
+        if value and value not in _INVALID_NAMES:
+            self._our_known_name_internal = value
 
     @property
     def log_path(self) -> Optional[Path]:
@@ -446,6 +470,14 @@ class CoreLogMonitor:
         lines = new_text.splitlines()
         self._process_lines(lines)
 
+        # 检查 deck_codes.txt 是否变更，自动格式化并刷新贝叶斯模型
+        if self._deck_reloader is not None:
+            try:
+                bayesian = getattr(self.global_tracker, '_bayesian_model', None)
+                self._deck_reloader.check_and_reload(bayesian)
+            except Exception as e:
+                logger.debug("DeckHotReloader check failed: %s", e)
+
         # 追赶模式结束：如果之前是首次读取旧日志，现在处理完毕
         # 检查当前游戏状态，若仍在游戏中则正常触发 game_start
         if self._catching_up:
@@ -536,7 +568,7 @@ class CoreLogMonitor:
         _names = self._player_names
         _pid0 = players[0].tags.get(GameTag.PLAYER_ID, 0) if hasattr(players[0], 'tags') else 0
         _pid1 = players[1].tags.get(GameTag.PLAYER_ID, 0) if hasattr(players[1], 'tags') else 0
-        logger.info("玩家检测诊断: n0=%r n1=%r _player_names=%r pid0=%d pid1=%d known_name=%r saved_ctrl=%d",
+        logger.debug("玩家检测诊断: n0=%r n1=%r _player_names=%r pid0=%d pid1=%d known_name=%r saved_ctrl=%d",
                     n0, n1, _names, _pid0, _pid1,
                     self._our_known_name, saved_our_controller)
 
@@ -621,13 +653,15 @@ class CoreLogMonitor:
 
             if has_tag1 and not has_tag0:
                 # 仅 players[1] 有 '#' 且非 UNKNOWN HUMAN PLAYER
-                # 检查对方是否 UNKNOWN HUMAN PLAYER（hslog 的本地玩家占位符）
+                # 修复: DebugPrintGame 中，本地玩家名字总是 BattleTag，
+                # UNKNOWN HUMAN PLAYER 是对手（名字尚未揭示）。
+                # 所以有 BattleTag 的玩家是本地玩家。
                 if name0 == 'UNKNOWN HUMAN PLAYER':
-                    # UNKNOWN 是本地玩家，带 # 的是对手
-                    my_idx = 0
-                    self._our_known_name = name0
-                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[0](name=%s), 对手=players[1](name=%s)",
-                                 name0, name1)
+                    # name1 有 '#' 是本地玩家，name0 是对手
+                    my_idx = 1
+                    self._our_known_name = name1
+                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[1](name=%s), 对手=players[0](name=%s)",
+                                 name1, name0)
                 else:
                     my_idx = 1
                     self._our_known_name = name1
@@ -636,11 +670,13 @@ class CoreLogMonitor:
                 return my_idx
             if has_tag0 and not has_tag1:
                 # 仅 players[0] 有 '#'
+                # 同上: 有 BattleTag 的是本地玩家
                 if name1 == 'UNKNOWN HUMAN PLAYER':
-                    my_idx = 1
-                    self._our_known_name = name1
-                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[1](name=%s), 对手=players[0](name=%s)",
-                                 name1, name0)
+                    # name0 有 '#' 是本地玩家，name1 是对手
+                    my_idx = 0
+                    self._our_known_name = name0
+                    logger.debug("玩家检测(_player_names, UNKNOWN判定): 我方=players[0](name=%s), 对手=players[1](name=%s)",
+                                 name0, name1)
                 else:
                     my_idx = 0
                     self._our_known_name = name0
@@ -860,11 +896,13 @@ class CoreLogMonitor:
 
         在 _process_lines() 和 _notify_state_update() 中调用。
         当信息补全后，将游戏生命周期推进到 READY 并重新发送 game_started 信号。
+
+        修复: 即使已 READY，仍检查 controller 是否需要修正。
+        场景: 英雄实体在 PlayerName 行之前被桥接，导致错误的 controller 映射
+        将英雄分配给了错误的一方。当 PlayerName 行随后到达时，
+        _detect_my_idx 能正确识别我方，但 READY 状态阻止了修正。
         """
         state = self.global_tracker.state
-        # 如果已进入 READY 状态，信息已完整，无需补充
-        if self._game_lifecycle == GameLifecycle.READY:
-            return
 
         result = self._enrich_player_info_core(re_bridge=True, re_emit=True)
         if result is None:
@@ -1026,9 +1064,11 @@ class CoreLogMonitor:
         self._last_known_zones.clear()
         self._last_known_card_ids.clear()
         self._first_player_detected = False
-        # 注意：不再清空 _player_names — DebugPrintGame() 的 PlayerName 行
-        # 可能在 CREATE_GAME 之前就已解析，清空会丢失当前游戏的有效信息。
-        # _player_names 在日志轮转时清空（line 355）。
+        # 修复: 每局开始清空 _player_names，防止上局的 PlayerName 映射
+        #（PID→名字）在新局中因 PID 对调而导致错误识别。
+        # DebugPrintGame() 的 PlayerName 行在 CREATE_GAME 之后才出现，
+        # 所以清空不会丢失当前局的有效信息。
+        self._player_names.clear()
         self._game_lifecycle = GameLifecycle.STARTING
 
         # 重置 GlobalTracker 状态（清空旧游戏数据）
@@ -1105,6 +1145,8 @@ class CoreLogMonitor:
         self._last_known_zones.clear()
         self._last_known_card_ids.clear()
         self._first_player_detected = False
+        # 重置玩家名称映射，防止下局 PID 对调导致错误识别
+        self._player_names.clear()
         # 结束回调完成后重置为 IDLE
         self._game_lifecycle = GameLifecycle.IDLE
 
@@ -1119,6 +1161,10 @@ class CoreLogMonitor:
 
     def _notify_state_update(self):
         """通知 UI 更新游戏状态。"""
+        if self._catching_up:
+            # 追赶模式：只桥接实体，不构建完整状态字典
+            self._bridge_new_entities()
+            return
         # 常规流程：先桥接新实体，再补充玩家信息
         # 注意：不再有延迟桥接路径。所有实体到达后即时桥接，
         # 确保 zone change 追踪可检测到 DECK→HAND 等区域转换。
@@ -1152,7 +1198,7 @@ class CoreLogMonitor:
                 if info and info.get("cardId"):
                     card_ids.append(info["cardId"])
             if card_ids:
-                logger.info(
+                logger.debug(
                     "Bayesian top-1 deck [%s] (prob=%.0f%%): %d 张卡牌作为采样池",
                     name, prob * 100, len(card_ids),
                 )
@@ -1165,6 +1211,9 @@ class CoreLogMonitor:
         self, known_hand_ids: List[str], hand_count: int
     ) -> List[str]:
         """用 DeckPoolTracker 从可用池采样填充未知手牌。
+
+        使用缓存的 DeckPoolTracker 实例，仅在职业变化时重建，
+        避免每次 build_state_dict 都重新扫描卡牌数据库。
 
         Args:
             known_hand_ids: 已知手牌的 card_id 列表（来自 entity_cache）
@@ -1185,13 +1234,21 @@ class CoreLogMonitor:
         try:
             from analysis.utils.deck_pool_tracker import DeckPoolTracker
 
-            # 从 Bayesian 模型获取 top-1 卡组作为初始采样池
-            bayesian_pool = self._get_bayesian_top_deck_cards()
-            if bayesian_pool:
-                tracker = DeckPoolTracker(player_class_en,
-                                          initial_pool=set(bayesian_pool))
-            else:
-                tracker = DeckPoolTracker(player_class_en)
+            # 检查缓存：职业变化时重建
+            cached_class = getattr(self, '_dpt_class', None)
+            if cached_class != player_class_en:
+                bayesian_pool = self._get_bayesian_top_deck_cards()
+                if bayesian_pool:
+                    self._dpt = DeckPoolTracker(player_class_en,
+                                                initial_pool=set(bayesian_pool))
+                else:
+                    self._dpt = DeckPoolTracker(player_class_en)
+                self._dpt_class = player_class_en
+
+            tracker = self._dpt
+
+            # 重置追踪状态（每次采样前重新注册当前已知信息）
+            tracker.reset_tracking_state()
 
             # 1) 我方已打出的卡牌
             for cid in gt_state.player_cards_played_history:
@@ -1199,7 +1256,6 @@ class CoreLogMonitor:
 
             # 2) 对手打出的卡牌（区分衍生 vs 非衍生）
             for kc in gt_state.opp_known_cards:
-                # 从 CardSource 判断是否衍生
                 from analysis.watcher.global_tracker import CardSource
                 is_derived = kc.source in (CardSource.GENERATED,)
                 tracker.register_opp_played(kc.card_id, is_derived)
@@ -1212,7 +1268,7 @@ class CoreLogMonitor:
             return sampled
 
         except Exception as e:
-            logger.warning("_build_sampled_hand_cards failed: %s", e)
+            logger.debug("_build_sampled_hand_cards failed: %s", e)
             return known_hand_ids
 
     @staticmethod
@@ -1357,6 +1413,8 @@ class CoreLogMonitor:
             "discarded_cards": list(gt_state.opp_discarded_cards),
             "hand_type_constraints": list(gt_state.opp_hand_type_constraints),
             "confirmed_hand_cards": list(gt_state.opp_confirmed_hand_cards),
+            "shatter_originals": list(gt_state.opp_shatter_originals),
+            "shatter_fragments": list(gt_state.opp_shatter_fragments),
             "bayesian": bayesian,
             "secret_report": secret_report,
             "card_breakdown": card_breakdown,
@@ -1638,6 +1696,7 @@ class CoreLogMonitor:
         """加载已有的 Power.log 文件（用于验证/离线模式）。
 
         逐行喂入以实时桥接实体到 GlobalTracker。
+        加载期间抑制中间状态通知，只在最后构建一次状态。
 
         Args:
             path: Power.log 文件路径
@@ -1649,23 +1708,53 @@ class CoreLogMonitor:
 
         logger.info("加载已有日志: %s", path)
 
-        # 按行逐条处理，确保每个 TAG_CHANGE ZONE 都能被 _detect_zone_changes_from_cache
-        # 捕获到区域变化。之前一次性喂入所有行会导致 entity_cache 中只有实体的最终区域，
-        # DECK→HAND 等过渡丢失（关键修复）。
+        # 抑制中间状态通知（避免每个 action 都调用 build_state_dict）
+        old_catching_up = self._catching_up
+        self._catching_up = True
+
+        # 批量模式：收集所有行后一次性处理，避免逐行调用 _process_lines
+        # _process_lines 末尾会调用 _detect_zone_changes_from_cache 等昂贵操作，
+        # 逐行调用会导致 O(n²) 复杂度
+        all_lines = []
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as f:
                 for line in f:
                     stripped = line.rstrip("\n").rstrip("\r")
-                    if not stripped:
-                        continue
-                    self._process_lines([stripped])
+                    if stripped:
+                        all_lines.append(stripped)
         except Exception as e:
             logger.error("加载日志失败: %s", e)
+            self._catching_up = old_catching_up
+            return
+
+        # 分批处理：每 500 行处理一次 zone change 检测
+        batch_size = 500
+        for i in range(0, len(all_lines), batch_size):
+            batch = all_lines[i:i + batch_size]
+            for line in batch:
+                self._parse_player_name_line(line)
+                event = self.game_tracker.feed_line(line)
+                if event is None:
+                    continue
+                if event == "game_start":
+                    self._bridged_entities.clear()
+                    self._last_known_zones.clear()
+                    self._last_known_card_ids.clear()
+                    self._first_player_detected = False
+                    self._on_game_start()
+                elif event == "game_end":
+                    self._on_game_end()
+                elif event == "turn_start":
+                    self._on_turn_start()
+            # 每批处理完后检测 zone change
+            self._detect_zone_changes_from_cache()
+            self._detect_first_player_from_cache()
+
+        self._catching_up = old_catching_up
 
         # 补充：使用统一的核心方法提取完整玩家信息
         old_our_ctrl = self.global_tracker.our_controller
         old_opp_ctrl = self.global_tracker.opp_controller
-        # 离线模式：使用核心方法但不重新发送信号
         self._enrich_player_info_core(re_bridge=True, re_emit=False)
 
         # 如果 controller 被修正了，_enrich_player_info_core 内部已处理重新桥接
@@ -1673,6 +1762,15 @@ class CoreLogMonitor:
         new_opp_ctrl = self.global_tracker.opp_controller
         if old_our_ctrl == new_our_ctrl and old_opp_ctrl == new_opp_ctrl:
             self._bridge_new_entities()
+
+        # 离线模式也触发一次 deck 格式化检查（仅当文件已变更时）
+        if self._deck_reloader is not None:
+            try:
+                bayesian = getattr(self.global_tracker, '_bayesian_model', None)
+                if self._deck_reloader.needs_reload():
+                    self._deck_reloader.check_and_reload(bayesian)
+            except Exception as e:
+                logger.debug("DeckHotReloader check failed: %s", e)
 
         logger.info("日志加载完成")
 

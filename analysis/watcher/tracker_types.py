@@ -302,6 +302,13 @@ class GlobalGameState:
     opp_discarded_cards: List[str] = field(default_factory=list)
     """对手弃牌/爆牌时揭示的已知 card_id 列表"""
 
+    # ---- 分裂卡牌追踪 ----
+    opp_shatter_originals: List[str] = field(default_factory=list)
+    """对手分裂卡牌的原始 card_id 列表（分裂前的card_id）"""
+
+    opp_shatter_fragments: List[str] = field(default_factory=list)
+    """对手分裂后的碎片 card_id 列表"""
+
     # ---- 手牌类型约束（导师效果等） ----
     opp_hand_type_constraints: List[Dict] = field(default_factory=list)
     """确认对手手牌类型 [{"type": str, "value": str, "card_id": str, "turn": int}, ...]

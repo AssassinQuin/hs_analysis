@@ -254,9 +254,6 @@ class TrackerApp:
         """初始化所有组件。"""
         logger.info("初始化组件…")
 
-        # 0. 启动时更新最新卡组代码（静默，失败不影响启动）
-        self._update_deck_codes_on_startup()
-
         # 1. 卡牌图像管理器
         from tracker.card_images import CardImageManager
         self._image_manager = CardImageManager()
@@ -280,13 +277,6 @@ class TrackerApp:
         from tracker.hsreplay_updater import HSReplayUpdater
         self._hsreplay_updater = HSReplayUpdater(update_interval_hours=24.0)
 
-        # 7. 卡组文件热更新监视器
-        self._deck_codes_mtime: float = 0.0
-        self._deck_watch_timer = QTimer(self._qt_app) if _HAS_PYQT5 and self._qt_app else None
-        if self._deck_watch_timer:
-            self._deck_watch_timer.timeout.connect(self._check_deck_codes_update)
-            self._deck_watch_timer.setInterval(5000)  # 每5秒检查一次
-
         # 6. 叠加 UI
         from tracker.overlay_ui import OverlayWindow
         self._overlay = OverlayWindow(
@@ -294,44 +284,6 @@ class TrackerApp:
         )
 
         logger.info("组件初始化完成")
-
-    def _update_deck_codes_on_startup(self):
-        """启动时静默更新最新卡组代码。
-
-        在后台线程中执行，不阻塞 UI 初始化。
-        如果更新失败（网络问题等），不影响正常启动。
-        """
-        import threading
-        from pathlib import Path
-
-        # 检查是否需要更新：如果上次更新在 12 小时内，跳过
-        deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
-        update_flag = deck_codes_path.parent / ".deck_codes_last_update"
-
-        if update_flag.exists():
-            try:
-                last_update = float(update_flag.read_text().strip())
-                if time.time() - last_update < 43200:  # 12 小时
-                    logger.info("卡组代码在 12 小时内已更新，跳过")
-                    return
-            except (ValueError, OSError):
-                pass
-
-        def _do_update():
-            try:
-                from scripts.update_deck_codes import update_deck_codes
-                success = update_deck_codes(max_per_class=7, max_decks=21, backup=True)
-                if success:
-                    update_flag.write_text(str(time.time()))
-                    logger.info("卡组代码更新完成")
-                else:
-                    logger.info("卡组代码更新失败，使用现有数据")
-            except Exception as e:
-                logger.info("卡组代码更新异常: %s，使用现有数据", e)
-
-        t = threading.Thread(target=_do_update, daemon=True)
-        t.start()
-        logger.info("卡组代码更新已在后台启动")
 
     def _connect_signals(self):
         """连接信号和槽。"""
@@ -355,13 +307,6 @@ class TrackerApp:
 
         # 启动 HSReplay 更新器
         self._hsreplay_updater.start()
-
-        # 启动卡组文件监视
-        if self._deck_watch_timer:
-            deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
-            if deck_codes_path.exists():
-                self._deck_codes_mtime = deck_codes_path.stat().st_mtime
-            self._deck_watch_timer.start()
 
         # 启动日志监控
         self._log_monitor.start()
@@ -495,70 +440,6 @@ class TrackerApp:
         """HSReplay 更新失败。"""
         logger.warning("HSReplay 更新失败: %s", error_msg)
 
-    def _check_deck_codes_update(self):
-        """定时检查 deck_codes.txt 是否更新，如有变化则重新加载卡组数据。
-
-        检测到文件变化后执行两步操作：
-        1. 重建 HSReplay archetype DB（从 deck_codes.txt 解析卡组数据）
-        2. 热刷新贝叶斯模型（重新加载卡组 + 保留已观察证据 + 重算后验）
-        同时更新 DeckProvider 供 game_tracker 使用。
-        """
-        try:
-            deck_codes_path = Path(__file__).resolve().parent.parent / "deck_codes.txt"
-            if not deck_codes_path.exists():
-                return
-            mtime = deck_codes_path.stat().st_mtime
-            if mtime <= self._deck_codes_mtime:
-                return
-            self._deck_codes_mtime = mtime
-            logger.info("检测到 deck_codes.txt 更新，重新加载卡组数据")
-
-            # 1. 重建 archetype DB + 热刷新贝叶斯模型
-            if hasattr(self, '_log_monitor'):
-                gt = self._log_monitor.global_tracker
-                bayesian_model = gt._bayesian_model
-                if bayesian_model is not None:
-                    # 使用 DeckHotReloader 重建 DB 并刷新贝叶斯模型
-                    from analysis.watcher.deck_hot_reloader import DeckHotReloader
-                    reloader = DeckHotReloader(str(deck_codes_path))
-                    reloader._last_mtime = 0  # 强制重载
-                    reloaded = reloader.check_and_reload(bayesian_model)
-                    if reloaded:
-                        logger.info("贝叶斯模型热刷新完成")
-                    else:
-                        logger.warning("贝叶斯模型热刷新失败，尝试完全重建")
-                        # 回退：完全重建贝叶斯模型
-                        gt._bayesian_initialized = False
-                        gt._bayesian_model = None
-                        if gt._init_bayesian_model(gt.state.opp_hero_class):
-                            logger.info("贝叶斯模型完全重建成功")
-                else:
-                    # 贝叶斯模型尚未初始化（游戏未开始或职业未知），
-                    # 仅重建 DB，下次初始化时会自动加载新数据
-                    from analysis.data.fetch_hsreplay import (
-                        init_db, build_archetype_db_from_deck_codes,
-                    )
-                    from analysis.config import HSREPLAY_CACHE_DB
-                    import os
-                    if os.path.exists(str(HSREPLAY_CACHE_DB)):
-                        conn = init_db(str(HSREPLAY_CACHE_DB))
-                        try:
-                            stored = build_archetype_db_from_deck_codes(conn)
-                            logger.info("archetype DB 重建完成（%d 个卡组）", stored)
-                        finally:
-                            conn.close()
-
-            # 2. 更新 DeckProvider 供 game_tracker 使用
-            from analysis.watcher.deck_provider import DeckProvider
-            if hasattr(self, '_log_monitor') and hasattr(self._log_monitor, 'game_tracker'):
-                new_provider = DeckProvider()
-                new_provider.load_deck_codes(str(deck_codes_path))
-                self._log_monitor.game_tracker.deck_provider = new_provider
-                logger.info("卡组数据热更新完成，加载 %d 个卡组",
-                            len(new_provider._decks) if hasattr(new_provider, '_decks') else 0)
-        except Exception as e:
-            logger.warning("卡组热更新检查失败: %s", e)
-
     # ── 清理 ───────────────────────────────────────────────────
 
     def _cleanup(self):
@@ -573,9 +454,6 @@ class TrackerApp:
 
         if self._overlay is not None:
             self._overlay.stop_refresh()
-
-        if hasattr(self, '_deck_watch_timer') and self._deck_watch_timer is not None:
-            self._deck_watch_timer.stop()
 
         logger.info("清理完成")
 

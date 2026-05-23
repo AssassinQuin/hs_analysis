@@ -143,7 +143,12 @@ def compute_retention_score(card: CardEntry, archetype: str) -> float:
 
 
 def parse_deck_codes(path: Path) -> List[Tuple[str, str, str]]:
-    """解析 deck_codes.txt，返回 [(name, archetype, deckstring)]。"""
+    """解析 deck_codes.txt，返回 [(name, archetype, deckstring)]。
+
+    支持两种名称格式:
+      - # name: XXX | arch: YYY   (expand_deck_codes 生成的注释格式)
+      - ### XXX                    (炉石导出格式)
+    """
     if not path.exists():
         log.error("文件不存在: %s", path)
         return []
@@ -155,14 +160,17 @@ def parse_deck_codes(path: Path) -> List[Tuple[str, str, str]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
-            # 匹配 # name: XXX | arch: YYY
             m = re.match(r"#\s*name:\s*(.+?)\s*\|\s*arch:\s*(\w+)", line)
             if m:
                 current_name = m.group(1).strip()
                 current_arch = m.group(2).strip()
+            else:
+                m2 = re.match(r"^###\s+(.+)", line)
+                if m2:
+                    current_name = m2.group(1).strip()
+                    current_arch = ""
             continue
 
-        # 卡组代码行
         if line.startswith("AAECA"):
             decks.append((current_name, current_arch, line))
             current_name = ""
@@ -342,7 +350,8 @@ def format_enriched_txt(entries: List[DeckEntry]) -> str:
 
     for entry in entries:
         if entry.name:
-            lines.append(f"# name: {entry.name} | arch: {entry.archetype}")
+            arch = entry.archetype or "unknown"
+            lines.append(f"# name: {entry.name} | arch: {arch}")
         lines.append(f"# class: {entry.hero_class} | class_cn: {entry.hero_class_cn}")
 
         # 高留存卡列表（前 10 张）

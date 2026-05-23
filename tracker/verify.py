@@ -80,19 +80,9 @@ def verify(log_path: str | None = None):
         monitor = CoreLogMonitor()
         monitor.load_existing_log(log_path)
 
-        # 事件统计
+        # 事件统计：从 game_tracker 获取已记录的事件数
         gt = monitor.game_tracker
-        events = []
-        for line in open(log_path, "r", encoding="utf-8", errors="replace"):
-            evt = gt.feed_line(line.rstrip("\n"))
-            if evt:
-                events.append(evt)
-        from collections import Counter
-        event_counts = Counter(events)
-        total = sum(event_counts.values())
-        print(f"   ✅ 解析完成: {total} 个事件")
-        for evt, count in event_counts.most_common():
-            print(f"      {evt}: {count}")
+        print(f"   ✅ 解析完成（game_count={gt.game_count}, in_game={gt.in_game}）")
     except Exception as e:
         print(f"   ❌ 解析失败: {e}")
         import traceback

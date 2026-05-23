@@ -193,20 +193,20 @@ class BayesianOpponentModel:
         loaded_decks = []
         hsreplay_ids = set()
 
-        # 1. Load HSReplay cache DB
+        # 1. Load HSReplay cache DB (only HSReplay-sourced decks, IDs < 9000)
         try:
             conn = init_db(DB_PATH)
             try:
-                loaded_decks = get_meta_decks(conn)
-                if loaded_decks:
-                    log.info("从 HSReplay 缓存加载了 %d 个卡组", len(loaded_decks))
+                all_cached = get_meta_decks(conn)
+                if all_cached:
+                    loaded_decks = [d for d in all_cached if d.get("archetype_id", 0) < 9000]
+                    log.info("从 HSReplay 缓存加载了 %d 个卡组 (排除旧 deck_codes %d 个)",
+                             len(loaded_decks), len(all_cached) - len(loaded_decks))
                     for d in loaded_decks:
                         aid = d.get("archetype_id")
-                        # IDs >= 9000 are deck_codes.txt decks (from previous runs)
-                        source = "deck_codes" if aid is not None and aid >= 9000 else "hsreplay"
+                        source = "hsreplay"
                         self._deck_source[aid] = source
-                        if source == "hsreplay":
-                            hsreplay_ids.add(aid)
+                        hsreplay_ids.add(aid)
             finally:
                 conn.close()
         except Exception as e:
@@ -446,8 +446,29 @@ class BayesianOpponentModel:
                     self._unlock_count = 0
             
             if self.locked is not None:
-                # 锁定时仍追踪已见卡牌，但不更新后验
-                # 这样 _seen_deck_cards 仍可用于剩余张数计算
+                # 锁定时仍做软更新：降低 likelihood ratio 但不完全跳过
+                # 这样当新证据累积时，后验可以缓慢偏移，支持更平滑的卡组切换
+                LOCKED_SIG = 0.6
+                LOCKED_EPS = 0.15
+                unnormalized = {}
+                for deck in self.decks:
+                    aid = deck["archetype_id"]
+                    prior = self.posteriors.get(aid, 0.0)
+                    if prior == 0.0:
+                        unnormalized[aid] = 0.0
+                        continue
+                    if seen_card_dbfId in deck["cards"]:
+                        likelihood = LOCKED_SIG
+                    else:
+                        likelihood = LOCKED_EPS
+                    unnormalized[aid] = likelihood * prior
+                total = sum(unnormalized.values())
+                if total > 0:
+                    self.posteriors = {
+                        aid: val / total for aid, val in unnormalized.items()
+                    }
+                # 重新检查锁定（可能切换到更优卡组）
+                self.locked = self.get_lock()
                 return dict(self.posteriors)
 
         unnormalized = {}
@@ -521,14 +542,33 @@ class BayesianOpponentModel:
         self._seen_cards.append(seen_card_dbfId)
         self._seen_cards_counter[seen_card_dbfId] += 1
         
-        # Don't update posteriors when locked, but still track the card
-        # This ensures _seen_cards_counter stays accurate for remaining copies calc
-        if self.locked is not None:
-            return dict(self.posteriors)
-        
         # Lower likelihood for hand observations (less certain than play)
         HAND_LIKELIHOOD = 0.6     # card in deck signature
         HAND_EPSILON = 0.05       # card not in signature
+
+        # 锁定时仍做软更新（与 update() 一致）
+        if self.locked is not None:
+            LOCKED_SIG = 0.5
+            LOCKED_EPS = 0.12
+            unnormalized = {}
+            for deck in self.decks:
+                aid = deck["archetype_id"]
+                prior = self.posteriors.get(aid, 0.0)
+                if prior == 0.0:
+                    unnormalized[aid] = 0.0
+                    continue
+                if seen_card_dbfId in deck["cards"]:
+                    likelihood = LOCKED_SIG
+                else:
+                    likelihood = LOCKED_EPS
+                unnormalized[aid] = likelihood * prior
+            total = sum(unnormalized.values())
+            if total > 0:
+                self.posteriors = {
+                    aid: val / total for aid, val in unnormalized.items()
+                }
+            self.locked = self.get_lock()
+            return dict(self.posteriors)
         
         unnormalized = {}
         for deck in self.decks:

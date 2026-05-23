@@ -11,169 +11,152 @@
 #
 # 支持热更新：对局中可随时添加/修改卡组，保存后自动生效
 
-# name: Aggro Paladin | arch: aggro
-# class: PALADIN | class_cn: 圣骑士
-# retain_cards: 飞龙机动(4费,留存42), 诺兹多姆，青铜守护巨龙(5费,留存40), 巨熊之槌(4费,留存30), 过去的诺莫瑞根(2费,留存15), 超时空鳍侠(2费,留存10), 龙鳞军备(1费,留存7), 紫色珍鳃鱼人(2费,留存0), 抛石鱼人(2费,留存-10), 正义保护者(1费,留存-15), 冰川裂片(1费,留存-20)
-# cards: CORE_EX1_010 CORE_ICC_038 CORE_UNG_205 CORE_ULD_723 EDR_251 EDR_253 EDR_849 TLC_427 TLC_438 TLC_603 TLC_249 TIME_706 TIME_044 CATA_556 CATA_473 CATA_210 CATA_479
-AAECAZ8FBM/+BrqWB8avB+XBBw2WoATJoATTngbUngbI/wb1gQeFlQfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
-
-# name: Control Warrior | arch: control
-# class: WARRIOR | class_cn: 战士
-# retain_cards: 格罗玛什·地狱咆哮(8费,留存115), 乘风浮龙(8费,留存100), 先觉蜿变幼龙(7费,留存85), 现场播报员(4费,留存65), 喷发火山(3费,留存65), 先行打击(2费,留存57), 影焰晕染(2费,留存57), 灼热裂隙(2费,留存57), 永时困苦(1费,留存52), 烈火炙烤(1费,留存52)
-# cards: CORE_EX1_414 CORE_REV_990 EDR_456 EDR_457 FIR_939 TLC_600 TIME_034 TIME_750 END_020 END_033 CATA_556 CATA_210 CATA_582 CATA_584 CATA_585 CATA_614
-AAECAQcCi6AE+cMHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
-
-# name: Control Warrior V2 | arch: control
-# class: WARRIOR | class_cn: 战士
-# retain_cards: 格罗玛什·地狱咆哮(8费,留存115), 乘风浮龙(8费,留存100), 先觉蜿变幼龙(7费,留存85), 梦魇之王萨维斯(4费,留存70), 现场播报员(4费,留存65), 喷发火山(3费,留存65), 先行打击(2费,留存57), 影焰晕染(2费,留存57), 灼热裂隙(2费,留存57), 永时困苦(1费,留存52)
-# cards: CORE_EX1_414 CORE_REV_990 EDR_456 EDR_457 EDR_856 FIR_939 TLC_600 TIME_034 TIME_750 END_020 END_033 CATA_556 CATA_210 CATA_582 CATA_584 CATA_585
-AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB7XAB/bBB5XCB5vCB5zCBwAA
-
-# name: Control Warrior V3 | arch: control
-# class: WARRIOR | class_cn: 战士
-# retain_cards: 格罗玛什·地狱咆哮(8费,留存115), 乘风浮龙(8费,留存100), 先觉蜿变幼龙(7费,留存85), 梦魇之王萨维斯(4费,留存70), 现场播报员(4费,留存65), 喷发火山(3费,留存65), 先行打击(2费,留存57), 影焰晕染(2费,留存57), 灼热裂隙(2费,留存57), 永时困苦(1费,留存52)
-# cards: CORE_EX1_414 CORE_REV_990 EDR_456 EDR_457 EDR_856 FIR_939 TLC_600 TIME_034 TIME_750 END_020 END_033 CATA_111 CATA_556 CATA_582 CATA_584 CATA_585
-AAECAQcCi6AEw4MHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB9CyB+yyB4S9B7XAB5XCB5vCB5zCBwAA
-
-# name: Aggro Paladin V2 | arch: aggro
-# class: PALADIN | class_cn: 圣骑士
-# retain_cards: 飞龙机动(4费,留存42), 过去的诺莫瑞根(2费,留存15), 超时空鳍侠(2费,留存10), 龙鳞军备(1费,留存7), 紫色珍鳃鱼人(2费,留存0), 讲故事的始祖龟(2费,留存0), 抛石鱼人(2费,留存-10), 正义保护者(1费,留存-15), 鱼人招潮者(1费,留存-15), 冰川裂片(1费,留存-20)
-# cards: CORE_EX1_509 CORE_ICC_038 CORE_UNG_205 CORE_ULD_723 EDR_251 EDR_849 TLC_427 TLC_438 TLC_603 TLC_249 TLC_254 TIME_706 TIME_044 CATA_556 CATA_210 CATA_479
-AAECAZ8FAvGbB8avBw6roATJoATTngbUngbP/gb1gQeFlQe6lgfXlwfOmwf1rwe1wAf2wQeDwgcAAA==
-
-# class: SHAMAN | class_cn: 萨满
-# retain_cards: 灭世者死亡之翼(10费,留存115), 穆拉丁的奋战(9费,留存107), 奥拉基尔，风暴之主(8费,留存90), 奥卓克希昂(6费,留存70), 高山之王的战锤(6费,留存70), 高山之王穆拉丁(5费,留存60), 天神下凡形态(3费,留存47), 闪电风暴(3费,留存47), 末世特使(5费,留存45), 导航员伊莉斯(4费,留存45)
-# cards: CORE_EX1_246 CORE_EX1_259 EDR_856 TLC_222 TLC_100 TIME_209 TIME_209t TIME_209t2 TIME_213 CORE_WC_042 TIME_218 CATA_722 CATA_497 CATA_561 CATA_565 CATA_568 CATA_210 CATA_153 CATA_190h CORE_GIL_531
-AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
-
-# class: DEMONHUNTER | class_cn: 恶魔猎手
-# retain_cards: 永时坚垒(6费,留存80), 怒火狱犬(4费,留存57), 盛宴之角(4费,留存52), 飞龙之眠(3费,留存52), 绵延传承(3费,留存47), 命源(3费,留存42), 燃薪咒符(2费,留存42), 塞纳留斯之斧(3费,留存40), 布洛克斯加的奋战(2费,留存37), 虫害侵扰(2费,留存37)
-# cards: CORE_YOP_001 EDR_840 EDR_820 FIR_902 TLC_902 DINO_136 TIME_020 TIME_020t1 TIME_020t2 TIME_443 TIME_444 TIME_446 TIME_448 TIME_449 END_007 CATA_526 CATA_528
-AAECAea5AwSKqgeSqgeTqgensQcN4fgF3v8G/oMHqocHtpcH550HnrEHobEHv7EHwLEH6LEHkr8Hlb8HAAA=
-
-# class: DEMONHUNTER | class_cn: 恶魔猎手
-# retain_cards: 永时坚垒(6费,留存80), 怒火狱犬(4费,留存57), 盛宴之角(4费,留存52), 飞龙之眠(3费,留存52), 奈瑟匹拉，蒙难古灵(3费,留存50), 绵延传承(3费,留存47), 燃薪咒符(2费,留存42), 塞纳留斯之斧(3费,留存40), 布洛克斯加的奋战(2费,留存37), 虫害侵扰(2费,留存37)
-# cards: CORE_YOP_001 EDR_840 EDR_820 FIR_902 TLC_900 TLC_902 DINO_136 TIME_020 TIME_020t1 TIME_020t2 TIME_443 TIME_444 TIME_446 TIME_449 END_007 CATA_526 CATA_527 CATA_528
-AAECAea5AwaKqgeSqgeTqgensQfosQeUvwcM4fgF3v8G/oMHqocHtJcHtpcH550HnrEHobEHwLEHkr8Hlb8HAAA=
-
-# class: DEMONHUNTER | class_cn: 恶魔猎手
-# retain_cards: 永时坚垒(6费,留存80), 怒火狱犬(4费,留存57), 盛宴之角(4费,留存52), 眼棱(3费,留存52), 飞龙之眠(3费,留存52), 奈瑟匹拉，蒙难古灵(3费,留存50), 绵延传承(3费,留存47), 燃薪咒符(2费,留存42), 塞纳留斯之斧(3费,留存40), 布洛克斯加的奋战(2费,留存37)
-# cards: CORE_BT_801 CORE_YOP_001 EDR_840 EDR_820 FIR_902 TLC_900 TLC_902 DINO_136 TIME_020 TIME_020t1 TIME_020t2 TIME_443 TIME_444 TIME_446 TIME_449 END_007 CATA_526 CATA_527 CATA_528
-AAECAea5AwjsoAS0lweKqgeSqgeTqgensQfosQeUvwcL4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEHkr8Hlb8HAAA=
-
-# name: Face Hunter | arch: aggro
-# class: HUNTER | class_cn: 猎人
-# retain_cards: 直面托维尔(3费,留存32), 精确射击(2费,留存22), 游侠将军希尔瓦娜斯(3费,留存20), 环形山的尼利(3费,留存20), 希尔瓦娜斯的胜利(2费,留存12), 游侠新兵温蕾萨(3费,留存10), 游侠队长奥蕾莉亚(3费,留存10), 奥术射击(1费,留存7), 追踪术(1费,留存7), 击伤猎物(1费,留存2)
-# cards: CORE_DS1_184 CORE_DS1_185 CORE_UNG_205 CORE_BAR_801 TLC_427 TLC_249 DINO_434 TIME_600 TIME_606 TIME_609t1 TIME_609t2 TIME_609 TIME_601 TLC_836 CATA_557 CATA_558 CATA_560
-AAECAR8EmacHmqcHm6cHxbEHDamfBKqfBNOeBq+SB4WVB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
-
-# name: Ramp Druid | arch: midrange
-# class: DRUID | class_cn: 德鲁伊
-# retain_cards: 柳牙(6费,留存80), 阿梅达希尔(5费,留存80), 奔行豹面具(4费,留存67), 荒林怪圈(4费,留存67), 过热(3费,留存57), 护巢龙(4费,留存55), 森林赠礼(3费,留存52), 待哺群雏(2费,留存47), 丰裕之角(2费,留存42), 孵化辅助师(3费,留存40)
-# cards: CORE_EX1_169 CORE_AT_037 EDR_270 FIR_906 FIR_907 TLC_232 TLC_233 TLC_603 DINO_432 TIME_701 CATA_131 CATA_132 CATA_134 CATA_139 CATA_138 CATA_210
-AAECAZICAq+HB+DABw6unwSB1ASIgweuhweSlweUlwfXlwe4nweqrwfXwAfYwAfbwAfswAf2wQcAAA==
-
-# class: DRUID | class_cn: 德鲁伊
-# retain_cards: 火光之龙菲莱克(10费,留存105), 莎拉达希尔(8费,留存102), 伊瑟拉，翡翠守护巨龙(9费,留存95), 梦境之龙麦琳瑟拉(8费,留存90), 地底虫王(7费,留存75), 纳拉雷克斯，龙群先锋(7费,留存75), 柳牙(6费,留存70), 阿梅达希尔(5费,留存70), 暮光时空撕裂者(6费,留存60), 导航员伊莉斯(4费,留存45)
-# cards: CORE_EX1_169 EDR_000 EDR_844 EDR_270 EDR_846 EDR_856 FIR_907 FIR_959 TLC_100 TIME_701 TIME_702 END_007 END_010 END_011 CATA_111 CATA_131 CATA_132 CATA_139 CATA_140 CORE_RLK_657
-AAECAZICCqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LABwqunwSIgweqrwesrwfosQe+sgeEvQfXwAfYwAeT8QcAAA==
-
-# class: DRUID | class_cn: 德鲁伊
-# retain_cards: 火光之龙菲莱克(10费,留存105), 莎拉达希尔(8费,留存102), 伊瑟拉，翡翠守护巨龙(9费,留存95), 梦境之龙麦琳瑟拉(8费,留存90), 地底虫王(7费,留存75), 纳拉雷克斯，龙群先锋(7费,留存75), 柳牙(6费,留存70), 阿梅达希尔(5费,留存70), 暮光时空撕裂者(6费,留存60), 导航员伊莉斯(4费,留存45)
-# cards: CORE_EX1_169 EDR_000 EDR_844 EDR_270 EDR_846 EDR_856 FIR_907 FIR_959 TLC_100 TIME_701 TIME_702 END_007 END_010 END_011 CATA_111 CATA_131 CATA_132 CATA_139 CATA_140 CATA_135 CORE_RLK_657
-AAECAZICDKn1BqGBB5KDB8ODB6+HB6yIB4KYB+ixB7iyB+DAB+LAB4/BBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
-
-# name: Miracle Rogue | arch: combo
-# class: ROGUE | class_cn: 盗贼
-# retain_cards: 灭世者死亡之翼(10费,留存135), 奥卓克希昂(6费,留存90), 希奈丝特拉(6费,留存90), 潜踪大师奥普(6费,留存90), 半兽人迦罗娜(4费,留存70), 梦魇之王萨维斯(4费,留存65), 米尔雷斯，晶化镜甲龙(3费,留存60), 暮光祭礼(2费,留存57), 闪回(2费,留存57), 癫狂的追随者(3费,留存55)
-# cards: CORE_EX1_145 CORE_SW_072 EDR_852 EDR_528 EDR_856 DINO_407 TLC_522 TIME_875 TIME_875t TIME_875t1 CORE_DMF_511 TIME_039 TIME_711 END_000 CATA_497 CATA_200 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567
-AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwn3nwT3gQeQgweMrQfHrgfZrweaswedxQfVxQcAAA==
-
-# name: Miracle Rogue V2 | arch: combo
-# class: ROGUE | class_cn: 盗贼
-# retain_cards: 灭世者死亡之翼(10费,留存135), 奥卓克希昂(6费,留存90), 希奈丝特拉(6费,留存90), 潜踪大师奥普(6费,留存90), 半兽人迦罗娜(4费,留存70), 梦魇之王萨维斯(4费,留存65), 米尔雷斯，晶化镜甲龙(3费,留存60), 暮光祭礼(2费,留存57), 闪回(2费,留存57), 癫狂的追随者(3费,留存55)
-# cards: CORE_EX1_145 CORE_SW_072 EDR_852 EDR_528 EDR_856 DINO_407 TLC_522 TIME_875 TIME_875t TIME_875t1 CORE_DMF_511 TIME_039 TIME_711 END_000 CATA_497 CATA_200 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567
-AAECAaIHDM2eBsODB9GdB+ylB4aoB4eoB4ioB8euB9C/B4rUB5vUB4jZBwn3nwT3gQeQgweMrQfZrweaswe0wQedxQfVxQcAAA==
-
-# name: Quest Mage | arch: combo
-# class: MAGE | class_cn: 法师
-# retain_cards: 操控时间(4费,留存37), 米罗克(4费,留存25), 梦魇之王萨维斯(4费,留存25), 拾荒清道夫(1费,留存17), 生命火花(1费,留存17), 石丘防御者(3费,留存15), 亢祖(3费,留存15), 符文宝珠(2费,留存12), 迅猛龙先锋(3费,留存10), 焚火林地(2费,留存7)
-# cards: Core_UNG_072 EDR_517 EDR_856 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
-AAECAf0EBu/8BsODB7OHB6ebB/KyB5PaBwyb8gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
-
-# name: Aggro Mage | arch: aggro
-# class: MAGE | class_cn: 法师
-# retain_cards: 科技恐龙(7费,留存50), 操控时间(4费,留存37), 乱翻库存(3费,留存27), 米罗克(4费,留存25), 亢祖(3费,留存20), 焚火林地(2费,留存17), 禁忌序列(1费,留存17), 符文宝珠(2费,留存12), 迅猛龙先锋(3费,留存10), 初始之火(1费,留存7)
-# cards: Core_UNG_072 EDR_517 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
-AAECAf0EBO/8BqebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
-
-# class: ROGUE | class_cn: 盗贼
-# retain_cards: 灭世者死亡之翼(10费,留存115), 莎拉达希尔(8费,留存102), 暮光主母(9费,留存95), 纳拉雷克斯，龙群先锋(7费,留存75), 奥卓克希昂(6费,留存70), 希奈丝特拉(6费,留存70), 潜踪大师奥普(6费,留存70), 半兽人迦罗娜(4费,留存50), 导航员伊莉斯(4费,留存45), 梦魇之王萨维斯(4费,留存45)
-# cards: CORE_EX1_145 EDR_844 EDR_846 EDR_856 TLC_515 TLC_100 TLC_522 TIME_875 TIME_875t TIME_875t1 CORE_DMF_511 TIME_711 CATA_497 CATA_200 CATA_201 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567 CORE_BT_701
-AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwTBlweMrQfZrwe0wQfAwQedxQfVxQfD8gcAAA==
-
-# class: ROGUE | class_cn: 盗贼
-# retain_cards: 灭世者死亡之翼(10费,留存115), 奥卓克希昂(6费,留存70), 希奈丝特拉(6费,留存70), 半兽人迦罗娜(4费,留存50), 明耀织梦者(4费,留存40), 暮光祭礼(2费,留存37), 闪回(2费,留存37), 时光锯刃(3费,留存35), 癫狂的追随者(3费,留存35), 不测之变(2费,留存32)
-# cards: CORE_EX1_145 CORE_SW_072 CORE_SW_066 CORE_UNG_205 EDR_860 EDR_852 TIME_875 TIME_875t TIME_875t1 CORE_DMF_511 TIME_711 END_000 END_001 CATA_497 CATA_200 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567
-AAECAaIHCs2eBs6eBoaoB4eoB4ioB9C/B7TBB4rUB5vUB4jZBwr3nwTTngac+wb3gQeMrQfZrweaswe6swedxQfVxQcAAA==
-
-# name: Aggro Mage V2 | arch: aggro
-# class: MAGE | class_cn: 法师
-# retain_cards: 科技恐龙(7费,留存50), 操控时间(4费,留存37), 乱翻库存(3费,留存27), 梦魇之王萨维斯(4费,留存25), 米罗克(4费,留存25), 焚火林地(2费,留存17), 禁忌序列(1费,留存17), 符文宝珠(2费,留存12), 迅猛龙先锋(3费,留存10), 初始之火(1费,留存7)
-# cards: Core_UNG_072 EDR_856 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
-AAECAf0EBMODB6ebB/KyB5PaBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
-
-# name: Control Death Knight | arch: control
-# class: DEATHKNIGHT | class_cn: 死亡骑士
-# retain_cards: 灭世者死亡之翼(10费,留存140), 莎拉达希尔(8费,留存127), 复活的奥妮克希亚(9费,留存125), 试验演示(6费,留存97), 奥卓克希昂(6费,留存95), 愤怒残魂(7费,留存90), 悼念成真(4费,留存82), 重生的翼手龙(5费,留存80), 馆长(5费,留存80), 永时收割者哈斯克(4费,留存75)
-# cards: RLK_708 CORE_RLK_066 EDR_105 EDR_814 EDR_813 EDR_846 EDR_856 CORE_REV_023 TLC_436 TLC_100 DINO_417 CORE_KAR_061 TIME_616 TIME_618 END_004 CATA_722 CATA_497 CATA_156 CATA_780 CATA_155 CATA_190h
-AAECAfHhBAyH9gS1+gaSgwfDgweDigeCmAf0qgeosQfisQfQvwfqyQeb1AcJ2OUGgf0Gl4IHupUHn54HkasHj74HmsUH0MUHAAA=
-
-# name: Reno Warlock | arch: control
-# class: WARLOCK | class_cn: 术士
-# retain_cards: 绝息剑龙(8费,留存105), 怪异触手(6费,留存102), 末日使者安布拉(7费,留存100), 着魔的动物术师(5费,留存75), 暮光神坛(4费,留存75), 地狱烈焰(3费,留存67), 诅咒之链(2费,留存67), 凯洛斯的蛋(3费,留存60), 吸取灵魂(2费,留存57), 焚烧(1费,留存52)
-# cards: CORE_CS2_062 CORE_CS2_188 CORE_ICC_055 CORE_BOT_222 EDR_491 FIR_954 TLC_106 TLC_451 TLC_252 DINO_410 DINO_131 DINO_411 DINO_132 CATA_725 CATA_491 CATA_492 CATA_496
-AAECAf0GBMSeBvWYB+ybB9edBw2PnwSRoATnoATrhAepiAeEmQfenQfgnQfhnQeTvgfXvgfYvgfgvgcAAA==
-
+# name: 控制牧 | arch: unknown
 # class: PRIEST | class_cn: 牧师
 # retain_cards: 圣地卡拉赞(10费,留存110), 圣杖埃提耶什(10费,留存110), 圣者麦迪文(10费,留存110), 月亮井(6费,留存82), 黑血(7费,留存80), 麦迪文的胜利(5费,留存72), 暗言术：毁(4费,留存62), 昔时古树(5费,留存50), 纠缠宿命(3费,留存47), 净化祭司(4费,留存45)
 # cards: CORE_EX1_197 CORE_AT_055 EDR_449 EDR_476 EDR_970 EDR_979 TLC_817 TIME_890 TIME_890t TIME_890t2 TIME_432 END_025 CATA_300 CATA_301 CATA_302 CATA_216 CATA_308 CORE_BAR_311
 AAECAa0GBqiWB/ypB4CqB4SqB+SyB4O/BwzwnwTLoASg+wbD/waFhge2lAedrQeFvwebvweixAeyxQeW/AcAAA==
 
-# name: Control Death Knight V2 | arch: control
-# class: DEATHKNIGHT | class_cn: 死亡骑士
-# retain_cards: 灭世者死亡之翼(10费,留存140), 复活的奥妮克希亚(9费,留存125), 白骨卫士指挥官(8费,留存105), 试验演示(6费,留存97), 奥卓克希昂(6费,留存95), 愤怒残魂(7费,留存90), 悼念成真(4费,留存82), 重生的翼手龙(5费,留存80), 永时收割者哈斯克(4费,留存75), 末日使者之杖(3费,留存75)
-# cards: RLK_708 CORE_RLK_066 EDR_814 EDR_813 EDR_856 TLC_436 TLC_100 TLC_245 DINO_417 TIME_616 TLC_EVENT_402 TIME_618 END_004 CATA_467 CATA_497 CATA_156 CATA_780 CATA_155 CATA_190h CORE_RLK_506
-AAECAfHhBAqH9gTDgweCmAfSrgeosQfisQfQvwfqyQeb1AfO6gcK2OUGgf0Gl4IHupUH0JsHn54HkasHjr8HmsUH0MUHAAA=
+# name: 兆示萨 | arch: unknown
+# class: SHAMAN | class_cn: 萨满
+# retain_cards: 灭世者死亡之翼(10费,留存115), 穆拉丁的奋战(9费,留存107), 奥拉基尔，风暴之主(8费,留存90), 奥卓克希昂(6费,留存70), 高山之王的战锤(6费,留存70), 高山之王穆拉丁(5费,留存60), 天神下凡形态(3费,留存47), 闪电风暴(3费,留存47), 末世特使(5费,留存45), 梦魇之王萨维斯(4费,留存45)
+# cards: CORE_EX1_246 CORE_EX1_259 EDR_856 TLC_222 TIME_209 TIME_209t TIME_209t2 TIME_213 CORE_WC_042 TIME_218 CATA_722 CATA_497 CATA_561 CATA_565 CATA_568 CATA_210 CATA_153 CATA_190h CORE_GIL_531
+AAECAaoICK+fBMODB9umB9+mB+WmB9C/B4LUB5vUBwv9nwTmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
 
-# name: Highlander Priest | arch: control
-# class: PRIEST | class_cn: 牧师
-# retain_cards: 圣地卡拉赞(10费,留存135), 圣杖埃提耶什(10费,留存135), 圣者麦迪文(10费,留存135), 月亮井(6费,留存107), 黑血(7费,留存105), 麦迪文的胜利(5费,留存97), 暗言术：毁(4费,留存87), 墓晨太阳花(4费,留存77), 纠缠宿命(3费,留存72), 净化祭司(4费,留存70)
-# cards: CORE_EX1_197 CORE_AT_055 EDR_449 EDR_476 EDR_856 EDR_970 CORE_REV_023 TLC_816 TLC_817 TIME_890 TIME_890t TIME_890t2 TIME_432 END_025 CATA_300 CATA_301 CATA_303 CATA_302 CATA_216 CATA_308 CORE_BAR_311
-AAECAa0GDPCfBMP/BsODB4OKB8WUB6iWB/ypB4CqB4SqB+SyB4O/B5a/BwnLoASg+waFhgedrQeFvwebvweixAeyxQeW/AcAAA==
+# name: 铺场德 | arch: unknown
+# class: DRUID | class_cn: 德鲁伊
+# retain_cards: 柳牙(6费,留存70), 阿梅达希尔(5费,留存70), 奔行豹面具(4费,留存57), 荒林怪圈(4费,留存57), 过热(3费,留存47), 梦魇之王萨维斯(4费,留存45), 森林赠礼(3费,留存42), 待哺群雏(2费,留存37), 丰裕之角(2费,留存32), 孵化辅助师(3费,留存30)
+# cards: CORE_EX1_169 CORE_AT_037 EDR_270 EDR_856 FIR_906 FIR_907 TLC_232 TLC_233 TLC_603 DINO_130 DINO_432 TIME_701 CATA_131 CATA_134 CATA_139 CATA_138 CATA_210
+AAECAZICBMODB6+HB7ifB+DABw2unwSB1ASIgweuhweSlweUlwfXlwfanQeqrwfXwAfbwAfswAf2wQcAAA==
 
-# name: Aggro Mage V3 | arch: aggro
-# class: MAGE | class_cn: 法师
-# retain_cards: 科技恐龙(7费,留存50), 操控时间(4费,留存37), 乱翻库存(3费,留存27), 梦魇之王萨维斯(4费,留存25), 米罗克(4费,留存25), 亢祖(3费,留存20), 焚火林地(2费,留存17), 禁忌序列(1费,留存17), 符文宝珠(2费,留存12), 初始之火(1费,留存7)
-# cards: Core_UNG_072 EDR_517 EDR_856 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541
-AAECAf0EBO/8BsODB6ebB/KyBw2b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeT2geG4AcAAA==
+# name: 回合结束骑 | arch: unknown
+# class: PALADIN | class_cn: 圣骑士
+# retain_cards: 明日巨匠格尔宾(8费,留存90), 梅卡托克的光环(5费,留存67), 时序光环(5费,留存62), 飞龙机动(4费,留存62), 坚韧的托雷斯(5费,留存60), 诺兹多姆，青铜守护巨龙(5费,留存60), 侏儒光环(4费,留存57), 破鳞盾卫(6费,留存55), 沙怒光环(3费,留存47), 梦魇之王萨维斯(4费,留存45)
+# cards: CORE_ICC_038 CORE_SW_066 EDR_258 EDR_856 TLC_438 TIME_009 TIME_009t1 TIME_009t2 TIME_019 TIME_700 TIME_044 END_011 CATA_721 CATA_472 CATA_473 CATA_474 CATA_475 CATA_210 CATA_479 CATA_480
+AAECAZ8FCs6eBvD+BsODB+6oB++oB/CoB/WvB42+B+XBB6vGBwrJoAS6lgfLqQfErge+sgfiwQfowQfqwQf2wQeDwgcAAA==
 
-# class: MAGE | class_cn: 法师
-# retain_cards: 织法者的光辉(10费,留存112), 沃坎诺斯(7费,留存80), 奥术涌流(4费,留存57), 火球术(4费,留存52), 大法师卡雷(4费,留存50), 不稳定的施法者(4费,留存45), 奥术弹幕(3费,留存42), 咒术图书管理员(3费,留存35), 寒冰箭(2费,留存32), 初始之火(1费,留存27)
-# cards: CORE_CS2_029 CORE_EX1_012 CORE_CS2_024 FIR_929 TLC_226 TIME_855 CORE_DRG_107 END_022 CATA_452 CATA_458 CATA_483 CATA_484 CATA_485 CATA_487 CATA_488 CATA_489 CORE_SW_108
-AAECAf0EBJegBIi+B9fDB5HGBw39ngSF5gbHhweflgfopQeLsQfWsgfWvAeGxAeSxAebxAesxgeT2gcAAA==
+# name: 铺场德 | arch: unknown
+# class: DRUID | class_cn: 德鲁伊
+# retain_cards: 巴珊娜·符文图腾(7费,留存80), 柳牙(6费,留存70), 阿梅达希尔(5费,留存70), 奔行豹面具(4费,留存57), 荒林怪圈(4费,留存57), 过热(3费,留存47), 梦魇之王萨维斯(4费,留存45), 森林赠礼(3费,留存42), 待哺群雏(2费,留存37), 丰裕之角(2费,留存32)
+# cards: CORE_EX1_169 CORE_AT_037 EDR_270 EDR_856 FIR_906 FIR_907 TLC_232 TLC_233 TLC_603 DINO_130 DINO_432 TIME_701 CATA_131 CATA_134 CATA_139 CATA_138 CATA_210 MEND_046
+AAECAZICBsODB66HB6+HB7ifB+DAB+XEBwyunwSB1ASIgweSlweUlwfXlwfanQeqrwfXwAfbwAfswAf2wQcAAA==
 
-# class: MAGE | class_cn: 法师
-# retain_cards: 科技恐龙(7费,留存70), 操控时间(4费,留存57), 乱翻库存(3费,留存47), 梦魇之王萨维斯(4费,留存45), 米罗克(4费,留存45), 亢祖(3费,留存40), 禁忌序列(1费,留存37), 符文宝珠(2费,留存32), 迅猛龙先锋(3费,留存30), 时间之沙(1费,留存27)
-# cards: Core_UNG_072 EDR_105 EDR_517 EDR_856 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_BAR_541 CORE_EDR_004_2026
-AAECAf0EBO/8BsODB6ebB/KyBw2b8ga1+gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
+# name: 空手猎 | arch: unknown
+# class: HUNTER | class_cn: 猎人
+# retain_cards: 直面托维尔(3费,留存52), 精确射击(2费,留存42), 游侠将军希尔瓦娜斯(3费,留存40), 环形山的尼利(3费,留存40), 希尔瓦娜斯的胜利(2费,留存32), 游侠新兵温蕾萨(3费,留存30), 游侠队长奥蕾莉亚(3费,留存30), 奥术射击(1费,留存27), 追踪术(1费,留存27), 击伤猎物(1费,留存22)
+# cards: CORE_DS1_184 CORE_DS1_185 CORE_BAR_801 TLC_427 TLC_603 TLC_249 DINO_434 TIME_600 TIME_606 TIME_609t1 TIME_609t2 TIME_609 TIME_601 TLC_836 CATA_557 CATA_558 CATA_560
+AAECAR8EmacHmqcHm6cHxbEHDamfBKqfBK+SB4WVB9eXB86bB+6fB5CnB5inB9SvB7TAB7nAB7vABwAA
 
-# class: MAGE | class_cn: 法师
-# retain_cards: 科技恐龙(7费,留存70), 操控时间(4费,留存57), 乱翻库存(3费,留存47), 米罗克(4费,留存45), 焚火林地(2费,留存37), 禁忌序列(1费,留存37), 符文宝珠(2费,留存32), 迅猛龙先锋(3费,留存30), 初始之火(1费,留存27), 时间之沙(1费,留存27)
-# cards: Core_UNG_072 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
-AAECAf0EAqebB/KyBw6b8gazhwfxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeT2geG4AecgggAAA==
+# name: 空手猎 | arch: unknown
+# class: HUNTER | class_cn: 猎人
+# retain_cards: 直面托维尔(3费,留存52), 精确射击(2费,留存42), 游侠将军希尔瓦娜斯(3费,留存40), 牧人之杖(3费,留存40), 环形山的尼利(3费,留存40), 希尔瓦娜斯的胜利(2费,留存32), 游侠新兵温蕾萨(3费,留存30), 游侠队长奥蕾莉亚(3费,留存30), 奥术射击(1费,留存27), 追踪术(1费,留存27)
+# cards: CORE_DS1_184 CORE_DS1_185 CORE_UNG_205 EDR_416 CORE_BAR_801 TLC_427 TLC_249 DINO_434 TIME_600 TIME_606 TIME_609t1 TIME_609t2 TIME_609 TIME_601 TLC_836 CATA_557 CATA_558 CATA_560
+AAECAR8GoPcGmacHmqcHm6cH1K8HxbEHDKmfBKqfBNOeBq+SB4WVB86bB+6fB5CnB5inB7TAB7nAB7vABwAA
 
+# name: 无随从瞎 | arch: unknown
+# class: DEMONHUNTER | class_cn: 恶魔猎手
+# retain_cards: 永时坚垒(6费,留存80), 怒火狱犬(4费,留存57), 盛宴之角(4费,留存52), 飞龙之眠(3费,留存52), 奈瑟匹拉，蒙难古灵(3费,留存50), 绵延传承(3费,留存47), 燃薪咒符(2费,留存42), 塞纳留斯之斧(3费,留存40), 布洛克斯加的奋战(2费,留存37), 虫害侵扰(2费,留存37)
+# cards: CORE_YOP_001 EDR_840 EDR_820 FIR_902 TLC_900 TLC_902 DINO_136 TIME_020 TIME_020t1 TIME_020t2 TIME_443 TIME_444 TIME_446 TIME_449 END_007 CATA_526 CATA_527 CATA_528
+AAECAea5Awa0lweKqgeSqgeTqgensQeUvwcM4fgF3v8G/oMHqocHtpcH550HnrEHobEHwLEH6LEHkr8Hlb8HAAA=
+
+# name: 兆示萨 | arch: unknown
+# class: SHAMAN | class_cn: 萨满
+# retain_cards: 灭世者死亡之翼(10费,留存115), 穆拉丁的奋战(9费,留存107), 奥拉基尔，风暴之主(8费,留存90), 奥卓克希昂(6费,留存70), 高山之王的战锤(6费,留存70), 高山之王穆拉丁(5费,留存60), 天神下凡形态(3费,留存47), 闪电风暴(3费,留存47), 末世特使(5费,留存45), 导航员伊莉斯(4费,留存45)
+# cards: CORE_EX1_246 CORE_EX1_259 EDR_856 TLC_222 TLC_100 TIME_209 TIME_209t TIME_209t2 TIME_213 CORE_WC_042 TIME_218 CATA_722 CATA_497 CATA_561 CATA_565 CATA_568 CATA_210 CATA_153 CATA_190h CORE_GIL_531
+AAECAaoICq+fBP2fBMODB4KYB9umB9+mB+WmB9C/B4LUB5vUBwrmlgf1rAexsAe8sQePvgfDwAfJwAf3wAf2wQfm/QcAAA==
+
+# name: 打脸法 | arch: unknown
 # class: MAGE | class_cn: 法师
 # retain_cards: 织法者的光辉(10费,留存112), 沃坎诺斯(7费,留存80), 奥术涌流(4费,留存57), 火球术(4费,留存52), 大法师卡雷(4费,留存50), 不稳定的施法者(4费,留存45), 奥术弹幕(3费,留存42), 焚火林地(2费,留存37), 咒术图书管理员(3费,留存35), 寒冰箭(2费,留存32)
 # cards: CORE_CS2_029 CORE_EX1_012 CORE_CS2_024 FIR_911 FIR_929 TLC_226 TIME_855 CORE_DRG_107 END_022 CATA_452 CATA_458 CATA_483 CATA_484 CATA_485 CATA_487 CATA_488 CATA_489 CORE_SW_108
 AAECAf0EBpegBLOHB4i+B9fDB5HGB5PaBwz9ngSF5gbHhweflgfopQeLsQfWsgfWvAeGxAeSxAebxAesxgcAAA==
+
+# name: 无随从瞎 | arch: unknown
+# class: DEMONHUNTER | class_cn: 恶魔猎手
+# retain_cards: 永时坚垒(6费,留存80), 怒火狱犬(4费,留存57), 盛宴之角(4费,留存52), 飞龙之眠(3费,留存52), 绵延传承(3费,留存47), 命源(3费,留存42), 燃薪咒符(2费,留存42), 塞纳留斯之斧(3费,留存40), 布洛克斯加的奋战(2费,留存37), 虫害侵扰(2费,留存37)
+# cards: CORE_YOP_001 EDR_840 EDR_820 FIR_902 TLC_902 DINO_136 TIME_020 TIME_020t1 TIME_020t2 TIME_443 TIME_444 TIME_446 TIME_448 TIME_449 END_007 CATA_526 CATA_528
+AAECAea5AwSKqgeSqgeTqgensQcN4fgF3v8G/oMHqocHtpcH550HnrEHobEHv7EHwLEH6LEHkr8Hlb8HAAA=
+
+# name: 麦琳德 | arch: unknown
+# class: DRUID | class_cn: 德鲁伊
+# retain_cards: 火光之龙菲莱克(10费,留存105), 莎拉达希尔(8费,留存102), 伊瑟拉，翡翠守护巨龙(9费,留存95), 梦境之龙麦琳瑟拉(8费,留存90), 巴珊娜·符文图腾(7费,留存80), 地底虫王(7费,留存75), 纳拉雷克斯，龙群先锋(7费,留存75), 柳牙(6费,留存70), 阿梅达希尔(5费,留存70), 暮光时空撕裂者(6费,留存60)
+# cards: CORE_EX1_169 CORE_SW_072 EDR_000 EDR_844 EDR_270 EDR_846 EDR_856 FIR_907 FIR_959 TLC_100 TIME_701 TIME_702 END_010 END_011 CATA_111 CATA_131 CATA_132 CATA_139 CATA_140 MEND_046 CORE_RLK_657
+AAECAZICDM2eBqn1BqGBB5KDB8ODB6+HB6yIB4KYB7iyB+DAB+LAB+XEBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
+
+# name: companion-hunter | arch: unknown
+# class: HUNTER | class_cn: 猎人
+# retain_cards: 兽群呼唤(8费,留存102), 自由漫步(7费,留存92), 塔雅·陆行(5费,留存60), 布罗尔·熊皮(5费,留存60), 直面托维尔(3费,留存52), 动物伙伴(3费,留存42), 游侠将军希尔瓦娜斯(3费,留存40), 环形山的尼利(3费,留存40), 灵语猎手(4费,留存35), 游侠新兵温蕾萨(3费,留存30)
+# cards: CORE_DS1_184 CORE_EX1_059 CORE_NEW1_031 EDR_853 EDR_971 CORE_BAR_801 DINO_434 TIME_609t1 TIME_609t2 TIME_609 TLC_836 TIME_EVENT_999 CATA_560 MEND_300 MEND_301 MEND_303 MEND_304 MEND_307 CORE_OG_211
+AAECAR8InaAEqYEH7p8HmacHmqcHm6cHxbEH5MQHC6mfBInUBOKJB6+SB8u2B7vAB97EB+DEB+PEB/nEB6H9BwAA
+
+# name: 龙战 | arch: unknown
+# class: WARRIOR | class_cn: 战士
+# retain_cards: 格罗玛什·地狱咆哮(8费,留存90), 乘风浮龙(8费,留存75), 先觉蜿变幼龙(7费,留存60), 现场播报员(4费,留存40), 喷发火山(3费,留存40), 先行打击(2费,留存32), 影焰晕染(2费,留存32), 灼热裂隙(2费,留存32), 永时困苦(1费,留存27), 烈火炙烤(1费,留存27)
+# cards: CORE_EX1_414 CORE_REV_990 EDR_456 EDR_457 FIR_939 TLC_600 TIME_034 TIME_750 END_020 END_033 CATA_111 CATA_556 CATA_582 CATA_584 CATA_585 CATA_614
+AAECAQcCi6AE0LIHDuPmBqr8Bqv8BuiHB9KXB7etB4+xB+yyB4S9B7XAB5XCB5vCB5zCB/nDBwAA
+
+# name: companion-hunter | arch: unknown
+# class: HUNTER | class_cn: 猎人
+# retain_cards: 兽群呼唤(8费,留存102), 自由漫步(7费,留存92), 塔雅·陆行(5费,留存60), 布罗尔·熊皮(5费,留存60), 直面托维尔(3费,留存52), 动物伙伴(3费,留存42), 游侠将军希尔瓦娜斯(3费,留存40), 环形山的尼利(3费,留存40), 灵语猎手(4费,留存35), 游侠新兵温蕾萨(3费,留存30)
+# cards: CORE_DS1_184 CORE_EX1_059 CORE_NEW1_031 EDR_853 EDR_971 CORE_BAR_801 DINO_434 TIME_609t1 TIME_609t2 TIME_609 TLC_836 TIME_EVENT_999 CATA_560 MEND_300 MEND_301 MEND_303 MEND_304 MEND_307 CORE_OG_211
+AAECAR8InaAEidQEqYEHmacHmqcHm6cHxbEH5MQHC6mfBOKJB6+SB+6fB8u2B7vAB97EB+DEB+PEB/nEB6H9BwAA
+
+# name: 邪DK | arch: unknown
+# class: DEATHKNIGHT | class_cn: 死亡骑士
+# retain_cards: 投喂加餐(8费,留存97), 昨日之影(6费,留存77), 塔兰吉的奋战(5费,留存67), 愤怒残魂(7费,留存65), 墓地之力(4费,留存62), 重生的翼手龙(5费,留存55), 法瑞克(3费,留存40), 蛛魔护群守卫(4费,留存35), 不情愿的饲养员(3费,留存25), 命令之爪(2费,留存25)
+# cards: RLK_707 CORE_ULD_723 CORE_RLK_062 EDR_816 TLC_436 TLC_443 CORE_REV_308 TLC_245 CORE_EDR_003 TIME_610 TIME_059 END_004 CATA_465 CATA_467 CATA_471 CATA_210
+AAECAfHhBAKilwftnwcOhfYE1J4G1+UGyIwHupUHvJoH0JsH0q0HhrEH4rEHiL8Hjr8H/78H9sEHAAA=
+
+# name: 兆示贼 | arch: unknown
+# class: ROGUE | class_cn: 盗贼
+# retain_cards: 灭世者死亡之翼(10费,留存115), 莎拉达希尔(8费,留存102), 暮光主母(9费,留存95), 纳拉雷克斯，龙群先锋(7费,留存75), 奥卓克希昂(6费,留存70), 希奈丝特拉(6费,留存70), 潜踪大师奥普(6费,留存70), 半兽人迦罗娜(4费,留存50), 导航员伊莉斯(4费,留存45), 梦魇之王萨维斯(4费,留存45)
+# cards: CORE_EX1_145 CORE_UNG_205 EDR_844 EDR_846 EDR_856 TLC_515 TLC_100 TLC_522 TIME_875 TIME_875t TIME_875t1 TIME_039 CATA_497 CATA_200 CATA_201 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567 CORE_BT_701
+AAECAaIHDKGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZBwn3nwTTngbBlwfHrge0wQfAwQedxQfVxQfD8gcAAA==
+
+# name: 任务法 | arch: unknown
+# class: MAGE | class_cn: 法师
+# retain_cards: 科技恐龙(7费,留存70), 操控时间(4费,留存57), 乱翻库存(3费,留存47), 梦魇之王萨维斯(4费,留存45), 米罗克(4费,留存45), 亢祖(3费,留存40), 焚火林地(2费,留存37), 禁忌序列(1费,留存37), 符文宝珠(2费,留存32), 迅猛龙先锋(3费,留存30)
+# cards: Core_UNG_072 EDR_517 EDR_856 FIR_911 EDR_872 TLC_460 TLC_461 TLC_365 DINO_409 TIME_857 END_036 TIME_EVENT_999 CATA_614 CATA_484 CATA_485 CORE_SW_108 CORE_BAR_541 CORE_EDR_004_2026
+AAECAf0EBu/8BsODB7OHB6ebB/KyB5PaBwyb8gbxkQewmwf6mwfVnQfRpgfLtgf5wweGxAeSxAeG4AecgggAAA==
+
+# name: 麦琳德 | arch: unknown
+# class: DRUID | class_cn: 德鲁伊
+# retain_cards: 火光之龙菲莱克(10费,留存105), 莎拉达希尔(8费,留存102), 伊瑟拉，翡翠守护巨龙(9费,留存95), 梦境之龙麦琳瑟拉(8费,留存90), 巴珊娜·符文图腾(7费,留存80), 地底虫王(7费,留存75), 纳拉雷克斯，龙群先锋(7费,留存75), 柳牙(6费,留存70), 阿梅达希尔(5费,留存70), 暮光时空撕裂者(6费,留存60)
+# cards: CORE_EX1_169 EDR_000 EDR_844 EDR_270 EDR_846 EDR_856 FIR_907 FIR_959 TLC_100 TIME_701 TIME_702 END_007 END_010 END_011 CATA_111 CATA_131 CATA_132 CATA_139 CATA_140 MEND_046 CORE_RLK_657
+AAECAZICDKn1BqGBB5KDB8ODB6+HB6yIB4KYB+ixB7iyB+DAB+LAB+XEBwmunwSIgweqrwesrwe+sgeEvQfXwAfYwAeT8QcAAA==
+
+# name: 兆示贼 | arch: unknown
+# class: ROGUE | class_cn: 盗贼
+# retain_cards: 灭世者死亡之翼(10费,留存115), 莎拉达希尔(8费,留存102), 暮光主母(9费,留存95), 纳拉雷克斯，龙群先锋(7费,留存75), 奥卓克希昂(6费,留存70), 希奈丝特拉(6费,留存70), 潜踪大师奥普(6费,留存70), 半兽人迦罗娜(4费,留存50), 导航员伊莉斯(4费,留存45), 梦魇之王萨维斯(4费,留存45)
+# cards: CORE_EX1_145 CORE_SW_072 CORE_UNG_205 EDR_844 EDR_846 EDR_856 TLC_515 TLC_100 TLC_522 TIME_875 TIME_875t TIME_875t1 TIME_039 CATA_497 CATA_200 CATA_201 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567 CORE_BT_701
+AAECAaIHDs2eBqGBB5KDB8ODB4KYB+ylB4aoB4eoB4ioB9C/B4rUB5vUB4jZB8PyBwj3nwTTngbBlwfHrge0wQfAwQedxQfVxQcAAA==
+
+# name: 艾萨拉德 | arch: unknown
+# class: DRUID | class_cn: 德鲁伊
+# retain_cards: 伊瑟拉，翡翠守护巨龙(9费,留存95), 棘嗣幼龙(10费,留存90), 地底虫王(7费,留存75), 阿梅达希尔(5费,留存70), 暮光时空撕裂者(6费,留存60), 艾萨拉女士(5费,留存60), 永恒之井(4费,留存50), 辛艾萨莉(4费,留存50), 欢迎回家(3费,留存47), 根心之石(3费,留存42)
+# cards: CORE_EX1_169 EDR_000 EDR_453 EDR_270 FIR_907 TLC_231 TIME_211 TIME_211t1 TIME_211t2 TIME_701 TIME_702 END_007 END_010 END_011 CATA_131 TIME_EVENT_997 MEND_043 CORE_RLK_657
+AAECAZICBqn1BqX8Bq+HB/ioB/moB/qoBwyunwSIgweQlweqrwesrwfosQe4sge+sgfXwAeYxAfZxAeT8QcAAA==
+
+# name: 蛋战 | arch: unknown
+# class: WARRIOR | class_cn: 战士
+# retain_cards: 屠灭(6费,留存82), 末日使者安布拉(7费,留存75), 观察者娜博亚(6费,留存70), 为了荣耀！(5费,留存62), 龟甲旋风(4费,留存57), 梦魇之王萨维斯(4费,留存45), 凯洛斯的蛋(3费,留存35), 远祖之斧(3费,留存35), 放出鳄鱼(2费,留存32), 盾牌格挡(2费,留存32)
+# cards: CORE_EX1_391 CORE_EX1_606 CORE_EX1_007 CORE_REV_990 EDR_856 EDR_531 TLC_601 TLC_106 TLC_624 DINO_410 DINO_411 TLC_478 TIME_873 TIME_715 END_020 CATA_581 CATA_585
+AAECAQcEw4MH9ZgHn5kH150HDYagBI7UBJzUBOPmBsyPB9OXB+CdB9WmB+qnB/yvB9CyB7DBB5zCBwAA
+
+# name: 兆示蛋术 | arch: unknown
+# class: WARLOCK | class_cn: 术士
+# retain_cards: 灭世者死亡之翼(10费,留存115), 怪异触手(6费,留存77), 末日使者安布拉(7费,留存75), 暮光神坛(4费,留存50), 地狱烈焰(3费,留存42), 诅咒之链(2费,留存42), 凯洛斯的蛋(3费,留存35), 吸取灵魂(2费,留存32), 永时困苦(1费,留存27), 焚烧(1费,留存27)
+# cards: CORE_CS2_062 CORE_EX1_302 CORE_CS2_188 CORE_ICC_055 EDR_491 FIR_954 TLC_106 TLC_451 TLC_252 DINO_410 DINO_411 END_020 CATA_725 CATA_491 CATA_492 CATA_496 CATA_190h
+AAECAf0GBPWYB+ybB9edB5vUBw2PnwSxnwSRoATnoATrhAepiAeEmQfgnQfQsgeTvgfXvgfYvgfgvgcAAA==
+
+# name: 自定义 潜行者2 | arch: unknown
+# class: ROGUE | class_cn: 盗贼
+# retain_cards: 灭世者死亡之翼(10费,留存115), 莎拉达希尔(8费,留存102), 暮光主母(9费,留存95), 纳拉雷克斯，龙群先锋(7费,留存75), 奥卓克希昂(6费,留存70), 希奈丝特拉(6费,留存70), 潜踪大师奥普(6费,留存70), 导航员伊莉斯(4费,留存45), 梦魇之王萨维斯(4费,留存45), 异教地图(2费,留存37)
+# cards: CORE_EX1_145 CORE_SW_072 EDR_844 EDR_852 EDR_846 EDR_856 TLC_515 TLC_100 TLC_522 TIME_039 END_000 CATA_497 CATA_200 CATA_201 CATA_158 CATA_785 CATA_154 CATA_190h CORE_RLK_567 CORE_BT_701
+AAECAfahBwrNngahgQeSgwfDgweCmAfspQfQvweK1Aeb1AeI2QcK958E94EHwZcHx64HmrMHtMEHwMEHncUH1cUHw/IHAAA=
+
+# name: lvge 花苞牧 | arch: unknown
+# class: PRIEST | class_cn: 牧师
+# retain_cards: 圣地卡拉赞(10费,留存110), 圣杖埃提耶什(10费,留存110), 圣者麦迪文(10费,留存110), 月亮井(6费,留存82), 黑血(7费,留存80), 麦迪文的胜利(5费,留存72), 暗言术：毁(4费,留存62), 力敌万世(4费,留存57), 纠缠宿命(3费,留存47), 蒸汽清洁器(5费,留存45)
+# cards: CORE_CS1_112 CORE_EX1_197 EDR_449 EDR_476 EDR_852 EDR_856 EDR_970 CORE_REV_023 TLC_817 CORE_REV_946 TIME_890 TIME_890t TIME_890t2 TIME_432 END_025 END_028 CATA_300 CATA_216 CATA_308 MEND_100 CORE_BAR_311
+AAECAZq2BwyEnwTD/wbDgweDigeolgeTmwf8qQeAqgeEqgfksgfnsgeDvwcJ8J8EoPsG94EHhYYHna0HosQHssUHyccHlvwHAAA=

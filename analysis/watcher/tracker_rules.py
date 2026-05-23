@@ -226,16 +226,9 @@ class ShuffleTrackerRule:
                        controller: int, zone: int,
                        card_type: int, state: "GlobalGameState",
                        is_opp: bool) -> None:
-        """No-op."""
         pass
 
     def on_game_start(self, state: "GlobalGameState") -> None:
-        """No-op."""
-        pass
-
-    def on_turn_change(self, new_turn: int,
-                       state: "GlobalGameState") -> None:
-        """No-op."""
         pass
 
     def on_zone_change(self, ctx: TrackingContext) -> None:
@@ -243,20 +236,82 @@ class ShuffleTrackerRule:
             return
 
         if ctx.is_opp:
-            # Always track in the legacy list for backward compat
             if ctx.card_id:
                 ctx.state.opp_shuffled_into_deck.append(ctx.card_id)
-                # Mark as known card (we know what was shuffled)
                 ctx.state.opp_shuffled_known_cards[ctx.card_id] = True
             else:
-                # Unknown card shuffled (no card_id visible)
                 ctx.state.opp_shuffled_known_cards[f"unknown_{ctx.entity_id}"] = False
-            
-            # Track source if entity has birth info
             ctx.state.opp_shuffled_card_sources[ctx.entity_id] = ctx.card_id or ""
         else:
             if ctx.card_id:
                 ctx.state.player_shuffled_into_deck.append(ctx.card_id)
+
+    def on_turn_change(self, new_turn: int,
+                       state: "GlobalGameState") -> None:
+        pass
+
+
+class ShatterTrackerRule:
+    """Tracks Shatter (裂变) mechanic: when a card with Shatter is drawn,
+    it splits into two fragment cards in hand.
+
+    Detection:
+    - on_show_entity: when a card with SHATTER mechanic is revealed in HAND zone,
+      record the original card_id. When SETASIDE→HAND zone change produces
+      fragment cards, record them as shatter fragments.
+    - Fragment cards are confirmed hand cards (the opponent definitely has them).
+
+    In Power.log, Shatter manifests as:
+    1. Original card: DECK→HAND (draw), then immediately HAND→SETASIDE (split)
+    2. Two fragment cards: SETASIDE→HAND (appear in hand)
+    """
+
+    name = "shatter"
+
+    def __init__(self) -> None:
+        from analysis.card.constants.hs_enums import ZONE_HAND, ZONE_SETASIDE
+        self._ZONE_HAND = ZONE_HAND
+        self._ZONE_SETASIDE = ZONE_SETASIDE
+        self._shatter_card_ids: set = set()
+        try:
+            from analysis.card.data.card_data import get_db
+            db = get_db()
+            for cid, card in db._cards.items():
+                mechanics = card.get("mechanics", []) or []
+                text = card.get("text", "") or ""
+                en_text = card.get("englishText", "") or ""
+                if "SHATTER" in mechanics or "裂变" in text or "Shatter" in en_text:
+                    self._shatter_card_ids.add(cid)
+        except Exception:
+            pass
+
+    def on_show_entity(self, entity_id: int, card_id: str,
+                       controller: int, zone: int,
+                       card_type: int, state: "GlobalGameState",
+                       is_opp: bool) -> None:
+        if not is_opp or not card_id:
+            return
+        if zone == self._ZONE_HAND and card_id in self._shatter_card_ids:
+            if card_id not in state.opp_shatter_originals:
+                state.opp_shatter_originals.append(card_id)
+                logger.info("分裂卡牌检测: 对手抽到 %s (裂变)", card_id)
+
+    def on_game_start(self, state: "GlobalGameState") -> None:
+        pass
+
+    def on_zone_change(self, ctx: TrackingContext) -> None:
+        if not ctx.is_opp or not ctx.card_id:
+            return
+        if ctx.old_zone == self._ZONE_SETASIDE and ctx.new_zone == self._ZONE_HAND:
+            if ctx.state.opp_shatter_originals:
+                if ctx.card_id not in ctx.state.opp_shatter_fragments:
+                    ctx.state.opp_shatter_fragments.append(ctx.card_id)
+                if ctx.card_id not in ctx.state.opp_confirmed_hand_cards:
+                    ctx.state.opp_confirmed_hand_cards.append(ctx.card_id)
+
+    def on_turn_change(self, new_turn: int,
+                       state: "GlobalGameState") -> None:
+        pass
 
 
 class CorruptTrackerRule:

@@ -57,13 +57,13 @@ class DeckPoolTracker:
         # 初始可能池：优先用传入选定池（Bayesian 预选卡组），否则标准该职业+中立
         if initial_pool is not None:
             self._pool: Set[str] = set(initial_pool)
-            logger.info(
+            logger.debug(
                 "DeckPoolTracker[%s]: 使用预选卡组池 %d 张",
                 player_class, len(self._pool),
             )
         else:
             self._pool: Set[str] = self._build_initial_pool()
-            logger.info(
+            logger.debug(
                 "DeckPoolTracker[%s]: 初始池 %d 张",
                 player_class, len(self._pool),
             )
@@ -119,6 +119,17 @@ class DeckPoolTracker:
     def register_generated(self, card_id: str):
         """标记为衍生牌。"""
         self._generated.add(card_id)
+
+    def reset_tracking_state(self):
+        """重置追踪状态（保留初始池，清除已注册的打出/揭示记录）。
+
+        用于缓存的 DeckPoolTracker 实例：每次采样前重置，
+        避免跨回合累积过期的追踪数据。
+        """
+        self._confirmed_played.clear()
+        self._opp_non_derived_played.clear()
+        self._generated.clear()
+        self._all_revealed.clear()
 
     # ── 池查询 ─────────────────────────────────────────
 

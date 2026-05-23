@@ -6293,7 +6293,7 @@
       {
         "event": "IN_HAND",
         "spell": {
-          "class": "TODO"
+          "class": "ManaSpell"
         }
       }
     ]
@@ -6313,7 +6313,7 @@
   },
   "CATA_131": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "BuffSpell"
     }
   },
   "CATA_132": {
@@ -6336,6 +6336,9 @@
   },
   "CATA_134": {
     "ON_PLAY": {
+      "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
       "class": "SummonSpell"
     }
   },
@@ -6376,8 +6379,16 @@
   },
   "CATA_139": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
+      "class": "BuffSpell"
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "BuffSpell"
+        }
+      }
+    ]
   },
   "CATA_140": {
     "ON_PLAY": {
@@ -6396,16 +6407,9 @@
           }
         }
       }
-    ]
-  },
-  "CATA_151": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "CATA_153": {
-    "ON_PLAY": {
-      "class": "TODO"
+    ],
+    "DEATHRATTLE": {
+      "class": "MetaSpell"
     }
   },
   "CATA_154": {
@@ -6426,8 +6430,16 @@
   },
   "CATA_155": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
+      "class": "BuffSpell"
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "HealSpell"
+        }
+      }
+    ]
   },
   "CATA_156": {
     "ON_PLAY": {
@@ -6485,9 +6497,7 @@
   },
   "CATA_190h": {
     "ON_PLAY": {
-      "class": "TODO",
-      "text_raw": "Battlecry: Choose Cataclysm to unleash! Herald twice to upgrade.",
-      "note": "Herald mechanic: shows 3 options, picks one to improve. Hero card with stages."
+      "class": "ChooseOneSpell"
     }
   },
   "CATA_200": {
@@ -6515,13 +6525,16 @@
   },
   "CATA_206": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "CATA_208": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
+      "class": "SwapSpell"
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "SwapSpell"
+        }
+      }
+    ]
   },
   "CATA_209": {
     "ON_PLAY": {
@@ -6609,7 +6622,7 @@
       {
         "event": "AFTER_HEAL",
         "spell": {
-          "class": "TODO"
+          "class": "HealSpell"
         }
       }
     ]
@@ -6713,7 +6726,15 @@
         "provider": "spell_damage",
         "base": 15
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "CATA_308": {
     "ON_PLAY": {
@@ -6723,11 +6744,6 @@
         "provider": "spell_damage",
         "base": 4
       }
-    }
-  },
-  "CATA_432": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "CATA_452": {
@@ -6786,7 +6802,7 @@
       {
         "event": "AFTER_ATTACK",
         "spell": {
-          "class": "TODO"
+          "class": "ManaSpell"
         }
       }
     ]
@@ -6807,9 +6823,9 @@
     },
     "TRIGGERS": [
       {
-        "event": "IN_HAND",
+        "event": "AFTER_PLAY_CARD",
         "spell": {
-          "class": "TODO"
+          "class": "SummonSpell"
         }
       }
     ]
@@ -6817,13 +6833,14 @@
   "CATA_471": {
     "ON_PLAY": {
       "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "CATA_472": {
     "DEATHRATTLE": {
-      "class": "TODO",
-      "text_raw": "Deathrattle: Trigger a random friendly minion's end of turn effect.",
-      "note": "Complex: selects random friendly minion and re-triggers its TURN_END effect"
+      "class": "MetaSpell"
     }
   },
   "CATA_473": {
@@ -6947,7 +6964,7 @@
       {
         "event": "DORMANT",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
@@ -7131,7 +7148,21 @@
   "CATA_499": {
     "ON_PLAY": {
       "class": "SummonSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "AFTER_PLAY_CARD",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      },
+      {
+        "event": "AFTER_DISCARD",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
   },
   "CATA_525": {
     "ON_PLAY": {
@@ -7174,16 +7205,35 @@
           "class": "SummonSpell"
         }
       ]
-    }
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
   },
   "CATA_528": {
     "ON_PLAY": {
       "class": "SummonSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
   },
   "CATA_529": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CATA_530": {
@@ -7208,11 +7258,6 @@
   "CATA_550": {
     "ON_PLAY": {
       "class": "SummonSpell"
-    }
-  },
-  "CATA_551": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "CATA_552": {
@@ -7294,14 +7339,9 @@
       ]
     }
   },
-  "CATA_558": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CATA_560": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CATA_561": {
@@ -7390,9 +7430,7 @@
   },
   "CATA_580": {
     "ON_PLAY": {
-      "class": "TODO",
-      "text_raw": "Battlecry: Herald {0}.",
-      "note": "Herald mechanic: shows 3 options, picks one to improve card"
+      "class": "MetaSpell"
     }
   },
   "CATA_581": {
@@ -7482,6 +7520,9 @@
   "CATA_610": {
     "ON_PLAY": {
       "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "CATA_612": {
@@ -7492,7 +7533,7 @@
   },
   "CATA_613": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CATA_614": {
@@ -7507,7 +7548,7 @@
   },
   "CATA_616": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "ManaSpell"
     }
   },
   "CATA_621": {
@@ -7661,11 +7702,6 @@
       ]
     }
   },
-  "CATA_898": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CATA_978": {
     "ON_PLAY": {
       "class": "DamageSpell",
@@ -7701,7 +7737,7 @@
   },
   "CATA_EVENT_000": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "SummonSpell"
     }
   },
   "CATA_EVENT_001": {
@@ -7726,7 +7762,7 @@
   },
   "CATA_EVENT_110": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CFM_020": {
@@ -8858,7 +8894,7 @@
   },
   "CORE_AT_052": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CORE_AT_053": {
@@ -8884,6 +8920,9 @@
   },
   "CORE_AT_062": {
     "ON_PLAY": {
+      "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
       "class": "SummonSpell"
     }
   },
@@ -9225,7 +9264,7 @@
   },
   "CORE_BT_120": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "ChooseOneSpell"
     }
   },
   "CORE_BT_134": {
@@ -9243,15 +9282,10 @@
       {
         "event": "DORMANT",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
-  },
-  "CORE_BT_187": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
   },
   "CORE_BT_188": {
     "TRIGGERS": [
@@ -9445,7 +9479,15 @@
         "provider": "spell_damage",
         "base": 1
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "CORE_BT_514": {
     "ON_PLAY": {
@@ -9457,11 +9499,6 @@
       }
     }
   },
-  "CORE_BT_701": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_BT_707": {
     "ON_PLAY": {
       "class": "SummonSpell"
@@ -9470,11 +9507,9 @@
   "CORE_BT_781": {
     "TRIGGERS": [
       {
-        "event": "DAMAGE_PREVENTION",
+        "event": "CUSTOM_TRIGGER",
         "spell": {
-          "class": "TODO",
-          "text_raw": "Whenever your hero would take damage, this loses 1 Durability instead.",
-          "note": "Passive damage redirection: hero damage -> weapon durability loss"
+          "class": "ArmorSpell"
         }
       }
     ]
@@ -9514,13 +9549,16 @@
       {
         "event": "AFTER_ATTACK",
         "spell": {
-          "class": "TODO"
+          "class": "AddToHandSpell"
         }
       }
     ]
   },
   "CORE_CATA_006": {
     "ON_PLAY": {
+      "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
       "class": "SummonSpell"
     }
   },
@@ -9612,7 +9650,7 @@
   },
   "CORE_CFM_670": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CORE_CFM_751": {
@@ -10015,11 +10053,6 @@
       "class": "WeaponEquipSpell"
     }
   },
-  "CORE_CS2_179": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_CS2_181": {
     "ON_PLAY": {
       "class": "DamageSpell",
@@ -10410,11 +10443,6 @@
       "target": "TARGET"
     }
   },
-  "CORE_DRG_079": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_DRG_090": {
     "ON_PLAY": {
       "class": "TODO"
@@ -10539,7 +10567,7 @@
   },
   "CORE_ETC_523": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "HealSpell"
     }
   },
   "CORE_EX1_002": {
@@ -10582,11 +10610,6 @@
       "class": "TODO"
     }
   },
-  "CORE_EX1_010": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_EX1_011": {
     "ON_PLAY": {
       "class": "HealSpell",
@@ -10618,11 +10641,6 @@
     }
   },
   "CORE_EX1_017": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "CORE_EX1_028": {
     "ON_PLAY": {
       "class": "TODO"
     }
@@ -10661,7 +10679,7 @@
   },
   "CORE_EX1_059": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "HealSpell"
     }
   },
   "CORE_EX1_066": {
@@ -10745,7 +10763,15 @@
     "ON_PLAY": {
       "class": "CopySpell",
       "target": "TARGET"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "CopySpell"
+        }
+      }
+    ]
   },
   "CORE_EX1_103": {
     "ON_PLAY": {
@@ -11021,11 +11047,6 @@
       }
     ]
   },
-  "CORE_EX1_250": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_EX1_258": {
     "TRIGGERS": [
       {
@@ -11107,13 +11128,29 @@
     "ON_PLAY": {
       "class": "CounterSpell",
       "note": "Secret: When opponent casts a spell, Counter it"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "SECRET_TRIGGER",
+        "spell": {
+          "class": "SilenceSpell"
+        }
+      }
+    ]
   },
   "CORE_EX1_289": {
     "ON_PLAY": {
       "class": "ArmorSpell",
       "value": 8
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "SECRET_TRIGGER",
+        "spell": {
+          "class": "ArmorSpell"
+        }
+      }
+    ]
   },
   "CORE_EX1_294": {
     "ON_PLAY": {
@@ -11325,7 +11362,8 @@
       {
         "event": "WHEN_DAMAGED",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell",
+          "attack_bonus": 6
         }
       }
     ]
@@ -11337,7 +11375,8 @@
   },
   "CORE_EX1_507": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "BuffSpell",
+      "target": "FRIENDLY_MURLOCS"
     }
   },
   "CORE_EX1_509": {
@@ -11487,7 +11526,15 @@
       "class": "BuffSpell",
       "target": "TARGET",
       "attack_bonus": 1
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "WHEN_DAMAGED",
+        "spell": {
+          "class": "BuffSpell"
+        }
+      }
+    ]
   },
   "CORE_EX1_606": {
     "ON_PLAY": {
@@ -11512,7 +11559,15 @@
         "provider": "spell_damage",
         "base": 2
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "CORE_EX1_611": {
     "ON_PLAY": {
@@ -11729,15 +11784,18 @@
       }
     ]
   },
-  "CORE_GIL_558": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_GIL_577": {
     "ON_PLAY": {
       "class": "SummonSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "SECRET_TRIGGER",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
   },
   "CORE_GIL_580": {
     "ON_PLAY": {
@@ -11918,11 +11976,6 @@
       }
     }
   },
-  "CORE_GVG_085": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_GVG_103": {
     "TRIGGERS": [
       {
@@ -12030,11 +12083,6 @@
   "CORE_ICC_034": {
     "DEATHRATTLE": {
       "class": "SummonSpell"
-    }
-  },
-  "CORE_ICC_038": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "CORE_ICC_039": {
@@ -13246,7 +13294,7 @@
   },
   "CORE_LOOT_044": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "ArmorSpell"
     }
   },
   "CORE_LOOT_051": {
@@ -13272,7 +13320,15 @@
         "provider": "spell_damage",
         "base": 6
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "SECRET_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "CORE_LOOT_124": {
     "ON_PLAY": {
@@ -13282,11 +13338,6 @@
     }
   },
   "CORE_LOOT_125": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "CORE_LOOT_137": {
     "ON_PLAY": {
       "class": "TODO"
     }
@@ -13696,16 +13747,6 @@
       }
     ]
   },
-  "CORE_NEW1_022": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "CORE_NEW1_023": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_NEW1_026": {
     "TRIGGERS": [
       {
@@ -13761,7 +13802,7 @@
   },
   "CORE_OG_044": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "ChooseOneSpell"
     }
   },
   "CORE_OG_047": {
@@ -13817,7 +13858,8 @@
       {
         "event": "WHEN_DAMAGED",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell",
+          "attack_bonus": 3
         }
       }
     ]
@@ -15305,7 +15347,8 @@
   },
   "CORE_SCH_605": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "DamageSpell",
+      "target": "ADJACENT"
     }
   },
   "CORE_SCH_706": {
@@ -15358,7 +15401,15 @@
       "target": "SELF",
       "attack_bonus": 5,
       "health_bonus": 5
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "BuffSpell"
+        }
+      }
+    ]
   },
   "CORE_SW_066": {
     "ON_PLAY": {
@@ -15691,7 +15742,7 @@
       {
         "event": "TURN_END",
         "spell": {
-          "class": "TODO"
+          "class": "MetaSpell"
         }
       }
     ]
@@ -15711,7 +15762,15 @@
     "ON_PLAY": {
       "class": "DestroySpell",
       "target": "TARGET"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "SECRET_TRIGGER",
+        "spell": {
+          "class": "DestroySpell"
+        }
+      }
+    ]
   },
   "CORE_ULD_165": {
     "ON_PLAY": {
@@ -15799,11 +15858,6 @@
     "ON_PLAY": {
       "class": "DestroySpell",
       "target": "TARGET"
-    }
-  },
-  "CORE_ULD_723": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "CORE_UNG_018": {
@@ -15924,11 +15978,6 @@
       "class": "AddToHandSpell"
     }
   },
-  "CORE_UNG_928": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "CORE_UNG_941": {
     "ON_PLAY": {
       "class": "DiscoverSpell"
@@ -16045,7 +16094,7 @@
   },
   "CORE_WON_145": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "SummonSpell"
     }
   },
   "CORE_WON_337": {
@@ -16978,7 +17027,7 @@
   },
   "CS3_007": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CS3_008": {
@@ -17172,7 +17221,7 @@
   },
   "CS3_035": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "CS3_036": {
@@ -17191,11 +17240,6 @@
     }
   },
   "CS3_037": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "CS3_038": {
     "ON_PLAY": {
       "class": "TODO"
     }
@@ -19038,7 +19082,8 @@
       {
         "event": "AFTER_ATTACK",
         "spell": {
-          "class": "TODO"
+          "class": "DamageSpell",
+          "target": "ALL_ENEMY_MINIONS"
         }
       }
     ]
@@ -19082,7 +19127,15 @@
       "target": "SELF",
       "attack_bonus": 2,
       "health_bonus": 2
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_END",
+        "spell": {
+          "class": "BuffSpell"
+        }
+      }
+    ]
   },
   "DINO_406": {
     "ON_PLAY": {
@@ -19127,11 +19180,6 @@
     "DEATHRATTLE": {
       "class": "DrawSpell",
       "value": 2
-    }
-  },
-  "DINO_409": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "DINO_410": {
@@ -19184,6 +19232,9 @@
   "DINO_415": {
     "ON_PLAY": {
       "class": "DiscoverSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "DINO_416": {
@@ -19293,6 +19344,9 @@
         "provider": "spell_damage",
         "base": 2
       }
+    },
+    "DEATHRATTLE": {
+      "class": "DamageSpell"
     }
   },
   "DINO_430": {
@@ -21870,12 +21924,7 @@
   },
   "EDR_257": {
     "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "EDR_258": {
-    "ON_PLAY": {
-      "class": "TODO"
+      "class": "HealSpell"
     }
   },
   "EDR_259": {
@@ -21902,6 +21951,9 @@
       "target": "SELF",
       "attack_bonus": 2,
       "health_bonus": 2
+    },
+    "DEATHRATTLE": {
+      "class": "BuffSpell"
     }
   },
   "EDR_262": {
@@ -21977,11 +22029,9 @@
           ]
         }
       }
-    ]
-  },
-  "EDR_272": {
-    "ON_PLAY": {
-      "class": "TODO"
+    ],
+    "DEATHRATTLE": {
+      "class": "CopySpell"
     }
   },
   "EDR_273": {
@@ -22206,7 +22256,7 @@
       {
         "event": "AFTER_HERO_POWER",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
@@ -22280,16 +22330,6 @@
       ]
     }
   },
-  "EDR_477": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
-  "EDR_480": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "EDR_481": {
     "ON_PLAY": {
       "class": "MetaSpell",
@@ -22338,7 +22378,7 @@
       {
         "event": "AFTER_MINION_DEATH",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell"
         }
       }
     ]
@@ -22347,11 +22387,6 @@
     "DEATHRATTLE": {
       "class": "DrawSpell",
       "value": 1
-    }
-  },
-  "EDR_486": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "EDR_487": {
@@ -22367,6 +22402,9 @@
   },
   "EDR_488": {
     "ON_PLAY": {
+      "class": "DiscoverSpell"
+    },
+    "DEATHRATTLE": {
       "class": "DiscoverSpell"
     }
   },
@@ -22400,6 +22438,9 @@
       "class": "CopySpell",
       "target": "FRIENDLY_MINIONS_DIED_THIS_TURN",
       "copy_what": "DEATHRATTLE"
+    },
+    "DEATHRATTLE": {
+      "class": "MetaSpell"
     }
   },
   "EDR_492": {
@@ -22571,6 +22612,9 @@
           }
         }
       ]
+    },
+    "DEATHRATTLE": {
+      "class": "DamageSpell"
     }
   },
   "EDR_526": {
@@ -22670,11 +22714,6 @@
       "value": 2
     }
   },
-  "EDR_598": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "EDR_654": {
     "ON_PLAY": {
       "class": "ManaSpell",
@@ -22699,7 +22738,15 @@
   "EDR_781": {
     "ON_PLAY": {
       "class": "SummonSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
   },
   "EDR_800": {
     "ON_PLAY": {
@@ -22858,15 +22905,13 @@
   },
   "EDR_818": {
     "DEATHRATTLE": {
-      "class": "SummonSpell",
-      "card_id": "EDR_818t",
-      "count": "self_health"
+      "class": "SummonSpell"
     },
     "TRIGGERS": [
       {
         "event": "TURN_START",
         "spell": {
-          "class": "TODO"
+          "class": "SummonSpell"
         }
       }
     ]
@@ -22964,12 +23009,12 @@
   },
   "EDR_844": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "ManaSpell"
     }
   },
   "EDR_845": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "EDR_846": {
@@ -23303,9 +23348,7 @@
   },
   "END_001": {
     "ON_PLAY": {
-      "class": "TODO",
-      "text_raw": "Battlecry: Imbue your Hero Power.",
-      "note": "Imbue mechanic: upgrades hero power"
+      "class": "MetaSpell"
     }
   },
   "END_002": {
@@ -23397,7 +23440,7 @@
       {
         "event": "AFTER_HERO_POWER",
         "spell": {
-          "class": "TODO"
+          "class": "ManaSpell"
         }
       }
     ]
@@ -23420,7 +23463,7 @@
   },
   "END_010": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "HealSpell"
     }
   },
   "END_011": {
@@ -23431,7 +23474,15 @@
       "attack_bonus": 0,
       "health_bonus": 0,
       "note": "At start of your turn, gain a temporary mana crystal"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "ManaSpell"
+        }
+      }
+    ]
   },
   "END_012": {
     "ON_PLAY": {
@@ -23488,7 +23539,7 @@
   },
   "END_017": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "END_018": {
@@ -23557,7 +23608,7 @@
       {
         "event": "WHEN_DAMAGED",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell"
         }
       }
     ]
@@ -23583,7 +23634,15 @@
       "target": "ENEMY_MINION_HIGHEST_HP",
       "value": 99999,
       "note": "Secret: At end of opponent's turn, deal massive damage to highest-HP enemy minion"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "SECRET_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "END_025": {
     "ON_PLAY": {
@@ -23628,14 +23687,9 @@
       }
     ]
   },
-  "END_030": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "END_031": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "END_032": {
@@ -23650,7 +23704,7 @@
       {
         "event": "IN_HAND",
         "spell": {
-          "class": "TODO"
+          "class": "MetaSpell"
         }
       }
     ]
@@ -26986,7 +27040,15 @@
         "provider": "spell_damage",
         "base": 6
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "FIR_904": {
     "TRIGGERS": [
@@ -27324,7 +27386,8 @@
       {
         "event": "AFTER_ATTACK",
         "spell": {
-          "class": "TODO"
+          "class": "DamageSpell",
+          "target": "RANDOM_ENEMY_CHARACTER"
         }
       }
     ]
@@ -27347,7 +27410,15 @@
         "provider": "spell_damage",
         "base": 3
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "FIR_956": {
     "ON_PLAY": {
@@ -27378,7 +27449,7 @@
       {
         "event": "IN_HAND",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell"
         }
       }
     ]
@@ -34752,7 +34823,7 @@
       {
         "event": "DORMANT",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
@@ -34984,7 +35055,15 @@
       "class": "BuffSpell",
       "target": "TARGET",
       "health_bonus": 1
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "HealSpell"
+        }
+      }
+    ]
   },
   "MEND_802": {
     "ON_PLAY": {
@@ -43530,11 +43609,6 @@
       }
     }
   },
-  "TIME_020": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "TIME_021": {
     "OUTCAST": {
       "class": "AddKeywordSpell",
@@ -43549,7 +43623,7 @@
       {
         "event": "DORMANT",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
@@ -43567,7 +43641,15 @@
       "target": "SELF",
       "note": "下个回合开始时攻击力变为无穷大",
       "trigger": "TURN_START"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "BuffSpell"
+        }
+      }
+    ]
   },
   "TIME_025": {
     "ON_PLAY": {
@@ -43815,17 +43897,12 @@
       "health_bonus": 1
     }
   },
-  "TIME_045": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "TIME_046": {
     "TRIGGERS": [
       {
         "event": "DORMANT",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
@@ -43863,7 +43940,7 @@
       {
         "event": "WHEN_DAMAGED",
         "spell": {
-          "class": "TODO"
+          "class": "SwapSpell"
         }
       }
     ]
@@ -43886,7 +43963,7 @@
       {
         "event": "TURN_END",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell"
         }
       }
     ]
@@ -43900,11 +43977,6 @@
         }
       }
     ]
-  },
-  "TIME_056": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
   },
   "TIME_057": {
     "ON_PLAY": {
@@ -43934,7 +44006,7 @@
   },
   "TIME_060": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "TIME_061": {
@@ -43965,14 +44037,17 @@
       {
         "event": "AFTER_PLAY_CARD",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
   },
   "TIME_064": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "MetaSpell"
     }
   },
   "TIME_100": {
@@ -43996,7 +44071,15 @@
         "provider": "spell_damage",
         "base": 2
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "TIME_102": {
     "ON_PLAY": {
@@ -44068,7 +44151,15 @@
       "target": "SELF",
       "attack_bonus": 2,
       "health_bonus": 1
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "BuffSpell"
+        }
+      }
+    ]
   },
   "TIME_215": {
     "ON_PLAY": {
@@ -44225,7 +44316,7 @@
       {
         "event": "DORMANT",
         "spell": {
-          "class": "TODO"
+          "class": "DormantSpell"
         }
       }
     ]
@@ -44356,7 +44447,7 @@
   },
   "TIME_606": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "ManaSpell"
     }
   },
   "TIME_609": {
@@ -44446,6 +44537,9 @@
       "keyword": "DEATHRATTLE",
       "target": "FRIENDLY_HERO",
       "note": "英雄获得亡语：消耗最多20份残骸复活英雄"
+    },
+    "DEATHRATTLE": {
+      "class": "BuffSpell"
     }
   },
   "TIME_619": {
@@ -44473,7 +44567,15 @@
   "TIME_700": {
     "ON_PLAY": {
       "class": "SummonSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_END",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
   },
   "TIME_701": {
     "ON_PLAY": {
@@ -44557,14 +44659,14 @@
       {
         "event": "TURN_END",
         "spell": {
-          "class": "TODO"
+          "class": "SwapSpell"
         }
       }
     ]
   },
   "TIME_707": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "ChooseOneSpell"
     }
   },
   "TIME_710": {
@@ -44691,7 +44793,7 @@
   },
   "TIME_852": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "TIME_855": {
@@ -44706,7 +44808,7 @@
   },
   "TIME_856": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "MetaSpell"
     }
   },
   "TIME_857": {
@@ -44806,7 +44908,15 @@
   "TIME_876": {
     "ON_PLAY": {
       "class": "TransformSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "TransformSpell"
+        }
+      }
+    ]
   },
   "TIME_890": {
     "ON_PLAY": {
@@ -44863,6 +44973,9 @@
   "TIME_EVENT_997": {
     "ON_PLAY": {
       "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "TIME_EVENT_998": {
@@ -44899,7 +45012,8 @@
       {
         "event": "WHEN_DAMAGED",
         "spell": {
-          "class": "TODO"
+          "class": "BuffSpell",
+          "attack_bonus": 3
         }
       }
     ]
@@ -44918,6 +45032,9 @@
         "note": "Trigger deathrattle of random friendly minion that died this game"
       },
       "count": 5
+    },
+    "DEATHRATTLE": {
+      "class": "MetaSpell"
     }
   },
   "TLC_107": {
@@ -45067,12 +45184,13 @@
   },
   "TLC_228": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "BuffSpell",
+      "target": "FRIENDLY_ELEMENTALS"
     }
   },
   "TLC_229": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_230": {
@@ -45103,7 +45221,15 @@
   "TLC_232": {
     "ON_PLAY": {
       "class": "SummonSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
   },
   "TLC_233": {
     "ON_PLAY": {
@@ -45155,7 +45281,7 @@
   },
   "TLC_239": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_240": {
@@ -45217,6 +45343,9 @@
           "attack_bonus": 3
         }
       ]
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "TLC_246": {
@@ -45343,11 +45472,6 @@
       "class": "DiscoverSpell"
     }
   },
-  "TLC_366": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "TLC_401": {
     "DEATHRATTLE": {
       "class": "DamageSpell",
@@ -45407,11 +45531,14 @@
     "ON_PLAY": {
       "class": "DrawSpell",
       "value": 1
+    },
+    "DEATHRATTLE": {
+      "class": "DrawSpell"
     }
   },
   "TLC_433": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_434": {
@@ -45422,11 +45549,6 @@
   "TLC_435": {
     "ON_PLAY": {
       "class": "DiscoverSpell"
-    }
-  },
-  "TLC_436": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "TLC_438": {
@@ -45496,7 +45618,7 @@
   },
   "TLC_446": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_447": {
@@ -45537,7 +45659,7 @@
   },
   "TLC_452": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "BuffSpell"
     }
   },
   "TLC_454": {
@@ -45579,14 +45701,25 @@
   },
   "TLC_465": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "BuffSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "BuffSpell"
     }
   },
   "TLC_466": {
     "ON_PLAY": {
       "class": "DiscardSpell",
       "value": 1
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_END",
+        "spell": {
+          "class": "MetaSpell"
+        }
+      }
+    ]
   },
   "TLC_467": {
     "DEATHRATTLE": {
@@ -45627,6 +45760,9 @@
           "class": "SummonSpell"
         }
       ]
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "TLC_478": {
@@ -45666,12 +45802,23 @@
   "TLC_482": {
     "ON_PLAY": {
       "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "TLC_483": {
     "ON_PLAY": {
       "class": "DiscoverSpell"
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "ManaSpell"
+        }
+      }
+    ]
   },
   "TLC_513": {
     "ON_PLAY": {
@@ -45729,11 +45876,6 @@
       "class": "SummonSpell"
     }
   },
-  "TLC_520": {
-    "ON_PLAY": {
-      "class": "TODO"
-    }
-  },
   "TLC_521": {
     "ON_PLAY": {
       "class": "DiscoverSpell",
@@ -45785,7 +45927,7 @@
   },
   "TLC_602": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_603": {
@@ -45883,14 +46025,15 @@
       {
         "event": "WHEN_DAMAGED",
         "spell": {
-          "class": "TODO"
+          "class": "AddToHandSpell"
         }
       }
     ]
   },
   "TLC_631": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "DamageSpell",
+      "target": "TARGET"
     }
   },
   "TLC_632": {
@@ -45901,7 +46044,15 @@
         "provider": "spell_damage",
         "base": 8
       }
-    }
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "DamageSpell"
+        }
+      }
+    ]
   },
   "TLC_633": {
     "ON_PLAY": {
@@ -45916,6 +46067,9 @@
   "TLC_810": {
     "ON_PLAY": {
       "class": "SummonSpell"
+    },
+    "DEATHRATTLE": {
+      "class": "SummonSpell"
     }
   },
   "TLC_811": {
@@ -45923,7 +46077,7 @@
       {
         "event": "AFTER_ATTACK",
         "spell": {
-          "class": "TODO"
+          "class": "HealSpell"
         }
       }
     ]
@@ -45966,7 +46120,7 @@
   },
   "TLC_817": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_818": {
@@ -45974,11 +46128,6 @@
       "class": "GiveKeywordSpell",
       "target": "TARGET",
       "keyword": "Reborn"
-    }
-  },
-  "TLC_819": {
-    "ON_PLAY": {
-      "class": "TODO"
     }
   },
   "TLC_820": {
@@ -45992,7 +46141,7 @@
       {
         "event": "AFTER_HEAL",
         "spell": {
-          "class": "TODO"
+          "class": "HealSpell"
         }
       }
     ]
@@ -46002,7 +46151,7 @@
       {
         "event": "TURN_END",
         "spell": {
-          "class": "TODO"
+          "class": "ManaSpell"
         }
       }
     ]
@@ -46024,7 +46173,8 @@
   },
   "TLC_825": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "DamageSpell",
+      "target": "TARGET"
     }
   },
   "TLC_826": {
@@ -46069,7 +46219,7 @@
   },
   "TLC_830": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_831": {
@@ -46193,7 +46343,7 @@
   },
   "TLC_903": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "BuffSpell"
     }
   },
   "TLC_987": {
@@ -46208,7 +46358,7 @@
   },
   "TLC_EVENT_400": {
     "ON_PLAY": {
-      "class": "TODO"
+      "class": "QuestSpell"
     }
   },
   "TLC_EVENT_402": {
@@ -61246,5 +61396,182 @@
       "value": 2
     },
     "note": "Power.log: L24012, DAMAGE=2 (spell_damage affected). 1-cost spell: deal 2 to a minion."
+  },
+  "CORE_BT_921": {
+    "ON_PLAY": {
+      "class": "WeaponEquipSpell"
+    }
+  },
+  "Core_CS2_200": {},
+  "RLK_067": {
+    "ON_PLAY": {
+      "class": "WeaponEquipSpell"
+    }
+  },
+  "TIME_053": {
+    "ON_PLAY": {
+      "class": "SummonSpell"
+    }
+  },
+  "TLC_248": {
+    "ON_PLAY": {
+      "class": "BuffSpell",
+      "target": "FRIENDLY_MINIONS"
+    }
+  },
+  "EDR_598": {},
+  "TLC_520": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CORE_GIL_558": {},
+  "EDR_486": {},
+  "CS3_038": {},
+  "TIME_020": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CORE_BT_187": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CORE_GVG_085": {},
+  "TIME_056": {},
+  "CORE_UNG_928": {
+    "TRIGGERS": [
+      {
+        "event": "TURN_START",
+        "spell": {
+          "class": "BuffSpell",
+          "attack_bonus": 2
+        }
+      },
+      {
+        "event": "TURN_END",
+        "spell": {
+          "class": "BuffSpell",
+          "attack_bonus": -2
+        }
+      }
+    ]
+  },
+  "CORE_BT_701": {},
+  "CORE_EX1_250": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CORE_DRG_079": {},
+  "END_030": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CORE_EX1_010": {},
+  "CORE_NEW1_023": {},
+  "TLC_366": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CORE_ICC_038": {},
+  "CORE_ULD_723": {},
+  "CORE_CS2_179": {},
+  "CATA_208": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "DINO_409": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "TLC_819": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "TIME_045": {},
+  "EDR_272": {},
+  "CATA_432": {
+    "ON_PLAY": {
+      "class": "SummonSpell"
+    }
+  },
+  "CATA_551": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    },
+    "TRIGGERS": [
+      {
+        "event": "IN_HAND",
+        "spell": {
+          "class": "TransformSpell"
+        }
+      }
+    ]
+  },
+  "CATA_898": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CATA_151": {
+    "ON_PLAY": {
+      "class": "SummonSpell"
+    },
+    "TRIGGERS": [
+      {
+        "event": "CUSTOM_TRIGGER",
+        "spell": {
+          "class": "BuffSpell"
+        }
+      }
+    ]
+  },
+  "CORE_EX1_028": {},
+  "CORE_NEW1_022": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "EDR_477": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "TLC_436": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CORE_LOOT_137": {},
+  "CATA_558": {},
+  "EDR_480": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
+  },
+  "CATA_153": {
+    "ON_PLAY": {
+      "class": "SummonSpell"
+    },
+    "TRIGGERS": [
+      {
+        "event": "TURN_END",
+        "spell": {
+          "class": "SummonSpell"
+        }
+      }
+    ]
+  },
+  "EDR_258": {
+    "ON_PLAY": {
+      "class": "MetaSpell"
+    }
   }
 }

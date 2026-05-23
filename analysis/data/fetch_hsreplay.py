@@ -532,13 +532,17 @@ def build_archetype_db_from_deck_codes(conn, deck_codes_path=None):
             if not line:
                 continue
             if line.startswith("#"):
-                # Parse annotations: # name: X | arch: Y
                 name_match = re.search(r'name:\s*([^|]+)', line, re.IGNORECASE)
                 arch_match = re.search(r'arch:\s*(\w+)', line, re.IGNORECASE)
                 if name_match:
                     current_name = name_match.group(1).strip()
                 if arch_match:
                     current_arch = arch_match.group(1).strip().lower()
+                if not name_match:
+                    m = re.match(r'^###\s+(.+)', line)
+                    if m:
+                        current_name = m.group(1).strip()
+                        current_arch = None
                 continue
             # Deck code line
             if line.startswith("AAE"):
