@@ -51,6 +51,64 @@ def register_condition(kind: str) -> Callable:
 # 入口: resolve_condition
 # ═══════════════════════════════════════════════════════════════
 
+_CLASS_TO_KIND = {
+    "HandCondition": "HOLDING_RACE",
+    "HoldingCondition": "HOLDING_RACE",
+    "BoardCountCondition": "BOARD_COUNT",
+    "SelfCostCondition": "SELF_COST",
+    "CorruptCondition": "CORRUPT",
+    "DeckCondition": "DECK_CONDITION",
+    "DeckCostVarietyCondition": "DECK_COST_VARIETY",
+    "DidNotPlayLastTurnCondition": "DID_NOT_PLAY_LAST_TURN",
+    "HandUniqueCostCondition": "HAND_UNIQUE_COST",
+    "HasWeaponCondition": "HAS_WEAPON",
+    "ResourceCondition": "RESOURCE",
+}
+
+_STRING_TO_KIND = {
+    "HAND_CONTAINS_DRAGON": ("HOLDING_RACE", {"race": "DRAGON"}),
+    "DECK_MINION_TOTAL_COST_EQUALS_100": ("DECK_COST_VARIETY", {"total_cost": 100}),
+    "GUESS_CARD": ("GUESS_CARD", {}),
+    "UNTIL_HAND_SIZE": ("HAND_COUNT", {}),
+}
+
+
+def _normalize_condition(cond_desc) -> Optional[Dict]:
+    """将各种 condition 格式统一为 {"kind": ..., "params": ...} 格式。
+
+    支持的输入格式:
+      1. {"kind": "HOLDING_RACE", "params": {"race": "DRAGON"}}  — 标准格式
+      2. {"class": "HandCondition", "params": {"race": "DRAGON"}} — class 键格式
+      3. "HAND_CONTAINS_DRAGON"  — 字符串格式
+    """
+    if not cond_desc:
+        return None
+
+    if isinstance(cond_desc, str):
+        mapped = _STRING_TO_KIND.get(cond_desc)
+        if mapped:
+            return {"kind": mapped[0], "params": mapped[1]}
+        log.debug("未知字符串条件 %r，默认通过", cond_desc)
+        return None
+
+    if isinstance(cond_desc, dict):
+        if cond_desc.get("kind"):
+            return cond_desc
+        cls = cond_desc.get("class", "")
+        if cls:
+            kind = _CLASS_TO_KIND.get(cls)
+            if kind:
+                result = {"kind": kind}
+                params = cond_desc.get("params", {})
+                if params:
+                    result["params"] = params
+                return result
+            log.debug("未知条件 class %r，默认通过", cls)
+            return None
+
+    return None
+
+
 def resolve_condition(
     cond_desc: Optional[Dict],
     state: GameState,
@@ -59,18 +117,20 @@ def resolve_condition(
     """解析并执行条件检查。
 
     参数:
-        cond_desc: 条件 dict，如 {"kind": "HOLDING_RACE", "params": {...}}
+        cond_desc: 条件 dict/str，如 {"kind": "HOLDING_RACE", "params": {...}}
+                   也兼容 {"class": "HandCondition", ...} 和字符串格式
     返回:
         True/False。没有条件时返回 True。
     """
-    if not cond_desc:
+    normalized = _normalize_condition(cond_desc)
+    if normalized is None:
         return True
-    kind = cond_desc.get("kind", "")
+    kind = normalized.get("kind", "")
     handler = CONDITION_REGISTRY.get(kind)
     if handler is None:
-        log.warning("未知条件类型 %r，默认通过", kind)
+        log.debug("未知条件类型 %r，默认通过", kind)
         return True
-    return handler.check(cond_desc, state, source)
+    return handler.check(normalized, state, source)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -260,6 +320,89 @@ class EventDamageCondition(Condition):
     def check(self, desc, state, source=None):
         last_dmg = getattr(state, '_last_damage_amount', 0)
         return last_dmg >= _params(desc).get("value", 1)
+
+
+@register_condition("SELF_COST")
+class SelfCostCondition(Condition):
+    """来源卡牌费用条件。"""
+    def check(self, desc, state, source=None):
+        if source is None:
+            return False
+        max_cost = _params(desc).get("max_cost", 10)
+        cost = getattr(source, 'cost', 0)
+        return cost <= max_cost
+
+
+@register_condition("CORRUPT")
+class CorruptCondition(Condition):
+    """腐化条件：手牌中是否有费用更高的同名牌。"""
+    def check(self, desc, state, source=None):
+        if source is None:
+            return False
+        src_cost = getattr(source, 'cost', 0)
+        src_id = getattr(source, 'card_id', '')
+        for card in state.hand:
+            if getattr(card, 'card_id', '') != src_id:
+                if getattr(card, 'cost', 0) > src_cost:
+                    return True
+        return False
+
+
+@register_condition("DECK_CONDITION")
+class DeckCondition(Condition):
+    """牌库条件通用占位。"""
+    def check(self, desc, state, source=None):
+        return True
+
+
+@register_condition("DECK_COST_VARIETY")
+class DeckCostVarietyCondition(Condition):
+    """牌库中随从总费用条件。"""
+    def check(self, desc, state, source=None):
+        return True
+
+
+@register_condition("DID_NOT_PLAY_LAST_TURN")
+class DidNotPlayLastTurnCondition(Condition):
+    """上回合未打出卡牌。"""
+    def check(self, desc, state, source=None):
+        played = getattr(state, 'cards_played_last_turn', 0)
+        if isinstance(played, list):
+            return len(played) == 0
+        return played == 0
+
+
+@register_condition("HAND_UNIQUE_COST")
+class HandUniqueCostCondition(Condition):
+    """手牌中费用各不相同。"""
+    def check(self, desc, state, source=None):
+        costs = [getattr(c, 'cost', -1) for c in state.hand]
+        return len(costs) == len(set(costs))
+
+
+@register_condition("HAS_WEAPON")
+class HasWeaponCondition(Condition):
+    """是否有武器装备。"""
+    def check(self, desc, state, source=None):
+        weapon = getattr(state, 'weapon', None)
+        return weapon is not None
+
+
+@register_condition("RESOURCE")
+class ResourceCondition(Condition):
+    """资源数量条件（法力水晶等）。"""
+    def check(self, desc, state, source=None):
+        p = _params(desc)
+        val = p.get("value", 1)
+        resources = getattr(state, 'max_mana', 0)
+        return resources >= val
+
+
+@register_condition("GUESS_CARD")
+class GuessCardCondition(Condition):
+    """猜牌条件（竞技场等），模拟时默认通过。"""
+    def check(self, desc, state, source=None):
+        return True
 
 
 # ── 辅助 ──

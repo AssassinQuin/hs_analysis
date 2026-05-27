@@ -516,15 +516,35 @@ class DynamicProbabilityEngine:
             except Exception as e:
                 logger.debug("回合%d MCTS推断失败: %s", turn, e)
 
+    def _is_derived_card(self, card_id: str) -> bool:
+        """判断卡牌是否为衍生牌。
+
+        使用卡牌本身的属性判断，而非依赖卡组池：
+        1. 在 generated_cards 集合中 → 衍生牌（由 GlobalTracker 追踪确认）
+        2. 非可收集卡牌（collectible=False）→ 衍生牌（token/衍生物不可能在初始牌库中）
+
+        Args:
+            card_id: 卡牌 ID
+
+        Returns:
+            True 如果是衍生牌
+        """
+        if card_id in self._generated_cards:
+            return True
+        if self._card_db:
+            card_data = self._card_db.get_card(card_id)
+            if card_data and not card_data.get("collectible", False):
+                return True
+        return False
+
     def _compute_non_derived_hand_candidates(self, state_dict: dict) -> List[str]:
         """计算对手手牌的非衍生候选卡牌。
 
         核心逻辑：
         top-N 卡组加权候选池 - 已使用的非衍生卡 = 对手手牌非衍生候选
 
-        改进：不再仅取 top-1 卡组，而是从 top-N 卡组中按后验概率
-        加权收集候选卡牌。这增加了手牌假设的覆盖度，特别是当
-        对手实际使用的卡组与 top-1 卡组不完全匹配时。
+        衍生牌判断使用卡牌本身的 collectible 属性，
+        而非依赖卡组池计数。
 
         Args:
             state_dict: 当前游戏状态字典
@@ -543,20 +563,17 @@ class DynamicProbabilityEngine:
         if top_decks and top_decks[0][0] in top_deck_sources:
             is_deck_codes_exclusive = top_deck_sources[top_decks[0][0]] == "deck_codes"
         if is_deck_codes_exclusive:
-            # 独占：仅从 top-1 卡组收集候选
             max_decks = 1
         else:
-            max_decks = min(5, len(top_decks))  # 最多取 top-5 卡组
+            max_decks = min(5, len(top_decks))
 
         candidates_set = set()
         for deck_idx in range(max_decks):
             deck_id, deck_name, deck_prob = top_decks[deck_idx]
 
-            # 如果卡组概率太低，跳过
             if deck_prob < 0.01:
                 continue
 
-            # 获取卡组卡牌列表
             deck_cards = self._get_deck_cards_cached(deck_id)
             if not deck_cards:
                 continue
@@ -566,14 +583,12 @@ class DynamicProbabilityEngine:
                 card_id = self._dbf_to_card_id(dbf_id)
                 if not card_id:
                     continue
-                if card_id in self._generated_cards:
-                    continue  # 排除衍生牌
-                # 卡牌类型检查
+                if self._is_derived_card(card_id):
+                    continue
                 if self._card_db:
                     card_data = self._card_db.get_card(card_id)
                     if card_data and card_data.get("type", "").upper() == "HERO_POWER":
                         continue
-                # 计算剩余非衍生张数
                 played = self._seen_cards.get(card_id, 0)
                 remaining = total_copies - played
                 if remaining > 0:
@@ -769,7 +784,7 @@ class DynamicProbabilityEngine:
         deck_match_counts: List[int] = [0] * len(top_decks)
         deck_total_seen: int = 0
         for card_id, seen_count in self._seen_cards.items():
-            if card_id in self._generated_cards:
+            if self._is_derived_card(card_id):
                 continue
             dbf = self._card_id_to_dbf(card_id)
             if dbf is None:
@@ -812,8 +827,8 @@ class DynamicProbabilityEngine:
                 if not card_id:
                     continue
 
-                # 衍生牌不算
-                if card_id in self._generated_cards:
+                # 衍生牌不算（使用卡牌本身属性判断，不依赖卡组池）
+                if self._is_derived_card(card_id):
                     continue
 
                 # 英雄技能不算手牌

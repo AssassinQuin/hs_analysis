@@ -149,7 +149,7 @@ def main():
 
     # Always MCTS — RHEA params no longer read from cfg
     engine_params = {
-        "time_budget_ms": cp.getfloat("engine", "time_budget_ms", fallback=8000.0) if cfg_loaded else 8000.0,
+        "time_budget_ms": cp.getfloat("engine", "time_budget_ms", fallback=1500.0) if cfg_loaded else 1500.0,
         "num_worlds": cp.getint("engine", "num_worlds", fallback=7) if cfg_loaded else 7,
         "uct_constant": cp.getfloat("engine", "uct_constant", fallback=0.5) if cfg_loaded else 0.5,
         "time_decay_gamma": cp.getfloat("engine", "time_decay_gamma", fallback=0.6) if cfg_loaded else 0.6,

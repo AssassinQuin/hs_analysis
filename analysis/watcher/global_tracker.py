@@ -902,20 +902,23 @@ class GlobalTracker:
     def _classify_source(self, entity_id: int, card_id: str) -> CardSource:
         """判断卡牌来源是牌库还是衍生。
 
-        启发式规则：
-        0. 英雄技能 → 不属于任何来源，调用方应跳过
-        1. 实体出生在DECK区域 → 牌库牌
-        2. 实体出生在SETASIDE → 衍生牌
-        3. 实体出生在HAND区域 → 区分初始手牌 vs 衍生到手牌
+        判断优先级（从高到低）：
+        0. 英雄技能 → 衍生（调用方应跳过）
+        1. 卡牌数据库：非可收集 = 衍生（token/衍生物不可能在初始牌库中）
+        2. 实体出生在DECK区域 → 牌库牌
+        3. 实体出生在SETASIDE → 衍生牌
+        4. 实体出生在HAND区域 → 区分初始手牌 vs 衍生到手牌
            - 游戏开始前（turn==0）出生在HAND → 牌库牌（初始手牌）
            - 游戏开始后出生在HAND → 衍生牌（发现/生成到手牌）
            - 硬币卡牌出生在HAND → 牌库牌（后手硬币是牌库的一部分）
-        4. 查卡牌数据库：非可收集 = 衍生
+        5. 窥探确认：已被确认存在于对手牌库中 → 牌库牌
+        6. 超过牌库限制 → 衍生牌（兜底）
         """
-        # 英雄技能不是从牌库或衍生来的卡牌，应被调用方完全跳过
         birth = self._entity_birth.get(entity_id)
+
+        # 英雄技能不是从牌库或衍生来的卡牌，应被调用方完全跳过
         if birth and birth.card_type == self.CT_HERO_POWER:
-            return CardSource.GENERATED  # 标记为衍生以排除贝叶斯，但调用方应已跳过
+            return CardSource.GENERATED
 
         # 查卡牌元数据（后续多处复用）
         meta = self._card_metadata(card_id) if card_id else {}
@@ -924,9 +927,10 @@ class GlobalTracker:
         if meta and meta.get("type", "").upper() == "HERO_POWER":
             return CardSource.GENERATED
 
-        # 窥探确认：如果卡牌已被确认存在于对手牌库中，则必定是牌库牌
-        if card_id and card_id in self.state.opp_known_deck_cards:
-            return CardSource.DECK
+        # 优先级1：非可收集卡牌一定是衍生牌（token/衍生物）
+        # 这是基于卡牌本身属性的判断，不依赖卡组池
+        if meta and not meta.get("collectible", False):
+            return CardSource.GENERATED
 
         if birth:
             if birth.initial_zone == self.ZONE_DECK:
@@ -935,24 +939,18 @@ class GlobalTracker:
                 return CardSource.GENERATED
             # HAND区域：区分初始手牌 vs 衍生到手牌
             if birth.initial_zone == self.ZONE_HAND:
-                # P0 #2: 使用 birth_turn 而非 current_turn 判断初始手牌
-                # 初始手牌（出生时 turn==0）属于牌库牌
-                # 硬币也属于牌库牌（后手硬币是初始手牌的一部分）
                 if birth.birth_turn == 0 or self._is_coin_entity(card_id):
                     return CardSource.DECK
                 return CardSource.GENERATED
 
-        # 兜底：无出生记录时，不可收集=衍生，可收集=未知
-        # 不再默认可收集卡牌=DECK，因为发现的牌也可以是可收集的
-        if meta:
-            if not meta.get("collectible", False):
-                return CardSource.GENERATED
-            # 可收集但无出生记录，无法确定来源
-            # 如果对手已打出超过牌库限制，则判断为衍生
-            if self._is_over_copy_limit(card_id):
-                return CardSource.GENERATED
-            return CardSource.UNKNOWN
+        # 窥探确认：如果卡牌已被确认存在于对手牌库中，则必定是牌库牌
+        if card_id and card_id in self.state.opp_known_deck_cards:
+            return CardSource.DECK
 
+        # 兜底：可收集但无出生记录，无法确定来源
+        # 如果对手已打出超过牌库限制，则判断为衍生
+        if self._is_over_copy_limit(card_id):
+            return CardSource.GENERATED
         return CardSource.UNKNOWN
 
     def _mark_shuffled_card_played(self, card_id: str):

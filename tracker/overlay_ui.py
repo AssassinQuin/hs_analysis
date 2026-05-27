@@ -641,6 +641,7 @@ class OverlayWindow(QWidget):
 
         # 缩放手柄
         self._resizing = False
+        self._resize_edge = None  # 'left' | 'right' | 'bottom' | 'bottom_right'
         self._resize_start = None
         self._resize_start_geo = None
 
@@ -765,11 +766,15 @@ class OverlayWindow(QWidget):
         # ── 恢复折叠状态 ──
         self._hand_header.set_expanded(self._hand_expanded)
         self._hand_list.setVisible(self._hand_expanded)
+        self._hand_list.setMinimumHeight(30 if self._hand_expanded else 0)
         self._deck_header.set_expanded(self._deck_expanded)
         self._deck_tab.setVisible(self._deck_expanded)
         self._deck_list.setVisible(self._deck_expanded)
+        self._deck_list.setMinimumHeight(40 if self._deck_expanded else 0)
         self._grave_header.set_expanded(self._grave_expanded)
         self._grave_list.setVisible(self._grave_expanded)
+        self._grave_list.setMinimumHeight(30 if self._grave_expanded else 0)
+        self._update_min_size()
 
         # ── 恢复交互模式 ──
         if not self._interactive:
@@ -855,6 +860,8 @@ class OverlayWindow(QWidget):
         self._hand_expanded = not self._hand_expanded
         self._hand_header.set_expanded(self._hand_expanded)
         self._hand_list.setVisible(self._hand_expanded)
+        self._hand_list.setMinimumHeight(30 if self._hand_expanded else 0)
+        self._update_min_size()
         self._save_geometry()
 
     def _toggle_deck(self):
@@ -862,13 +869,35 @@ class OverlayWindow(QWidget):
         self._deck_header.set_expanded(self._deck_expanded)
         self._deck_tab.setVisible(self._deck_expanded)
         self._deck_list.setVisible(self._deck_expanded)
+        self._deck_list.setMinimumHeight(40 if self._deck_expanded else 0)
+        self._update_min_size()
         self._save_geometry()
 
     def _toggle_grave(self):
         self._grave_expanded = not self._grave_expanded
         self._grave_header.set_expanded(self._grave_expanded)
         self._grave_list.setVisible(self._grave_expanded)
+        self._grave_list.setMinimumHeight(30 if self._grave_expanded else 0)
+        self._update_min_size()
         self._save_geometry()
+
+    def _update_min_size(self):
+        """折叠/展开后动态调整窗口最小尺寸。
+
+        折叠 section 后内容减少，允许窗口缩小到更合理的尺寸。
+        """
+        min_h = _HDR_H + 4
+        min_h += _SEC_HDR_H
+        if self._hand_expanded:
+            min_h += 30
+        min_h += _SEC_HDR_H
+        if self._deck_expanded:
+            min_h += _TAB_H + 40
+        min_h += _SEC_HDR_H
+        if self._grave_expanded:
+            min_h += 30
+        min_h = max(min_h, 120)
+        self.setMinimumSize(_W_MIN, min_h)
 
     # ── 卡组切换 ──
 
@@ -1116,9 +1145,10 @@ class OverlayWindow(QWidget):
         else:
             self._deck_tab.setVisible(False)
 
-        # 增量刷新
+        # 增量刷新（包含 hand_probability，概率变化时也触发重绘）
         d_hash = tuple(
-            (c["card_id"], c.get("remaining", 0), c.get("played", False))
+            (c["card_id"], c.get("remaining", 0), c.get("played", False),
+             round(c.get("hand_probability", 0.0), 4))
             for c in display
         )
         if d_hash == self._deck_hash:
@@ -1206,13 +1236,32 @@ class OverlayWindow(QWidget):
 
     # ── 鼠标事件 ──
 
+    def _hit_edge(self, pos) -> Optional[str]:
+        """检测鼠标位置对应的缩放边缘。
+
+        返回: 'left' | 'right' | 'bottom' | 'bottom_right' | None
+        """
+        r = self.rect()
+        g = _GRIP_SIZE
+        on_right = pos.x() >= r.right() - g
+        on_left = pos.x() <= r.left() + g
+        on_bottom = pos.y() >= r.bottom() - g
+        if on_right and on_bottom:
+            return "bottom_right"
+        if on_right:
+            return "right"
+        if on_left:
+            return "left"
+        if on_bottom:
+            return "bottom"
+        return None
+
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
-            # 检测是否点击右下角缩放区域
-            r = self.rect()
-            grip_zone = QRect(r.right() - _GRIP_SIZE, r.bottom() - _GRIP_SIZE, _GRIP_SIZE, _GRIP_SIZE)
-            if grip_zone.contains(e.pos()):
+            edge = self._hit_edge(e.pos())
+            if edge:
                 self._resizing = True
+                self._resize_edge = edge
                 self._resize_start = e.globalPos()
                 self._resize_start_geo = self.geometry()
             else:
@@ -1222,19 +1271,48 @@ class OverlayWindow(QWidget):
     def mouseMoveEvent(self, e):
         if self._resizing and self._resize_start is not None:
             delta = e.globalPos() - self._resize_start
-            new_w = max(_W_MIN, self._resize_start_geo.width() + delta.x())
-            new_h = max(_H_MIN, self._resize_start_geo.height() + delta.y())
-            self.setGeometry(self._resize_start_geo.x(), self._resize_start_geo.y(), new_w, new_h)
+            geo = self._resize_start_geo
+            edge = self._resize_edge
+
+            min_w = self.minimumWidth()
+            min_h = self.minimumHeight()
+
+            if edge in ("left", "bottom_right"):
+                new_w = max(min_w, geo.width() - delta.x())
+            else:
+                new_w = geo.width()
+
+            if edge in ("bottom", "bottom_right"):
+                new_h = max(min_h, geo.height() + delta.y())
+            else:
+                new_h = geo.height()
+
+            if edge == "left":
+                new_x = geo.right() - new_w
+            else:
+                new_x = geo.x()
+
+            self.setGeometry(new_x, geo.y(), new_w, new_h)
         elif self._drag_start is not None and e.buttons() & Qt.LeftButton:
             self.move(e.globalPos() + self._drag_off)
+        else:
+            edge = self._hit_edge(e.pos())
+            if edge in ("left", "right"):
+                self.setCursor(Qt.SizeHorCursor)
+            elif edge == "bottom":
+                self.setCursor(Qt.SizeVerCursor)
+            elif edge == "bottom_right":
+                self.setCursor(Qt.SizeFDiagCursor)
+            else:
+                self.setCursor(Qt.ArrowCursor)
 
     def mouseReleaseEvent(self, e):
         was_dragging = self._drag_start is not None or self._resizing
         self._drag_start = None
         self._resizing = False
+        self._resize_edge = None
         self._resize_start = None
         self._resize_start_geo = None
-        # 拖拽/缩放结束后保存几何信息
         if was_dragging:
             self._save_geometry()
 
@@ -1266,14 +1344,23 @@ class OverlayWindow(QWidget):
         p.setBrush(QBrush(_C_HDR_BG))
         p.drawRoundedRect(hdr_rect, 4, 4)
 
-        # 缩放手柄 (右下角三行点)
+        # 缩放提示 — 右下角三行点 + 左/右/下边缘高亮线
+        grip_color = QColor(90, 100, 130, 140)
+        edge_color = QColor(90, 100, 130, 60)
         gx, gy = r.right() - 4, r.bottom() - 4
         p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(QColor(90, 100, 130, 140)))
+        p.setBrush(QBrush(grip_color))
         for dy in range(0, 9, 3):
             for dx in range(0, 9, 3):
                 if dx + dy >= 3:
                     p.drawEllipse(gx - dx - 2, gy - dy - 2, 2, 2)
+        # 左边缘
+        p.setBrush(QBrush(edge_color))
+        p.drawRect(r.left(), r.top() + _HDR_H, 2, r.height() - _HDR_H)
+        # 右边缘
+        p.drawRect(r.right() - 2, r.top() + _HDR_H, 2, r.height() - _HDR_H)
+        # 下边缘
+        p.drawRect(r.left(), r.bottom() - 2, r.width(), 2)
 
         p.end()
 

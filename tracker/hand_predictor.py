@@ -409,16 +409,14 @@ class HandPredictor:
     def _filter_generated_and_wrong_class(
         self, result: PredictionResult, opp_class: str,
     ) -> None:
-        """后过滤：去除衍生牌、非收集卡牌、非本职业卡牌。
+        """后过滤：标记衍生牌、过滤非本职业卡牌。
 
-        问题背景:
-          - opp_generated_seen 只追踪到部分衍生牌，遗漏率达 50%+
-          - 贝叶斯卡组池可能加载错误职业的卡组（如 Zoo Warlock）
-            导致 Warlock/DK/Druid 卡牌概率异常膨胀
-          - 概率引擎内部过滤依赖 card_data 非空，但 token 卡牌常无 DB 记录
+        衍生牌判断使用卡牌本身的 collectible 属性，
+        而非依赖卡组池计数。
 
-        此过滤器作为安全网，利用卡牌数据库完整捕获遗留的衍生牌和
-        非本职业卡牌。使用保守策略：仅剔除明确有问题的卡牌。
+        非可收集卡牌（collectible=False）是衍生牌/token，
+        不可能在对手初始牌库中。但它们可能通过 Discover/生成效果
+        置入手牌，因此不直接过滤，而是标记 source="generated"。
 
         Args:
             result: 预测结果（被就地修改）
@@ -433,14 +431,12 @@ class HandPredictor:
         before_count = len(result.hand_predictions)
         filtered: List[HandPrediction] = []
 
-        # 已知可玩职业列表（排除 NEUTRAL 和非职业分类）
         PLAYABLE_CLASSES = frozenset({
             "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVILCLASS", "HUNTER",
             "MAGE", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
         })
 
         for hp in result.hand_predictions:
-            # 概率为 0 的占位符无需过滤
             if hp.probability <= 0.0:
                 filtered.append(hp)
                 continue
@@ -451,38 +447,39 @@ class HandPredictor:
                 card_class = (card_data.get("cardClass", "") or "").upper()
                 collectible = card_data.get("collectible", True)
 
-                # 过滤 1: 非收集卡牌且非本职业 → 衍生牌
-                # 标准构筑中，非收集卡牌不可能在初始卡组中
-                if not collectible and card_class not in ("", opp_class):
-                    logger.debug("  过滤衍生牌(非收集): %s (%s) class=%s collectible=%s",
+                # 标记1: 非可收集卡牌 → 衍生牌（token/衍生物）
+                # 不直接过滤，因为衍生牌可能在手牌中（Discover/生成效果）
+                # 标记 source="generated" 以便 UI 区分显示
+                if not collectible and hp.source not in ("revealed", "generated"):
+                    hp.source = "generated"
+
+                # 过滤1: 非可收集且非本职业的衍生牌 → 过滤
+                # 这些牌不太可能出现在手牌预测中
+                if not collectible and card_class not in ("", opp_class, "NEUTRAL"):
+                    logger.debug("  过滤非本职业衍生牌: %s (%s) class=%s collectible=%s",
                                  hp.name, hp.card_id, card_class, collectible)
                     continue
 
-                # 过滤 2: 明确的非本职业卡牌 → 贝叶斯卡组池错配
-                # 适用于所有 source（包括 revealed），因为即使被"揭示"过的卡牌，
-                # 如果属于其他职业，它也是衍生牌而非卡组牌
-                # 例外：source="generated" 的牌（Discover/生成）可以合法地跨职业
+                # 过滤2: 明确的非本职业卡牌 → 贝叶斯卡组池错配
                 if hp.source != "generated" and card_class in PLAYABLE_CLASSES and card_class not in ("NEUTRAL", opp_class):
                     logger.debug("  过滤非本职业: %s (%s) class=%s, opp=%s source=%s",
                                  hp.name, hp.card_id, card_class, opp_class, hp.source)
                     continue
             else:
-                # card_data 为 None → 未知卡牌 ID
-                # 策略: 检查是否是明显的 token ID 模式
                 cid = hp.card_id or ""
                 is_token_id = (
-                    cid.endswith("t")       # 标准衍生牌后缀 (如 NEW1_008t)
-                    or "_t" in cid.lower()  # 其他衍生牌模式
-                    or cid.startswith("TB_")  # 乱斗/特殊模式卡牌
+                    cid.endswith("t")
+                    or "_t" in cid.lower()
+                    or cid.startswith("TB_")
                 )
                 if is_token_id:
-                    logger.debug("  过滤 token ID 模式: %s (%s)", hp.name, cid)
-                    continue
-                # 不在 generated 集中且 ID 看起来正常 → 保守保留
+                    if hp.source not in ("revealed", "generated"):
+                        hp.source = "generated"
+                    # token ID 且非本职业 → 过滤
+                    logger.debug("  标记 token ID: %s (%s) source=generated", hp.name, cid)
                 if cid and cid in generated:
-                    logger.debug("  过滤未知衍生牌: %s (%s)", hp.name, cid)
-                    continue
-                # 否则保留（可能只是 DB 暂缺的合法卡牌）
+                    if hp.source not in ("revealed", "generated"):
+                        hp.source = "generated"
 
             filtered.append(hp)
 
@@ -647,6 +644,17 @@ class HandPredictor:
         if self._probability_engine is not None:
             # 通知概率引擎回合变更，触发MCTS推断
             self._probability_engine.on_turn_changed(turn, state_dict)
+
+    def reset(self):
+        """重置所有内部状态，用于新游戏开始时调用。"""
+        if self._effect_engine is not None:
+            self._effect_engine.reset()
+        self._last_effect_inputs_hash = None
+        self._multi_deck_cache = []
+        self._multi_deck_cache_turn = -1
+        self._multi_deck_cache_opp_hand = -1
+        self._multi_deck_cache_opp_deck = -1
+        self._multi_deck_cache_known_count = -1
 
     def close(self):
         """关闭缓存的数据库连接。"""

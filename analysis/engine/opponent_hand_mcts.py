@@ -1143,6 +1143,28 @@ class HandSampler:
 
         return deduped[:num_worlds]
 
+    def _is_derived_card(self, card_id: str, generated_cards: Set[str]) -> bool:
+        """判断卡牌是否为衍生牌。
+
+        使用卡牌本身的属性判断，而非依赖卡组池：
+        1. 在 generated_cards 集合中 → 衍生牌（由 GlobalTracker 追踪确认）
+        2. 非可收集卡牌（collectible=False）→ 衍生牌（token/衍生物不可能在初始牌库中）
+
+        Args:
+            card_id: 卡牌 ID
+            generated_cards: 已确认的衍生牌集合
+
+        Returns:
+            True 如果是衍生牌
+        """
+        if card_id in generated_cards:
+            return True
+        if self._card_db:
+            card_data = self._card_db.get_card(card_id)
+            if card_data and not card_data.get("collectible", False):
+                return True
+        return False
+
     def _extend_deck_with_observed_cards(
         self,
         deck_cards: List[int],
@@ -1151,15 +1173,8 @@ class HandSampler:
     ) -> List[int]:
         """动态扩展卡组，包含对手已打出但不在卡组中的牌。
 
-        解决"非卡组卡牌覆盖不足"问题：
-        对手可能使用非主流卡组，其中有些牌不在HSReplay候选卡组中。
-        这些牌已经打出，说明对手卡组中确实包含它们。
-        将这些牌加入候选池，使MCTS能预测同卡组中其他可能的非主流牌。
-
-        关键：添加标准张数（非传说=2，传说=1），而非仅已打出的张数。
-        因为 _sample_hand_from_deck 会从 total_copies 中减去 seen_cards 的张数，
-        如果只添加已打出张数，减去后剩余0，无法采样。
-        添加2张后，减去1张已打出，剩余1张可被采样进手牌。
+        衍生牌判断使用卡牌本身的 collectible 属性，
+        而非依赖卡组池计数。
         """
         if not seen_cards or not self._card_db:
             return deck_cards
@@ -1168,17 +1183,14 @@ class HandSampler:
         extended = list(deck_cards)
 
         for card_id, played_count in seen_cards.items():
-            if card_id in generated_cards:
+            if self._is_derived_card(card_id, generated_cards):
                 continue
-            # 跳过衍生卡牌后缀（如 TIME_000ta → TIME_000）
             base_card_id = self._strip_card_suffix(card_id)
             if base_card_id != card_id:
-                continue  # 变形/衍生版本不加入卡组
+                continue
 
             dbf_id = self._card_id_to_dbf(card_id)
             if dbf_id and dbf_id not in deck_dbf_set:
-                # 对手打出了这张牌，但不在卡组中，说明是额外牌
-                # 添加标准张数（2张普通/1张传说），这样减去已打出张数后还有剩余
                 is_legendary = False
                 card_data = self._card_db.get_card(card_id) if self._card_db else None
                 if card_data and card_data.get("rarity", "") == "LEGENDARY":
@@ -1287,7 +1299,9 @@ class HandSampler:
     ) -> List:
         """从卡组剩余牌 + 衍生牌候选池中采样一手手牌。
 
-        改进（v4）：
+        衍生牌判断使用卡牌本身的 collectible 属性，
+        而非依赖卡组池计数。
+
         1. 衍生牌不再被排除，而是加入候选池填充剩余手牌位置
         2. 支持 cost_bias 加权采样，使采样偏向历史行为暗示的费用方向
         3. 支持 non_derived_candidates 加权，使来自最大概率卡组的非衍生牌权重更高
@@ -1300,7 +1314,6 @@ class HandSampler:
             card_id = self._dbf_to_card_id(dbf_id)
             if not card_id:
                 continue
-            # 卡组中的原始计数不考虑衍生牌（衍生牌不在卡组中）
             played = seen_cards.get(card_id, 0)
             remaining = count - played
             if remaining <= 0:
@@ -1311,17 +1324,30 @@ class HandSampler:
         if not remaining_cards:
             return []
 
-        # ── 衍生牌加入候选池（v4修复：衍生牌可以且应该在手牌中） ──
+        # ── 衍生牌加入候选池（使用 collectible 属性判断） ──
         generated_candidates = []
         deck_card_ids = {self._dbf_to_card_id(d) for d in card_counts if self._dbf_to_card_id(d)}
         for cid in generated_cards:
             if cid in seen_cards:
-                continue  # 已打出，不在手牌中
+                continue
             if cid in deck_card_ids:
-                continue  # 已在卡组候选池中
+                continue
             dbf = self._card_id_to_dbf(cid)
             if dbf is not None:
                 generated_candidates.append(dbf)
+        # 补充：非可收集卡牌（token/衍生物）也加入衍生候选池
+        # 这些牌不在卡组中，但可能通过 Discover/生成效果置入手牌
+        if self._card_db:
+            for dbf_id in card_counts:
+                card_id = self._dbf_to_card_id(dbf_id)
+                if not card_id:
+                    continue
+                if card_id in generated_cards:
+                    continue
+                card_data = self._card_db.get_card(card_id)
+                if card_data and not card_data.get("collectible", False):
+                    if card_id not in seen_cards and dbf_id not in {d for d in generated_candidates}:
+                        generated_candidates.append(dbf_id)
 
         # 合并候选池：卡组剩余 + 衍生牌
         all_candidates = list(remaining_cards)
@@ -1352,13 +1378,16 @@ class HandSampler:
         non_derived_candidates: Optional[List[str]],
         k: int,
     ) -> List[int]:
-        """按费用偏向+非衍生候选权重做无放回加权采样。"""
+        """按费用偏向+非衍生候选权重做无放回加权采样。
+
+        非衍生候选判断使用卡牌本身的 collectible 属性，
+        而非依赖卡组池。
+        """
         if len(candidates) <= k:
             return list(candidates)
 
         non_derived_set = set(non_derived_candidates) if non_derived_candidates else set()
 
-        # 预计算每个候选的权重
         weights = []
         for dbf_id in candidates:
             card = self._dbf_to_card(dbf_id)
@@ -1367,8 +1396,14 @@ class HandSampler:
             if cost_bias:
                 w *= cost_bias.get(cost, 1.0)
             # 非衍生候选卡牌权重提升2倍
+            # 判断依据：在 non_derived_set 中，或是可收集卡牌
             card_id = self._dbf_to_card_id(dbf_id) if dbf_id else ""
-            if card_id and card_id in non_derived_set:
+            is_non_derived = card_id and card_id in non_derived_set
+            if not is_non_derived and card_id and self._card_db:
+                card_data = self._card_db.get_card(card_id)
+                if card_data and card_data.get("collectible", False):
+                    is_non_derived = True
+            if is_non_derived:
                 w *= 2.0
             weights.append(max(0.01, w))
 

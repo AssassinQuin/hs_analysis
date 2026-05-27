@@ -582,7 +582,7 @@ class DecisionLoop:
     ):
         self.log_path = Path(log_path)
         self.engine_params = engine_params or {
-            "time_budget_ms": 8000.0,
+            "time_budget_ms": 1500.0,
             "num_worlds": 7,
             "uct_constant": 0.5,
             "time_decay_gamma": 0.6,
@@ -592,8 +592,8 @@ class DecisionLoop:
         # ── MCTSUCT 搜索引擎（替代 GameEngine） ──
         mcts_config = MCTSConfig(
             exploration_constant=self.engine_params.get("uct_constant", 1.414),
-            iterations=self.engine_params.get("iterations", 800),
-            time_budget_ms=int(self.engine_params.get("time_budget_ms", 8000.0)),
+            iterations=self.engine_params.get("iterations", 300),
+            time_budget_ms=int(self.engine_params.get("time_budget_ms", 1500.0)),
             rollout_depth=self.engine_params.get("rollout_depth", 15),
             use_heuristic_rollout=True,
             verbose=verbose,
@@ -603,14 +603,14 @@ class DecisionLoop:
         # ── MCTSWorldTracker（世界粒子滤波器） ──
         tracker_config = TrackerConfig(
             num_worlds=self.engine_params.get("num_worlds", 7),
-            mcts_iterations=self.engine_params.get("iterations", 500),
-            mcts_time_budget_ms=int(self.engine_params.get("time_budget_ms", 8000.0)),
+            mcts_iterations=self.engine_params.get("iterations", 300),
+            mcts_time_budget_ms=int(self.engine_params.get("time_budget_ms", 1500.0)),
             uct_exploration=self.engine_params.get("uct_constant", 1.414),
         )
         self._world_tracker = MCTSWorldTracker(tracker_config)
 
         # ── OpponentHandMCTS（对手手牌概率推断） ──
-        opp_hand_budget = min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+        opp_hand_budget = min(500.0, self.engine_params.get("time_budget_ms", 1500.0) * 0.15)
         self._opp_hand_mcts = OpponentHandMCTS(time_budget_ms=opp_hand_budget)
 
         # 对手手牌推断结果缓存
@@ -742,7 +742,7 @@ class DecisionLoop:
             # 重置 MCTSUCT（无状态，无需操作）和 WorldTracker + OpponentHandMCTS
             self._world_tracker.reset()
             self._opp_hand_mcts = OpponentHandMCTS(
-                time_budget_ms=min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+                time_budget_ms=min(500.0, self.engine_params.get("time_budget_ms", 1500.0) * 0.15)
             )
             # Auto-reset GlobalTracker when latest_game_only=True
             if self._global_tracker is not None:
@@ -758,7 +758,7 @@ class DecisionLoop:
             # 重置状态
             self._world_tracker.reset()
             self._opp_hand_mcts = OpponentHandMCTS(
-                time_budget_ms=min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+                time_budget_ms=min(500.0, self.engine_params.get("time_budget_ms", 1500.0) * 0.15)
             )
             self._display.present_status("游戏结束")
         elif event == "turn_start":
@@ -994,7 +994,7 @@ class DecisionLoop:
             deck_remaining = max(0, 30 - hand_size - sum(seen_cards.values()))
 
         # 时间预算：取总预算的一小部分，避免影响主搜索
-        opp_hand_budget = min(500.0, self.engine_params.get("time_budget_ms", 8000.0) * 0.15)
+        opp_hand_budget = min(500.0, self.engine_params.get("time_budget_ms", 1500.0) * 0.15)
 
         try:
             probs = self._opp_hand_mcts.infer_hand_probabilities(
@@ -1077,7 +1077,7 @@ class DecisionLoop:
             log.debug(f"Eval logging failed: {e}")
 
     @staticmethod
-    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "mcts", time_budget_ms: float = 8000.0, num_worlds: int = 7, **engine_kwargs) -> None:
+    def analyze_file(path: str | Path, output: TextIO = sys.stdout, *, engine: str = "mcts", time_budget_ms: float = 1500.0, num_worlds: int = 7, **engine_kwargs) -> None:
         """One-shot: analyze an entire Power.log file and output decisions for each turn."""
         log_path = Path(path)
         if not log_path.exists():
@@ -1092,7 +1092,7 @@ class DecisionLoop:
         # 使用 MCTSUCT 替代 GameEngine
         mcts_config = MCTSConfig(
             exploration_constant=engine_kwargs.get("uct_constant", 1.414),
-            iterations=engine_kwargs.get("iterations", 800),
+            iterations=engine_kwargs.get("iterations", 300),
             time_budget_ms=int(time_budget_ms),
             rollout_depth=engine_kwargs.get("rollout_depth", 15),
             use_heuristic_rollout=True,

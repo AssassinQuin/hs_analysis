@@ -476,14 +476,12 @@ class AddToHandSpell(Spell):
         card_id = desc.card_id or ""
         pool = desc.pool or ""
 
-        # ── pool 模式：从池中随机选一张 ──
         if not card_id and pool:
             candidates = self._resolve_add_pool(pool, db)
             if not candidates:
                 return state
             import random
             card_data = random.choice(candidates)
-        # ── card_id 模式：直接添加 ──
         elif card_id:
             card_data = db.get_card(card_id)
         else:
@@ -516,8 +514,28 @@ class AddToHandSpell(Spell):
             except Exception:
                 return []
 
-        # Fallback: use generic pool resolver from this module
         return DiscoverSpell._resolve_pool(pool_name, None) if DiscoverSpell else []
+
+
+@register_spell
+class FillHandSpell(Spell):
+    """用随机卡牌填满手牌。
+
+    炉石效果: "用随机X牌填满你的手牌"（如唤醒、太阳之井等）。
+    在 MCTS 模拟中，用占位符卡牌填充手牌至 10 张，
+    因为精确的随机池对搜索树分支因子影响过大。
+    """
+    def execute(self, desc, state, source=None, target=None):
+        from analysis.card.models.card import Card
+        while len(state.hand) < 10:
+            placeholder = Card(
+                card_id="_fill_placeholder",
+                name="?",
+                cost=0,
+                card_type="SPELL",
+            )
+            state.hand.append(placeholder)
+        return state
 
 
 # ═══════════════════════════════════════════════════════════════

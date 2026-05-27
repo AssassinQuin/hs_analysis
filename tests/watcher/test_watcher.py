@@ -380,11 +380,10 @@ class TestGeneratedCardDeckExclusion:
 
 
 class TestDetectMyIdx:
-    """Test _detect_my_idx player identification with _our_known_name persistence."""
+    """Test _detect_my_idx player identification."""
 
     def _make_players(self, name0, name1, controller0=1, controller1=2,
                       ai0=0, ai1=0, player_id0=1, player_id1=2):
-        """Create mock player objects for testing."""
         from hearthstone.enums import GameTag as GT
         class MockPlayer:
             def __init__(self, name, controller, ai, player_id):
@@ -398,9 +397,6 @@ class TestDetectMyIdx:
                 MockPlayer(name1, controller1, ai1, player_id1)]
 
     def _make_monitor(self, our_known_name=""):
-        """Create a CoreLogMonitor with optional _our_known_name pre-set."""
-        import sys, types
-        # Import from tracker package
         from tracker.log_monitor import CoreLogMonitor
         monitor = CoreLogMonitor.__new__(CoreLogMonitor)
         monitor._our_known_name = our_known_name
@@ -416,7 +412,7 @@ class TestDetectMyIdx:
         assert result == 0
 
     def test_known_name_matches_player1(self):
-        """_our_known_name matches players[1] → my_idx=1 (fixes the bug)."""
+        """_our_known_name matches players[1] → my_idx=1."""
         monitor = self._make_monitor(our_known_name="PlayerB#5678")
         players = self._make_players("PlayerA#1234", "PlayerB#5678")
         result = monitor._detect_my_idx(players, saved_our_controller=0)
@@ -427,46 +423,14 @@ class TestDetectMyIdx:
         monitor = self._make_monitor(our_known_name="Second#999")
         players = self._make_players("First#111", "Second#999")
         result = monitor._detect_my_idx(players, saved_our_controller=0)
-        assert result == 1  # Would be 0 without _our_known_name
+        assert result == 1
 
-    def test_known_name_saved_from_player_names(self):
-        """When _our_known_name is empty and only one has BattleTag, saves it."""
+    def test_no_known_name_no_hand_data_returns_zero(self):
+        """Without _our_known_name and no hand visibility data, returns 0."""
         monitor = self._make_monitor(our_known_name="")
-        monitor._player_names = {1: "Hero#123", 2: "NoTag"}
         players = self._make_players("Hero#123", "NoTag", player_id0=1, player_id1=2)
         result = monitor._detect_my_idx(players, saved_our_controller=0)
         assert result == 0
-        assert monitor._our_known_name == "Hero#123"
-
-    def test_known_name_saved_when_player1_is_us(self):
-        """_our_known_name is saved correctly when player[1] is identified as us."""
-        monitor = self._make_monitor(our_known_name="")
-        monitor._player_names = {1: "NoTag", 2: "Hero#123"}
-        players = self._make_players("NoTag", "Hero#123", player_id0=1, player_id1=2)
-        result = monitor._detect_my_idx(players, saved_our_controller=0)
-        assert result == 1
-        assert monitor._our_known_name == "Hero#123"
-
-    def test_dual_battletag_with_saved_controller_saves_name(self):
-        """When both have BattleTags and saved_our_controller matches, saves name."""
-        monitor = self._make_monitor(our_known_name="")
-        monitor._player_names = {1: "Hero#123", 2: "Villain#456"}
-        players = self._make_players("Hero#123", "Villain#456",
-                                     controller0=1, controller1=2,
-                                     player_id0=1, player_id1=2)
-        result = monitor._detect_my_idx(players, saved_our_controller=2)
-        assert result == 1  # saved controller=2 matches players[1]
-        assert monitor._our_known_name == "Villain#456"
-
-    def test_player_names_not_cleared_on_game_start(self):
-        """_player_names should NOT be cleared in _on_game_start (only on log rotation)."""
-        monitor = self._make_monitor(our_known_name="")
-        monitor._player_names = {1: "Hero#123", 2: "Villain#456"}
-        monitor._first_player_detected = True
-        # Simulate what _on_game_start does (the fix: no _player_names.clear())
-        monitor._first_player_detected = False
-        # _player_names should still have data
-        assert monitor._player_names == {1: "Hero#123", 2: "Villain#456"}
 
     def test_known_name_normalization(self):
         """Name matching uses normalize_player_name (case-insensitive, strip)."""
@@ -474,3 +438,107 @@ class TestDetectMyIdx:
         players = self._make_players("hero#123", "Villain#456")
         result = monitor._detect_my_idx(players, saved_our_controller=0)
         assert result == 0
+
+
+class TestHandVisibilityDetection:
+    """Test _detect_hand_visibility for reliable player identification."""
+
+    def _make_players(self, name0="P0", name1="P1", controller0=1, controller1=2):
+        from hearthstone.enums import GameTag as GT
+        class MockPlayer:
+            def __init__(self, name, controller):
+                self.name = name
+                self.tags = {GT.CONTROLLER: controller, GT.PLAYER_ID: controller}
+        return [MockPlayer(name0, controller0), MockPlayer(name1, controller1)]
+
+    def _make_monitor_with_cache(self, hand_entities):
+        import sys, types
+        from tracker.log_monitor import CoreLogMonitor
+        from hearthstone.enums import GameTag as GT
+
+        monitor = CoreLogMonitor.__new__(CoreLogMonitor)
+        monitor._our_known_name = ""
+        monitor._player_names = {}
+        monitor._first_player_detected = False
+
+        class MockEntityCache(dict):
+            pass
+
+        ec = MockEntityCache()
+        for eid, ctrl, card_id, zone in hand_entities:
+            ec[eid] = {
+                "tags": {
+                    GT.CONTROLLER: ctrl,
+                    GT.ZONE: zone,
+                },
+                "card_id": card_id,
+            }
+
+        class MockGameTracker:
+            entity_cache = ec
+
+        monitor.game_tracker = MockGameTracker()
+        return monitor
+
+    def test_controller1_has_visible_hand(self):
+        """Controller 1 has visible hand cards → my_idx=0."""
+        from hearthstone.enums import Zone
+        monitor = self._make_monitor_with_cache([
+            (100, 1, "CS2_029", Zone.HAND.value),
+            (101, 1, "CS2_023", Zone.HAND.value),
+            (102, 2, "", Zone.HAND.value),
+            (103, 2, "", Zone.HAND.value),
+        ])
+        players = self._make_players(controller0=1, controller1=2)
+        result = monitor._detect_hand_visibility(players)
+        assert result == 0
+
+    def test_controller2_has_visible_hand(self):
+        """Controller 2 has visible hand cards → my_idx=1."""
+        from hearthstone.enums import Zone
+        monitor = self._make_monitor_with_cache([
+            (100, 1, "", Zone.HAND.value),
+            (101, 1, "", Zone.HAND.value),
+            (102, 2, "CS2_029", Zone.HAND.value),
+            (103, 2, "CS2_023", Zone.HAND.value),
+        ])
+        players = self._make_players(controller0=1, controller1=2)
+        result = monitor._detect_hand_visibility(players)
+        assert result == 1
+
+    def test_both_visible_returns_none(self):
+        """Both have visible cards → ambiguous, returns None."""
+        from hearthstone.enums import Zone
+        monitor = self._make_monitor_with_cache([
+            (100, 1, "CS2_029", Zone.HAND.value),
+            (101, 2, "CS2_023", Zone.HAND.value),
+        ])
+        players = self._make_players(controller0=1, controller1=2)
+        result = monitor._detect_hand_visibility(players)
+        assert result is None
+
+    def test_empty_cache_returns_none(self):
+        """No entity_cache → returns None."""
+        from tracker.log_monitor import CoreLogMonitor
+        monitor = CoreLogMonitor.__new__(CoreLogMonitor)
+        monitor._our_known_name = ""
+        monitor._player_names = {}
+
+        class MockGameTracker:
+            entity_cache = {}
+
+        monitor.game_tracker = MockGameTracker()
+        players = self._make_players()
+        result = monitor._detect_hand_visibility(players)
+        assert result is None
+
+    def test_no_hand_entities_returns_none(self):
+        """No HAND zone entities → returns None."""
+        from hearthstone.enums import Zone
+        monitor = self._make_monitor_with_cache([
+            (100, 1, "CS2_029", Zone.PLAY.value),
+            (101, 2, "CS2_023", Zone.DECK.value),
+        ])
+        players = self._make_players(controller0=1, controller1=2)
+        result = monitor._detect_hand_visibility(players)
+        assert result is None

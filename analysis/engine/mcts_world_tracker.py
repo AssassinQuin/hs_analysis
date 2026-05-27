@@ -54,8 +54,8 @@ from analysis.engine.world_tracker_output import WorldTrackerOutput
 class TrackerConfig:
     """Top-level configuration for the World Tracker."""
     num_worlds: int = 30
-    mcts_iterations: int = 500
-    mcts_time_budget_ms: int = 500
+    mcts_iterations: int = 300
+    mcts_time_budget_ms: int = 1500
     mcts_rollout_depth: int = 15
     uct_exploration: float = 1.414
     prune_threshold: float = 0.01

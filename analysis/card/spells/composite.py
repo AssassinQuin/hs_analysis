@@ -231,3 +231,36 @@ class RewindChoiceSpell(Spell):
         if spells:
             state = SpellExecutor._execute_desc(spells[0], state, source=source, target=target)
         return state
+
+
+@register_spell
+class ChooseOneSpell(Spell):
+    """Choose One 机制：玩家从多个选项中选择一个执行。
+
+    炉石中德鲁伊的职业机制，打出时选择两个效果之一。
+    MCTS 搜索时会分支探索所有选项；确定性模拟执行第一个选项。
+
+    JSON 格式:
+      1. 带选项: {"class": "ChooseOneSpell", "spells": [
+           {"name": "选项1", "spell": {"class": "BuffSpell", ...}},
+           {"name": "选项2", "spell": {"class": "DamageSpell", ...}}
+         ]}
+         注: from_json 会自动解包 {"name":..., "spell":{...}} 为内部 SpellDesc
+      2. 简略: {"class": "ChooseOneSpell"} — 无选项数据，跳过
+    """
+    def execute(self, desc, state, source=None, target=None):
+        from analysis.card.abilities.executor import SpellExecutor
+        choices = desc.spells or []
+        if not choices:
+            return state
+
+        # 记录选择上下文（供 MCTS 分支使用）
+        if not hasattr(state, 'choose_one_stack'):
+            state.choose_one_stack = []
+        state.choose_one_stack.append({
+            "source": source,
+            "choices": choices,
+        })
+
+        # 确定性模拟: 执行第一个选项
+        return SpellExecutor._execute_desc(choices[0], state, source=source, target=target)

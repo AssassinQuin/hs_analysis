@@ -344,6 +344,9 @@ class TrackerApp:
         logger.info("游戏开始: %s vs %s", info.get("player_class"), info.get("opp_class"))
         # 重置游戏状态
         self._game_state_manager.reset()
+        # 重置手牌预测引擎（效果推断、缓存等）
+        if self._hand_predictor is not None:
+            self._hand_predictor.reset()
         # 立即同步新状态到 overlay，避免窗口引用旧实例
         self._overlay.update_state(self._game_state_manager.state)
         # 注入 log_monitor 到 HandPredictor，启用 Power.log 实时数据模式
@@ -365,6 +368,9 @@ class TrackerApp:
         logger.info("游戏结束")
         # 重置游戏状态管理器，清空所有追踪数据
         self._game_state_manager.reset()
+        # 重置手牌预测引擎
+        if self._hand_predictor is not None:
+            self._hand_predictor.reset()
         # 推送空状态到 overlay，使其显示为"等待新游戏"
         self._overlay.update_state(self._game_state_manager.state)
 

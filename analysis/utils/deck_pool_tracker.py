@@ -133,6 +133,20 @@ class DeckPoolTracker:
 
     # ── 池查询 ─────────────────────────────────────────
 
+    def _is_derived_card(self, card_id: str) -> bool:
+        """判断卡牌是否为衍生牌。
+
+        使用卡牌本身的属性判断，而非依赖卡组池：
+        1. 在 _generated 集合中 → 衍生牌（由外部追踪确认）
+        2. 非可收集卡牌（collectible=False）→ 衍生牌（token/衍生物不可能在初始牌库中）
+        """
+        if card_id in self._generated:
+            return True
+        card_data = self.db.get_card(card_id) if self.db else None
+        if card_data and not card_data.get("collectible", False):
+            return True
+        return False
+
     def get_available_pool(self) -> Set[str]:
         """获取当前可用的卡牌池（初始 - 已排除）。
 
@@ -140,17 +154,22 @@ class DeckPoolTracker:
         - 已打出的牌（我方）：从手牌/牌库消耗，排除
         - 对手打出的非衍生牌：在对手卡组中，不可能在我方牌库，排除
         - 已揭示的卡牌：减去衍生牌（生成的不影响原始牌库中的副本）
+        - 非可收集卡牌：token/衍生物，不在初始牌库中，排除
 
-        注意：当牌池小于采样需求时，fill_unknown_hand 会使用
-        rng.choices（有放回采样）兜底，避免崩溃。
+        衍生牌判断使用卡牌本身的 collectible 属性，
+        而非依赖卡组池计数。
         """
-        excluded_from_revealed = self._all_revealed - self._generated
+        derived_from_revealed = {cid for cid in self._all_revealed if self._is_derived_card(cid)}
+        excluded_from_revealed = self._all_revealed - derived_from_revealed
         unavailable = (
             self._confirmed_played
             | self._opp_non_derived_played
             | excluded_from_revealed
         )
-        return self._pool - unavailable
+        pool = self._pool - unavailable
+        # 排除非可收集卡牌（token/衍生物不在初始牌库中）
+        pool = {cid for cid in pool if not self._is_derived_card(cid)}
+        return pool
 
     def fill_unknown_hand(
         self,
